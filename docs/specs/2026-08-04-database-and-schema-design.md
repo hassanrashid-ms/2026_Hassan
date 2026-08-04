@@ -1,0 +1,743 @@
+# Database and schema design
+
+**Date:** 2026-08-04
+**Status:** Approved
+**Supersedes:** the MongoDB/Mongoose rows in `CLAUDE.md` and `README.md`
+**Related:** [`../decisions/2026-08-04-postgresql-over-mongodb.md`](../decisions/2026-08-04-postgresql-over-mongodb.md), [`erd.html`](erd.html)
+
+## Decision
+
+| Layer | Choice |
+|---|---|
+| Database | **PostgreSQL 17** (`pgvector/pgvector:pg17`) |
+| Access layer | **Drizzle ORM** + `drizzle-kit` migrations |
+| Tenant isolation | **Row-Level Security**, one policy per scoped table |
+| Vector search | **pgvector**, HNSW index — same database |
+| Queue / pub-sub | Redis 7 + BullMQ + `@socket.io/redis-adapter` (unchanged) |
+| Object storage | S3 or Cloudflare R2, presigned PUT (unchanged) |
+
+Two services. Redis is a queue and a pub/sub bus, not a system of record — nothing stored there is
+missed if it is lost.
+
+**No MongoDB. No Weaviate. No separate vector store.** Rationale in the ADR.
+
+## Why not both
+
+Polyglot persistence was considered and rejected on three counts:
+
+1. **It splits the tenancy boundary.** RLS protects Postgres. A Mongo side needs the Mongoose hook
+   system protecting it separately and equivalently, including the `aggregate` path. Two enforcement
+   mechanisms for the one requirement the docs call the highest-risk thing in the build; one will drift.
+2. **It breaks transactions across the seam.** "Publish an article" writes article state *and*
+   embeddings. "Resolve a conversation" writes the cycle row *and* an event. Whichever pair straddles
+   the seam becomes a distributed write with a half-failure mode to detect and repair.
+3. **It doubles the ops surface** on a self-hosted deployment we operate ourselves.
+
+The usual justification — the freeform `state.raw` blob — is `JSONB` + GIN. Same flexibility, inside
+existing transactions and inside the existing RLS policy.
+
+## Tenancy
+
+**Exactly two tables have no `workspace_id`:** `workspace` and `agent`. Every other table carries one
+and gets the identical policy:
+
+```sql
+ALTER TABLE <t> ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant ON <t> USING (
+  workspace_id = current_setting('app.workspace_id', true)::uuid
+);
+```
+
+Every request sets the variable inside its transaction:
+
+```sql
+SET LOCAL app.workspace_id = '<uuid>';
+```
+
+`workspace_member` is the hinge: an `agent` row is global — one login per person — but the role is
+held per workspace. A person on three games has one login and three `workspace_member` rows, possibly
+with three different roles.
+
+### Isolation test — day one
+
+Authenticate as workspace A and hit every endpoint with workspace B's IDs. **The expected result is
+`404`, not `403`** — under RLS the rows are invisible, so the handler genuinely cannot distinguish
+"not yours" from "not there." Assert this rather than discovering it.
+
+## The 32 tables
+
+`workspace_id` is present on every scoped table and omitted below.
+
+### Identity — 3
+
+| Table | Key columns |
+|---|---|
+| `workspace` | `id`, `name`, `slug` UK, `created_at` |
+| `agent` | `id`, `email` UK (citext), `password_hash`, `display_name`, `status` (`active`/`on_leave`/`deactivated`) |
+| `workspace_member` | `id`, `workspace_id`, `agent_id`, `role` (`agent`/`team_lead`/`admin`), `deactivated_at`; UK(`workspace_id`,`agent_id`) |
+
+### Players — 3
+
+| Table | Key columns |
+|---|---|
+| `player` | `id`, `external_id`, `first_seen_at`, `last_seen_at`; UK(`workspace_id`,`external_id`) |
+| `player_device` | `id`, `player_id`, `platform`, `push_token`, `app_version`, `last_seen_at`, `revoked_at`; UK(`workspace_id`,`push_token`) |
+| `session` | `id`, `player_id`, `started_at`, `ended_at` |
+
+`session` is the denominator for self-serve rate — counted **per session, never per ticket**. It
+ships in week 1; the data cannot be backfilled.
+
+`player_device` uses `revoked_at` rather than delete. A push provider returning "unregistered" is a
+fact worth keeping. Push stays **best effort** — fetch-on-open is the guaranteed path and no
+requirement may depend on push alone.
+
+### Taxonomy — 3
+
+| Table | Key columns |
+|---|---|
+| `intent` | `id`, `name`, `is_system` (guards `Other`), `archived_at`; UK(`workspace_id`,`name`) |
+| `subintent` | `id`, `intent_id`, `name`, `default_priority` (`p1`–`p4`), `form_id`, `merged_into_id`, `archived_at`; UK(`workspace_id`,`intent_id`,`name`) |
+| `taxonomy_change` | `id`, `entity_type` (`intent`/`subintent`), `intent_id`, `subintent_id`, `kind` (`create`/`rename`/`move`/`merge`/`archive`), `survivor_subintent_id`, `from_intent_id`, `to_intent_id`, `before_name`, `after_name`, `conversations_moved`, `actor_id`, `occurred_at` — full DDL below |
+
+**Only the subintent is stored on a conversation**; the parent intent is derived through the join, so
+an edited taxonomy can never leave the two drifting apart.
+
+The **taxonomy** is the intent → subintent tree taken as one structure. Four systems depend on it —
+the bot chooses from it, forms map to it, rules route on it, and every report groups by it — which is
+why p15 opens with "every rule exists to protect historical reporting."
+
+#### `taxonomy_change` covers intents as well as subintents
+
+Intent renames and archives are dated structural changes for the same reason subintent ones are:
+p40's headline chart groups by intent, so renaming or archiving one without recording the date leaves
+an unexplained discontinuity in the chart support uses most.
+
+```sql
+CREATE TABLE taxonomy_change (
+  id                     uuid PRIMARY KEY,
+  workspace_id           uuid NOT NULL REFERENCES workspace(id),
+  entity_type            taxonomy_entity NOT NULL,   -- intent | subintent
+  intent_id              uuid REFERENCES intent(id),
+  subintent_id           uuid REFERENCES subintent(id),
+  kind                   change_kind NOT NULL,       -- create|rename|move|merge|archive
+  survivor_subintent_id  uuid REFERENCES subintent(id),
+  from_intent_id         uuid REFERENCES intent(id),
+  to_intent_id           uuid REFERENCES intent(id),
+  before_name            text,
+  after_name             text,
+  conversations_moved    integer NOT NULL DEFAULT 0,
+  actor_id               uuid NOT NULL REFERENCES agent(id),
+  occurred_at            timestamptz NOT NULL DEFAULT now(),
+
+  CONSTRAINT one_target CHECK (
+    (entity_type = 'intent'    AND intent_id    IS NOT NULL AND subintent_id IS NULL) OR
+    (entity_type = 'subintent' AND subintent_id IS NOT NULL AND intent_id    IS NULL)
+  )
+);
+```
+
+**`kind` includes `create`.** p14: *"rising volume in Other is a direct instruction to add a
+subintent."* When support acts on that, volume in `Other` drops — and that drop is someone
+reorganising the list, not player behaviour changing. Creation has to be dated like every other
+structural change, for both intents and subintents.
+
+#### Intents are admin-editable
+
+**The spec's p44 permission matrix has no intent rows** — it grants Admin *"Create or rename a
+subintent"* and *"Archive, move or merge a subintent"*, and otherwise only *"View intents and
+subintents"*. That is an omission, not a prohibition: the non-negotiable *"Support owns content,
+taxonomy, forms, bot prompt and rules — changing any of it must never require a release"* covers
+intents. Treat them as Admin-editable at the same level as subintents.
+
+| Operation | Agent | Team Lead | Admin |
+|---|---|---|---|
+| View intents and subintents | ✓ | ✓ | ✓ |
+| Create or rename an **intent** | · | · | ✓ |
+| Archive an **intent** | · | · | ✓ |
+| Create or rename a subintent | · | · | ✓ |
+| Archive, move or merge a subintent | · | · | ✓ |
+| Delete anything in the taxonomy | · | · | · |
+
+#### Intent guards — archiving is blocked-if-not-empty
+
+Subintents archive freely. **Intents do not**, and the asymmetry must be written down or someone will
+implement a cascade:
+
+| Guard | Why |
+|---|---|
+| Cannot archive an intent with non-archived subintents | Cascading would silently archive several categories in one click. Archive or move the children first, so each is a deliberate, dated act. |
+| Cannot archive an intent with published articles | Articles hang off intents. Archiving the parent while its articles stay published leaves the bot holding content in a category that no longer exists. Unpublish or move them first. |
+| Cannot archive `Other` | `is_system = true`, checked in the archive handler. |
+| No intent merge | Not specced and unnecessary — achieve it by moving the subintents, which is already supported and already dated. |
+| No delete, ever | Archive only. `ON DELETE RESTRICT` on both FKs. |
+
+Every one of these operations writes a `taxonomy_change` row and, **after commit**, enqueues the bot
+knowledge sync — the subintent list travels the same sync path as article changes. An unsynced
+addition will never be assigned; an archived one the bot still knows about keeps being used.
+
+#### `Other` needs a seeded subintent
+
+`Other` is an *intent*, but conversations store a *subintent* — so the first migration seeds both: the
+`Other` intent with `is_system = true`, and a catch-all subintent beneath it. This also keeps two
+distinct states distinguishable:
+
+| State | Means |
+|---|---|
+| `subintent_id` = the `Other` catch-all | The bot ran and decided the issue fits nothing |
+| `subintent_id IS NULL` | The bot never ran — errored, timed out, or disabled |
+
+Those are different facts, and the second is its own metric (*"Bot fallbacks — conversations created
+unclassified because the bot was unavailable"*). Folded together, a broken bot looks like a taxonomy
+gap.
+
+### Knowledge — 4
+
+| Table | Key columns |
+|---|---|
+| `article` | `id`, `intent_id`, `title`, `body`, `summary`, `state` (`draft`/`published`/`archived`), `created_by`, `published_by`, `published_at` |
+| `article_phrasing` | `id`, `article_id`, `phrase` |
+| `article_embedding` | `id`, `article_id`, `source` (`summary`/`phrasing`), `phrasing_id`, `embedding vector(1536)`, `model`, `synced_at` |
+| `article_feedback` | `id`, `article_id`, `session_id`, `conversation_id`, `was_helpful`, `did_solve`, `created_at` |
+
+Articles belong to an **intent**, never a subintent.
+
+Embeddings are their own table, one row per summary and per phrasing. Retrieval matches the phrasing
+that hit and returns the `body` — body text full of "tap the button below" retrieves badly. A model
+change re-embeds without touching `article` rows.
+
+`article_feedback` is **not optional**: two reporting panels cannot exist without the "did this help
+/ did this solve it" signal — the self-serve split between *found the answer* and *left without an
+answer*, and the bot's offered→rejected panel. Capture it from the first article a player reads.
+
+```sql
+CREATE INDEX ON article_embedding
+  USING hnsw (embedding vector_cosine_ops);
+```
+
+Retrieval filters and searches in one query:
+
+```sql
+SELECT a.id, a.title, a.body
+  FROM article_embedding e
+  JOIN article a ON a.id = e.article_id
+ WHERE a.state = 'published'
+   AND a.archived_at IS NULL
+ ORDER BY e.embedding <=> :query_vec
+ LIMIT 5;
+```
+
+RLS supplies the workspace predicate. Publishing an article and writing its embeddings happens in
+**one transaction**, so the bot can never see a published article it has no vector for.
+
+### Conversation core — 6
+
+| Table | Key columns |
+|---|---|
+| `conversation` | `id`, `player_id`, `session_id`, `subintent_id`, `status`, `priority`, `assigned_agent_id`, `classification_source`, `message_seq`, `created_at` |
+| `resolution_cycle` | `id`, `conversation_id`, `cycle_no`, `opened_at`, `first_human_reply_at`, `resolved_at`, `resolution_kind`, `support_owed_reply`, `inactivity_stage`, `inactivity_due_at`, `closed_at` |
+| `message` | `id`, `conversation_id`, `seq`, `author_type`, `author_agent_id`, `body`, `visibility`, `delivery_state`, `created_at` |
+| `attachment` | `id`, `message_id` **NOT NULL**, `storage_key`, `mime_type`, `byte_size` |
+| `label` | `id`, `name`, `colour` |
+| `conversation_label` | `conversation_id`, `label_id`, `applied_by`, `applied_at` |
+
+`assigned_agent_id IS NULL` **is** the unassigned queue. There is no `queue` table — see
+*Queues are views* below.
+
+**`attachment` has exactly one parent: a message.** Because forms are conversational, an
+`attachment`-type form answer arrives as an ordinary image message — so the file is parented to that
+message and reached through `form_answer.message_id`. There is no `form_answer_id` column and no
+one-parent CHECK.
+
+### Resolution cycles
+
+A conversation can resolve more than once, and **each resolution counts in the window it happened**.
+Scalar columns on `conversation` would hold only the latest, so last month's figure would change when
+someone replies today. Cycle 1 opens at creation; every reopen opens the next.
+
+```sql
+CREATE UNIQUE INDEX one_open_cycle_per_conversation
+  ON resolution_cycle (conversation_id)
+  WHERE resolved_at IS NULL;
+```
+
+This finds the current cycle *and* makes "a conversation can never have two open cycles" a database
+guarantee. It also avoids the circular FK a `current_cycle_id` column on `conversation` would create.
+`reopen_count` is `current_cycle.cycle_no - 1` — no denormalised counter to drift.
+
+`first_human_reply_at` is **per cycle**. A player reopening after three months waits for a reply
+again, and that wait is real.
+
+### Message ordering
+
+Server-assigned sequence, never device clocks:
+
+```sql
+UPDATE conversation SET message_seq = message_seq + 1
+ WHERE id = :id
+RETURNING message_seq;
+-- then INSERT the message with that seq
+```
+
+Unique index on (`conversation_id`, `seq`). **Gaps are fine; order is not.** Both statements run in
+one transaction, and **no I/O happens inside it** — the row lock is held for its duration.
+
+### Internal notes
+
+`visibility` (`public`/`internal`) lives on `message` and is **never filtered in the query**. Two
+serializers: `toAgentView(message)` and `toPlayerView(message)`, where the player one is an explicit
+field **whitelist** and returns `null` for `visibility <> 'public'`. Player-facing routes may only
+call the player serializer. Sockets emit to `conv:{id}:agents` and `conv:{id}:player` as **separate
+rooms**, so a player socket can never receive an internal-note event.
+
+### Assignment
+
+Round-robin among active agents; bot handoffs are auto-assigned. The atomic claim:
+
+```sql
+UPDATE conversation
+   SET assigned_agent_id = :agent
+ WHERE id = :id AND assigned_agent_id IS NULL
+RETURNING *;
+```
+
+Zero rows means "already claimed" — one agent wins, the other sees a message, not an error and not a
+duplicate reply. Deactivating an agent returns their open conversations to the unassigned queue **and
+emits one event per conversation** (see *Bulk operations* below).
+
+### Player state — 2
+
+| Table | Key columns |
+|---|---|
+| `player_state_snapshot` | `id`, `conversation_id` UK, `declared jsonb`, `raw jsonb`, `is_missing`, `captured_at` |
+| `declared_field` | `id`, `key` UK, `label`, `type`, `declared_at`, `declared_by` |
+
+The split is done **at write time**, against the `declared_field` set current at that moment. That is
+what makes promotion non-retroactive: promote a field later and old snapshots keep it in `raw`. There
+is **no backfill, ever**. `declared_at` is why a filter returning partial results is explainable
+rather than mysterious.
+
+```sql
+CREATE INDEX ON player_state_snapshot USING gin (declared jsonb_path_ops);
+```
+
+`raw` is **PII by default** — uncontrolled client input that may contain anything, handled as personal
+data for access and retention purposes regardless of contents. Nothing the game sends is ever dropped.
+
+**Missing state is a state, not an error.** `is_missing = true`, never a rejected conversation — those
+are exactly the conversations where something is broken.
+
+**One snapshot per conversation, taken at creation.** A reopen keeps the original, per "what was true
+when the problem happened." *Consequence:* a player reopening six months later shows a six-month-old
+device and client version, so the Game View **must display `captured_at` prominently** — otherwise an
+agent reads stale data as current and hunts a bug in a build that no longer exists.
+
+### Forms — 5
+
+| Table | Key columns |
+|---|---|
+| `form` | `id`, `name`, `created_by` |
+| `form_version` | `id`, `form_id`, `version`, `published_at`, `published_by`; UK(`form_id`,`version`) |
+| `form_field` | `id`, `form_version_id`, `key`, `label`, `type`, `is_required`, `options jsonb`, `position` |
+| `form_submission` | `id`, `conversation_id` UK, `form_version_id`, `status`, `started_at`, `submitted_at` |
+| `form_answer` | `id`, `submission_id`, `form_field_id`, `message_id`, `value jsonb`, `created_at` |
+
+**Exactly six field types:** `short_text`, `long_text`, `choice`, `date`, `number`, `attachment`.
+
+Fields belong to the **version**, not the form. Editing a live form mints a new version; every
+submission is stamped with the version it used, so answers collected last month still read correctly
+after the questions change. A subintent maps to exactly one form; a form can serve several subintents
+(FK on `subintent`). Merges never disturb submitted answers: they reference a form version, not a
+subintent.
+
+#### Forms are conversational, not a modal
+
+**The form is delivered as bot messages in the same thread.** The bot asks the questions, the player
+answers as ordinary messages, and there is no separate form UI. The spec supports this directly:
+*Forms* is one of the four **bot settings** tabs (p26–27), and p28 says *"Structured questions… shown
+by the bot at step 6."* Only the builder side is ever wireframed; the player side is a conversation.
+
+p28's *"Skippable — an option at the bottom of every form"* becomes: the skip is offered alongside
+every question. It is satisfied more strongly than in a modal, since "Talk to a person" is on every
+screen regardless.
+
+Three schema consequences follow.
+
+**1 · Partial completion is a real state.** In a modal, submit is atomic — the player submits or
+skips. In a conversation the bot asks Q1, the player answers, the bot asks Q2, and the player goes
+silent. Two of five answers exist with no submit event, and those answers must not be lost: *"the
+agent never has to ask for something a form already collected."*
+
+```sql
+status  form_status NOT NULL   -- in_progress | completed | partial | skipped
+```
+
+| `status` | Means |
+|---|---|
+| `in_progress` | The bot is still asking; the player is still engaged |
+| `completed` | Every required field answered |
+| `partial` | Handed off mid-questionnaire. The agent sees what was gathered and knows the rest is missing |
+| `skipped` | Declined outright |
+
+**The row is created when the bot asks the first question**, not at submit — hence `started_at`
+alongside a now-nullable `submitted_at`. A skipped or partial form is a row, **not a missing row**:
+the agent has to see that the player declined rather than wondering where the details went.
+
+**2 · Answers trace back to their message.** `form_answer.message_id` records which player message
+supplied the value. The bot is *extracting* structure from prose — a player types "iOS 26.5, and I'm on
+6.2 I think", which is one message answering two fields, with hedging. The agent needs the original
+words when an extraction looks wrong, and so does anyone debugging the bot.
+
+**3 · Attachments have one parent again.** An attachment answer now arrives as an ordinary image
+message, so the file is already parented to that message and reached via
+`form_answer → message → attachment`. `attachment.form_answer_id` and its one-parent CHECK are both
+dropped, and `attachment.message_id` becomes `NOT NULL`.
+
+#### Two behavioural rules this creates
+
+**`is_required` must be soft.** In a modal, required blocks submit. In a conversation the bot asks and
+the player says "I don't know" — and the bot **cannot block**, because nothing may prevent a player
+reaching a human. So required means *re-ask once, then move on and record the field unanswered*.
+Write this down explicitly, or someone builds a bot that loops on a required field and breaks the hard
+constraint.
+
+**Answers arrive out of order, several at once, and get corrected.** The bot's position in the
+questionnaire is **derivable** — the lowest `position` with no `form_answer` row — so no cursor column
+is needed. But the extractor must tolerate one message filling two fields, and a later message
+revising an earlier answer. **Corrections are made by adding:** a second `form_answer` row for the
+same field, newest by `created_at` wins, both traceable to their messages. Never update an answer in
+place.
+
+### Automation — 3
+
+| Table | Key columns |
+|---|---|
+| `rule` | `id`, `name`, `is_enabled`, `is_locked`, `position`, `conditions jsonb`, `actions jsonb` |
+| `rule_firing` | `id`, `rule_id`, `conversation_id`, `actions_applied jsonb`, `fired_at` |
+| `bot_config` | `id`, `workspace_id` UK, `prompt`, `is_provisioned`, `last_synced_at`, `last_sync_outcome`, `last_sync_error` |
+
+**Exactly one extra evaluation pass** after an action changes the conversation, then stop — otherwise
+two rules trigger each other indefinitely. Every firing is logged; a rule engine without an execution
+log is unmaintainable within weeks, and the one-extra-pass limit is only debuggable if you can see
+the passes.
+
+`is_locked` rules are visible but not editable, so an admin can see why the bot behaves that way.
+**Two can never be switched off:** hand off immediately when the player asks for a person, and never
+ask for a password, card number or personal ID. The bot **cannot be provisioned with an empty rule
+set**.
+
+The prompt uses placeholders — `{{subintents}}`, `{{articles}}`, `{{player_level}}`, `{{spend_tier}}`
+— and **never contains a hard-coded subintent or article**.
+
+`bot_config` stays separate from `workspace` because `workspace` is one of only two *global* tables
+and this is tenant-scoped config under RLS. Merging would put tenanted data in an untenanted table.
+
+### Reporting and audit — 3
+
+| Table | Key columns |
+|---|---|
+| `event` | `id bigserial`, `type`, `conversation_id`, `session_id`, `actor_id`, `actor_type`, `payload jsonb`, `occurred_at` |
+| `change_log` | `id`, `entity_type`, `entity_id`, `field`, `before_value jsonb`, `after_value jsonb`, `actor_id`, `changed_at` |
+| `saved_filter` | `id`, `owner_agent_id`, `name`, `is_shared`, `definition jsonb` |
+
+`event` is the reporting spine and it is **append-only** — enforce with `REVOKE UPDATE, DELETE`, not a
+convention.
+
+```sql
+CREATE INDEX ON event USING brin (occurred_at);
+CREATE INDEX ON event (conversation_id, occurred_at);
+```
+
+Event types needed: `intent_set` (with `source: bot|agent`), `intent_corrected`, `subintent_merged`,
+`article_shown`, `article_rejected`, `session_start`, `session_end`, `first_human_reply`,
+`conversation_resolved`, `conversation_reopened`, `assignment_returned`, `form_started`,
+`form_completed`, `form_partial`, `form_skipped`.
+
+The four `form_*` types give the completion funnel — started → completed / partial / skipped. Because
+the form is a conversation rather than a single submit, *partial* is a real outcome and needs its own
+count; folding it into skipped would hide the case where the bot lost the player halfway through a
+questionnaire it chose to ask.
+
+**Payload values are snapshotted, never live pointers.** An event records what happened; a name that
+resolves through a FK would silently rewrite history when someone renames the thing.
+
+`change_log` stays separate from `event` because `event` is scanned constantly for metrics across
+millions of rows, and mixing rare config audits in means every metric query wades through noise.
+Different write rate, different read pattern, different index strategy. Status, permission, taxonomy,
+bot and configuration changes are recorded **with the value before and after**.
+
+**Build `event` on day two.** Retrofitting it in week 3 means weeks 1–2 have no data, and most of
+these numbers cannot be reconstructed later.
+
+## Six schema decisions
+
+| Decision | Resolution |
+|---|---|
+| **Resolution cycles** | First-class `resolution_cycle` rows, not scalars on `conversation`. |
+| **Push tokens** | New `player_device` table. Best-effort; fetch-on-open remains guaranteed. |
+| **Subintent merge** | Conversations are **repointed** to the survivor, per spec p15. |
+| **Bot offers** | No table. `article_shown` / `article_rejected` events already carry the fact. |
+| **Queues** | No entity. Unassigned is `assigned_agent_id IS NULL`; a named queue is a label + a shared saved filter. |
+| **Attachment lifecycle** | No row until the message sends. Unsent uploads are deleted. |
+
+Two things deliberately need **no** table:
+
+- **Active agent-days** — aggregate `event` where `actor_type = 'agent'`. Days actually worked rather
+  than days employed falls out for free.
+- **Agent auth** — short-TTL JWT plus a Redis denylist, not a sessions table, because deactivation
+  has to take effect immediately.
+
+## Merge
+
+Admin only, per the p44 permission matrix. One transaction.
+
+```sql
+BEGIN;
+
+-- Lock both rows so two concurrent merges cannot interleave
+SELECT id, archived_at, merged_into_id, intent_id
+  FROM subintent WHERE id IN (:survivor, :loser) FOR UPDATE;
+
+-- 1 · reassign the conversations, recording what happened to each one
+WITH moved AS (
+  UPDATE conversation SET subintent_id = :survivor
+   WHERE subintent_id = :loser
+  RETURNING id
+)
+INSERT INTO event (workspace_id, type, conversation_id, actor_id,
+                   actor_type, occurred_at, payload)
+SELECT :ws, 'subintent_merged', moved.id, :actor, 'agent', now(),
+       jsonb_build_object(
+         'from_subintent_id',   :loser,
+         'from_subintent_name', :loser_name,      -- snapshotted
+         'to_subintent_id',     :survivor,
+         'to_subintent_name',   :survivor_name,
+         'taxonomy_change_id',  :change_id)
+FROM moved;
+
+-- 2 · archive the loser, leaving a forwarding address
+UPDATE subintent SET archived_at = now(), merged_into_id = :survivor
+ WHERE id = :loser;
+
+-- 3 · compress the chain so lookups stay depth-1
+UPDATE subintent SET merged_into_id = :survivor
+ WHERE merged_into_id = :loser;
+
+-- 4 · record the structural change and its date
+INSERT INTO taxonomy_change (workspace_id, entity_type, subintent_id, kind,
+       survivor_subintent_id, from_intent_id, to_intent_id,
+       before_name, after_name, conversations_moved, actor_id, occurred_at)
+VALUES (:ws, 'subintent', :loser, 'merge', :survivor, :a, :b,
+        :loser_name, :survivor_name, :moved_count, :actor, now());
+
+COMMIT;
+```
+
+**After commit**, enqueue the bot knowledge sync. An archived subintent the bot still knows about
+keeps being used, and an unsynced one will never be assigned.
+
+### Why the per-conversation event
+
+Without it a ticket's history reads as a contradiction — classified as one thing, currently another,
+nothing in between. With it, the ticket explains itself:
+
+```
+14 Mar 09:12   Player: "paid but no gems"
+14 Mar 09:12   Bot offered "Purchase didn't arrive"
+14 Mar 09:14   Player said it didn't help
+14 Mar 09:15   Classified as "Double charge" by bot
+ 3 Apr 11:40   Moved to "Payment failed" — taxonomy merge by Sara (admin)
+```
+
+Names are snapshotted because the survivor can be renamed later and the loser is archived but still
+renameable. Without snapshots a March entry silently rewrites itself to use today's labels.
+
+Separate event types also protect a metric: **misclassification rate counts conversations where an
+_agent_ changed the subintent.** If a merge were indistinguishable from a reclassification, one admin
+tidying the list would spike every agent's apparent error rate.
+
+### Guards, refused before any write
+
+| Guard | Why |
+|---|---|
+| `survivor <> loser` | Would archive a live category and move nothing |
+| Same workspace | RLS covers it, but fail with a clear error rather than "not found" |
+| Loser is not `is_system` | `Other` cannot be archived or removed — and merge archives |
+| `survivor.archived_at IS NULL` | Otherwise every ticket has just moved onto a dead category |
+| Actor is Admin | Enforced at the API — hiding the button is not enforcement |
+
+### The bug merge creates
+
+**Saved filters.** A `saved_filter.definition` can contain `subintent_id = <loser>`. After a merge
+that filter silently returns zero rows forever, and it reads as a bug rather than a merge. Fix both
+ways: resolve `merged_into_id` on read so stale links and bookmarked URLs degrade gracefully, **and**
+rewrite stored filter definitions in the same transaction.
+
+### Bulk operations
+
+**Any bulk operation touching conversations emits a per-conversation event, not just a summary row.**
+The summary tells you the list changed; only the per-ticket event tells you what happened to a ticket.
+Merge is the first case; **deactivating an agent** — which returns their open conversations to the
+unassigned queue — is the second.
+
+## Uploads
+
+No `attachment` row exists until a message sends, so an abandoned upload is only bytes in a bucket.
+
+```
+ws/{workspace_id}/pending/{player_id}/{uuid}   -- unclaimed, expires in 24h
+ws/{workspace_id}/attachments/{uuid}           -- claimed, permanent
+```
+
+1. `POST /uploads` returns a presigned PUT with `content-length-range` and `content-type` conditions.
+   **No database write.**
+2. Client PUTs straight to storage.
+3. `POST /messages { body, upload_keys[] }` — server **HEADs each key** for its real size and mime
+   (client-declared values are untrusted), `CopyObject`s to `attachments/`, deletes the `pending/`
+   original, and inserts message + attachment rows in **one transaction**.
+
+### Deleting unsent uploads
+
+| Trigger | What happens |
+|---|---|
+| Player cancels | `DELETE /uploads/{key}` — object deleted immediately. Authorised by comparing the token's `player_id` to the path segment, so no DB row is needed to prove ownership. |
+| Message sends | `pending/` original deleted after the copy succeeds. |
+| **Client never returns** (force-quit, crash, lost signal) | Bucket lifecycle rule expires `pending/` after 24 h. **Mandatory** — no cancel request is ever coming. |
+
+**This does not conflict with "nothing is deleted."** That rule protects *records*. An unsent upload
+has no `attachment` row, appears in no thread, and no agent ever saw it — it is uncollected garbage,
+not history. Once an `attachment` row exists the object is permanent and no route removes it.
+
+Reads use **presigned GET** against a private bucket. `attachment` stores the **storage key, never a
+URL** — a stored URL would expire and rot.
+
+**Signing a GET must check the parent message's visibility.** If an agent attaches a screenshot to an
+internal note, the *message* is hidden by the player serializer but the file sits behind a signable
+key. The signing endpoint has to walk `attachment.message_id → message.visibility` and refuse for a
+player token when it is not `public`. Easy to miss, because the thread renders correctly while the
+attachment leaks.
+
+*Portability note:* the `pending/` prefix plus a copy on claim works identically on S3 and R2. The
+alternative — upload to the final key, tag `state=pending`, expire by tag so large video is never
+copied — is cheaper but relies on tag-based lifecycle filtering, which R2 does not match S3 on.
+
+## Queues are views
+
+Spec p2 glossary: *"Queue — The list of tickets waiting to be worked."* p32: agents narrow the queue
+by status, subintent, label, assignee, priority and age. **There is no `queue` table.**
+
+- **Unassigned queue** = `assigned_agent_id IS NULL`. Still ages, visible to everyone.
+- **"Default queue"** (p30–31) is a UI breadcrumb.
+- **"Senior queue"** (p29 routing example) = a rule that applies a `senior` label and skips
+  auto-assign, plus a shared saved filter `{ labels: ['senior'], assignee: null }`. Support can
+  invent a new queue tomorrow with no release.
+
+## The two clocks
+
+They are **sequential, not the same clock.** The inactivity clock's *output* is `resolved`; the
+auto-close window starts after that, whatever produced it.
+
+### Inactivity clock — two stages, both sides equally
+
+1. 24 h with no message **from either party** → the bot asks "Is your issue resolved?"
+2. Player says yes → `resolved`, recorded **player-confirmed**.
+3. Player says no → stays as it was, **clock restarts**.
+4. No reply within a **further 24 h** → `resolved`, recorded **timed out**.
+
+Both stages live on the open `resolution_cycle` as `inactivity_stage` and `inactivity_due_at`. The
+worker query is a tiny partial index scan:
+
+```sql
+SELECT * FROM resolution_cycle
+ WHERE resolved_at IS NULL AND inactivity_due_at < now();
+```
+
+It fires from `open` as well as `awaiting_player`. **On `escalated`, set `inactivity_due_at = NULL`**
+so the worker never sees it — the spec never states this, and it is the safe reading: escalation
+means engineering owns the work, and timing out a ticket nobody is waiting on would be wrong.
+
+**If support owed the reply when the clock fired, set `support_owed_reply`.** It surfaces in both the
+queue and reporting. A conversation that timed out waiting on an agent is a support failure wearing a
+resolution's clothing.
+
+### Auto-close — 7 days, per-workspace setting
+
+`resolved → closed` after **7 days**, configurable in the admin console, per "anything that would
+otherwise need a release to change belongs here instead."
+
+**Auto-close is the lowest-value worker in the build — schedule it in week 3, not week 1.** What
+`closed` achieves is mostly queue hygiene:
+
+| | `resolved` | `closed` |
+|---|---|---|
+| Player sees | Resolved | Resolved — identical |
+| Can be reopened | Yes, no time limit | **Yes, no time limit** |
+| Inactivity clock | Stopped | Stopped |
+| In an agent's recent view | Yes | Dropped out |
+
+It does not serve reporting: the counting rule is *"resolution counts events, not current status,"* so
+reports aggregate `conversation_resolved` events. **Closing must never block a reopen** — no status is
+terminal for the player.
+
+The inactivity clock, by contrast, **is** load-bearing: it produces resolutions and the
+`support_owed_reply` flag, both of which feed reporting. Build it in week 1.
+
+## Postgres features this schema relies on
+
+| Feature | What it buys |
+|---|---|
+| Row-Level Security | Tenant isolation as a database guarantee, testable at the SQL layer independently of the API |
+| Partial unique index | One open `resolution_cycle` per conversation; no circular FK |
+| `ENUM` types | Status, priority, delivery state, author type and visibility are closed sets — an invalid status becomes impossible, not merely untested |
+| `JSONB` + GIN | `declared` filterable on any promoted key without an index per field; `raw` stored as-is |
+| CTE with `RETURNING` | Merge repoints conversations and writes one event per ticket from the same statement, so the sets cannot diverge |
+| Conditional `UPDATE` | The atomic claim — zero rows means "already claimed" |
+| BRIN on `occurred_at` | The events table only grows and is only queried by time range |
+| `generate_series` | Sparklines with no gaps; days with zero conversations render as zero rather than distorting the line |
+| Transactions | Article + embeddings atomically, so the bot never sees a published article with no vector |
+| `pgvector` HNSW | Filtered similarity search in the same query as the relational predicates |
+
+## Why 32 tables
+
+**Twelve are things the product has. Twenty are the price of three rules in the spec.**
+
+| Rule | Tables it generates |
+|---|---|
+| Nothing is deleted | `taxonomy_change`, `event`, `rule_firing`, `change_log`, `resolution_cycle` |
+| Support configures without a release | `intent`, `subintent`, `form`, `form_version`, `form_field`, `label`, `rule`, `bot_config`, `declared_field`, `saved_filter` |
+| Reporting counts events | `session`, `article_feedback`, `article_embedding`, `article_phrasing`, `player_state_snapshot` |
+
+Four are genuinely collapsible and were considered:
+
+| Candidate | Verdict |
+|---|---|
+| `form_field` → `jsonb` on `form_version` | Defensible; **not taken**. Kept as a table for the FK from `form_answer`. |
+| `bot_config` → columns on `workspace` | **Kept.** `workspace` is global; this is tenant-scoped under RLS. |
+| `player_state_snapshot` → columns on `conversation` | **Kept.** `raw` is PII with its own retention rules and a potentially large blob you never want in a queue list query. |
+| `change_log` → into `event` | **Kept.** Different write rate, read pattern and index strategy. |
+
+The cheapest-looking cuts are the most expensive: `session`, `article_feedback` and `event` are three
+small tables whose data **cannot be reconstructed later**.
+
+## Non-negotiables this schema must not break
+
+- **Nothing may prevent a player reaching a human.** Asking for a person redirects immediately; a bot
+  that errors/times out/is disabled still creates the conversation, unclassified and auto-assigned;
+  refusing the form still hands off, marked form-skipped.
+- **Failure is never silent.** The player sees no error; support is alerted.
+- **No hard deletes anywhere; don't even write the route.** Enforce with `ON DELETE RESTRICT`.
+- **Internal notes never reach a player.** Two serializers, separate socket rooms.
+- **`Other` cannot be archived or removed.**
+- **No cross-workspace reads, enforced in the data layer.**
+- **Missing data is a state, not an error.**
+- **Version-stamp every form submission.**
+- **Deleting an article must not break the record of which article the bot offered** — that record is
+  a snapshotted event payload, not a FK to live content.
+
+## Open
+
+Nothing blocking. Two items to revisit once there is live data:
+
+- **HNSW tuning** (`m`, `ef_construction`) is left at defaults. At a per-workspace corpus of dozens to
+  low hundreds of articles this is irrelevant; revisit only if a workspace passes ~10k embeddings.
+- **`event` partitioning** is not needed yet. BRIN on `occurred_at` handles a long time. Revisit if
+  the table passes ~50M rows.

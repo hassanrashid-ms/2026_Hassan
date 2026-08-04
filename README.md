@@ -20,9 +20,9 @@ forms, players or issues. Multiple games are expected.
 
 ```
 Unity SDK ─┐
-Web SDK ───┼──▶ Core API (Express, Socket.io, workspace scoping)
+Web SDK ───┼──▶ Core API (Express, Socket.io, RLS workspace scoping)
 Console ───┘         │
-                     ├── MongoDB (documents + append-only events)
+                     ├── PostgreSQL (relational + append-only events + pgvector)
                      ├── Redis + BullMQ (sockets, scheduled jobs)
                      └── Object storage (presigned uploads)
 ```
@@ -35,7 +35,9 @@ the forms all live in *this* repo's web surface — not duplicated in C#, JS, Ko
 
 **Reporting is event-sourced.** Resolution counts events rather than current status, and a reopen
 starts a new resolution cycle, so neither can be derived from a conversation's `status` field. Every
-state change appends to a `events` collection and all reporting is an aggregation over it.
+state change appends to an append-only `event` table and all reporting is an aggregation over it.
+Resolution state lives on its own `resolution_cycle` rows for the same reason — a conversation can
+resolve more than once, and each resolution counts in the window it happened.
 
 ## Planned stack
 
@@ -43,14 +45,20 @@ state change appends to a `events` collection and all reporting is an aggregatio
 |---|---|
 | Repo | pnpm workspaces monorepo, shared `@support/types` as the SDK↔server contract |
 | Server | Express 5 + TypeScript + Zod (schemas double as validation and types) |
-| ODM | Mongoose 8 — needed for the tenancy plugin/hook system |
-| Database | MongoDB |
+| Database | **PostgreSQL 17** (`pgvector/pgvector:pg17`) — self-hosted, Docker |
+| Access layer | **Drizzle ORM** + `drizzle-kit` migrations |
+| Tenancy | **Row-Level Security** — one policy per scoped table |
 | Realtime | Socket.io + `@socket.io/redis-adapter`, rooms per conversation |
 | Jobs | BullMQ repeatable jobs |
 | Files | S3 or Cloudflare R2, presigned PUT — never proxy uploads through Node |
-| Bot retrieval | Atlas Vector Search, or in-memory cosine if self-hosting |
+| Bot retrieval | **pgvector**, HNSW index — same database |
 | Console | Vite + React + TanStack Query + Tailwind + shadcn/ui |
 | Charts | Recharts |
+
+Deployment is **self-hosted, Docker only** — two services, Postgres and Redis. The schema is 32
+tables, specced in [`docs/specs/2026-08-04-database-and-schema-design.md`](docs/specs/2026-08-04-database-and-schema-design.md)
+with diagrams in [`docs/specs/erd.html`](docs/specs/erd.html). The database choice reverses an earlier
+written decision; rationale in [`docs/decisions/2026-08-04-postgresql-over-mongodb.md`](docs/decisions/2026-08-04-postgresql-over-mongodb.md).
 
 ## Getting started
 
@@ -69,7 +77,7 @@ command you find in a doc as aspirational.
 
 ```
 frontend/    console (agent-facing) and web support surface (player-facing)
-backend/     Core API — Express, Socket.io, Mongoose models, BullMQ workers
+backend/     Core API — Express, Socket.io, Drizzle schema + migrations, BullMQ workers
 docs/
   specs/         architecture and API specs
   plans/         implementation plans (YYYY-MM-DD-*.md)
@@ -94,9 +102,11 @@ Ten macro components across three weeks, per the delivery-slices doc:
 
 Week 1 is built in sequence rather than five-way parallel:
 
-1. **Days 1–3 — the spine.** Mongo models, tenancy plugin, agent auth, player-token auth, event
-   collection. No UI. `POST /conversations` and `POST /messages` with correct sequencing and correct
-   tenant isolation.
+1. **Days 1–3 — the spine.** Drizzle schema + first migration, RLS policies on every scoped table,
+   agent auth, player-token auth, the `event` table. No UI. `POST /conversations` and `POST /messages`
+   with correct sequencing and correct tenant isolation. The cross-workspace isolation test is written
+   here, not later — authenticate as workspace A, hit every endpoint with workspace B's IDs, expect
+   `404`.
 2. **Days 4–7 — the core loop end to end.** Player message from a crude page → crude agent inbox →
    agent reply → player sees it. Ugly is fine. If this loop doesn't work, nothing else matters, so
    it ships before the bot is touched.

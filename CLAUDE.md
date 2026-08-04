@@ -20,7 +20,11 @@ multi-tenant customer support tool for mobile games. This repo is one of two:
    *what belongs to which week*.
 3. The SDK repo's `docs/specs/overview+sdk.md` — the decision record for things settled in
    conversation and not written in the spec.
-4. This file — a summary of 1–3 plus the server decisions. If it disagrees with the spec, the spec
+4. `docs/specs/2026-08-04-database-and-schema-design.md` — the database and schema spec. **Wins on
+   anything about tables, columns, indexes or the data layer.** Rationale for the database choice
+   itself is in `docs/decisions/2026-08-04-postgresql-over-mongodb.md`; the ERD diagrams are in
+   `docs/specs/erd.html`.
+5. This file — a summary of 1–4 plus the server decisions. If it disagrees with the spec, the spec
    is right and this file is stale.
 
 `Docs/` sits one level above both repos and is deliberately tracked by neither.
@@ -31,28 +35,37 @@ multi-tenant customer support tool for mobile games. This repo is one of two:
 `package.json`, no workspace manifest, no env template, no models, no tests. Do not invent commands
 for this repo — there are none yet. The first task is scaffolding the pnpm workspace.
 
+**The database and schema are specced but not built.** 32 tables, fully designed in
+`docs/specs/2026-08-04-database-and-schema-design.md`. No migration exists yet; that is the second
+task, after the workspace scaffold.
+
 Planned stack (decided, not installed):
 
 | Layer | Choice |
 |---|---|
 | Repo | pnpm workspaces monorepo, shared `@support/types` as the SDK↔server contract |
 | Server | Express 5 + TypeScript + Zod (schemas double as validation and types) |
-| ODM | Mongoose 8 — chosen specifically for the plugin/hook system the tenancy guard needs |
-| Database | MongoDB |
+| Database | **PostgreSQL 17** (`pgvector/pgvector:pg17`) — self-hosted, Docker |
+| Access layer | **Drizzle ORM** + `drizzle-kit` migrations |
+| Tenancy | **Row-Level Security** — one policy per scoped table, not an ORM hook |
 | Realtime | Socket.io + `@socket.io/redis-adapter`, rooms per conversation |
 | Jobs | BullMQ repeatable jobs |
 | Files | S3 or Cloudflare R2, presigned PUT — never proxy uploads through Node |
-| Bot retrieval | Atlas Vector Search, or in-memory cosine if self-hosting |
+| Bot retrieval | **pgvector**, HNSW index — same database |
 | Console | Vite + React + TanStack Query + Tailwind + shadcn/ui |
 | Charts | Recharts |
+
+**Deployment is self-hosted, Docker only.** Two services: Postgres and Redis. Redis is a queue and a
+pub/sub bus, not a system of record. There is no MongoDB, no Weaviate and no separate vector store —
+see the ADR for why "both" was the worst of the three options.
 
 ## Architecture
 
 ```
 Unity SDK ─┐
-Web SDK ───┼──▶ Core API (Express, Socket.io, workspace scoping)
+Web SDK ───┼──▶ Core API (Express, Socket.io, RLS workspace scoping)
 Console ───┘         │
-                     ├── MongoDB (documents + append-only events)
+                     ├── PostgreSQL (relational + append-only events + pgvector)
                      ├── Redis + BullMQ (sockets, scheduled jobs)
                      └── Object storage (presigned uploads)
 ```
@@ -85,9 +98,20 @@ your games has two unrelated records and no cross-game history.
 
 **Conversation** (= Ticket; the terms are interchangeable) is the central object. Holds: messages,
 internal notes (inline in the same thread), attachments, the player-state snapshot, classification
-(intent + subintent, labels, priority `p1`–`p4`), form submission or a form-skipped marker,
-ownership, status, reopen count, classification source (`bot` | `agent` | unset), which article the
-bot offered and whether it was rejected, and an inactivity-clock flag.
+(subintent only — the intent is derived), labels, priority `p1`–`p4`, form submission or a
+form-skipped marker, ownership, status, and classification source (`bot` | `agent` | unset).
+
+**Resolution state is not on the conversation.** A conversation can resolve more than once and each
+resolution counts in the window it happened, so `resolution_cycle` is its own table holding
+`resolved_at`, `resolution_kind` (player-confirmed vs timed out), `first_human_reply_at`,
+`support_owed_reply`, the inactivity-clock fields and `closed_at`. Cycle 1 opens at creation; every
+reopen opens the next. `reopen_count` is `cycle_no - 1` — there is no counter column.
+A partial unique index (`WHERE resolved_at IS NULL`) makes one-open-cycle-per-conversation a database
+guarantee and finds the current cycle without a circular FK.
+
+**Which article the bot offered is not a column either.** It lives in the `article_shown` /
+`article_rejected` events with the title snapshotted into the payload — a record of what happened, not
+a FK to live content.
 
 **Message** — author type `player` | `agent` | `bot` | `system`, body, attachments, server-assigned
 `seq`, `delivery_state`, internal-note flag.
@@ -106,10 +130,24 @@ Declared set expected on every conversation: `player_id`, `client_version`, `pla
 Record the declaration date so a filter returning partial results is explainable rather than
 mysterious. Nothing the game sends is ever dropped.
 
-**Intent** (= category) → **Subintent**. Articles belong to an **intent**, not a subintent.
+**Intent** (= category) → **Subintent**. Together they are **the taxonomy** — one structure that the
+bot chooses from, forms map to, rules route on and every report groups by. Articles belong to an
+**intent**, not a subintent, because one article usually answers several subintents at once.
 Subintent holds parent intent, default priority, and a linked form. **Store only the deepest level
 reached** and derive the parent — storing both lets them drift apart when the taxonomy is edited.
-Start with 3–4 subintents per intent.
+Start with 5–8 intents and 3–4 subintents per intent.
+
+**Both levels are Admin-editable** — create, rename, archive. The p44 matrix only enumerates
+subintents, but the non-negotiable "changing taxonomy must never require a release" covers intents
+too; see contradiction 8. **Archiving an intent is blocked-if-not-empty**: not while it has
+non-archived subintents (a cascade would silently archive several categories at once) and not while it
+has published articles (the bot would hold content in a category that no longer exists). Subintents
+archive freely. Write that asymmetry down or someone implements a cascade.
+
+**`Other` is an intent, so seed a catch-all subintent beneath it** in the first migration —
+conversations store a subintent, so "anything it can't place goes to Other" needs somewhere to land.
+Keep it distinct from `subintent_id IS NULL`, which means the bot never ran (errored, timed out or
+disabled) and is its own metric. Folded together, a broken bot looks like a taxonomy gap.
 
 **Article** — title, body, intent (exactly one), **summary** and **search keywords** (these two are
 for the bot and for search, not for humans). States: Draft / Published / Archived. Only Published is
@@ -119,6 +157,27 @@ ever in the bot's knowledge or visible to players.
 form; a form can serve several subintents. **Exactly six field types**: short text, long text,
 choice, date, number, attachment. Editing a live form mints a new version; every submission records
 the version it used.
+
+**Forms are conversational — the bot asks the questions as messages in the same thread. There is no
+form modal.** The spec supports this: *Forms* is one of the four **bot settings** tabs, and p28 says
+"structured questions… shown by the bot at step 6". Only the builder side is wireframed. Three
+consequences:
+
+- **`partial` is a real state.** The player can answer two of five questions and go silent, so
+  `form_submission.status` is `in_progress | completed | partial | skipped`, the row is created when
+  the bot asks the *first* question (`started_at`), and `submitted_at` is nullable. Collected answers
+  are never lost — the agent must not re-ask what the form already got.
+- **`form_answer.message_id`** records which message supplied the value. The bot extracts structure
+  from prose ("iOS 26.5, and I'm on 6.2 I think" is one message answering two fields, with hedging),
+  so the original words have to be reachable.
+- **Attachments have one parent.** An attachment answer arrives as an ordinary image message, so it is
+  reached via `form_answer → message → attachment`. `attachment.form_answer_id` does not exist.
+
+**`is_required` must be soft.** In a conversation the bot cannot block on a required field — that
+would break "nothing may prevent a player reaching a human". Required means *re-ask once, then move on
+and record it unanswered*. **Answers are corrected by adding** a second `form_answer` row for the same
+field, newest by `created_at` wins; never update in place. The bot's position in the questionnaire is
+derivable (lowest `position` with no answer), so there is no cursor column.
 
 **Rule** — conditions read conversation fields, classification, labels, and any searchable
 player-state field; actions apply a label, set priority, assign, or send a message. **Exactly one
@@ -200,28 +259,51 @@ Deactivating an agent returns their open conversations to the unassigned queue.
 
 Rename freely (existing conversations follow the new name). **Delete is not permitted — archive
 instead.** Archived is hidden from the bot but kept on existing conversations and in reporting. Move
-and merge are allowed and **their date is recorded**, so a volume trend can distinguish real change
-in player behaviour from someone reorganising the list. Seed the **`Other`** intent in a migration
-and guard it in the archive handler: `Other` can never be archived or removed, and rising volume
-there is the signal that the taxonomy has a gap.
+and merge are allowed and **their date is recorded** in `taxonomy_change`, so a volume trend can
+distinguish real change in player behaviour from someone reorganising the list. Seed the **`Other`**
+intent in a migration and guard it in the archive handler via `is_system`: `Other` can never be
+archived or removed, and rising volume there is the signal that the taxonomy has a gap.
+
+**`taxonomy_change` covers both levels.** `entity_type` (`intent` | `subintent`) with a nullable
+`intent_id` and `subintent_id` and a CHECK that exactly one is set. `kind` is
+`create | rename | move | merge | archive` — **including `create`**, because p14 says rising volume in
+`Other` is an instruction to add a subintent, so when support acts on it `Other`'s volume drops. That
+drop is someone reorganising the list, not player behaviour changing, and it needs a date like every
+other structural change.
+
+**Merge repoints the conversations** — spec p15: "Pick the survivor, reassign conversations, archive
+the other." The loser keeps a `merged_into_id` forwarding address so stale saved filters and bookmarked
+URLs resolve rather than silently returning zero rows. **The merge also emits one
+`subintent_merged` event per affected conversation**, with both subintent names snapshotted into the
+payload, so a ticket's own history explains itself ("Moved to Payment failed — taxonomy merge by
+Sara") instead of reading as a contradiction. Keeping `subintent_merged` distinct from
+`intent_corrected` matters: misclassification rate counts conversations where an *agent* changed the
+subintent, so one admin tidying the list must not spike every agent's apparent error rate.
+Full procedure, including the guards, in `docs/specs/2026-08-04-database-and-schema-design.md`.
 
 ## Server-side decisions worth not re-deriving
 
-**Message ordering.** Server-assigned sequence, never device clocks. Atomic `findOneAndUpdate` on
-the conversation with `$inc: { messageSeq: 1 }` and `returnDocument: 'after'`, then insert with that
-seq. Unique compound index on `{ conversationId: 1, seq: 1 }`. Gaps are fine; order is not.
-**Do not embed messages in the conversation document** — 16 MB cap and unbounded growth.
+**Message ordering.** Server-assigned sequence, never device clocks.
+`UPDATE conversation SET message_seq = message_seq + 1 WHERE id = :id RETURNING message_seq`, then
+insert the message with that seq, both in one transaction. Unique index on
+(`conversation_id`, `seq`). Gaps are fine; order is not. **No I/O inside that transaction** — it holds
+a row lock on the conversation for its duration.
 
-**Declared vs freeform.** Store `state.declared` (admin-promoted) and `state.raw` (everything else).
-A wildcard index on `state.declared.$**` gives filtering on any declared field without an index per
-field, which matches the admin-promotes-a-field workflow exactly. The attribute pattern is the
-alternative; wildcard ships faster.
+**Declared vs freeform.** Store `declared` (admin-promoted) and `raw` (everything else) as two `jsonb`
+columns on `player_state_snapshot`, with `CREATE INDEX ... USING gin (declared jsonb_path_ops)` for
+filtering on any promoted key without an index per field. **The split happens at write time**, against
+the `declared_field` set current at that moment — which is exactly what makes promotion
+non-retroactive. Promote a field later and old snapshots keep it in `raw`. No backfill, ever.
 
-**Tenancy is the highest-risk thing in the build.** "No cross-workspace reads, enforced in the data
-layer" means a Mongoose global plugin with `pre` hooks on `find`, `findOne`, `updateOne`,
-`countDocuments` and — the one people forget — **`aggregate`**, which needs a manual `$match`
-unshifted onto the pipeline. Pull `workspaceId` from `AsyncLocalStorage`. Write one integration test
-that authenticates as workspace A and tries every endpoint against workspace B's IDs.
+**Tenancy is the highest-risk thing in the build**, and it is enforced by the database, not the ORM.
+Every scoped table gets
+`CREATE POLICY tenant ON <t> USING (workspace_id = current_setting('app.workspace_id', true)::uuid)`,
+and every request runs `SET LOCAL app.workspace_id = '<uuid>'` inside its transaction. A query with no
+workspace predicate returns zero rows — there is no code path around it, including raw SQL and `psql`.
+Only `workspace` and `agent` are unscoped.
+Write one integration test that authenticates as workspace A and tries every endpoint against
+workspace B's IDs. **Expect `404`, not `403`** — under RLS the rows are invisible, so the handler
+cannot distinguish "not yours" from "not there."
 
 **Internal notes leaking is safety-critical** — the spec says so explicitly: "one bug leaks internal
 notes to a player." Do **not** filter in the query. Use two serializers, `toAgentView(message)` and
@@ -232,17 +314,42 @@ can never receive an internal-note event.
 
 **Metrics require event sourcing.** "Resolution counts events, not current status" and "a reopen
 starts a new resolution cycle" cannot be computed from a conversation's current `status`. Use an
-append-only `events` collection —
-`{ workspaceId, type, conversationId, actorId, actorType, ts, payload }` — written on every state
-change, with all reporting as aggregations over it. **Build this on day two.** Retrofitting it in
-week 3 means weeks 1–2 have no data, and most of these numbers cannot be reconstructed later.
+append-only `event` table —
+`{ workspace_id, type, conversation_id, session_id, actor_id, actor_type, occurred_at, payload }` —
+written on every state change, with all reporting as aggregations over it. Enforce append-only with
+`REVOKE UPDATE, DELETE`, not a convention. BRIN index on `occurred_at`; btree on
+(`conversation_id`, `occurred_at`). **Build this on day two.** Retrofitting it in week 3 means weeks
+1–2 have no data, and most of these numbers cannot be reconstructed later.
 
-Event types needed: `intent_set` (with `source: bot|agent`), `intent_corrected`, `article_shown`,
-`article_rejected`, `session_start`, `session_end`, `first_human_reply`.
+Event types needed: `intent_set` (with `source: bot|agent`), `intent_corrected`, `subintent_merged`,
+`article_shown`, `article_rejected`, `session_start`, `session_end`, `first_human_reply`,
+`conversation_resolved`, `conversation_reopened`, `assignment_returned`, `form_started`,
+`form_completed`, `form_partial`, `form_skipped`. **Keep `form_partial` distinct from `form_skipped`**
+— because the form is a conversation, losing the player halfway through a questionnaire the bot chose
+to ask is a different failure from the player declining it up front.
 
-**Article schema.** Embed `summary` and `knownPhrasings` separately from `body`. Body text full of
-"tap the button below" retrieves badly — embed the summary and each phrasing, match against those,
-and return the body.
+**Payload values are snapshotted, never live pointers.** An event records what happened; a name
+resolved through a FK would silently rewrite history when someone renames the thing.
+
+**Events are a projection, not the source of truth.** `conversation` stays a mutable row the console
+reads directly, and every state change *also* appends to `event`. The cost: a bug can let the row and
+the stream disagree, so all state changes go through one function that writes both in a single
+transaction — never ad-hoc updates.
+
+**Any bulk operation touching conversations emits a per-conversation event, not just a summary row.**
+The summary tells you the list changed; only the per-ticket event tells you what happened to a ticket.
+Merge is the first case; deactivating an agent — which returns their open conversations to the
+unassigned queue — is the second.
+
+**Article schema.** `summary` sits on `article`; known phrasings are rows in `article_phrasing`; and
+`article_embedding` holds one vector row per summary and per phrasing (`source`, plus a nullable
+`phrasing_id`). Body text full of "tap the button below" retrieves badly — embed the summary and each
+phrasing, match against those, and return the `body`. Keeping vectors in their own table also means a
+model change re-embeds without touching `article` rows.
+
+**Publish an article and write its embeddings in one transaction.** The bot must never see a published
+article it has no vector for — that is exactly the stale-knowledge failure the spec warns about, and
+it is the main reason retrieval lives in the same database rather than in a separate vector store.
 
 **Permission checks run at the API.** Hiding a control in the UI is not enforcement.
 
@@ -251,10 +358,27 @@ value before and after**.
 
 ### Traps
 
-- `resolved → closed` needs a scheduled worker, and so does the two-stage inactivity clock.
+- `resolved → closed` needs a scheduled worker (**7 days, per-workspace setting**), and so does the
+  two-stage inactivity clock. **They are sequential clocks, not the same clock** — the inactivity
+  clock's *output* is `resolved`; the auto-close window starts after that, whatever produced it.
+  The inactivity clock is load-bearing and ships in week 1; auto-close is queue hygiene and ships in
+  week 3.
+- The inactivity worker reads the open cycle:
+  `WHERE resolved_at IS NULL AND inactivity_due_at < now()`. **On `escalated`, set
+  `inactivity_due_at = NULL`** so it is skipped — the spec never states this, and timing out a ticket
+  engineering owns would be wrong.
 - Never store both intent and subintent — store the deepest reached, derive the parent.
-- **No hard deletes anywhere; don't even write the route.**
+- **No hard deletes anywhere; don't even write the route.** Enforce with `ON DELETE RESTRICT` so the
+  database refuses rather than relying on everyone remembering.
+- An unsent upload has no `attachment` row and *is* deleted — that is garbage collection, not a
+  record. Once the row exists the object is permanent.
 - Version-stamp every form submission.
+- Because forms are conversational, **a bot that loops on a required field breaks the hard
+  constraint.** Re-ask once, then move on and record the field unanswered.
+- **Signing a presigned GET must check the parent message's `visibility`.** An internal note's
+  attachment is hidden by the serializer but its key is still signable — walk
+  `attachment.message_id → message.visibility` and refuse for a player token. The thread renders
+  correctly while the attachment leaks, which is why this one gets missed.
 - Missing player state is a state, not an error — never reject the conversation. Those are exactly
   the conversations where something is broken.
 - Treat `state.raw` as **PII by default**: it is uncontrolled client input and may contain anything,
@@ -414,10 +538,26 @@ decision record in `docs/decisions/`.
 7. **Immediate handoff vs. the three-reply rule:** the hard constraint says "not after three turns",
    yet a switchable "hand off after three unhelpful replies" rule ships on by default. Compatible —
    the locked rule is about *asking* for a person — but the wording collides.
+8. **Who creates an intent?** The p44 Taxonomy block grants Admin "Create or rename a subintent" and
+   "Archive, move or merge a subintent", and otherwise only "View intents and subintents". **There is
+   no intent row at all** — the spec discusses intents throughout but never says who may create one.
+   Read as an omission rather than a prohibition: "changing taxonomy must never require a release"
+   covers intents, so they are Admin-editable at the same level as subintents. **Decided** — see
+   `docs/specs/2026-08-04-database-and-schema-design.md`.
 
-Also simply unspecified: the **auto-close window** ("some days after resolved"), what a **queue**
-entity actually is (routing examples reference a "senior queue"; the console shows a "Default
-queue"), and the behaviour of the inactivity clock on `escalated` conversations.
+Three things the spec simply left unspecified have now been **decided** — see
+`docs/specs/2026-08-04-database-and-schema-design.md`:
+
+| Was unspecified | Decision |
+|---|---|
+| The **auto-close window** ("some days after resolved") | **7 days**, per-workspace setting in the admin console |
+| What a **queue** entity is | **There isn't one.** p2 glossary: "the list of tickets waiting to be worked." Unassigned is `assigned_agent_id IS NULL`; a named queue (p29's "senior queue") is a label + a shared saved filter, so support can invent one with no release |
+| The inactivity clock on **`escalated`** | `inactivity_due_at = NULL` while escalated, so the worker skips it |
+
+Also decided, both absent from the spec: **cross-intent merge is allowed** (recorded with both
+`from_intent_id` and `to_intent_id`), and **a reopened cycle keeps the original player-state
+snapshot** — which means the Game View must display `captured_at` prominently, or an agent reads a
+six-month-old client version as current.
 
 ## Conventions
 

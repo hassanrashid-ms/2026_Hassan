@@ -1,0 +1,1030 @@
+<title>Support CRM — Database & ERD</title>
+<style>
+  :root {
+    --ink:      #10161c;
+    --ground:   #f4f6f5;
+    --surface:  #ffffff;
+    --hairline: #d3dcdb;
+    --muted:    #55676d;
+    --accent:   #0e6b6e;
+    --accent-w: #e2efee;
+    --signal:   #9e3d29;
+    --signal-w: #f6e8e4;
+    --amber:    #7d5710;
+    --amber-w:  #f6efdf;
+
+    --serif: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --sans:  system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono:  ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink:      #e2eae9;
+      --ground:   #0c1114;
+      --surface:  #141b1f;
+      --hairline: #27343a;
+      --muted:    #8fa3a8;
+      --accent:   #4fb3b2;
+      --accent-w: #102b2c;
+      --signal:   #d98a72;
+      --signal-w: #2c1a15;
+      --amber:    #d3a95c;
+      --amber-w:  #2a2114;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ink:      #e2eae9;
+    --ground:   #0c1114;
+    --surface:  #141b1f;
+    --hairline: #27343a;
+    --muted:    #8fa3a8;
+    --accent:   #4fb3b2;
+    --accent-w: #102b2c;
+    --signal:   #d98a72;
+    --signal-w: #2c1a15;
+    --amber:    #d3a95c;
+    --amber-w:  #2a2114;
+  }
+  :root[data-theme="light"] {
+    --ink:      #10161c;
+    --ground:   #f4f6f5;
+    --surface:  #ffffff;
+    --hairline: #d3dcdb;
+    --muted:    #55676d;
+    --accent:   #0e6b6e;
+    --accent-w: #e2efee;
+    --signal:   #9e3d29;
+    --signal-w: #f6e8e4;
+    --amber:    #7d5710;
+    --amber-w:  #f6efdf;
+  }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap {
+    max-width: 60rem;
+    margin: 0 auto;
+    padding: 4rem 1.5rem 6rem;
+    display: flex;
+    flex-direction: column;
+    gap: 3.5rem;
+  }
+
+  .masthead { display: flex; flex-direction: column; gap: 1rem; }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: .72rem;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  h1 {
+    font-family: var(--serif);
+    font-size: clamp(2rem, 5vw, 2.9rem);
+    line-height: 1.12;
+    font-weight: 600;
+    text-wrap: balance;
+    letter-spacing: -0.015em;
+  }
+  .standfirst { font-size: 1.08rem; color: var(--muted); max-width: 48ch; }
+
+  .verdict { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .5rem; }
+  .chip {
+    font-family: var(--mono);
+    font-size: .82rem;
+    padding: .38rem .7rem;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    background: var(--accent-w);
+    border-radius: 2px;
+  }
+  .chip.alt { border-color: var(--hairline); color: var(--muted); background: transparent; }
+
+  section { display: flex; flex-direction: column; gap: 1.25rem; }
+  h2 {
+    font-family: var(--serif);
+    font-size: 1.55rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    padding-bottom: .6rem;
+    border-bottom: 2px solid var(--accent);
+    text-wrap: balance;
+  }
+  h3 {
+    font-family: var(--mono);
+    font-size: .78rem;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 600;
+  }
+  p { max-width: 68ch; }
+  a { color: var(--accent); }
+
+  .scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: .92rem; min-width: 34rem; }
+  th {
+    text-align: left;
+    font-family: var(--mono);
+    font-size: .72rem;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 500;
+    padding: 0 .9rem .5rem 0;
+    border-bottom: 1px solid var(--hairline);
+    vertical-align: bottom;
+  }
+  td { padding: .7rem .9rem .7rem 0; border-bottom: 1px solid var(--hairline); vertical-align: top; }
+  td:last-child, th:last-child { padding-right: 0; }
+  code {
+    font-family: var(--mono);
+    font-size: .88em;
+    background: var(--accent-w);
+    color: var(--accent);
+    padding: .1em .35em;
+    border-radius: 2px;
+  }
+  pre.sql {
+    font-family: var(--mono);
+    font-size: .82rem;
+    line-height: 1.55;
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-left: 3px solid var(--accent);
+    padding: 1rem 1.1rem;
+    overflow-x: auto;
+    white-space: pre;
+  }
+
+  .note {
+    border-left: 3px solid var(--signal);
+    background: var(--signal-w);
+    padding: .9rem 1.1rem;
+    font-size: .95rem;
+  }
+  .note.q { border-left-color: var(--amber); background: var(--amber-w); }
+  .note strong { font-family: var(--mono); font-size: .84em; letter-spacing: .04em; }
+
+  .scope { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 1rem; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    padding: 1.1rem 1.2rem;
+    display: flex;
+    flex-direction: column;
+    gap: .6rem;
+  }
+  .card ul { list-style: none; display: flex; flex-wrap: wrap; gap: .3rem; }
+  .card li {
+    font-family: var(--mono);
+    font-size: .78rem;
+    background: var(--ground);
+    border: 1px solid var(--hairline);
+    padding: .18rem .45rem;
+    border-radius: 2px;
+  }
+  .card p { font-size: .88rem; color: var(--muted); }
+
+  .diagram {
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    padding: 1.25rem;
+    overflow-x: auto;
+  }
+  .cap { font-size: .85rem; color: var(--muted); max-width: 68ch; }
+  ol, ul.prose {
+    padding-left: 1.2rem;
+    max-width: 68ch;
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+  }
+  ol li, ul.prose li { padding-left: .2rem; }
+  strong { font-weight: 650; }
+
+  .timeline {
+    font-family: var(--mono);
+    font-size: .84rem;
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    padding: 1rem 1.1rem;
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: .45rem 1.1rem;
+    overflow-x: auto;
+  }
+  .timeline .when { color: var(--muted); white-space: nowrap; }
+  .timeline .what { color: var(--ink); }
+  .timeline .what.hl { color: var(--accent); font-weight: 600; }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">Support CRM · Data layer · rev 5</div>
+    <h1>PostgreSQL, and the 32 tables that follow from it</h1>
+    <p class="standfirst">The stack doc picked Mongo before the deployment target was known. Self-hosting settles it, and nothing is built yet. Seven schema decisions worked through, five unspecified behaviours pinned down, and every table accounted for.</p>
+    <div class="verdict">
+      <span class="chip">PostgreSQL 17</span>
+      <span class="chip">Drizzle ORM</span>
+      <span class="chip">pgvector · HNSW</span>
+      <span class="chip alt">Row-Level Security</span>
+      <span class="chip alt">Redis + BullMQ</span>
+      <span class="chip alt">32 tables</span>
+    </div>
+  </header>
+
+  <section>
+    <h2>Why the decision flips</h2>
+    <p>Four requirements carry real weight. Three favour Postgres on merit; the fourth is settled outright by self-hosting.</p>
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th style="width:26%">Requirement</th><th style="width:37%">On MongoDB</th><th style="width:37%">On PostgreSQL</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Bot retrieval</strong><br><span style="color:var(--muted);font-size:.85em">Vector search over published articles</span></td>
+            <td><strong>Not available.</strong> Atlas Vector Search runs as a separate <code>mongot</code> process that exists only on Atlas — it is not in Community Edition. Self-hosting leaves in-process cosine, which every API replica holds its own copy of, so a manual re-sync only fixes the instance that served the request.</td>
+            <td><code>pgvector</code> in the same container. One image, one backup, one transaction.</td>
+          </tr>
+          <tr>
+            <td><strong>Tenant isolation</strong><br><span style="color:var(--muted);font-size:.85em">"The highest-risk thing in the build"</span></td>
+            <td>A Mongoose global plugin with <code>pre</code> hooks. Bypassed by <code>.aggregate()</code>, by paths that skip middleware, and by any raw driver call. The stack doc already flags <code>aggregate</code> as "the one people forget."</td>
+            <td>RLS policies enforced by the engine. A query with no <code>workspace_id</code> predicate returns zero rows — no code path around it, including raw SQL and psql.</td>
+          </tr>
+          <tr>
+            <td><strong>Event-sourced reporting</strong><br><span style="color:var(--muted);font-size:.85em">9 metrics, date range + comparison period</span></td>
+            <td>Aggregation pipelines. "Resolutions per <em>active agent-day</em>, split player-confirmed vs timed out, vs the prior period" is several hundred lines of <code>$facet</code> nobody wants to modify in week 3.</td>
+            <td><code>GROUP BY</code> with <code>FILTER</code>, window functions for sparklines, <code>generate_series</code> to gap-fill empty days.</td>
+          </tr>
+          <tr>
+            <td><strong>"Nothing is deleted"</strong><br><span style="color:var(--muted);font-size:.85em">No hard deletes anywhere</span></td>
+            <td>A code convention, enforced by everyone remembering.</td>
+            <td>Foreign keys with <code>ON DELETE RESTRICT</code>. The database refuses.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p>The one thing Mongo genuinely wins is the freeform <code>state.raw</code> blob the SDK sends — arbitrary keys, no schema, never dropped. <code>JSONB</code> with a GIN index covers that completely, and the declared-field wildcard index the stack doc describes maps onto a GIN index one-for-one.</p>
+    <div class="note">
+      <strong>Cost of switching: zero.</strong> <code>frontend/</code> and <code>backend/</code> contain nothing but a README. No schema to migrate, no data to move, no code to rewrite — three documents to correct. This is the last moment the switch is free.
+    </div>
+  </section>
+
+  <section>
+    <h2>Drizzle, not Mongoose or Prisma</h2>
+    <p>The stack doc chose Mongoose "specifically for the plugin/hook system the tenancy guard needs." Under RLS that requirement disappears — the guard moves into the database, so the ORM stops being the security boundary. Three things then decide it:</p>
+    <ul class="prose">
+      <li><strong>RLS needs session variables.</strong> Every request runs <code>SET LOCAL app.workspace_id</code> inside its transaction. Drizzle's transaction API makes that a one-line wrapper; Prisma needs <code>$executeRaw</code> threaded through interactive transactions and loses the guarantee whenever someone forgets.</li>
+      <li><strong>Reporting is SQL-shaped.</strong> Drizzle's <code>sql</code> template keeps window functions and <code>FILTER</code> clauses typed and inline. Prisma pushes them to <code>$queryRaw</code>, outside the type system.</li>
+      <li><strong>pgvector is a first-class column type</strong> in Drizzle. Prisma models it as <code>Unsupported()</code>, which cannot be selected through the client.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>The tenancy boundary</h2>
+    <p>The schema's organising idea. <strong>Exactly two tables have no <code>workspace_id</code>.</strong> Everything else carries one and gets the identical RLS policy.</p>
+    <div class="scope">
+      <div class="card">
+        <h3>Global — no tenancy</h3>
+        <ul><li>workspace</li><li>agent</li></ul>
+        <p>One login per person. An agent row is global; their <em>role</em> is not.</p>
+      </div>
+      <div class="card">
+        <h3>The hinge</h3>
+        <ul><li>workspace_member</li></ul>
+        <p>Carries the per-workspace role. An agent on three games has three rows and may hold a different role in each.</p>
+      </div>
+      <div class="card">
+        <h3>Scoped — RLS on all 29</h3>
+        <ul><li>every other table</li></ul>
+        <p>One policy, repeated: <code>workspace_id = current_setting('app.workspace_id')::uuid</code></p>
+      </div>
+    </div>
+    <div class="note">
+      <strong>Write the isolation test on day one.</strong> Authenticate as workspace A, then hit every endpoint with workspace B's IDs. Under RLS the expected result is <code>404</code>, not <code>403</code> — the rows are invisible, so the handler genuinely cannot distinguish "not yours" from "not there." That is correct, and it should be asserted rather than discovered.
+    </div>
+  </section>
+
+  <section>
+    <h2>Seven decisions, and what they changed</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th style="width:20%">Decision</th><th style="width:44%">Resolution</th><th style="width:36%">Schema effect</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Resolution cycles</strong></td>
+            <td>A conversation can resolve more than once and each counts in its own window, so the cycle becomes a first-class row rather than scalar columns holding only the latest.</td>
+            <td><code>+resolution_cycle</code><br><code>conversation</code> loses 6 columns</td>
+          </tr>
+          <tr>
+            <td><strong>Push tokens</strong></td>
+            <td>Gap in rev 1. "A reply reaches the player whether or not they are in the game" needs device tokens somewhere. Still best-effort — fetch-on-open stays the guaranteed path.</td>
+            <td><code>+player_device</code></td>
+          </tr>
+          <tr>
+            <td><strong>Subintent merge</strong></td>
+            <td>Spec p15 is explicit: <em>"Pick the survivor, reassign conversations, archive the other."</em> Conversations are repointed. Rev 1 argued for tombstoning; the spec wins.</td>
+            <td><code>taxonomy_change</code> gains a survivor column; a per-conversation event is emitted</td>
+          </tr>
+          <tr>
+            <td><strong>Bot offers</strong></td>
+            <td>Killed. <code>article_shown</code> and <code>article_rejected</code> are already required event types, so a table stores the same fact twice and invites drift.</td>
+            <td><code>−bot_offer</code></td>
+          </tr>
+          <tr>
+            <td><strong>Queues</strong></td>
+            <td>No entity. Glossary p2: <em>"the list of tickets waiting to be worked."</em> Unassigned is <code>assigned_agent_id IS NULL</code>; a named queue is a label plus a shared saved filter, which support can create without a release.</td>
+            <td>no table</td>
+          </tr>
+          <tr>
+            <td><strong>Attachment lifecycle</strong></td>
+            <td>No row until the message sends. The server HEADs the object for its real size and mime — client-declared values are untrusted — then writes message and attachment in one transaction. <strong>An upload that is never sent is deleted</strong> — see below.</td>
+            <td>no status column, no reaper job</td>
+          </tr>
+          <tr>
+            <td><strong>Forms are conversational</strong></td>
+            <td>The bot asks the questions as messages in the same thread; there is no form modal. Backed by the spec — <em>Forms</em> is a <strong>bot settings</strong> tab and p28 says "shown by the bot at step 6". This makes <code>partial</code> completion reachable for the first time, since a player can answer two of five questions and go silent.</td>
+            <td><code>was_skipped</code> → <code>status</code> + <code>started_at</code>; <code>form_answer</code> gains <code>message_id</code>; <code>attachment.form_answer_id</code> <strong>dropped</strong> along with its CHECK</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Two things were checked and deliberately need <em>no</em> table, so nobody builds them by accident. <strong>Active agent-days</strong> is an aggregation over <code>event</code> where <code>actor_type = 'agent'</code> — days actually worked rather than days employed falls out for free. <strong>Agent auth</strong> is a short-TTL JWT plus a Redis denylist, not a sessions table, because deactivation has to take effect immediately.</p>
+  </section>
+
+  <section>
+    <h2>ERD</h2>
+    <p>Thirty-two tables in five diagrams. A single diagram at this size is a hairball nobody reads. <code>workspace_id</code> is on every scoped table and omitted from the attribute lists — otherwise it is the only thing you see.</p>
+
+    <h3>1 · Identity, tenancy, players and devices</h3>
+    <div class="diagram">
+      <pre class="mermaid">
+erDiagram
+    WORKSPACE ||--o{ WORKSPACE_MEMBER : "grants roles in"
+    AGENT     ||--o{ WORKSPACE_MEMBER : holds
+    WORKSPACE ||--o{ PLAYER  : contains
+    WORKSPACE ||--o{ SESSION : contains
+    PLAYER    ||--o{ SESSION : opens
+    PLAYER    ||--o{ PLAYER_DEVICE : "is reachable on"
+    AGENT     ||--o{ SAVED_FILTER : owns
+
+    WORKSPACE {
+        uuid id PK
+        text name
+        text slug UK
+        timestamptz created_at
+    }
+    AGENT {
+        uuid id PK
+        citext email UK
+        text password_hash
+        text display_name
+        agent_status status "active, on_leave, deactivated"
+        timestamptz created_at
+    }
+    WORKSPACE_MEMBER {
+        uuid id PK
+        uuid workspace_id FK
+        uuid agent_id FK
+        member_role role "agent, team_lead, admin"
+        timestamptz deactivated_at "nullable"
+    }
+    PLAYER {
+        uuid id PK
+        text external_id "from the game, UK per workspace"
+        timestamptz first_seen_at
+        timestamptz last_seen_at
+    }
+    PLAYER_DEVICE {
+        uuid id PK
+        uuid player_id FK
+        device_platform platform "ios, android, web"
+        text push_token "UK per workspace"
+        text app_version
+        timestamptz last_seen_at
+        timestamptz revoked_at "nullable, set on provider unregister"
+    }
+    SESSION {
+        uuid id PK
+        uuid player_id FK
+        timestamptz started_at
+        timestamptz ended_at "nullable"
+    }
+    SAVED_FILTER {
+        uuid id PK
+        uuid owner_agent_id FK
+        text name
+        boolean is_shared "team lead or admin only"
+        jsonb definition "a named queue lives here"
+    }
+      </pre>
+    </div>
+    <p class="cap"><code>SESSION</code> exists purely as the denominator for self-serve rate — counted per session, never per ticket. Without it the number cannot be computed at all, which is why it ships in week 1 rather than week 3. <code>PLAYER_DEVICE</code> uses <code>revoked_at</code> rather than delete, per house rules: a push provider returning "unregistered" is a fact worth keeping.</p>
+
+    <h3>2 · Taxonomy and knowledge base</h3>
+    <div class="diagram">
+      <pre class="mermaid">
+erDiagram
+    INTENT    ||--o{ SUBINTENT : parents
+    INTENT    ||--o{ ARTICLE   : categorises
+    INTENT    ||--o{ TAXONOMY_CHANGE : "logs edits to"
+    SUBINTENT ||--o{ TAXONOMY_CHANGE : "logs edits to"
+    SUBINTENT }o--o| FORM : asks
+    ARTICLE   ||--o{ ARTICLE_PHRASING  : "is asked as"
+    ARTICLE   ||--o{ ARTICLE_EMBEDDING : "is retrieved by"
+    ARTICLE   ||--o{ ARTICLE_FEEDBACK  : "is rated by"
+
+    INTENT {
+        uuid id PK
+        text name
+        boolean is_system "true for Other, blocks archive"
+        timestamptz archived_at "nullable"
+    }
+    SUBINTENT {
+        uuid id PK
+        uuid intent_id FK
+        text name
+        priority default_priority "p1 to p4"
+        uuid form_id FK "nullable"
+        uuid merged_into_id FK "nullable, forwarding address"
+        timestamptz archived_at "nullable"
+    }
+    TAXONOMY_CHANGE {
+        uuid id PK
+        taxonomy_entity entity_type "intent or subintent"
+        uuid intent_id FK "nullable, CHECK exactly one target"
+        uuid subintent_id FK "nullable, CHECK exactly one target"
+        change_kind kind "create, rename, move, merge, archive"
+        uuid survivor_subintent_id FK "nullable, merge only"
+        uuid from_intent_id FK "nullable"
+        uuid to_intent_id FK "nullable"
+        text before_name
+        text after_name
+        integer conversations_moved
+        uuid actor_id FK
+        timestamptz occurred_at "the date reporting needs"
+    }
+    ARTICLE {
+        uuid id PK
+        uuid intent_id FK
+        text title
+        text body "returned to the player"
+        text summary "embedded, not shown"
+        article_state state "draft, published, archived"
+        uuid created_by FK
+        uuid published_by FK "nullable"
+        timestamptz published_at "nullable"
+    }
+    ARTICLE_PHRASING {
+        uuid id PK
+        uuid article_id FK
+        text phrase "one known phrasing"
+    }
+    ARTICLE_EMBEDDING {
+        uuid id PK
+        uuid article_id FK
+        embedding_source source "summary or phrasing"
+        uuid phrasing_id FK "nullable"
+        vector embedding "HNSW index"
+        text model
+        timestamptz synced_at
+    }
+    ARTICLE_FEEDBACK {
+        uuid id PK
+        uuid article_id FK
+        uuid session_id FK
+        uuid conversation_id FK "nullable"
+        boolean was_helpful
+        boolean did_solve
+        timestamptz created_at
+    }
+      </pre>
+    </div>
+    <p class="cap">Three load-bearing choices. <strong>Articles hang off intent, never subintent</strong> — one article usually answers several subintents at once, so attaching it lower would mean duplicating it or the bot missing it. <strong>Embeddings are their own table</strong>, one row per summary and per phrasing, so retrieval matches the phrasing that hit and returns the body — body text full of "tap the button below" retrieves badly. <strong><code>ARTICLE_FEEDBACK</code> is not optional</strong>: two reporting panels cannot exist without the "did this help / did this solve it" signal, so it is captured from the first article a player ever reads.</p>
+
+    <p><strong>Both levels are Admin-editable, and <code>TAXONOMY_CHANGE</code> logs edits to either.</strong> The spec's p44 matrix grants Admin "create or rename a subintent" and "archive, move or merge a subintent" — and has <em>no intent row at all</em>, despite discussing intents throughout. That reads as an omission rather than a prohibition, since "changing taxonomy must never require a release" covers intents too. So <code>entity_type</code> plus a nullable <code>intent_id</code>/<code>subintent_id</code> pair with a CHECK that exactly one is set.</p>
+    <p class="cap"><code>kind</code> includes <strong><code>create</code></strong>, which rev 2 missed. p14 says rising volume in <code>Other</code> is a direct instruction to add a subintent — so when support acts on it, <code>Other</code>'s volume drops. That drop is someone reorganising the list, not player behaviour changing, and it needs a date exactly like a merge does.</p>
+    <div class="note">
+      <strong>Archiving an intent is blocked-if-not-empty — unlike a subintent.</strong> Refuse while it still has non-archived subintents, because cascading would silently archive several categories in one click; each child should be a deliberate, dated act. Refuse while it still has published articles, because articles hang off intents and the bot would be left holding content in a category that no longer exists. <code>Other</code> is refused always, via <code>is_system</code>. Write this asymmetry down or someone implements a cascade.
+    </div>
+    <p class="cap">And because <code>Other</code> is an <em>intent</em> while conversations store a <em>subintent</em>, the first migration seeds a catch-all subintent beneath it. That also keeps two distinct states apart: the <code>Other</code> catch-all means the bot ran and decided the issue fits nothing, whereas <code>subintent_id IS NULL</code> means the bot never ran — errored, timed out or disabled — which is its own metric. Folded together, a broken bot looks like a taxonomy gap.</p>
+
+    <h3>3 · Conversations, resolution cycles and messages</h3>
+    <div class="diagram">
+      <pre class="mermaid">
+erDiagram
+    PLAYER       ||--o{ CONVERSATION : raises
+    SESSION      ||--o{ CONVERSATION : originates
+    SUBINTENT    }o--o{ CONVERSATION : classifies
+    AGENT        }o--o{ CONVERSATION : "is assigned"
+    CONVERSATION ||--|{ RESOLUTION_CYCLE : "resolves through"
+    CONVERSATION ||--o{ MESSAGE : contains
+    CONVERSATION ||--|| PLAYER_STATE_SNAPSHOT : "captured at creation"
+    CONVERSATION ||--o{ CONVERSATION_LABEL : "tagged by"
+    LABEL        ||--o{ CONVERSATION_LABEL : "applied via"
+    MESSAGE      ||--o{ ATTACHMENT : carries
+
+    CONVERSATION {
+        uuid id PK
+        uuid player_id FK
+        uuid session_id FK
+        uuid subintent_id FK "nullable, deepest level only"
+        conv_status status "new, bot_active, open, awaiting_player, escalated, resolved, closed"
+        priority priority "p1 to p4"
+        uuid assigned_agent_id FK "nullable, NULL is the unassigned queue"
+        classify_source classification_source "bot, agent, null"
+        integer message_seq "atomic counter"
+        timestamptz created_at
+    }
+    RESOLUTION_CYCLE {
+        uuid id PK
+        uuid conversation_id FK
+        integer cycle_no "UK with conversation_id"
+        timestamptz opened_at
+        timestamptz first_human_reply_at "nullable"
+        timestamptz resolved_at "nullable"
+        resolution_kind resolution_kind "nullable, player_confirmed or timed_out"
+        boolean support_owed_reply "the failure-in-disguise flag"
+        smallint inactivity_stage "0, 1, 2"
+        timestamptz inactivity_due_at "nullable, NULL while escalated"
+        timestamptz closed_at "nullable"
+    }
+    MESSAGE {
+        uuid id PK
+        uuid conversation_id FK
+        integer seq "UK with conversation_id"
+        author_type author_type "player, agent, bot, system"
+        uuid author_agent_id FK "nullable"
+        text body
+        visibility visibility "public or internal"
+        delivery_state delivery_state "sending, sent, delivered, read, failed"
+        timestamptz created_at
+    }
+    PLAYER_STATE_SNAPSHOT {
+        uuid id PK
+        uuid conversation_id FK UK
+        jsonb declared "GIN indexed, filterable"
+        jsonb raw "display only, PII by default"
+        boolean is_missing "a state, never an error"
+        timestamptz captured_at
+    }
+    DECLARED_FIELD {
+        uuid id PK
+        text key UK
+        text label
+        field_type type
+        timestamptz declared_at "no backfill, ever"
+        uuid declared_by FK
+    }
+    LABEL {
+        uuid id PK
+        text name
+        text colour
+    }
+    CONVERSATION_LABEL {
+        uuid conversation_id FK
+        uuid label_id FK
+        uuid applied_by FK
+        timestamptz applied_at
+    }
+    ATTACHMENT {
+        uuid id PK
+        uuid message_id FK "NOT NULL, the only parent"
+        text storage_key "never a URL, URLs expire"
+        text mime_type "from HEAD, not the client"
+        bigint byte_size
+    }
+      </pre>
+    </div>
+    <p class="cap">Five deliberate choices. <strong>Messages are their own table</strong>, ordered by a server-assigned <code>seq</code> from an atomic increment on the conversation row — never device clocks; gaps are fine, order is not, and internal notes consume sequence numbers so the player's view legitimately has holes in it. <strong>Only the subintent is stored</strong>; the parent intent is derived through the join, so an edited taxonomy can never leave the two drifting apart. <strong><code>visibility</code> lives on the message and is never filtered in the query</strong> — the player serializer whitelists fields and returns null for anything not <code>public</code>, so anything unexpected fails closed. <strong>Resolution state left <code>conversation</code> entirely</strong>, which is what makes per-cycle reporting possible. And <strong><code>ATTACHMENT</code> has exactly one parent</strong> — a message — because forms are conversational, so an attachment answer arrives as an ordinary image message.</p>
+    <div class="note">
+      <strong>Signing a presigned GET must check the parent message's <code>visibility</code>.</strong> If an agent attaches a screenshot to an internal note, the message is hidden by the player serializer but the file still sits behind a signable key. The signing endpoint has to walk <code>attachment.message_id → message.visibility</code> and refuse for a player token when it is not <code>public</code>. This is the one that gets missed, because the thread renders perfectly while the attachment leaks.
+    </div>
+
+    <h3>4 · Forms and submissions</h3>
+    <div class="diagram">
+      <pre class="mermaid">
+erDiagram
+    FORM            ||--o{ FORM_VERSION : "mints on edit"
+    FORM_VERSION    ||--o{ FORM_FIELD : defines
+    FORM_VERSION    ||--o{ FORM_SUBMISSION : "stamped on"
+    CONVERSATION    ||--o| FORM_SUBMISSION : "has at most one"
+    FORM_SUBMISSION ||--o{ FORM_ANSWER : contains
+    FORM_FIELD      ||--o{ FORM_ANSWER : answers
+    MESSAGE         ||--o{ FORM_ANSWER : "supplied"
+
+    FORM {
+        uuid id PK
+        text name
+        uuid created_by FK
+    }
+    FORM_VERSION {
+        uuid id PK
+        uuid form_id FK
+        integer version "UK with form_id"
+        timestamptz published_at "nullable, admin only"
+        uuid published_by FK "nullable"
+    }
+    FORM_FIELD {
+        uuid id PK
+        uuid form_version_id FK
+        text key
+        text label
+        field_type type "short_text, long_text, choice, date, number, attachment"
+        boolean is_required "soft, the bot may never block"
+        jsonb options "choice values"
+        smallint position "the bot asks in this order"
+    }
+    FORM_SUBMISSION {
+        uuid id PK
+        uuid conversation_id FK UK
+        uuid form_version_id FK
+        form_status status "in_progress, completed, partial, skipped"
+        timestamptz started_at "when the bot asked Q1"
+        timestamptz submitted_at "nullable while in_progress"
+    }
+    FORM_ANSWER {
+        uuid id PK
+        uuid submission_id FK
+        uuid form_field_id FK
+        uuid message_id FK "which message supplied it"
+        jsonb value
+        timestamptz created_at "newest wins, corrections add"
+    }
+      </pre>
+    </div>
+    <p class="cap">Editing a live form mints a new <code>FORM_VERSION</code>; fields belong to the version, not the form. Because every submission is stamped with the version it used and answers point at that version's fields, answers collected last month still read correctly after the questions change. A skipped or partial form is a <em>row</em>, not a missing row — the agent has to see that the player declined rather than wondering where the details went. A merge never disturbs submitted answers either: they reference a form version, not a subintent.</p>
+
+    <div class="note">
+      <strong>The form is a conversation, not a modal.</strong> The bot asks the questions as messages in the same thread and the player answers as ordinary messages. The spec supports this directly — <em>Forms</em> is one of the four <strong>bot settings</strong> tabs (p26–27), and p28 says "structured questions… <em>shown by the bot</em> at step 6." Only the builder side is ever wireframed. p28's "skippable — an option at the bottom of every form" becomes: the skip is offered alongside every question, which is satisfied more strongly than in a modal since "Talk to a person" is on every screen anyway.
+    </div>
+
+    <p class="cap">That shapes three columns. <strong><code>status</code> replaces a <code>was_skipped</code> boolean</strong>, because in a conversation the player can answer two of five questions and go silent — <code>partial</code> is reachable in a way it never was with an atomic submit, and those answers must not be lost. The row is therefore created when the bot asks the <em>first</em> question, hence <code>started_at</code> and a nullable <code>submitted_at</code>. <strong><code>message_id</code> on each answer</strong> keeps the player's actual words reachable, because the bot is extracting structure from prose — "iOS 26.5, and I'm on 6.2 I think" is one message answering two fields, with hedging. And <strong>corrections add rather than update</strong>: a second row for the same field, newest by <code>created_at</code> winning, both traceable.</p>
+
+    <p class="cap">Two things deliberately have no column. <strong>The bot's position in the questionnaire is derivable</strong> — lowest <code>position</code> with no answer — so there is no cursor. And <strong><code>is_required</code> is soft</strong>: the bot asks, and if the player says "I don't know" it re-asks once, then moves on and records the field unanswered. A bot that blocks on a required field would break the hard constraint that nothing may prevent a player reaching a human.</p>
+
+    <h3>5 · Events, rules, bot and audit</h3>
+    <div class="diagram">
+      <pre class="mermaid">
+erDiagram
+    WORKSPACE    ||--o{ EVENT : accumulates
+    CONVERSATION ||--o{ EVENT : emits
+    SESSION      ||--o{ EVENT : emits
+    RULE         ||--o{ RULE_FIRING : logs
+    CONVERSATION ||--o{ RULE_FIRING : "was changed by"
+    WORKSPACE    ||--|| BOT_CONFIG : configures
+    WORKSPACE    ||--o{ CHANGE_LOG : records
+
+    EVENT {
+        bigint id PK
+        event_type type "incl. form_started, form_completed, form_partial, form_skipped"
+        uuid conversation_id FK "nullable"
+        uuid session_id FK "nullable"
+        uuid actor_id FK "nullable"
+        actor_type actor_type "player, agent, bot, system"
+        jsonb payload "names snapshotted, never live pointers"
+        timestamptz occurred_at "BRIN indexed"
+    }
+    RULE {
+        uuid id PK
+        text name
+        boolean is_enabled
+        boolean is_locked "visible, not editable"
+        smallint position
+        jsonb conditions
+        jsonb actions
+    }
+    RULE_FIRING {
+        uuid id PK
+        uuid rule_id FK
+        uuid conversation_id FK
+        jsonb actions_applied
+        timestamptz fired_at
+    }
+    BOT_CONFIG {
+        uuid id PK
+        uuid workspace_id FK UK
+        text prompt "placeholders only, no hard-coded subintents"
+        boolean is_provisioned
+        timestamptz last_synced_at
+        sync_outcome last_sync_outcome
+        text last_sync_error "nullable"
+    }
+    CHANGE_LOG {
+        uuid id PK
+        text entity_type
+        uuid entity_id
+        text field
+        jsonb before_value
+        jsonb after_value
+        uuid actor_id FK
+        timestamptz changed_at
+    }
+      </pre>
+    </div>
+    <p class="cap"><code>EVENT</code> is append-only and it is the reporting spine — resolution counts events rather than current status, so enforce it with <code>REVOKE UPDATE, DELETE</code> rather than a convention. <code>RULE_FIRING</code> exists because a rule engine without an execution log becomes unmaintainable within weeks, and because the "exactly one extra evaluation pass" limit is only debuggable if you can see the passes.</p>
+  </section>
+
+  <section>
+    <h2>Uploads: an unsent file is deleted</h2>
+    <p>Because no <code>attachment</code> row exists until a message sends, an abandoned upload is only bytes in a bucket. Three triggers remove them, and all three are needed — the first two cover the paths where the client tells you what happened, and the third covers the one where it never does.</p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th style="width:22%">Trigger</th><th style="width:30%">When</th><th style="width:48%">What happens</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Player cancels</strong></td>
+            <td>Removes the file from the composer, or closes the composer with a staged file</td>
+            <td><code>DELETE /uploads/{key}</code> — the object is deleted immediately. Authorised by putting the player id in the key path, so no database row is needed to prove ownership.</td>
+          </tr>
+          <tr>
+            <td><strong>Message sends</strong></td>
+            <td>The good path</td>
+            <td><code>CopyObject</code> to <code>attachments/</code>, then delete the <code>pending/</code> original. Nothing lingers and you never pay to store the file twice.</td>
+          </tr>
+          <tr>
+            <td><strong>Client never returns</strong></td>
+            <td>Force-quit, crash, lost connectivity, player walks away</td>
+            <td>A bucket lifecycle rule expires everything under <code>pending/</code> after 24 h. <strong>Mandatory</strong> — no cancel request is ever coming, so without this the bytes are permanent.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <pre class="sql">-- ownership is encoded in the key, so no DB row is needed
+ws/{workspace_id}/pending/{player_id}/{uuid}     -- unclaimed, expires in 24h
+ws/{workspace_id}/attachments/{uuid}             -- claimed, permanent
+
+-- DELETE /uploads/:key  authorises by comparing the token's
+-- player_id to the segment in the path. A player cannot reach
+-- another player's pending upload, or anything under attachments/.</pre>
+    <div class="note">
+      <strong>This does not conflict with "nothing is deleted."</strong> That rule protects records — messages, conversations, subintents. An unsent upload has no <code>attachment</code> row, appears in no thread, and no agent ever saw it. It is not a record; it is uncollected garbage. The moment an <code>attachment</code> row exists, the object becomes permanent like everything else, and there is no route that removes it.
+    </div>
+    <p class="cap">One portability note. The <code>pending/</code> prefix plus a copy on claim works identically on S3 and R2. The alternative — upload straight to the final key and tag it <code>state=pending</code>, expiring by tag so large videos are never copied — is cheaper for video but relies on tag-based lifecycle filtering, which R2 does not match S3 on. Since the stack doc still says "S3 or Cloudflare R2", the prefix approach keeps that choice open.</p>
+  </section>
+
+  <section>
+    <h2>Merge, in full</h2>
+    <p>The operation that got the most attention, so worth writing out. Admin only, per the p44 matrix. One transaction, five writes.</p>
+    <pre class="sql">BEGIN;
+
+-- Lock both rows so two concurrent merges cannot interleave
+SELECT id, archived_at, merged_into_id, intent_id, is_system
+  FROM subintent
+ WHERE id IN (:survivor, :loser)
+   FOR UPDATE;
+
+-- 1 · reassign the conversations, and record what happened to each one
+WITH moved AS (
+  UPDATE conversation
+     SET subintent_id = :survivor
+   WHERE subintent_id = :loser
+  RETURNING id
+)
+INSERT INTO event
+  (workspace_id, type, conversation_id, actor_id, actor_type, occurred_at, payload)
+SELECT :ws, 'subintent_merged', moved.id, :actor, 'agent', now(),
+       jsonb_build_object(
+         'from_subintent_id',   :loser,
+         'from_subintent_name', :loser_name,      -- snapshotted
+         'to_subintent_id',     :survivor,
+         'to_subintent_name',   :survivor_name,
+         'taxonomy_change_id',  :change_id)
+FROM moved;
+
+-- 2 · archive the loser, leaving a forwarding address
+UPDATE subintent
+   SET archived_at = now(), merged_into_id = :survivor
+ WHERE id = :loser;
+
+-- 3 · compress the chain so lookups stay depth-1
+UPDATE subintent
+   SET merged_into_id = :survivor
+ WHERE merged_into_id = :loser;
+
+-- 4 · record the structural change and its date
+INSERT INTO taxonomy_change (workspace_id, entity_type, subintent_id, kind,
+       survivor_subintent_id, from_intent_id, to_intent_id,
+       before_name, after_name, conversations_moved, actor_id, occurred_at)
+VALUES (:ws, 'subintent', :loser, 'merge', :survivor, :a, :b,
+        :loser_name, :survivor_name, :moved_count, :actor, now());
+
+COMMIT;
+
+-- then, AFTER commit: enqueue the bot knowledge sync.
+-- An archived subintent the bot still knows about keeps being used.</pre>
+
+    <p><strong>Why the per-conversation event matters.</strong> Without it, a ticket's history reads as a contradiction — classified as one thing, currently another, nothing in between. With it, the ticket explains itself:</p>
+    <div class="timeline">
+      <span class="when">14 Mar 09:12</span><span class="what">Player: "paid but no gems"</span>
+      <span class="when">14 Mar 09:12</span><span class="what">Bot offered "Purchase didn't arrive"</span>
+      <span class="when">14 Mar 09:14</span><span class="what">Player said it didn't help</span>
+      <span class="when">14 Mar 09:15</span><span class="what">Classified as "Double charge" by bot</span>
+      <span class="when">3 Apr 11:40</span><span class="what hl">Moved to "Payment failed" — taxonomy merge by Sara (admin)</span>
+      <span class="when">now</span><span class="what">Subintent: Payment failed</span>
+    </div>
+    <p class="cap">Names are snapshotted into the payload because the survivor can be renamed later, and the loser is archived but still renameable. Without snapshots, a March entry silently rewrites itself to use today's labels. Same principle as the article title on a bot offer: a record of what happened, not a pointer to live content.</p>
+
+    <p>Separate event types also protect a metric. <strong>Misclassification rate counts conversations where an <em>agent</em> changed the subintent.</strong> If a merge were indistinguishable from a reclassification, one admin tidying the list would spike every agent's apparent error rate. <code>intent_corrected</code> and <code>subintent_merged</code> stay distinct.</p>
+
+    <div class="scroll">
+      <table>
+        <thead><tr><th style="width:38%">Guard, refused before any write</th><th style="width:62%">Why</th></tr></thead>
+        <tbody>
+          <tr><td><code>survivor ≠ loser</code></td><td>Would archive a live category and move nothing</td></tr>
+          <tr><td>Both in the same workspace</td><td>RLS covers it, but fail with a clear error rather than "not found"</td></tr>
+          <tr><td>Loser is not <code>is_system</code></td><td><em>"Other cannot be archived or removed"</em> — and merge archives</td></tr>
+          <tr><td><code>survivor.archived_at IS NULL</code></td><td>Otherwise every ticket has just been moved onto a dead category</td></tr>
+          <tr><td>Actor is Admin</td><td>The p44 matrix, enforced at the API — hiding the button is not enforcement</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note">
+      <strong>The bug merge creates: saved filters.</strong> A <code>saved_filter.definition</code> can contain <code>subintent_id = &lt;loser&gt;</code>. After a merge that filter silently returns zero rows forever, and it reads as a bug rather than a merge. Fix it both ways — resolve <code>merged_into_id</code> on read so stale links and bookmarked URLs degrade gracefully, and rewrite stored filter definitions in the same transaction so they stay honest rather than permanently indirect.
+    </div>
+
+    <p><strong>Generalise it:</strong> any bulk operation that touches conversations emits a per-conversation event, not just a summary row. The summary tells you the list changed; only the per-ticket event tells you what happened to a ticket. Merge is the first case. Deactivating an agent — which returns all their open conversations to the unassigned queue — is the second one you will hit.</p>
+  </section>
+
+  <section>
+    <h2>Postgres features this schema leans on</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th style="width:24%">Feature</th><th style="width:76%">What it buys</th></tr></thead>
+        <tbody>
+          <tr><td>Partial unique index</td><td><code>UNIQUE (conversation_id) WHERE resolved_at IS NULL</code> on <code>resolution_cycle</code>. Finds the current cycle <em>and</em> makes "a conversation can never have two open cycles" a database guarantee rather than something the reopen handler must get right. It also removes the circular FK a <code>current_cycle_id</code> column would have created.</td></tr>
+          <tr><td>Row-Level Security</td><td>Tenant isolation as a database guarantee, testable at the SQL layer independently of the API.</td></tr>
+          <tr><td><code>ENUM</code> types</td><td>Status, priority, delivery state, author type and visibility are closed sets. An invalid status becomes impossible rather than merely untested — and the status machine is the most-touched logic in the product.</td></tr>
+          <tr><td><code>JSONB</code> + GIN</td><td><code>state.declared</code> filterable on any admin-promoted key without an index per field; <code>state.raw</code> stored as-is so nothing the game sends is ever dropped.</td></tr>
+          <tr><td>CTE with <code>RETURNING</code></td><td>The merge repoints conversations and writes one event per affected ticket from the same statement, so the two sets cannot diverge.</td></tr>
+          <tr><td>Conditional <code>UPDATE</code></td><td>The atomic claim: <code>UPDATE conversation SET assigned_agent_id = $1 WHERE id = $2 AND assigned_agent_id IS NULL RETURNING *</code>. Zero rows means "already claimed" — one agent wins, the other sees a message rather than an error or a duplicate reply.</td></tr>
+          <tr><td>BRIN on <code>occurred_at</code></td><td>The events table only grows and is only queried by time range. A fraction of a B-tree's size here.</td></tr>
+          <tr><td><code>generate_series</code></td><td>Sparklines with no gaps. Days with zero conversations must render as zero, not vanish and distort the line.</td></tr>
+          <tr><td>Transactions</td><td>Publish an article and write its embeddings atomically, so the bot can never see a published article it has no vector for — precisely the stale-knowledge failure the spec warns about.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>The five unspecified things, now decided</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th style="width:24%">Question</th><th style="width:76%">Decision</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Cross-intent merge</strong></td>
+            <td><strong>Allowed.</strong> Blocking it would only force an admin to do two operations to achieve the same thing. Both <code>from_intent_id</code> and <code>to_intent_id</code> land on the <code>taxonomy_change</code> row, so the intent-level volume shift is as explainable as the subintent-level one.</td>
+          </tr>
+          <tr>
+            <td><strong>Snapshot on reopen</strong></td>
+            <td><strong>Keeps the original.</strong> One snapshot per conversation, taken at creation, per the spec's "what was true when the problem happened." <code>PLAYER_STATE_SNAPSHOT</code> stays 1:1. <em>Consequence for the Game View:</em> a player reopening six months later shows a six-month-old device and client version, so <code>captured_at</code> must be displayed prominently — otherwise an agent reads stale data as current and hunts a bug in a build that no longer exists.</td>
+          </tr>
+          <tr>
+            <td><strong>Auto-close window</strong></td>
+            <td><strong>7 days, per-workspace setting.</strong> Lives in the admin console, per "anything that would otherwise need a release to change belongs here instead."</td>
+          </tr>
+          <tr>
+            <td><strong>Events: projection or truth</strong></td>
+            <td><strong>Projection.</strong> <code>CONVERSATION</code> stays a mutable row the console reads directly, and every state change <em>also</em> appends to <code>EVENT</code>. The cost: a bug can let the row and the stream disagree, so all state changes go through one function that writes both in a single transaction — never ad-hoc updates.</td>
+          </tr>
+          <tr>
+            <td><strong>Who creates an intent</strong></td>
+            <td><strong>An Admin, in the dashboard.</strong> The p44 matrix enumerates subintent operations and has <em>no intent row at all</em>, despite the spec discussing intents throughout — an omission rather than a prohibition, since "changing taxonomy must never require a release" covers intents. Same permission level as subintents. Three consequences: <code>taxonomy_change</code> gains <code>entity_type</code>, <code>kind</code> gains <code>create</code>, and archiving an intent is blocked-if-not-empty.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note">
+      <strong>Auto-close is the lowest-value worker in the build — schedule it last.</strong> Push on what <code>closed</code> achieves and most of it evaporates: the player sees "Resolved" either way, reopening works identically from both with no time limit, and the inactivity clock has already stopped. It does not even serve reporting, because the counting rule is "resolution counts events, not current status" — so reports aggregate <code>conversation_resolved</code> events, which the event table does better than a status field. What genuinely remains is queue hygiene: the line between "resolved an hour ago, might bounce back" and "resolved last month, file it." Worth building, worth building in week 3.
+    </div>
+  </section>
+
+  <section>
+    <h2>Why 32 tables</h2>
+    <p>It sounds like a lot until you notice where they come from. <strong>Twelve tables are things the product has. The other twenty are the price of three rules you wrote yourself.</strong></p>
+    <div class="scope">
+      <div class="card">
+        <h3>Rule 1 · Nothing is deleted</h3>
+        <ul><li>taxonomy_change</li><li>event</li><li>rule_firing</li><li>change_log</li><li>resolution_cycle</li></ul>
+        <p>Corrections are made by adding, so every correction needs somewhere to be added. A product that allowed deletes would drop all five.</p>
+      </div>
+      <div class="card">
+        <h3>Rule 2 · Support configures without a release</h3>
+        <ul><li>intent</li><li>subintent</li><li>form</li><li>form_version</li><li>form_field</li><li>label</li><li>rule</li><li>bot_config</li><li>declared_field</li><li>saved_filter</li></ul>
+        <p>Every one of these would be a constant in the codebase if a release were acceptable. They are tables because it isn't.</p>
+      </div>
+      <div class="card">
+        <h3>Rule 3 · Reporting counts events</h3>
+        <ul><li>session</li><li>article_feedback</li><li>article_embedding</li><li>article_phrasing</li><li>player_state_snapshot</li></ul>
+        <p>Metrics that cannot be derived from current state need their raw material captured at the time it happens.</p>
+      </div>
+    </div>
+
+    <h3>Every table, and what breaks without it</h3>
+    <div class="scroll">
+      <table>
+        <thead><tr><th style="width:18%">Table</th><th style="width:44%">Why it exists</th><th style="width:38%">Remove it and…</th></tr></thead>
+        <tbody>
+          <tr><td colspan="3" style="background:var(--accent-w);font-family:var(--mono);font-size:.74rem;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);padding:.5rem .6rem">Identity — 3</td></tr>
+          <tr><td><code>workspace</code></td><td>One workspace is one game. The tenancy root.</td><td>No multi-tenancy at all.</td></tr>
+          <tr><td><code>agent</code></td><td>One login per person, global — a person working on three games has one account.</td><td>Three logins per person, or roles that can't differ per game.</td></tr>
+          <tr><td><code>workspace_member</code></td><td>The hinge. A global agent holding a <em>different role in each workspace</em> is only expressible as a join row.</td><td>Role goes on <code>agent</code> and is the same everywhere — directly against the spec.</td></tr>
+
+          <tr><td colspan="3" style="background:var(--accent-w);font-family:var(--mono);font-size:.74rem;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);padding:.5rem .6rem">Players — 3</td></tr>
+          <tr><td><code>player</code></td><td>A player of two of your games has two unrelated records and no shared history.</td><td>Nothing to attach conversations or sessions to.</td></tr>
+          <tr><td><code>player_device</code></td><td>Push tokens. One player has several devices and tokens rotate, so it can't be a column.</td><td>No push. Replies only arrive when the player reopens the app.</td></tr>
+          <tr><td><code>session</code></td><td><strong>The denominator for self-serve rate.</strong> Counted per session, never per ticket.</td><td>Self-serve rate — the headline metric of the whole product — is uncomputable, and cannot be backfilled.</td></tr>
+
+          <tr><td colspan="3" style="background:var(--accent-w);font-family:var(--mono);font-size:.74rem;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);padding:.5rem .6rem">Taxonomy — 3</td></tr>
+          <tr><td><code>intent</code></td><td>The category list support owns. Articles hang off it.</td><td>Categories become a code constant; changing one needs a release.</td></tr>
+          <tr><td><code>subintent</code></td><td>The leaf, and the only level stored. Carries default priority and the form link — properties intent doesn't have.</td><td>No routing, no form mapping, no misclassification metric.</td></tr>
+          <tr><td><code>taxonomy_change</code></td><td>The dated structural log, for <strong>both</strong> levels — create, rename, move, merge, archive. <em>"Structural changes are dated… otherwise a volume trend can't distinguish real change in player behaviour from someone reorganising the list."</em></td><td>Every create, merge, move and rename becomes an unexplained step in a chart, forever.</td></tr>
+
+          <tr><td colspan="3" style="background:var(--accent-w);font-family:var(--mono);font-size:.74rem;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);padding:.5rem .6rem">Knowledge — 4</td></tr>
+          <tr><td><code>article</code></td><td>The bot's entire knowledge. Not trained — this <em>is</em> the model's world.</td><td>No self-serve, no bot answers.</td></tr>
+          <tr><td><code>article_phrasing</code></td><td>The ways players actually ask. Each gets its own embedding.</td><td>Retrieval matches against polished support prose instead of player language.</td></tr>
+          <tr><td><code>article_embedding</code></td><td>N vectors per article — one per summary, one per phrasing. Also lets you re-embed with a new model without touching article rows.</td><td>Either no vector search, or vectors welded to article rows so a model change is a full rewrite.</td></tr>
+          <tr><td><code>article_feedback</code></td><td>The "did this help / did this solve it" signal.</td><td><strong>Two reporting panels cannot exist</strong> — the self-serve split between "found the answer" and "left without one", and the bot's offered→rejected panel.</td></tr>
+
+          <tr><td colspan="3" style="background:var(--accent-w);font-family:var(--mono);font-size:.74rem;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);padding:.5rem .6rem">Conversation core — 6</td></tr>
+          <tr><td><code>conversation</code></td><td>The central object. Everything else hangs off it.</td><td>There is no product.</td></tr>
+          <tr><td><code>resolution_cycle</code></td><td>A conversation resolves more than once, and each counts in the window it happened.</td><td>Last month's resolution figure changes when someone replies today.</td></tr>
+          <tr><td><code>message</code></td><td>The thread. Its own table, never embedded — unbounded growth.</td><td>No chat.</td></tr>
+          <tr><td><code>attachment</code></td><td>Images and video, both directions, private bucket, presigned access.</td><td>Players describe screenshots in words.</td></tr>
+          <tr><td><code>label</code></td><td>Shared workspace vocabulary, so "urgent" means one thing and can be renamed once.</td><td>Free-text tags that drift into six spellings of the same word.</td></tr>
+          <tr><td><code>conversation_label</code></td><td>Many labels per ticket, many tickets per label. An unavoidable M:N join.</td><td>One label per ticket, or labels duplicated per conversation.</td></tr>
+
+          <tr><td colspan="3" style="background:var(--accent-w);font-family:var(--mono);font-size:.74rem;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);padding:.5rem .6rem">Player state — 2</td></tr>
+          <tr><td><code>player_state_snapshot</code></td><td>What was true in the game when the issue was raised. <em>"This is the difference between a support tool and a chat window."</em></td><td>The Game View is empty and agents diagnose by interrogating the player.</td></tr>
+          <tr><td><code>declared_field</code></td><td>Which keys an admin promoted to searchable, <strong>and when</strong>. Promotion is never retroactive.</td><td>A filter silently returns partial results with no way to explain why.</td></tr>
+
+          <tr><td colspan="3" style="background:var(--accent-w);font-family:var(--mono);font-size:.74rem;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);padding:.5rem .6rem">Forms — 5</td></tr>
+          <tr><td><code>form</code></td><td>The container, so several subintents can share one form.</td><td>A form per subintent, duplicated and drifting.</td></tr>
+          <tr><td><code>form_version</code></td><td>Editing a live form mints a new version.</td><td>Editing a question retroactively changes what past answers were answering.</td></tr>
+          <tr><td><code>form_field</code></td><td>The six field types, belonging to a version rather than a form.</td><td>See <code>form_version</code>. <em>Collapsible — see below.</em></td></tr>
+          <tr><td><code>form_submission</code></td><td>One per conversation, version-stamped, carrying <code>status</code> — and because the form is a conversation, <code>partial</code> is a reachable outcome.</td><td>No way to tell "declined it", "abandoned halfway" and "was never asked" apart — and the agent needs all three.</td></tr>
+          <tr><td><code>form_answer</code></td><td>The values, each traced to the message that supplied it.</td><td>The bot's extraction can't be checked against what the player actually wrote.</td></tr>
+
+          <tr><td colspan="3" style="background:var(--accent-w);font-family:var(--mono);font-size:.74rem;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);padding:.5rem .6rem">Automation — 3</td></tr>
+          <tr><td><code>rule</code></td><td>Routing and automation support owns without a release.</td><td>Routing logic is a deploy.</td></tr>
+          <tr><td><code>rule_firing</code></td><td>The execution log. <em>"A rule engine without an execution log is unmaintainable within weeks."</em></td><td>"Why did this ticket get priority 1?" is unanswerable.</td></tr>
+          <tr><td><code>bot_config</code></td><td>Prompt, provisioning state, and loud sync status. <em>Collapsible — see below.</em></td><td>The bot's behaviour is a code change.</td></tr>
+
+          <tr><td colspan="3" style="background:var(--accent-w);font-family:var(--mono);font-size:.74rem;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);padding:.5rem .6rem">Reporting and audit — 3</td></tr>
+          <tr><td><code>event</code></td><td>The reporting spine. Resolution counts events, not status.</td><td><strong>Most metrics become unreconstructible.</strong> This is why the doc says build it on day two.</td></tr>
+          <tr><td><code>change_log</code></td><td>Config changes with the value before and after.</td><td>"Who changed the bot prompt, and what was it before?" has no answer.</td></tr>
+          <tr><td><code>saved_filter</code></td><td>Private and shared views — and, post-decision, named queues.</td><td>Every agent rebuilds the same filter daily, and "the senior queue" doesn't exist.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Where I'd accept fewer</h3>
+    <p>Four of the 32 are genuinely collapsible. I'd take one of them and keep the rest, and here's the honest reasoning on each:</p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th style="width:20%">Candidate</th><th style="width:80%">Verdict</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code>form_field</code></td>
+            <td><strong>Collapsible; kept.</strong> Fields are only ever read as a whole set, so they could be <code>jsonb</code> on <code>form_version</code>. Kept as a table because <code>form_answer</code> FKs to it, and because the bot walks fields by <code>position</code> to decide what to ask next.</td>
+          </tr>
+          <tr>
+            <td><code>bot_config</code></td>
+            <td><strong>Keep.</strong> It looks like columns on <code>workspace</code>, but <code>workspace</code> is one of only two <em>global</em> tables and this is workspace-scoped config under RLS. Merging it would put tenant-scoped data in an untenanted table — exactly the confusion the tenancy boundary exists to prevent.</td>
+          </tr>
+          <tr>
+            <td><code>player_state_snapshot</code></td>
+            <td><strong>Keep.</strong> It's 1:1 with <code>conversation</code>, so it could be four more columns. But <code>raw</code> is uncontrolled client input treated as PII by default, with its own access and retention rules — and it's a potentially large blob you never want dragged through a queue list query. Separate table keeps both problems contained.</td>
+          </tr>
+          <tr>
+            <td><code>change_log</code></td>
+            <td><strong>Keep.</strong> It could fold into <code>event</code> as one append-only log. But <code>event</code> is scanned constantly for metrics across millions of rows, and mixing rare config audits into it means every metric query wades through noise. Different write rate, different read pattern, different index strategy.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Every table is kept, so the count stays <strong>32</strong>. Going lower means dropping a spec requirement rather than normalising differently — and the cheapest-looking cuts are the most expensive: <code>session</code>, <code>article_feedback</code> and <code>event</code> are three small tables whose data <strong>cannot be reconstructed later</strong>. Skip them in week 1 to save time and weeks 1–2 have no metrics at all.</p>
+  </section>
+
+  <section>
+    <h2>What changes in the docs</h2>
+    <ol>
+      <li><code>app/CLAUDE.md</code> — the stack table, the architecture diagram, and the "Server-side decisions" section. The Mongoose tenancy-plugin paragraph is replaced by RLS; the <code>findOneAndUpdate</code> message-ordering note becomes a <code>RETURNING</code> clause; the wildcard-index note becomes GIN on <code>JSONB</code>. The domain-model paragraph on conversations needs resolution state moved out.</li>
+      <li><code>app/README.md</code> — the same stack table and architecture block.</li>
+      <li><code>app/docs/decisions/</code> — an ADR, since this reverses a written decision. That directory exists and is empty.</li>
+    </ol>
+    <p>Everything else in both documents survives untouched. The status machine, the metric definitions, the roles matrix and the non-negotiables were never database-specific.</p>
+  </section>
+
+</div>
