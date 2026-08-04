@@ -130,4 +130,39 @@ describe('splitSnapshot', () => {
     expect(splitSnapshot(SPEC_SNAPSHOT, ALL_DECLARED, 'UserId7661').raw.__player_id_mismatch).toBeUndefined()
     expect(splitSnapshot({ platform: 'ios' }, ALL_DECLARED, 'UserId7661').raw.__player_id_mismatch).toBeUndefined()
   })
+
+  // Regression: a `raw[key] = value` assignment on an ordinary object invokes
+  // Object.prototype's `__proto__` accessor instead of creating an own property,
+  // silently swallowing the payload. Parsed from a JSON string, not written as an
+  // object literal — a literal `{ __proto__: ... }` is special-cased by the JS
+  // parser (it sets the prototype, not an own property) and would not reproduce
+  // the wire case where the SDK's JSON body is parsed by the server.
+  it('keeps a wire __proto__ key as real, visible data in raw instead of dropping it', () => {
+    const snapshot = JSON.parse('{"platform":"ios","__proto__":{"polluted":true}}')
+    const result = splitSnapshot(snapshot, new Set(['platform']), 'UserId7661')
+    expect(Object.keys(result.raw)).toEqual(['__proto__'])
+    expect(JSON.stringify(result.raw)).toBe('{"__proto__":{"polluted":true}}')
+    expect(result.raw.__proto__).toEqual({ polluted: true })
+    expect(result.raw.polluted).toBeUndefined()
+    expect(Object.getPrototypeOf(result.raw)).toBeNull()
+  })
+
+  it('preserves a malformed (non-object) extra under raw.__extra_malformed instead of discarding it', () => {
+    const result = splitSnapshot({ platform: 'ios', extra: ['a', 'b'] }, ALL_DECLARED, 'UserId7661')
+    expect(result.raw.__extra_malformed).toEqual(['a', 'b'])
+    expect(result.declared.platform).toBe('ios')
+  })
+
+  it('does not flag a null or absent extra as malformed', () => {
+    expect(splitSnapshot({ platform: 'ios', extra: null }, ALL_DECLARED, 'UserId7661').raw.__extra_malformed).toBeUndefined()
+    expect(splitSnapshot({ platform: 'ios' }, ALL_DECLARED, 'UserId7661').raw.__extra_malformed).toBeUndefined()
+  })
+
+  it('flags a player_id mismatch even when the claimed id is not a string', () => {
+    const mismatched = splitSnapshot({ ...SPEC_SNAPSHOT, player_id: 7661 }, ALL_DECLARED, 'UserId7661')
+    expect(mismatched.raw.__player_id_mismatch).toEqual({ claimed: 7661, authenticated: 'UserId7661' })
+
+    const agreeing = splitSnapshot({ ...SPEC_SNAPSHOT, player_id: 7661 }, ALL_DECLARED, '7661')
+    expect(agreeing.raw.__player_id_mismatch).toBeUndefined()
+  })
 })

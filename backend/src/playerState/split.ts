@@ -8,10 +8,16 @@ export type SnapshotSplit = {
 }
 
 const MAX_DEGRADED_REASON = 500
-const EMPTY: SnapshotSplit = { declared: {}, raw: {}, isMissing: true, degradedReason: null }
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
+
+// Null-prototype so a wire key literally named `__proto__` (parsed from JSON, where
+// it is an ordinary own property, not the parser special-case a `{ __proto__: ... }`
+// object literal gets) lands as real, visible data instead of being swallowed by
+// Object.prototype's `__proto__` accessor. Object.keys, `in` and JSON.stringify all
+// behave identically on a null-prototype object, so this changes nothing else.
+const emptyBucket = (): Record<string, unknown> => Object.create(null) as Record<string, unknown>
 
 /**
  * Splits one SDK snapshot into the two jsonb columns of player_state_snapshot.
@@ -28,7 +34,7 @@ export function splitSnapshot(
   declaredKeys: ReadonlySet<string>,
   authenticatedExternalPlayerId: string,
 ): SnapshotSplit {
-  if (!isPlainObject(input)) return { ...EMPTY, declared: {}, raw: {} }
+  if (!isPlainObject(input)) return { declared: emptyBucket(), raw: emptyBucket(), isMissing: true, degradedReason: null }
 
   const { extra, degraded_reason: degradedRaw, ...topLevel } = input
 
@@ -44,21 +50,33 @@ export function splitSnapshot(
   }
 
   if (Object.keys(candidates).length === 0) {
-    return { declared: {}, raw: {}, isMissing: true, degradedReason }
+    return { declared: emptyBucket(), raw: emptyBucket(), isMissing: true, degradedReason }
   }
 
-  const declared: Record<string, unknown> = {}
-  const raw: Record<string, unknown> = {}
+  const declared = emptyBucket()
+  const raw = emptyBucket()
   for (const [key, value] of Object.entries(candidates)) {
     if (declaredKeys.has(key)) declared[key] = value
     else raw[key] = value
   }
 
+  // `extra` arrived but in the wrong shape (array, string, number...) — it contributed
+  // nothing to `candidates` above, so record that something arrived malformed rather
+  // than silently discarding it. `null`/absent `extra` is a normal "no extra data"
+  // signal, not malformed. Written after the partition, like the mismatch key below.
+  if (extra !== undefined && extra !== null && !isPlainObject(extra)) {
+    raw.__extra_malformed = extra
+  }
+
   // snapshot.player_id is advisory only — the authoritative player comes from the
   // JWT. A mismatch is recorded and does not fail the request; the SDK cannot be
-  // trusted to identify the player it is authenticated as.
+  // trusted to identify the player it is authenticated as. Compare stringified so a
+  // numeric (or other primitive) player_id still triggers the diagnostic — the wire
+  // contract documents player_id as a string, but the whole point of this check is
+  // catching an SDK that is confused about who it is. The original, non-stringified
+  // value is what gets recorded.
   const claimed = candidates.player_id
-  if (typeof claimed === 'string' && claimed !== authenticatedExternalPlayerId) {
+  if (claimed !== undefined && claimed !== null && String(claimed) !== authenticatedExternalPlayerId) {
     raw.__player_id_mismatch = { claimed, authenticated: authenticatedExternalPlayerId }
   }
 
