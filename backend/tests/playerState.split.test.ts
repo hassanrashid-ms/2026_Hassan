@@ -137,6 +137,14 @@ describe('splitSnapshot', () => {
   // object literal — a literal `{ __proto__: ... }` is special-cased by the JS
   // parser (it sets the prototype, not an own property) and would not reproduce
   // the wire case where the SDK's JSON body is parsed by the server.
+  //
+  // declared/raw are built with Object.defineProperty (see setOwn in split.ts),
+  // not Object.create(null): defineProperty uses [[DefineOwnProperty]] rather than
+  // [[Set]], so it never invokes the inherited __proto__ accessor either — but the
+  // result keeps a normal Object.prototype, which is what makes it safe to pass
+  // straight into drizzle-orm's .values() (its is() helper reads
+  // Object.getPrototypeOf(value).constructor unconditionally and throws on a
+  // null-prototype value).
   it('keeps a wire __proto__ key as real, visible data in raw instead of dropping it', () => {
     const snapshot = JSON.parse('{"platform":"ios","__proto__":{"polluted":true}}')
     const result = splitSnapshot(snapshot, new Set(['platform']), 'UserId7661')
@@ -144,7 +152,8 @@ describe('splitSnapshot', () => {
     expect(JSON.stringify(result.raw)).toBe('{"__proto__":{"polluted":true}}')
     expect(result.raw.__proto__).toEqual({ polluted: true })
     expect(result.raw.polluted).toBeUndefined()
-    expect(Object.getPrototypeOf(result.raw)).toBeNull()
+    expect(Object.prototype.hasOwnProperty.call(result.raw, '__proto__')).toBe(true)
+    expect(Object.getPrototypeOf(result.raw)).toBe(Object.prototype)
   })
 
   it('preserves a malformed (non-object) extra under raw.__extra_malformed instead of discarding it', () => {

@@ -78,23 +78,16 @@ export const sessionsStart: RequestHandler = async (req, res) => {
     const declaredKeys = await loadDeclaredKeys(tx)
     const split = splitSnapshot(body.snapshot, declaredKeys, player.externalPlayerId)
 
-    // splitSnapshot deliberately returns declared/raw as null-prototype objects (see
-    // src/playerState/split.ts) so a wire key literally named `__proto__` survives as
-    // real data. But drizzle-orm's internal `is()` helper (entity.js) unconditionally
-    // reads `Object.getPrototypeOf(value).constructor` while walking `.values()`,
-    // which throws on a null-prototype object (`Object.getPrototypeOf` is `null`
-    // there). Spreading into a plain object literal fixes the prototype chain for
-    // drizzle without losing data: object-spread copies own enumerable properties via
-    // CreateDataProperty, not the `[[Set]]` assignment that would invoke
-    // Object.prototype's `__proto__` accessor, so a `__proto__` key still round-trips
-    // as an ordinary own property (verified empirically).
+    // DO NOTHING, not DO UPDATE. The split is permanent: re-splitting a redelivered
+    // payload against a newer declared_field set would promote a key retroactively,
+    // which the schema spec forbids outright ("no backfill, ever").
     await tx
       .insert(playerStateSnapshot)
       .values({
         workspaceId: player.workspaceId,
         sessionId: body.session_id,
-        declared: { ...split.declared },
-        raw: { ...split.raw },
+        declared: split.declared,
+        raw: split.raw,
         isMissing: split.isMissing,
         degradedReason: split.degradedReason,
         capturedAt: startedAt,

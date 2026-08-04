@@ -277,4 +277,29 @@ describe('POST /sdk/sessions/start', () => {
     expect(sessions[0]!.playerId).toBe(other)
     expect(await rows(f.workspaceId, async (tx) => tx.select().from(playerStateSnapshot))).toHaveLength(0)
   })
+
+  // Locks the whole chain — splitSnapshot -> drizzle .values() -> Postgres jsonb ->
+  // read back out of the driver — which is where the null-prototype/drizzle bug
+  // actually lived. JSON.parse is required, not an object literal: JSON.parse
+  // creates __proto__ as an ordinary own data property, whereas a JS object literal
+  // `{ __proto__: 'x' }` is special-cased by the parser to merely set the
+  // prototype, silently discarding the string, and would prove nothing here.
+  it('round-trips a wire __proto__ key through drizzle and jsonb without dropping it', async () => {
+    const f = await fixture()
+    const snapshot = JSON.parse('{"platform":"ios","__proto__":"malicious-payload"}')
+    await post(f, body({ snapshot })).expect(200)
+
+    const { rows: dbRows } = await ownerPool.query(
+      'select declared, raw from player_state_snapshot where session_id = $1',
+      [SESSION_ID],
+    )
+    const row = dbRows[0]!
+
+    // A bare `.hasOwnProperty()` on a value read back from the pg driver is exactly
+    // the kind of thing that could throw if the driver ever handed back something
+    // prototype-less, so go through Object.prototype explicitly.
+    expect(Object.prototype.hasOwnProperty.call(row.raw, '__proto__')).toBe(true)
+    expect(row.raw.__proto__).toBe('malicious-payload')
+    expect(row.declared.platform).toBe('ios')
+  })
 })

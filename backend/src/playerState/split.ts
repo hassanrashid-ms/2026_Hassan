@@ -12,12 +12,25 @@ const MAX_DEGRADED_REASON = 500
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
-// Null-prototype so a wire key literally named `__proto__` (parsed from JSON, where
-// it is an ordinary own property, not the parser special-case a `{ __proto__: ... }`
-// object literal gets) lands as real, visible data instead of being swallowed by
-// Object.prototype's `__proto__` accessor. Object.keys, `in` and JSON.stringify all
-// behave identically on a null-prototype object, so this changes nothing else.
-const emptyBucket = (): Record<string, unknown> => Object.create(null) as Record<string, unknown>
+const emptyBucket = (): Record<string, unknown> => ({})
+
+/**
+ * Assigns `target[key] = value` without ever invoking an inherited setter. An
+ * ordinary `target[key] = value` on a normal-prototype object triggers
+ * `Object.prototype`'s `__proto__` accessor when `key` is literally `"__proto__"`
+ * (parsed from JSON, where it is an ordinary own property — not the parser
+ * special-case a `{ __proto__: ... }` object literal gets), silently rewriting the
+ * object's prototype instead of storing the value. `Object.defineProperty` uses
+ * `[[DefineOwnProperty]]` rather than `[[Set]]`, so it never consults the prototype
+ * chain, and the result still has a normal `Object.prototype` — unlike
+ * `Object.create(null)`, which fixes the same problem but produces a value that
+ * drizzle-orm's `is()` helper (`entity.js`) crashes on, since it unconditionally
+ * reads `Object.getPrototypeOf(value).constructor` while walking `.values()`.
+ * `enumerable: true` keeps `Object.keys`/`JSON.stringify` behaving normally.
+ */
+const setOwn = (target: Record<string, unknown>, key: string, value: unknown): void => {
+  Object.defineProperty(target, key, { value, enumerable: true, writable: true, configurable: true })
+}
 
 /**
  * Splits one SDK snapshot into the two jsonb columns of player_state_snapshot.
@@ -56,8 +69,8 @@ export function splitSnapshot(
   const declared = emptyBucket()
   const raw = emptyBucket()
   for (const [key, value] of Object.entries(candidates)) {
-    if (declaredKeys.has(key)) declared[key] = value
-    else raw[key] = value
+    if (declaredKeys.has(key)) setOwn(declared, key, value)
+    else setOwn(raw, key, value)
   }
 
   // `extra` arrived but in the wrong shape (array, string, number...) — it contributed
