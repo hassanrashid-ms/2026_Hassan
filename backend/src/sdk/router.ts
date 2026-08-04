@@ -3,6 +3,7 @@ import { requirePlayerToken } from '../auth/requirePlayerToken.ts'
 import { requireSdkHeaders } from '../auth/requireSdkHeaders.ts'
 import { sessionsStart } from './sessionsStart.ts'
 import { sessionsEnd } from './sessionsEnd.ts'
+import { incidents } from './incidents.ts'
 
 export const sdkRouter: RouterType = Router()
 
@@ -15,6 +16,6 @@ sdkRouter.get('/_whoami', (req, res) => {
 
 sdkRouter.post('/sessions/start', sessionsStart)
 sdkRouter.post('/sessions/end', sessionsEnd)
+sdkRouter.post('/incidents', incidents)
 
-// Task 11 → POST /incidents
 // Task 12 → GET  /unread
