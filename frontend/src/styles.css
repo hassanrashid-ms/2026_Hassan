@@ -1,0 +1,11 @@
+:root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+.surface {
+  margin: 0 auto;
+  max-width: 40rem;
+  padding: max(1rem, env(safe-area-inset-top)) 1rem max(1rem, env(safe-area-inset-bottom));
+}
+dl { display: grid; grid-template-columns: 10rem 1fr; gap: 0.25rem 1rem; }
+dt { font-weight: 600; }
+pre { overflow-x: auto; padding: 0.5rem; background: rgb(0 0 0 / 0.06); }
+.notice { padding: 0.5rem; border-left: 3px solid currentColor; }
+button { padding: 0.5rem 0.75rem; margin-right: 0.5rem; }
