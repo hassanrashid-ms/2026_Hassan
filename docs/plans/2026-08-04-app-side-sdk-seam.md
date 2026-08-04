@@ -2177,8 +2177,10 @@ Expected: PASS — 6 tests
 
 ```ts
 import { randomUUID } from 'node:crypto'
+import { Client } from 'pg'
 import { DECLARED_FIELD_SEED } from '@support/types'
-import { agent, declaredField, workspace, workspaceMember } from './schema/index.ts'
+import { getEnv } from '../env.ts'
+import { agent, declaredField, workspaceMember } from './schema/index.ts'
 import { closeDb } from './client.ts'
 import { withWorkspace, withoutWorkspace } from './withWorkspace.ts'
 import { generateWorkspaceSecret } from '../auth/workspaceSecret.ts'
@@ -2197,13 +2199,30 @@ const ADMIN_EMAIL = process.env.SEED_ADMIN_EMAIL ?? 'admin@example.test'
 async function seed(): Promise<void> {
   const { secret, secretHash } = generateWorkspaceSecret(SLUG)
 
-  const { workspaceId, adminId } = await withoutWorkspace(async (tx) => {
-    const [row] = await tx
-      .insert(workspace)
-      .values({ id: randomUUID(), name: 'Demo Game', slug: SLUG, secretHash })
-      .onConflictDoUpdate({ target: workspace.slug, set: { secretHash } })
-      .returning({ id: workspace.id })
-    if (!row) throw new Error('workspace upsert returned nothing')
+  // `workspace` is written on the OWNER connection, not the app pool: the app role
+  // holds only SELECT there, so it cannot rewrite a workspace secret even if a
+  // handler is compromised. Seeding is ops tooling, so the owner credential is
+  // appropriate here and nowhere in the request path. See
+  // docs/decisions/2026-08-04-unscoped-table-writes.md.
+  const owner = new Client({ connectionString: getEnv().MIGRATION_DATABASE_URL })
+  await owner.connect()
+  let workspaceId: string
+  try {
+    const { rows } = await owner.query<{ id: string }>(
+      `insert into workspace (id, name, slug, secret_hash) values ($1, 'Demo Game', $2, $3)
+         on conflict (slug) do update set secret_hash = excluded.secret_hash
+       returning id`,
+      [randomUUID(), SLUG, secretHash],
+    )
+    if (!rows[0]) throw new Error('workspace upsert returned nothing')
+    workspaceId = rows[0].id
+  } finally {
+    await owner.end()
+  }
+
+  // Everything below stays on the APP pool deliberately, so the seed exercises the
+  // real RLS path rather than bypassing it.
+  const { adminId } = await withoutWorkspace(async (tx) => {
 
     // No password: agent auth is Google OAuth restricted to the mindstormstudios.com
     // org. google_subject stays null until this person's first real login.
@@ -2214,7 +2233,7 @@ async function seed(): Promise<void> {
       .returning({ id: agent.id })
     if (!admin) throw new Error('agent upsert returned nothing')
 
-    return { workspaceId: row.id, adminId: admin.id }
+    return { adminId: admin.id }
   })
 
   // workspace_member and declared_field are BOTH scoped, so they belong here rather
