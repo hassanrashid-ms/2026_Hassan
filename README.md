@@ -100,19 +100,26 @@ Ten macro components across three weeks, per the delivery-slices doc:
 | 2 | 2 | Intents · Forms |
 | 3 | 3 | Ticket View · Game View · Admin Console |
 
-Week 1 is built in sequence rather than five-way parallel:
+Week 1 is built in sequence rather than five-way parallel. Full detail in
+[`docs/specs/2026-08-04-sdk-wire-contract.md`](docs/specs/2026-08-04-sdk-wire-contract.md).
 
-1. **Days 1–3 — the spine.** Drizzle schema + first migration, RLS policies on every scoped table,
-   agent auth, player-token auth, the `event` table. No UI. `POST /conversations` and `POST /messages`
-   with correct sequencing and correct tenant isolation. The cross-workspace isolation test is written
-   here, not later — authenticate as workspace A, hit every endpoint with workspace B's IDs, expect
-   `404`.
-2. **Days 4–7 — the core loop end to end.** Player message from a crude page → crude agent inbox →
-   agent reply → player sees it. Ugly is fine. If this loop doesn't work, nothing else matters, so
-   it ships before the bot is touched.
-3. **Rest of week 1 — Bot and Knowledge Base.** Build the *handoff* path first and the clever part
-   second: a bot that always says "let me get someone" is a working system, while a clever bot with
-   no fallback is broken.
+1. **The spine.** Drizzle schema + first migration, RLS policies on every scoped table, agent auth,
+   the `event` table, seeded workspace and `Other` taxonomy. No UI. The cross-workspace isolation test
+   is written here, not later — authenticate as workspace A, hit every endpoint with workspace B's IDs,
+   **expect `404`, not `403`** (under RLS the rows are invisible, so the handler cannot tell "not
+   yours" from "not there").
+2. **The SDK seam.** `POST /auth/player-token` plus the four `/sdk/*` endpoints, then a deliberately
+   ugly web stub that reads the token from the URL fragment, renders the player's state and calls
+   `SupportBridge.post({type:'close'})`, then the real `Assets/Support/` SDK pointed at it. **This
+   comes before the chat loop on purpose:** the seam spans both repos — token issuance, the fragment
+   handoff, snapshot delivery, the bridge, session end — and it is where the surprises live. Prove it
+   while it is still cheap to change.
+3. **The core loop end to end.** `POST /conversations` and `POST /messages` with correct sequencing and
+   tenant isolation. Player message from a crude page → crude agent inbox → agent reply → player sees
+   it. Ugly is fine. If this loop doesn't work, nothing else matters, so it ships before the bot is
+   touched.
+4. **Bot and Knowledge Base.** Build the *handoff* path first and the clever part second: a bot that
+   always says "let me get someone" is a working system, while a clever bot with no fallback is broken.
 
 ## What must be true, regardless of implementation
 
