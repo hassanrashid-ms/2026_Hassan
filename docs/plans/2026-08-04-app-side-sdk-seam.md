@@ -6158,7 +6158,8 @@ git commit -m "feat(surface): web stub that reads the fragment and renders playe
 - Create: `scripts/verify-seam.sh`
 - Modify: `README.md`, `CLAUDE.md`, `docs/specs/2026-08-04-database-and-schema-design.md`
 - Create: `docs/decisions/2026-08-04-sdk-path-schema-subset.md`
-- Already written during execution (reference them, do not rewrite): `docs/decisions/2026-08-04-agent-auth-google-oauth.md`, `docs/decisions/2026-08-04-composite-foreign-keys-for-tenancy.md`, `docs/decisions/2026-08-04-unscoped-table-writes.md`
+- Already written during execution (reference them, do not rewrite): `docs/decisions/2026-08-04-agent-auth-google-oauth.md`, `docs/decisions/2026-08-04-composite-foreign-keys-for-tenancy.md`, `docs/decisions/2026-08-04-unscoped-table-writes.md`, `docs/decisions/2026-08-04-three-audience-api-structure.md`
+- Rename: `backend/src/auth/jwt.ts` → `backend/src/auth/playerToken.ts`, updating every import. Deferred here deliberately so it did not churn in-flight tasks. The file is player-specific (it sets `aud: 'support-player'`), and the generic name would attract agent-token code once the console's Google OAuth session lands — which is precisely the audience mixing `docs/decisions/2026-08-04-three-audience-api-structure.md` exists to prevent. Run the full suite after; it is a pure rename with no behaviour change.
 
 **Interfaces:**
 - Consumes: everything. Produces no code — this task closes the loop so the next person is not guessing.
