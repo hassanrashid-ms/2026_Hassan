@@ -6158,7 +6158,7 @@ git commit -m "feat(surface): web stub that reads the fragment and renders playe
 - Create: `scripts/verify-seam.sh`
 - Modify: `README.md`, `CLAUDE.md`, `docs/specs/2026-08-04-database-and-schema-design.md`
 - Create: `docs/decisions/2026-08-04-sdk-path-schema-subset.md`
-- Already written during execution (reference them, do not rewrite): `docs/decisions/2026-08-04-agent-auth-google-oauth.md`, `docs/decisions/2026-08-04-composite-foreign-keys-for-tenancy.md`
+- Already written during execution (reference them, do not rewrite): `docs/decisions/2026-08-04-agent-auth-google-oauth.md`, `docs/decisions/2026-08-04-composite-foreign-keys-for-tenancy.md`, `docs/decisions/2026-08-04-unscoped-table-writes.md`
 
 **Interfaces:**
 - Consumes: everything. Produces no code — this task closes the loop so the next person is not guessing.
