@@ -3213,7 +3213,9 @@ The rules, in the order the function applies them. Each is asserted by a test be
 | 3 | `extra` is flattened into the candidate map **first**, so a top-level key of the same name wins. `extra` itself never appears in `raw` as a nested object. |
 | 4 | Candidates are partitioned against `declaredKeys` **as passed** — the set current at this moment. Anything not in it goes to `raw`. This is what makes promotion non-retroactive. |
 | 5 | Nothing is dropped. Every candidate key lands in exactly one of the two objects. |
-| 6 | A `player_id` that disagrees with the authenticated player is recorded at `raw.__player_id_mismatch` and does not fail anything. The authoritative player is always the JWT's. |
+| 6 | A `player_id` that disagrees with the authenticated player is recorded at `raw.__player_id_mismatch` and does not fail anything. The authoritative player is always the JWT's. Compared **stringified**, so a numeric id still trips the diagnostic. |
+| 6b | An `extra` that is present but not a plain object is preserved at `raw.__extra_malformed` rather than discarded — it is still data the game sent. |
+| 6c | `declared` and `raw` are built with `Object.create(null)`, so a game-supplied `__proto__` key lands as real data instead of invoking the prototype setter and vanishing. |
 | 7 | `isMissing` is judged on the six **provider** keys alone: `true` when every one is absent or `null`. Device fields come from the SDK's own probe and are present even when the game's provider throws on everything, so including them would make `is_missing` unreachable. |
 
 - [ ] **Step 1: Write the failing test**
@@ -3409,12 +3411,24 @@ export function splitSnapshot(
     ...topLevel,
   }
 
+  // An `extra` that arrived in the wrong shape (an array, a string, a number) is
+  // still data the game sent, so it is preserved under a reserved key rather than
+  // discarded. An agent seeing __extra_malformed knows something arrived broken;
+  // dropping it silently would leave them wondering where it went.
+  const extraMalformed = extra !== undefined && !isPlainObject(extra) ? extra : undefined
+
   if (Object.keys(candidates).length === 0) {
     return { declared: {}, raw: {}, isMissing: true, degradedReason }
   }
 
-  const declared: Record<string, unknown> = {}
-  const raw: Record<string, unknown> = {}
+  // Object.create(null), NOT {}: a game can legitimately send a key named
+  // `__proto__`, and `raw['__proto__'] = value` on an ordinary object invokes
+  // Object.prototype's accessor instead of creating an own property — the value
+  // silently vanishes before it reaches the jsonb column. That would break
+  // "nothing the game sends is ever dropped" on untrusted input. Object.keys,
+  // `in` and JSON.stringify all behave identically on a null-prototype object.
+  const declared: Record<string, unknown> = Object.create(null)
+  const raw: Record<string, unknown> = Object.create(null)
   for (const [key, value] of Object.entries(candidates)) {
     if (declaredKeys.has(key)) declared[key] = value
     else raw[key] = value
@@ -3423,9 +3437,21 @@ export function splitSnapshot(
   // snapshot.player_id is advisory only — the authoritative player comes from the
   // JWT. A mismatch is recorded and does not fail the request; the SDK cannot be
   // trusted to identify the player it is authenticated as.
+  // Compare stringified, so a numeric player_id still trips the diagnostic — the
+  // point is catching an SDK confused about who it is, and the wire contract's
+  // "string" is a documented shape, not a guarantee. The ORIGINAL value is recorded,
+  // not the stringified one, so the row shows what actually arrived.
   const claimed = candidates.player_id
-  if (typeof claimed === 'string' && claimed !== authenticatedExternalPlayerId) {
+  if (
+    claimed !== undefined &&
+    claimed !== null &&
+    String(claimed) !== authenticatedExternalPlayerId
+  ) {
     raw.__player_id_mismatch = { claimed, authenticated: authenticatedExternalPlayerId }
+  }
+
+  if (extraMalformed !== undefined) {
+    raw.__extra_malformed = extraMalformed
   }
 
   // Judged on the provider fields only: the SDK's DeviceProbe fills the device
