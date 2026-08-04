@@ -3,6 +3,7 @@ import express from 'express'
 import { getEnv } from './env.ts'
 import { errorMiddleware } from './errors.ts'
 import { playerTokenRouter } from './auth/playerTokenRoute.ts'
+import { sdkRouter } from './sdk/router.ts'
 
 export function createApp(): express.Express {
   const app = express()
@@ -29,7 +30,8 @@ export function createApp(): express.Express {
   })
 
   app.use('/auth', playerTokenRouter)
-  // Task 7 mounts /sdk; Task 14 mounts /surface.
+  app.use('/sdk', sdkRouter)
+  // Task 14 mounts /surface.
 
   app.use(errorMiddleware)
   return app
