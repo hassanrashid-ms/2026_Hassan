@@ -5959,7 +5959,7 @@ export function reportArticleRead(token: string, sessionId: string, articleId: s
 - [ ] **Step 8: Write `frontend/src/SupportSurface.tsx`**
 
 ```tsx
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { BootstrapResponse, PlayerStateAvailability } from '@support/types'
 import { fetchBootstrap, reportArticleRead } from './api.ts'
 import { readBoot, scrubToken, type SurfaceBoot } from './boot.ts'
@@ -5984,7 +5984,17 @@ export function SupportSurface() {
   const [error, setError] = useState<string | null>(null)
   const [read, setRead] = useState<string[]>([])
 
+  // React double-invokes effects on mount under StrictMode in development. The
+  // first pass scrubs the hash, so a second pass would read an empty fragment,
+  // conclude there is no token, and set a permanent false error alongside the real
+  // data. The sentinel makes the effect idempotent — do NOT solve this by removing
+  // StrictMode; the double-invoke is a useful check and the effect should survive it.
+  const startedRef = useRef(false)
+
   useEffect(() => {
+    if (startedRef.current) return
+    startedRef.current = true
+
     const parsed = readBoot(window.location)
     if (!parsed) {
       setError('This page must be opened by the game. No session token was supplied.')
@@ -6078,6 +6088,12 @@ export function SupportSurface() {
       <section>
         <button type="button" onClick={() => post({ type: 'conversation_created' })}>
           Still need help?
+        </button>
+        {/* Both controls are required on EVERY screen, including a failed bootstrap.
+            Their absence is the dead end the rule forbids, so the stub renders them
+            even though the real handoff arrives with the chat slice. */}
+        <button type="button" onClick={() => post({ type: 'conversation_created' })}>
+          Talk to a person
         </button>
         <button type="button" onClick={() => post({ type: 'close' })}>
           Close
