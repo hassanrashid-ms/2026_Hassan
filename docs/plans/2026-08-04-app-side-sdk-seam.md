@@ -3444,7 +3444,7 @@ Note that `__player_id_mismatch` is written *after* the partition, so it always 
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `pnpm --filter @support/api test playerState.split`
-Expected: PASS — 14 tests
+Expected: PASS — 13 tests
 
 - [ ] **Step 5: Commit**
 
