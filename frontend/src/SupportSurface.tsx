@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { BootstrapResponse, PlayerStateAvailability } from '@support/types'
 import { fetchBootstrap, reportArticleRead } from './api.ts'
 import { readBoot, scrubToken, type SurfaceBoot } from './boot.ts'
@@ -23,7 +23,17 @@ export function SupportSurface() {
   const [error, setError] = useState<string | null>(null)
   const [read, setRead] = useState<string[]>([])
 
+  // StrictMode double-invokes mount effects in development. scrubToken removes the
+  // fragment as a side effect of the first invocation, so a naive second run would
+  // read an already-scrubbed URL, see no token, and set a false "no session token"
+  // error alongside whatever the first run already loaded. The ref makes the body
+  // idempotent instead of relying on removing StrictMode, which stays on deliberately.
+  const startedRef = useRef(false)
+
   useEffect(() => {
+    if (startedRef.current) return
+    startedRef.current = true
+
     const parsed = readBoot(window.location)
     if (!parsed) {
       setError('This page must be opened by the game. No session token was supplied.')
@@ -112,11 +122,14 @@ export function SupportSurface() {
 
       {/* Always on screen, whatever else happened — including when bootstrap failed.
           "Still need help?" and "Talk to a person" appear on every screen; there are
-          no dead ends. Neither does anything yet: the chat UI arrives with the
-          conversation slice. */}
+          no dead ends. Neither does anything yet beyond posting a bridge message: the
+          real chat UI and handoff arrive with the conversation slice. */}
       <section>
         <button type="button" onClick={() => post({ type: 'conversation_created' })}>
           Still need help?
+        </button>
+        <button type="button" onClick={() => post({ type: 'conversation_created' })}>
+          Talk to a person
         </button>
         <button type="button" onClick={() => post({ type: 'close' })}>
           Close
