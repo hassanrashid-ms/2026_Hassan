@@ -1169,11 +1169,21 @@ export const workspace = pgTable('workspace', {
   createdAt: timestamp('created_at', tz).notNull().defaultNow(),
 })
 
-/** The other unscoped table: one login per person, global across workspaces. */
+/**
+ * The other unscoped table: one login per person, global across workspaces, with
+ * the ROLE held per workspace in workspace_member.
+ *
+ * Authentication is Google OAuth 2 restricted to the mindstormstudios.com org —
+ * there are no passwords in this product, so there is no password_hash. See
+ * docs/decisions/2026-08-04-agent-auth-google-oauth.md. The OAuth flow itself
+ * belongs to the console slice; only the identity columns land here.
+ */
 export const agent = pgTable('agent', {
   id: uuid('id').primaryKey().defaultRandom(),
+  /** The Google account address. citext because Google addresses are case-insensitive. */
   email: citext('email').notNull().unique(),
-  passwordHash: text('password_hash').notNull(),
+  /** The Google `sub` claim — stable per-account id. Null until a seeded row's first login. */
+  googleSubject: text('google_subject').unique(),
   displayName: text('display_name').notNull(),
   status: agentStatus('status').notNull().default('active'),
   createdAt: timestamp('created_at', tz).notNull().defaultNow(),
@@ -2068,7 +2078,7 @@ export async function seedWorkspace(
 export async function seedAgent(email = `a-${randomUUID().slice(0, 8)}@example.test`): Promise<string> {
   const id = randomUUID()
   await ownerPool.query(
-    `insert into agent (id, email, password_hash, display_name) values ($1, $2, 'x', 'Test Agent')`,
+    `insert into agent (id, email, display_name) values ($1, $2, 'Test Agent')`,
     [id, email],
   )
   return id
@@ -2195,9 +2205,11 @@ async function seed(): Promise<void> {
       .returning({ id: workspace.id })
     if (!row) throw new Error('workspace upsert returned nothing')
 
+    // No password: agent auth is Google OAuth restricted to the mindstormstudios.com
+    // org. google_subject stays null until this person's first real login.
     const [admin] = await tx
       .insert(agent)
-      .values({ email: ADMIN_EMAIL, passwordHash: 'set-me-when-agent-auth-ships', displayName: 'Seed Admin' })
+      .values({ email: ADMIN_EMAIL, displayName: 'Seed Admin' })
       .onConflictDoUpdate({ target: agent.email, set: { displayName: 'Seed Admin' } })
       .returning({ id: agent.id })
     if (!admin) throw new Error('agent upsert returned nothing')
@@ -6127,6 +6139,7 @@ git commit -m "feat(surface): web stub that reads the fragment and renders playe
 - Create: `scripts/verify-seam.sh`
 - Modify: `README.md`, `CLAUDE.md`, `docs/specs/2026-08-04-database-and-schema-design.md`
 - Create: `docs/decisions/2026-08-04-sdk-path-schema-subset.md`
+- Already written during execution (reference them, do not rewrite): `docs/decisions/2026-08-04-agent-auth-google-oauth.md`, `docs/decisions/2026-08-04-composite-foreign-keys-for-tenancy.md`
 
 **Interfaces:**
 - Consumes: everything. Produces no code — this task closes the loop so the next person is not guessing.
@@ -6217,7 +6230,7 @@ Added in the first migration; the reasoning belongs here rather than in a plan.
 
 | Table | Column | Why |
 |---|---|---|
-| `workspace` | `secret_hash text NOT NULL` | `POST /auth/player-token` authenticates with `Authorization: Bearer <workspace_secret>`. Format `sk_<slug>.<32 random bytes base64url>`; the stored value is the sha256 of the random half. sha256 rather than a slow KDF because the secret is 256 bits of CSPRNG output — there is no guessable password to slow an attacker down to. **This reasoning does not transfer to `agent.password_hash`,** which is human-chosen and needs a real KDF when agent auth ships. |
+| `workspace` | `secret_hash text NOT NULL` | `POST /auth/player-token` authenticates with `Authorization: Bearer <workspace_secret>`. Format `sk_<slug>.<32 random bytes base64url>`; the stored value is the sha256 of the random half. sha256 rather than a slow KDF because the secret is 256 bits of CSPRNG output — there is no guessable password to slow an attacker down to. (There is no agent password to contrast this with: agent auth is Google OAuth restricted to the mindstormstudios.com org — see `docs/decisions/2026-08-04-agent-auth-google-oauth.md`.) |
 | `workspace` | `disabled_at timestamptz` | The wire contract requires `404` for a workspace that is *"not found **or disabled**"*, and a disabled workspace must also invalidate live player tokens rather than waiting out their 15 minutes. |
 | `session` | `ended_by session_end_reason` (`client` \| `timeout`) | The wire contract's repeatable job marks sessions it closes `ended_by = 'timeout'`. Without the column, a timed-out session is indistinguishable from one the player closed — and *"a missing end must never silently shrink the denominator"* depends on being able to tell. |
 
@@ -6328,8 +6341,12 @@ console, the admin console, reporting. Step 5 of the build order.
 
 - **`GET /surface/bootstrap` returns `raw` outside production.** Remove that branch
   when the real chat UI lands; the agent Game View is what reads freeform state.
-- **`agent.password_hash` has no KDF yet** — the seed writes a placeholder. Agent auth
-  ships with the console.
+- **Agent auth is not built.** `agent` carries a Google identity (`email`, `google_subject`)
+  and no password, per `docs/decisions/2026-08-04-agent-auth-google-oauth.md`. The OAuth
+  flow — client registration, callback, token verification, the
+  **mindstormstudios.com org check**, session issuance and the Redis denylist — ships
+  with the console slice and needs its own plan. The seeded admin row has a null
+  `google_subject` until that person's first real login.
 ```
 
 - [ ] **Step 5: Update `CLAUDE.md`**
