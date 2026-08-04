@@ -105,6 +105,18 @@ describe('IncidentBody', () => {
   it('accepts an unknown kind', () => {
     expect(IncidentBody.parse({ kind: 'something_new' }).kind).toBe('something_new')
   })
+
+  it('tolerates a missing incident_id and session_id', () => {
+    const parsed = IncidentBody.parse({ kind: 'webview_init_failed' })
+    expect(parsed.incident_id).toBeNull()
+    expect(parsed.session_id).toBeNull()
+  })
+
+  it('tolerates a wrong-typed incident_id and session_id', () => {
+    const parsed = IncidentBody.parse({ kind: 'webview_init_failed', incident_id: 42, session_id: 42 })
+    expect(parsed.incident_id).toBeNull()
+    expect(parsed.session_id).toBeNull()
+  })
 })
 
 describe('PlayerTokenRequest', () => {
