@@ -1,0 +1,49 @@
+import { z } from 'zod'
+
+const EnvSchema = z.object({
+  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  PORT: z.coerce.number().int().positive().default(4000),
+  DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
+  MIGRATION_DATABASE_URL: z.string().min(1, 'MIGRATION_DATABASE_URL is required'),
+  REDIS_URL: z.string().min(1, 'REDIS_URL is required'),
+  PLAYER_JWT_SECRET: z
+    .string()
+    .min(32, 'PLAYER_JWT_SECRET must be at least 32 characters'),
+  PLAYER_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(900),
+  SESSION_TIMEOUT_MINUTES: z.coerce.number().int().positive().default(30),
+  SURFACE_ORIGINS: z
+    .string()
+    .default('http://localhost:5173')
+    .transform((value) =>
+      value
+        .split(',')
+        .map((origin) => origin.trim())
+        .filter((origin) => origin.length > 0),
+    ),
+})
+
+export type Env = z.infer<typeof EnvSchema>
+
+export function loadEnv(source: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env): Env {
+  const parsed = EnvSchema.safeParse(source)
+  if (!parsed.success) {
+    const detail = parsed.error.issues
+      .map((issue) => `${issue.path.join('.') || '(root)'}: ${issue.message}`)
+      .join('\n')
+    throw new Error(`Invalid environment:\n${detail}`)
+  }
+  return parsed.data
+}
+
+let cached: Env | undefined
+
+/** Memoised so a bad env fails once, loudly, rather than on every call. */
+export function getEnv(): Env {
+  cached ??= loadEnv()
+  return cached
+}
+
+/** Tests only — forces the next getEnv() to re-read process.env. */
+export function resetEnvCache(): void {
+  cached = undefined
+}
