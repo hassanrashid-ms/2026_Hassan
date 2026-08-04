@@ -3941,7 +3941,7 @@ sdkRouter.post('/sessions/start', sessionsStart)
 - [ ] **Step 6: Run the test to verify it passes**
 
 Run: `pnpm --filter @support/api test sdk.sessionsStart`
-Expected: PASS — 14 tests
+Expected: PASS — 18 tests (14 `it()` blocks, one of which is an `it.each` with 5 cases)
 
 - [ ] **Step 7: Commit**
 
