@@ -3606,17 +3606,26 @@ describe('POST /sdk/sessions/start', () => {
     expect(snapshots[0]!.raw.player_level).toBe(34)
   })
 
-  it('records a missing snapshot as a state and still returns 200', async () => {
+  // A malformed, empty or absent snapshot is a STATE, never a 4xx: rejecting it
+  // would mean the conversations where something is broken are the ones that fail
+  // to attach context.
+  it.each([
+    ['absent', undefined],
+    ['null', null],
+    ['empty object', {}],
+    ['a bare string', 'garbage'],
+    ['a number', 42],
+  ])('records a %s snapshot as is_missing and still returns 200', async (_label, snapshot) => {
     const f = await fixture()
-    for (const snapshot of [undefined, null, {}, 'garbage', 42]) {
-      await truncateAll()
-      const g = await fixture()
-      await post(g, body({ snapshot })).expect(200)
-      const snapshots = await rows(g.workspaceId, async (tx) => tx.select().from(playerStateSnapshot))
-      expect(snapshots, JSON.stringify(snapshot) ?? 'undefined').toHaveLength(1)
-      expect(snapshots[0]!.isMissing).toBe(true)
-    }
-    expect(f).toBeTruthy()
+    await post(f, body({ snapshot })).expect(200)
+
+    const snapshots = await rows(f.workspaceId, async (tx) => tx.select().from(playerStateSnapshot))
+    expect(snapshots).toHaveLength(1)
+    expect(snapshots[0]!.isMissing).toBe(true)
+    expect(snapshots[0]!.declared).toEqual({})
+    expect(snapshots[0]!.raw).toEqual({})
+    // The session still exists — a broken snapshot never costs us the visit.
+    expect(await rows(f.workspaceId, async (tx) => tx.select().from(session))).toHaveLength(1)
   })
 
   it('records degraded_reason when the provider partially threw', async () => {
@@ -5085,10 +5094,10 @@ describe('GET /surface/bootstrap', () => {
   })
 
   it('404s for another workspace session — invisible, so indistinguishable from absent', async () => {
-    await fixture('victim-game')
-    await truncateAll()
-
+    // victim-game owns SESSION_ID and has a snapshot on it.
     const victim = await fixture('victim-game')
+    await insertSnapshot({ workspaceId: victim.workspaceId, declared: { platform: 'ios' } })
+
     const attackerWs = await seedWorkspace({ slug: 'attacker-game' })
     const attackerPlayer = await seedPlayer(attackerWs, 'UserId7661')
     const attackerToken = await mintToken({
@@ -5097,8 +5106,13 @@ describe('GET /surface/bootstrap', () => {
       external_player_id: 'UserId7661',
     })
 
-    await bootstrap(attackerToken).expect(404)
-    expect(victim.workspaceId).not.toBe(attackerWs)
+    const res = await bootstrap(attackerToken)
+    expect(res.status).toBe(404)
+    expect(res.body.error.code).toBe('not_found')
+    // Nothing about the victim's session leaked into the response.
+    expect(JSON.stringify(res.body)).not.toContain('ios')
+    // And the victim can still read their own.
+    expect((await bootstrap(victim.token)).status).toBe(200)
   })
 
   it('404s for another player session in the same workspace', async () => {
@@ -5420,6 +5434,8 @@ The per-endpoint tests in Tasks 9–14 each cover their own cross-workspace case
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import request from 'supertest'
 import { closeDb } from '../src/db/client.ts'
+import { verifyPlayerToken } from '../src/auth/jwt.ts'
+import { generateWorkspaceSecret, parseWorkspaceSecret } from '../src/auth/workspaceSecret.ts'
 import { app, mintToken } from './helpers/app.ts'
 import {
   closeOwnerPool,
@@ -5541,18 +5557,42 @@ describe('workspace A cannot reach workspace B', () => {
     expect((await rowCounts()).event).toBe(before.event)
   })
 
-  it('cannot mint a token for B with A secret', async () => {
-    // A's secret_hash is the literal 'unset' from the factory, so no real secret
-    // matches either workspace — the assertion is that a wrong secret never
-    // authenticates against a real workspace slug.
+  it('cannot mint a B token with A real secret', async () => {
+    // Give both workspaces genuine secrets, then present A's against B's slug.
+    const aSecret = generateWorkspaceSecret('game-a')
+    const bSecret = generateWorkspaceSecret('game-b')
+    await ownerPool.query(`update workspace set secret_hash = $2 where id = $1`, [
+      a.workspaceId,
+      aSecret.secretHash,
+    ])
+    await ownerPool.query(`update workspace set secret_hash = $2 where id = $1`, [
+      b.workspaceId,
+      bSecret.secretHash,
+    ])
+
+    // A's random half under B's slug: the slug resolves, the hash does not match.
+    const { raw } = parseWorkspaceSecret(aSecret.secret)!
     await request(app)
       .post('/auth/player-token')
-      .set('Authorization', `Bearer sk_game-b.${'w'.repeat(43)}`)
+      .set('Authorization', `Bearer sk_game-b.${raw}`)
       .send({ external_player_id: 'UserId7661' })
       .expect(401)
+
+    // A's own secret still works, so the 401 above was the cross-check and not a
+    // broken fixture.
+    const ok = await request(app)
+      .post('/auth/player-token')
+      .set('Authorization', `Bearer ${aSecret.secret}`)
+      .send({ external_player_id: 'UserId7661' })
+      .expect(200)
+    const claims = await verifyPlayerToken(ok.body.token)
+    expect(claims.workspace_id).toBe(a.workspaceId)
   })
 
-  it('leaves B data completely untouched after every attempt above', async () => {
+  it('every attempt above leaves B session count at one', async () => {
+    // Guards against a handler that writes into B while still returning the right
+    // status. beforeEach seeds exactly one B session; nothing in this file may add
+    // or remove one.
     const { rows } = await ownerPool.query<{ n: number }>(
       `select count(*)::int as n from session where workspace_id = $1`,
       [b.workspaceId],
