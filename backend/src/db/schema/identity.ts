@@ -19,11 +19,18 @@ export const workspace = pgTable('workspace', {
   createdAt: timestamp('created_at', tz).notNull().defaultNow(),
 })
 
-/** The other unscoped table: one login per person, global across workspaces. */
+/**
+ * The other unscoped table: one login per person, global across workspaces.
+ *
+ * Holds a Google identity, not a credential — there are no passwords in the
+ * product. See docs/decisions/2026-08-04-agent-auth-google-oauth.md.
+ */
 export const agent = pgTable('agent', {
   id: uuid('id').primaryKey().defaultRandom(),
+  /** The Google account address. Case-insensitive because Google addresses are. */
   email: citext('email').notNull().unique(),
-  passwordHash: text('password_hash').notNull(),
+  /** The Google `sub` claim. Nullable only until a seeded row's first real login. */
+  googleSubject: text('google_subject').unique(),
   displayName: text('display_name').notNull(),
   status: agentStatus('status').notNull().default('active'),
   createdAt: timestamp('created_at', tz).notNull().defaultNow(),
