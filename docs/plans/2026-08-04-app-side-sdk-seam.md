@@ -151,6 +151,7 @@ Each backend file has one responsibility and none exceeds ~150 lines. The split 
 **Files:**
 - Create: `package.json`, `pnpm-workspace.yaml`, `.npmrc`, `tsconfig.base.json`, `docker-compose.yml`, `.env.example`, `.env.test.example`
 - Create: `backend/package.json`, `backend/tsconfig.json`, `backend/vitest.config.ts`, `backend/src/env.ts`
+- Create: `packages/types/package.json` — **manifest only.** `backend/package.json` declares `"@support/types": "workspace:*"`, and `pnpm install` **hard-errors** with `ERR_PNPM_WORKSPACE_PKG_NOT_FOUND` if the member does not exist. Write the exact manifest from Task 2 Step 1 and nothing else in that directory; Task 2 adds the tsconfig, the source files and the tests beside it. `main` pointing at a not-yet-existing `./src/index.ts` is harmless because nothing in Task 1 imports the package.
 - Modify: `.gitignore`
 - Test: `backend/tests/env.test.ts`
 
@@ -519,7 +520,8 @@ git commit -m "feat: pnpm workspace, Postgres 17 + Redis compose, validated env"
 ### Task 2: `@support/types` — the wire contract as Zod
 
 **Files:**
-- Create: `packages/types/package.json`, `packages/types/tsconfig.json`
+- Verify (already created by Task 1, as the workspace member `pnpm install` needs): `packages/types/package.json`. Confirm it matches Step 1 below and move on.
+- Create: `packages/types/tsconfig.json`
 - Create: `packages/types/src/index.ts`, `src/sdk-wire.ts`, `src/player-state.ts`, `src/surface.ts`
 - Test: `packages/types/tests/sdk-wire.test.ts`
 
