@@ -228,8 +228,8 @@
 <div class="wrap">
 
   <header class="masthead">
-    <div class="eyebrow">Support CRM · Data layer · rev 6</div>
-    <h1>PostgreSQL, and the 32 tables that follow from it</h1>
+    <div class="eyebrow">Support CRM · Data layer · rev 7</div>
+    <h1>PostgreSQL, and the 33 tables that follow from it</h1>
     <p class="standfirst">The stack doc picked Mongo before the deployment target was known. Self-hosting settles it, and nothing is built yet. Seven schema decisions worked through, five unspecified behaviours pinned down, every table accounted for, and the SDK wire contract reconciled against it.</p>
     <div class="verdict">
       <span class="chip">PostgreSQL 17</span>
@@ -237,7 +237,7 @@
       <span class="chip">pgvector · HNSW</span>
       <span class="chip alt">Row-Level Security</span>
       <span class="chip alt">Redis + BullMQ</span>
-      <span class="chip alt">32 tables</span>
+      <span class="chip alt">33 tables</span>
     </div>
   </header>
 
@@ -304,7 +304,7 @@
         <p>Carries the per-workspace role. An agent on three games has three rows and may hold a different role in each.</p>
       </div>
       <div class="card">
-        <h3>Scoped — RLS on all 29</h3>
+        <h3>Scoped — RLS on all 30</h3>
         <ul><li>every other table</li></ul>
         <p>One policy, repeated: <code>workspace_id = current_setting('app.workspace_id')::uuid</code></p>
       </div>
@@ -363,7 +363,7 @@
 
   <section>
     <h2>ERD</h2>
-    <p>Thirty-two tables in five diagrams. A single diagram at this size is a hairball nobody reads. <code>workspace_id</code> is on every scoped table and omitted from the attribute lists — otherwise it is the only thing you see.</p>
+    <p>Thirty-three tables in five diagrams. A single diagram at this size is a hairball nobody reads. <code>workspace_id</code> is on every scoped table and omitted from the attribute lists — otherwise it is the only thing you see.</p>
 
     <h3>1 · Identity, tenancy, players and devices</h3>
     <div class="diagram">
@@ -535,6 +535,8 @@ erDiagram
     SESSION      ||--o| PLAYER_STATE_SNAPSHOT : "captured on support open"
     CONVERSATION ||--o{ CONVERSATION_LABEL : "tagged by"
     LABEL        ||--o{ CONVERSATION_LABEL : "applied via"
+    LABEL        ||--o{ SUBINTENT_LABEL : "auto-applied via"
+    SUBINTENT    ||--o{ SUBINTENT_LABEL : "auto-applies"
     MESSAGE      ||--o{ ATTACHMENT : carries
 
     CONVERSATION {
@@ -592,14 +594,21 @@ erDiagram
     }
     LABEL {
         uuid id PK
-        text name
+        text name "aka tag"
         text colour
+        timestamptz archived_at "nullable, retires from new use"
     }
     CONVERSATION_LABEL {
         uuid conversation_id FK
         uuid label_id FK
-        uuid applied_by FK
+        uuid applied_by FK "NULL means auto-applied"
         timestamptz applied_at
+    }
+    SUBINTENT_LABEL {
+        uuid subintent_id FK "PK with label_id"
+        uuid label_id FK
+        uuid created_by FK
+        timestamptz created_at
     }
     ATTACHMENT {
         uuid id PK
@@ -611,6 +620,11 @@ erDiagram
       </pre>
     </div>
     <p class="cap">Five deliberate choices. <strong>Messages are their own table</strong>, ordered by a server-assigned <code>seq</code> from an atomic increment on the conversation row — never device clocks; gaps are fine, order is not, and internal notes consume sequence numbers so the player's view legitimately has holes in it. <strong>Only the subintent is stored</strong>; the parent intent is derived through the join, so an edited taxonomy can never leave the two drifting apart. <strong><code>visibility</code> lives on the message and is never filtered in the query</strong> — the player serializer whitelists fields and returns null for anything not <code>public</code>, so anything unexpected fails closed. <strong>Resolution state left <code>conversation</code> entirely</strong>, which is what makes per-cycle reporting possible. And <strong><code>ATTACHMENT</code> has exactly one parent</strong> — a message — because forms are conversational, so an attachment answer arrives as an ordinary image message.</p>
+    <div class="note">
+      <strong>Tags are labels, and <code>SUBINTENT_LABEL</code> is what makes them auto-applied.</strong> The spec's glossary says "Label / tag" — one table, two names. The mapping is admin-managed and means <em>classify as this subintent → apply these labels</em>. It is a table rather than a rule on purpose: p29 shows the same thing as a rule example, but p29 <em>also</em> says rule conditions read labels, so labels sourced from rules would make a routing rule depend on a tagging rule having fired first — and evaluation is capped at <strong>exactly one extra pass</strong>. Layering instead: bot picks a subintent → server applies that subintent's labels and <code>default_priority</code> → <em>then</em> rules evaluate and may read those labels. <strong>The bot never invents a tag</strong>, same as never inventing a subintent.
+    </div>
+    <p class="cap"><strong>An applied tag is permanent until an agent removes it.</strong> Reclassification does not swap tags and neither does a merge — a tag is a marker someone put on this ticket, not a derived view of its current subintent, so re-deriving it on every change would erase real signal. <code>applied_by IS NULL</code> marks an auto-applied tag, which is all the provenance needed; rule-applied ones are already traceable through <code>RULE_FIRING</code>. <strong>Priority is never a tag</strong> — <code>subintent.default_priority</code> exists and is typed <code>p1</code>–<code>p4</code>, so a <code>priority_high</code> label would be a second source of truth every filter has to choose between.</p>
+
     <div class="note">
       <strong>Signing a presigned GET must check the parent message's <code>visibility</code>.</strong> If an agent attaches a screenshot to an internal note, the message is hidden by the player serializer but the file still sits behind a signable key. The signing endpoint has to walk <code>attachment.message_id → message.visibility</code> and refuse for a player token when it is not <code>public</code>. This is the one that gets missed, because the thread renders perfectly while the attachment leaks.
     </div>
@@ -916,8 +930,8 @@ COMMIT;
   </section>
 
   <section>
-    <h2>Why 32 tables</h2>
-    <p>It sounds like a lot until you notice where they come from. <strong>Twelve tables are things the product has. The other twenty are the price of three rules you wrote yourself.</strong></p>
+    <h2>Why 33 tables</h2>
+    <p>It sounds like a lot until you notice where they come from. <strong>Twelve tables are things the product has. The other twenty-one are the price of three rules you wrote yourself.</strong></p>
     <div class="scope">
       <div class="card">
         <h3>Rule 1 · Nothing is deleted</h3>
@@ -926,7 +940,7 @@ COMMIT;
       </div>
       <div class="card">
         <h3>Rule 2 · Support configures without a release</h3>
-        <ul><li>intent</li><li>subintent</li><li>form</li><li>form_version</li><li>form_field</li><li>label</li><li>rule</li><li>bot_config</li><li>declared_field</li><li>saved_filter</li></ul>
+        <ul><li>intent</li><li>subintent</li><li>form</li><li>form_version</li><li>form_field</li><li>label</li><li>subintent_label</li><li>rule</li><li>bot_config</li><li>declared_field</li><li>saved_filter</li></ul>
         <p>Every one of these would be a constant in the codebase if a release were acceptable. They are tables because it isn't.</p>
       </div>
       <div class="card">
@@ -962,13 +976,14 @@ COMMIT;
           <tr><td><code>article_embedding</code></td><td>N vectors per article — one per summary, one per phrasing. Also lets you re-embed with a new model without touching article rows.</td><td>Either no vector search, or vectors welded to article rows so a model change is a full rewrite.</td></tr>
           <tr><td><code>article_feedback</code></td><td>The "did this help / did this solve it" signal.</td><td><strong>Two reporting panels cannot exist</strong> — the self-serve split between "found the answer" and "left without one", and the bot's offered→rejected panel.</td></tr>
 
-          <tr><td colspan="3" style="background:var(--accent-w);font-family:var(--mono);font-size:.74rem;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);padding:.5rem .6rem">Conversation core — 6</td></tr>
+          <tr><td colspan="3" style="background:var(--accent-w);font-family:var(--mono);font-size:.74rem;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);padding:.5rem .6rem">Conversation core — 7</td></tr>
           <tr><td><code>conversation</code></td><td>The central object. Everything else hangs off it.</td><td>There is no product.</td></tr>
           <tr><td><code>resolution_cycle</code></td><td>A conversation resolves more than once, and each counts in the window it happened.</td><td>Last month's resolution figure changes when someone replies today.</td></tr>
           <tr><td><code>message</code></td><td>The thread. Its own table, never embedded — unbounded growth.</td><td>No chat.</td></tr>
           <tr><td><code>attachment</code></td><td>Images and video, both directions, private bucket, presigned access.</td><td>Players describe screenshots in words.</td></tr>
-          <tr><td><code>label</code></td><td>Shared workspace vocabulary, so "urgent" means one thing and can be renamed once.</td><td>Free-text tags that drift into six spellings of the same word.</td></tr>
-          <tr><td><code>conversation_label</code></td><td>Many labels per ticket, many tickets per label. An unavoidable M:N join.</td><td>One label per ticket, or labels duplicated per conversation.</td></tr>
+          <tr><td><code>label</code></td><td>Shared workspace vocabulary — the tags themselves, so "urgent" means one thing and can be renamed once.</td><td>Free-text tags that drift into six spellings of the same word.</td></tr>
+          <tr><td><code>conversation_label</code></td><td>Many tags per ticket, many tickets per tag. An unavoidable M:N join.</td><td>One tag per ticket, or tags duplicated per conversation.</td></tr>
+          <tr><td><code>subintent_label</code></td><td>Admin-managed M:N: <em>classify as this subintent → apply these tags.</em> The bot picks the subintent; the server derives the tags.</td><td>Every auto-tag becomes a rule, so routing rules depend on tagging rules firing first — inside a one-extra-pass budget.</td></tr>
 
           <tr><td colspan="3" style="background:var(--accent-w);font-family:var(--mono);font-size:.74rem;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);padding:.5rem .6rem">Player state — 2</td></tr>
           <tr><td><code>player_state_snapshot</code></td><td>What was true in the game when the issue was raised. <em>"This is the difference between a support tool and a chat window."</em> Keyed to the <strong>session</strong>, since the SDK delivers it before any conversation exists.</td><td>The Game View is empty and agents diagnose by interrogating the player.</td></tr>
@@ -1019,7 +1034,7 @@ COMMIT;
         </tbody>
       </table>
     </div>
-    <p>Every table is kept, so the count stays <strong>32</strong>. Going lower means dropping a spec requirement rather than normalising differently — and the cheapest-looking cuts are the most expensive: <code>session</code>, <code>article_feedback</code> and <code>event</code> are three small tables whose data <strong>cannot be reconstructed later</strong>. Skip them in week 1 to save time and weeks 1–2 have no metrics at all.</p>
+    <p>Every table is kept, so the count stands at <strong>33</strong>. Going lower means dropping a spec requirement rather than normalising differently — and the cheapest-looking cuts are the most expensive: <code>session</code>, <code>article_feedback</code> and <code>event</code> are three small tables whose data <strong>cannot be reconstructed later</strong>. Skip them in week 1 to save time and weeks 1–2 have no metrics at all.</p>
   </section>
 
   <section>

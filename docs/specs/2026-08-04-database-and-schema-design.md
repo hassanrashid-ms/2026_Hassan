@@ -64,7 +64,7 @@ Authenticate as workspace A and hit every endpoint with workspace B's IDs. **The
 `404`, not `403`** — under RLS the rows are invisible, so the handler genuinely cannot distinguish
 "not yours" from "not there." Assert this rather than discovering it.
 
-## The 32 tables
+## The 33 tables
 
 `workspace_id` is present on every scoped table and omitted below.
 
@@ -245,7 +245,7 @@ SELECT a.id, a.title, a.body
 RLS supplies the workspace predicate. Publishing an article and writing its embeddings happens in
 **one transaction**, so the bot can never see a published article it has no vector for.
 
-### Conversation core — 6
+### Conversation core — 7
 
 | Table | Key columns |
 |---|---|
@@ -253,8 +253,52 @@ RLS supplies the workspace predicate. Publishing an article and writing its embe
 | `resolution_cycle` | `id`, `conversation_id`, `cycle_no`, `opened_at`, `first_human_reply_at`, `resolved_at`, `resolution_kind`, `support_owed_reply`, `inactivity_stage`, `inactivity_due_at`, `closed_at` |
 | `message` | `id`, `conversation_id`, `seq`, `author_type`, `author_agent_id`, `body`, `visibility`, `delivery_state`, `created_at` |
 | `attachment` | `id`, `message_id` **NOT NULL**, `storage_key`, `mime_type`, `byte_size` |
-| `label` | `id`, `name`, `colour` |
-| `conversation_label` | `conversation_id`, `label_id`, `applied_by`, `applied_at` |
+| `label` | `id`, `name`, `colour`, `archived_at` |
+| `conversation_label` | `conversation_id`, `label_id`, `applied_by` (**nullable**), `applied_at` |
+| `subintent_label` | `subintent_id`, `label_id`, `created_by`, `created_at`; PK(`subintent_id`,`label_id`) |
+
+#### Tags are labels
+
+The spec calls them *"Label / tag"* (p3), and the console says "label" (p31–32). One table, two names.
+
+#### Auto-tagging from the subintent
+
+`subintent_label` is an admin-managed many-to-many: *when a conversation is classified as this
+subintent, apply these labels.* p29 shows the same intent as a rule example ("Subintent is a refund
+request → apply the refund label"), but a mapping table is the better home for it, because **p29 also
+says rule conditions read labels.** If labels came from rules, a rule routing on a tag would depend on
+the tag rule having fired first — and evaluation is capped at *exactly one extra pass*. That is
+ordering fragility in the subsystem that can least afford it.
+
+The layering instead:
+
+```
+1. Bot picks a subintent                    -- the only thing the bot decides
+2. Server applies that subintent's labels   -- declarative, from subintent_label
+3. Server applies default_priority
+4. Rules evaluate, and may read those labels as conditions
+```
+
+**The bot never invents a tag** — same principle as never inventing a subintent. It chooses a
+subintent; the server derives the labels.
+
+**Applied tags are permanent until an agent removes them.** Reclassification does not swap them, and
+neither does a merge. A tag is a marker someone or something put on this ticket, not a derived view of
+its current subintent — so re-deriving it on every classification change would erase real signal.
+`applied_by IS NULL` distinguishes an auto-applied tag from an agent's, which is all the provenance
+this needs; rule-applied labels are already traceable through `rule_firing`.
+
+**Priority is not a tag.** `subintent.default_priority` already exists, typed `p1`–`p4`. A
+`priority_high` label alongside it would be a second source of truth that every filter and report has
+to choose between.
+
+`label.archived_at` retires a tag from new use while keeping it on existing tickets — same treatment as
+an archived subintent, and for the same reason: deleting would break historical filters.
+
+**Permissions.** Applying or removing a tag on a ticket is `✓ ✓ ✓` (p43: *"Add or remove labels"*).
+**Creating a tag and mapping it to subintents is Admin** — vocabulary and automation are configuration,
+like subintents and forms. The spec never states who manages the label vocabulary; that is an omission
+in the same family as the missing intent rows.
 
 `assigned_agent_id IS NULL` **is** the unassigned queue. There is no `queue` table — see
 *Queues are views* below.
@@ -777,14 +821,14 @@ The inactivity clock, by contrast, **is** load-bearing: it produces resolutions 
 | Transactions | Article + embeddings atomically, so the bot never sees a published article with no vector |
 | `pgvector` HNSW | Filtered similarity search in the same query as the relational predicates |
 
-## Why 32 tables
+## Why 33 tables
 
-**Twelve are things the product has. Twenty are the price of three rules in the spec.**
+**Twelve are things the product has. Twenty-one are the price of three rules in the spec.**
 
 | Rule | Tables it generates |
 |---|---|
 | Nothing is deleted | `taxonomy_change`, `event`, `rule_firing`, `change_log`, `resolution_cycle` |
-| Support configures without a release | `intent`, `subintent`, `form`, `form_version`, `form_field`, `label`, `rule`, `bot_config`, `declared_field`, `saved_filter` |
+| Support configures without a release | `intent`, `subintent`, `form`, `form_version`, `form_field`, `label`, `subintent_label`, `rule`, `bot_config`, `declared_field`, `saved_filter` |
 | Reporting counts events | `session`, `article_feedback`, `article_embedding`, `article_phrasing`, `player_state_snapshot` |
 
 Four are genuinely collapsible and were considered:

@@ -6226,7 +6226,7 @@ conversation slice.
 
 ## Rejected
 
-**All 32 tables in migration 001.** The schema is fully designed, so this was
+**All 33 tables in migration 001.** The schema is fully designed, so this was
 defensible. Rejected because it puts several tasks of DDL — pgvector, HNSW, forms,
 automation — ahead of the first endpoint, and the seam is what needs proving first:
 it spans both repos and is where the surprises live.
@@ -6263,7 +6263,7 @@ database whose name does not end in `_test`.
 Build-order steps 1–3 of `docs/specs/2026-08-04-sdk-wire-contract.md`:
 `POST /auth/player-token`, the four `/sdk/*` endpoints, `GET /surface/bootstrap`,
 `POST /surface/events/article_read`, the 30-minute session-timeout job, and a
-deliberately-ugly web surface stub. Ten of the 32 tables — see
+deliberately-ugly web surface stub. Ten of the 33 tables — see
 `docs/decisions/2026-08-04-sdk-path-schema-subset.md`.
 
 **Not built:** conversations, messages, the bot, the taxonomy, forms, the agent
@@ -6295,7 +6295,7 @@ console, the admin console, reporting. Step 5 of the build order.
 Two edits, both in **Current state**:
 
 1. Replace *"**Scaffold only.** `frontend/` and `backend/` contain nothing but a README… Do not invent commands for this repo — there are none yet"* with the real command table from the README and a one-line summary of what is built.
-2. Replace *"**The database and schema are specced but not built.** 32 tables… No migration exists yet"* with: ten tables built in migration `001`, twenty-two deferred to `002`, pointing at the new decision record.
+2. Replace *"**The database and schema are specced but not built.** 33 tables… No migration exists yet"* with: ten tables built in migration `001`, twenty-three deferred to `002`, pointing at the new decision record.
 
 Then add to the **Source of truth** list, after item 5:
 
