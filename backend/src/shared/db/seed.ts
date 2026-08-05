@@ -4,13 +4,13 @@
 // call interleaved among top-level imports would run too late. Dynamic `import()` defers
 // evaluation to this exact point in the control flow, which is what makes the ordering
 // here actually work when this file is executed directly by node.
-const { loadRootEnv } = await import('../env/loadRootEnv.ts')
+const { loadRootEnv } = await import('../../env/loadRootEnv.ts')
 loadRootEnv(import.meta.url)
 
 const { randomUUID } = await import('node:crypto')
 const { Client } = await import('pg')
 const { DECLARED_FIELD_SEED } = await import('@support/types')
-const { getEnv } = await import('../env.ts')
+const { getEnv } = await import('../../env.ts')
 const { agent, declaredField, workspaceMember } = await import('./schema/index.ts')
 const { closeDb } = await import('./client.ts')
 const { withWorkspace, withoutWorkspace } = await import('./withWorkspace.ts')

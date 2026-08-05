@@ -1,9 +1,9 @@
 import type { RequestHandler } from 'express'
 import { eq } from 'drizzle-orm'
-import { sendError } from '../errors.ts'
+import { sendError } from '../../errors.ts'
 import { workspace } from '../db/schema/index.ts'
 import { withoutWorkspace } from '../db/withWorkspace.ts'
-import { InvalidPlayerToken, verifyPlayerToken } from './playerToken.ts'
+import { InvalidPlayerToken, verifyPlayerToken } from '../auth/playerToken.ts'
 
 export type PlayerContext = {
   workspaceId: string

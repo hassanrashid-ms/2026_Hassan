@@ -1,9 +1,9 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { eq } from 'drizzle-orm'
-import { closeDb } from '../src/db/client.ts'
-import { withWorkspace } from '../src/db/withWorkspace.ts'
-import { event, session } from '../src/db/schema/index.ts'
-import { closeStaleSessions } from '../src/jobs/sessionTimeout.ts'
+import { closeDb } from '../src/shared/db/client.ts'
+import { withWorkspace } from '../src/shared/db/withWorkspace.ts'
+import { event, session } from '../src/shared/db/schema/index.ts'
+import { closeStaleSessions } from '../src/shared/jobs/sessionTimeout.ts'
 import { closeOwnerPool, seedPlayer, seedSession, seedWorkspace, truncateAll } from './helpers/db.ts'
 
 const NOW = new Date('2026-08-04T12:00:00Z')

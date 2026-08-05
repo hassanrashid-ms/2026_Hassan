@@ -1,8 +1,8 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import request from 'supertest'
-import { closeDb } from '../src/db/client.ts'
-import { verifyPlayerToken } from '../src/auth/playerToken.ts'
-import { generateWorkspaceSecret, parseWorkspaceSecret } from '../src/auth/workspaceSecret.ts'
+import { closeDb } from '../src/shared/db/client.ts'
+import { verifyPlayerToken } from '../src/shared/auth/playerToken.ts'
+import { generateWorkspaceSecret, parseWorkspaceSecret } from '../src/shared/auth/workspaceSecret.ts'
 import { app, mintToken } from './helpers/app.ts'
 import {
   closeOwnerPool,

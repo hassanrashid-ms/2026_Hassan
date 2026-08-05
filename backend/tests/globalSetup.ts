@@ -1,5 +1,5 @@
 import { Client } from 'pg'
-import { setupDatabase } from '../src/db/setup.ts'
+import { setupDatabase } from '../src/shared/db/setup.ts'
 import { getEnv } from '../src/env.ts'
 
 /**

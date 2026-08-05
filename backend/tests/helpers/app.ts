@@ -1,7 +1,7 @@
 import type { Express } from 'express'
 import request from 'supertest'
 import { createApp } from '../../src/app.ts'
-import { signPlayerToken, type PlayerClaims } from '../../src/auth/playerToken.ts'
+import { signPlayerToken, type PlayerClaims } from '../../src/shared/auth/playerToken.ts'
 
 export const app = createApp()
 

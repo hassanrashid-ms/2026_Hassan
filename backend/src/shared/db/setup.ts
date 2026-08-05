@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
 import { Client } from 'pg'
-import { getEnv } from '../env.ts'
+import { getEnv } from '../../env.ts'
 
 const run = promisify(execFile)
 const sqlDir = join(dirname(new URL(import.meta.url).pathname), 'sql')
@@ -35,7 +35,7 @@ if (process.argv[1]?.endsWith('setup.ts')) {
   // dotenv's default override:false means this is a no-op when a caller (e.g. vitest's
   // globalSetup, which loads .env.test itself) already populated process.env, so it's
   // safe to run unconditionally here.
-  const { loadRootEnv } = await import('../env/loadRootEnv.ts')
+  const { loadRootEnv } = await import('../../env/loadRootEnv.ts')
   loadRootEnv(import.meta.url)
   await setupDatabase()
   console.log('database ready')

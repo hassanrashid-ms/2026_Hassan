@@ -1,6 +1,6 @@
 import { drizzle } from 'drizzle-orm/node-postgres'
 import { Pool } from 'pg'
-import { getEnv } from '../env.ts'
+import { getEnv } from '../../env.ts'
 import * as schema from './schema/index.ts'
 
 /** Connects as support_app: a non-owner role with no BYPASSRLS. */

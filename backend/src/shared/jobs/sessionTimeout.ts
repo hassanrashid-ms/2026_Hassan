@@ -1,5 +1,5 @@
 import { and, isNull, lt } from 'drizzle-orm'
-import { getEnv } from '../env.ts'
+import { getEnv } from '../../env.ts'
 import { appendEvent } from '../events/appendEvent.ts'
 import { session, workspace } from '../db/schema/index.ts'
 import { withWorkspace, withoutWorkspace } from '../db/withWorkspace.ts'

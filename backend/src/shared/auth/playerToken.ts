@@ -1,5 +1,5 @@
 import { SignJWT, jwtVerify } from 'jose'
-import { getEnv } from '../env.ts'
+import { getEnv } from '../../env.ts'
 
 const ISSUER = 'support-crm'
 const AUDIENCE = 'support-player'

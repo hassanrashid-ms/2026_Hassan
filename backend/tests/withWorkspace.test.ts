@@ -1,9 +1,9 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { eq, sql } from 'drizzle-orm'
-import { closeDb, db } from '../src/db/client.ts'
-import { InvalidWorkspaceId, withWorkspace, withoutWorkspace } from '../src/db/withWorkspace.ts'
-import { appendEvent } from '../src/events/appendEvent.ts'
-import { event, player, workspace } from '../src/db/schema/index.ts'
+import { closeDb, db } from '../src/shared/db/client.ts'
+import { InvalidWorkspaceId, withWorkspace, withoutWorkspace } from '../src/shared/db/withWorkspace.ts'
+import { appendEvent } from '../src/shared/events/appendEvent.ts'
+import { event, player, workspace } from '../src/shared/db/schema/index.ts'
 import { closeOwnerPool, seedPlayer, seedWorkspace, truncateAll } from './helpers/db.ts'
 
 afterAll(async () => {

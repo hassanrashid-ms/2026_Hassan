@@ -2,7 +2,7 @@ import cors from 'cors'
 import express from 'express'
 import { getEnv } from './env.ts'
 import { errorMiddleware } from './errors.ts'
-import { playerTokenRouter } from './auth/playerTokenRoute.ts'
+import { playerTokenRouter } from './shared/auth/playerTokenRoute.ts'
 import { sdkRouter } from './sdk/router.ts'
 import { surfaceRouter } from './surface/router.ts'
 

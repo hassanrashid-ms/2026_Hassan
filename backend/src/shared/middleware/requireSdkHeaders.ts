@@ -1,6 +1,6 @@
 import type { RequestHandler } from 'express'
 import { SDK_HEADERS } from '@support/types'
-import { sendError } from '../errors.ts'
+import { sendError } from '../../errors.ts'
 
 const normalise = (value: string | undefined): string | null => {
   const trimmed = value?.trim()

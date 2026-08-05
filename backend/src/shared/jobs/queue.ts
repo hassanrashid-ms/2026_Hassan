@@ -1,6 +1,6 @@
 import { Queue, Worker } from 'bullmq'
 import IORedis from 'ioredis'
-import { getEnv } from '../env.ts'
+import { getEnv } from '../../env.ts'
 import { closeStaleSessions } from './sessionTimeout.ts'
 
 const QUEUE_NAME = 'support-jobs'

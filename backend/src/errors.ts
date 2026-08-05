@@ -1,5 +1,5 @@
 import type { ErrorRequestHandler, Response } from 'express'
-import { InvalidWorkspaceId } from './db/withWorkspace.ts'
+import { InvalidWorkspaceId } from './shared/db/withWorkspace.ts'
 
 export type ErrorCode =
   | 'unauthorized'
@@ -18,7 +18,7 @@ export function sendError(res: Response, status: number, code: ErrorCode, messag
  * asyncHandler wrapper is needed anywhere in this codebase.
  *
  * Never `console.error(error)` on the whole object. `InvalidWorkspaceId`
- * (src/db/withWorkspace.ts) deliberately keeps the rejected value off its
+ * (src/shared/db/withWorkspace.ts) deliberately keeps the rejected value off its
  * `.message` and only on an enumerable `workspaceId` field, so that an
  * attacker-supplied string can be inspected by code but never lands in a log by
  * accident. Logging the object (or spreading it into a template) would

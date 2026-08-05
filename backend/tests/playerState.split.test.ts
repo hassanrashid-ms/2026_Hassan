@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DECLARED_FIELD_KEYS } from '@support/types'
-import { splitSnapshot } from '../src/playerState/split.ts'
+import { splitSnapshot } from '../src/shared/playerState/split.ts'
 
 const ALL_DECLARED = new Set<string>(DECLARED_FIELD_KEYS)
 const SPEC_SNAPSHOT = {
