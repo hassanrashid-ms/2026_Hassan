@@ -31,18 +31,34 @@ multi-tenant customer support tool for mobile games. This repo is one of two:
    retype one** — shipped Unity builds sit in app stores for years and cannot be recalled.
 6. This file — a summary of 1–5 plus the server decisions. If it disagrees with the spec, the spec
    is right and this file is stale.
+7. `docs/plans/2026-08-04-app-side-sdk-seam.md` — the implementation plan for the SDK
+   seam, and `docs/decisions/2026-08-04-sdk-path-schema-subset.md` for why ten tables
+   rather than 32. Both are records of what was built, not requirements.
 
 `Docs/` sits one level above both repos and is deliberately tracked by neither.
 
 ## Current state
 
-**Scaffold only.** `frontend/` and `backend/` contain nothing but a README. There is no
-`package.json`, no workspace manifest, no env template, no models, no tests. Do not invent commands
-for this repo — there are none yet. The first task is scaffolding the pnpm workspace.
+**The SDK seam is built.** `pnpm install && pnpm db:setup && pnpm db:seed && pnpm dev` — see
+`README.md`'s *Getting started* for the full sequence and `.env.example` for what to set first.
 
-**The database and schema are specced but not built.** 33 tables, fully designed in
-`docs/specs/2026-08-04-database-and-schema-design.md`. No migration exists yet; that is the second
-task, after the workspace scaffold.
+| Command | What it does |
+|---|---|
+| `pnpm test` | every package's suite; the API's needs Postgres up |
+| `pnpm typecheck` | `tsc --noEmit` across the workspace |
+| `pnpm db:setup` | idempotent; re-run after any schema change |
+| `SEED_SECRET=… ./scripts/verify-seam.sh` | proves the SDK seam end to end |
+
+Built: `POST /auth/player-token`, the four `/sdk/*` endpoints, `GET /surface/bootstrap`, `POST
+/surface/events/article_read`, the 30-minute session-timeout job, and a deliberately-ugly web
+surface stub — steps 1–3 of the wire contract's build order. **Not built:** conversations, messages,
+the bot, the taxonomy, forms, the agent console, the admin console, reporting.
+
+**The database and schema are specced in full but only partly built.** 33 tables designed in
+`docs/specs/2026-08-04-database-and-schema-design.md`; the first migration builds ten of them — the
+ones the SDK path touches — and the remaining twenty-three arrive in migration `002`, at the start
+of the conversation slice. See `docs/decisions/2026-08-04-sdk-path-schema-subset.md` for which ten
+and why.
 
 Planned stack (decided, not installed):
 
@@ -420,6 +436,14 @@ value before and after**.
 
 ### Traps
 
+- **`SET LOCAL app.workspace_id = $1` is a syntax error.** Use
+  `select set_config('app.workspace_id', $1, true)`.
+- **RLS does not bind the table owner** unless the table is `FORCE ROW LEVEL SECURITY`.
+  The app connects as a non-owner role (`support_app`) as well, so a mistake in either
+  mechanism is caught by the other.
+- **Foreign-key checks bypass RLS.** Any client-supplied id used as a FK must first be
+  confirmed visible with an explicit scoped `SELECT`, or a row can point across the
+  tenant boundary while every policy is in place.
 - `resolved → closed` needs a scheduled worker (**7 days, per-workspace setting**), and so does the
   two-stage inactivity clock. **They are sequential clocks, not the same clock** — the inactivity
   clock's *output* is `resolved`; the auto-close window starts after that, whatever produced it.

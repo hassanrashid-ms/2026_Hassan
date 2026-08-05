@@ -1,9 +1,9 @@
-import { Router, type Router as RouterType } from 'express'
+import { Router } from 'express'
 import { requirePlayerToken } from '../auth/requirePlayerToken.ts'
 import { articleRead } from './articleRead.ts'
 import { bootstrap } from './bootstrap.ts'
 
-export const surfaceRouter: RouterType = Router()
+export const surfaceRouter = Router()
 
 // requirePlayerToken only. A browser page has no reason to know the workspace slug,
 // so requireSdkHeaders is deliberately absent here.

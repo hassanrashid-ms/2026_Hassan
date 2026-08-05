@@ -1,14 +1,14 @@
-import { Router, type Router as RouterType } from 'express'
+import { Router } from 'express'
 import { PlayerTokenRequest, type PlayerTokenResponse } from '@support/types'
 import { and, eq, sql } from 'drizzle-orm'
 import { getEnv } from '../env.ts'
 import { sendError } from '../errors.ts'
 import { player, workspace } from '../db/schema/index.ts'
 import { withWorkspace, withoutWorkspace } from '../db/withWorkspace.ts'
-import { signPlayerToken } from './jwt.ts'
+import { signPlayerToken } from './playerToken.ts'
 import { parseWorkspaceSecret, secretMatches } from './workspaceSecret.ts'
 
-export const playerTokenRouter: RouterType = Router()
+export const playerTokenRouter = Router()
 
 /**
  * Called server-to-server by the GAME's backend, which is the only place the
@@ -39,8 +39,10 @@ playerTokenRouter.post('/player-token', async (req, res) => {
       .limit(1),
   )
 
-  // Unknown and disabled are both 404, per the wire contract. Compare the secret
-  // first so the response cannot be used to enumerate workspace slugs.
+  // Unknown and disabled are both 404, per the wire contract. The slug itself is not
+  // a secret — it travels in the X-Support-Workspace header on every SDK request —
+  // so a 404 revealing "no such slug" is accepted deliberately: a game backend
+  // operator needs 404 to mean "you typed the slug wrong".
   if (!found || !secretMatches(parsed.raw, found.secretHash)) {
     sendError(
       res,

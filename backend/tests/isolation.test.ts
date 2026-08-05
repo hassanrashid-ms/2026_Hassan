@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import request from 'supertest'
 import { closeDb } from '../src/db/client.ts'
-import { verifyPlayerToken } from '../src/auth/jwt.ts'
+import { verifyPlayerToken } from '../src/auth/playerToken.ts'
 import { generateWorkspaceSecret, parseWorkspaceSecret } from '../src/auth/workspaceSecret.ts'
 import { app, mintToken } from './helpers/app.ts'
 import {

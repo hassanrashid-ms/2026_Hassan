@@ -2,7 +2,6 @@ import { execFile } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
-import { config as loadDotenv } from 'dotenv'
 import { Client } from 'pg'
 import { getEnv } from '../env.ts'
 
@@ -33,11 +32,11 @@ export async function setupDatabase(url: string = getEnv().MIGRATION_DATABASE_UR
 }
 
 if (process.argv[1]?.endsWith('setup.ts')) {
-  // `pnpm --filter @support/api db:setup` sets cwd to backend/, but .env lives at the repo
-  // root one level above. dotenv's default override:false means this is a no-op when a
-  // caller (e.g. vitest's globalSetup, which loads .env.test itself) already populated
-  // process.env, so it's safe to run unconditionally here.
-  loadDotenv({ path: join(dirname(new URL(import.meta.url).pathname), '..', '..', '..', '.env') })
+  // dotenv's default override:false means this is a no-op when a caller (e.g. vitest's
+  // globalSetup, which loads .env.test itself) already populated process.env, so it's
+  // safe to run unconditionally here.
+  const { loadRootEnv } = await import('../env/loadRootEnv.ts')
+  loadRootEnv(import.meta.url)
   await setupDatabase()
   console.log('database ready')
 }

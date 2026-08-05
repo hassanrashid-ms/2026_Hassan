@@ -8,10 +8,15 @@ work the resulting conversations in a web console.
 The Unity game-client SDK lives in the companion repo,
 [`2026_Hassan_Sdk`](https://github.com/hassanrashid-ms/2026_Hassan_Sdk).
 
-> **Status: scaffold.** The stack and architecture are decided and written up (see
-> [`CLAUDE.md`](CLAUDE.md) and the SDK repo's `docs/specs/overview+sdk.md`), but no application code
-> exists yet. `frontend/` and `backend/` are empty. Nothing below the *Planned stack* section is
-> installed.
+> **Status: the SDK seam is built.** Steps 1–3 of the wire contract's build order (see
+> [`docs/specs/2026-08-04-sdk-wire-contract.md`](docs/specs/2026-08-04-sdk-wire-contract.md#build-order)
+> — not the *Build order* section below, which uses different numbering) are done:
+> `POST /auth/player-token`, the four `/sdk/*` endpoints, `GET /surface/bootstrap` and
+> `POST /surface/events/article_read`, the session-timeout worker, and a deliberately-ugly
+> web surface stub. Ten of the 33 specced tables exist; see
+> [`docs/decisions/2026-08-04-sdk-path-schema-subset.md`](docs/decisions/2026-08-04-sdk-path-schema-subset.md).
+> Item **2** below ("The SDK seam") is what this covers; item **3** ("The core loop end
+> to end" — conversations and messages) has not started.
 
 **One workspace = one game.** Nothing is shared between workspaces — not content, categories,
 forms, players or issues. Multiple games are expected.
@@ -55,23 +60,69 @@ resolve more than once, and each resolution counts in the window it happened.
 | Console | Vite + React + TanStack Query + Tailwind + shadcn/ui |
 | Charts | Recharts |
 
-Deployment is **self-hosted, Docker only** — two services, Postgres and Redis. The schema is 32
+Deployment is **self-hosted, Docker only** — two services, Postgres and Redis. The full schema is 33
 tables, specced in [`docs/specs/2026-08-04-database-and-schema-design.md`](docs/specs/2026-08-04-database-and-schema-design.md)
-with diagrams in [`docs/specs/erd.html`](docs/specs/erd.html). The database choice reverses an earlier
-written decision; rationale in [`docs/decisions/2026-08-04-postgresql-over-mongodb.md`](docs/decisions/2026-08-04-postgresql-over-mongodb.md).
+with diagrams in [`docs/specs/erd.html`](docs/specs/erd.html) — ten are built so far, see **What
+exists** below. The database choice reverses an earlier written decision; rationale in
+[`docs/decisions/2026-08-04-postgresql-over-mongodb.md`](docs/decisions/2026-08-04-postgresql-over-mongodb.md).
 
 ## Getting started
 
 ```bash
 git clone git@github.com:hassanrashid-ms/2026_Hassan.git
+cd 2026_Hassan
+cp .env.example .env                 # then set PLAYER_JWT_SECRET (32+ chars)
+docker compose up -d                 # Postgres 17 (pgvector) + Redis 7
+pnpm install
+pnpm db:setup                        # extensions → drizzle-kit push → RLS
+pnpm db:seed                         # prints the workspace secret ONCE — save it
+pnpm dev                             # api on :4000, web surface on :5173
 ```
 
-There is nothing to install yet — no `package.json`, no workspace manifest, no environment
-template. The first task is scaffolding the pnpm workspace; see **Build order** below.
+| Command | What it does |
+|---|---|
+| `pnpm test` | every package's suite; the API's needs Postgres up |
+| `pnpm typecheck` | `tsc --noEmit` across the workspace |
+| `pnpm db:setup` | idempotent; re-run after any schema change |
+| `SEED_SECRET=… ./scripts/verify-seam.sh` | proves the SDK seam end to end against a running API |
 
-Once scaffolded, this section should carry the real commands (`pnpm install`, dev servers, test
-runner, single-test invocation) and the required environment variables. Until then, treat any such
-command you find in a doc as aspirational.
+Tests run against `support_test`, created automatically. `globalSetup` refuses any database whose
+name does not end in `_test`, so pointing the suite at a real database is not possible by accident.
+
+## What exists
+
+Steps 1–3 of the [wire contract's build order](docs/specs/2026-08-04-sdk-wire-contract.md#build-order)
+(a different numbering than the *Build order* section below): `POST /auth/player-token`, the four
+`/sdk/*` endpoints, `GET /surface/bootstrap`, `POST /surface/events/article_read`, the 30-minute
+session-timeout job, and a deliberately-ugly web surface stub. Ten of the 33 tables — see
+[`docs/decisions/2026-08-04-sdk-path-schema-subset.md`](docs/decisions/2026-08-04-sdk-path-schema-subset.md).
+Full implementation plan and rationale in
+[`docs/plans/2026-08-04-app-side-sdk-seam.md`](docs/plans/2026-08-04-app-side-sdk-seam.md).
+
+**Not built:** conversations, messages, the bot, the taxonomy, forms, the agent console, the admin
+console, reporting. Item 3 ("The core loop end to end") of the *Build order* section below.
+
+## Owed
+
+- **Nothing watches `sdk_incident`.** The write path exists; alerting does not. A rising count is how
+  you learn a release broke support entry for a whole platform, so an unwatched stream is the silent
+  failure it was built to prevent. Until then, this query is the manual check:
+
+  ```sql
+  select date_trunc('hour', occurred_at) as hour,
+         payload->>'kind' as kind, count(*)
+    from event
+   where type = 'sdk_incident' and occurred_at > now() - interval '24 hours'
+   group by 1, 2 order by 1 desc;
+  ```
+
+- **`GET /surface/bootstrap` returns `raw` outside production.** Remove that branch when the real
+  chat UI lands; the agent Game View is what reads freeform state.
+- **Agent auth is not built.** `agent` carries a Google identity (`email`, `google_subject`) and no
+  password, per [`docs/decisions/2026-08-04-agent-auth-google-oauth.md`](docs/decisions/2026-08-04-agent-auth-google-oauth.md).
+  The OAuth flow — client registration, callback, token verification, the **mindstormstudios.com org
+  check**, session issuance and the Redis denylist — ships with the console slice and needs its own
+  plan. The seeded admin row has a null `google_subject` until that person's first real login.
 
 ## Repository layout
 

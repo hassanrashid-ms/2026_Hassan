@@ -1,4 +1,4 @@
-import { Router, type Router as RouterType } from 'express'
+import { Router } from 'express'
 import { requirePlayerToken } from '../auth/requirePlayerToken.ts'
 import { requireSdkHeaders } from '../auth/requireSdkHeaders.ts'
 import { getEnv } from '../env.ts'
@@ -7,7 +7,7 @@ import { sessionsEnd } from './sessionsEnd.ts'
 import { incidents } from './incidents.ts'
 import { unread } from './unread.ts'
 
-export const sdkRouter: RouterType = Router()
+export const sdkRouter = Router()
 
 sdkRouter.use(requirePlayerToken, requireSdkHeaders)
 

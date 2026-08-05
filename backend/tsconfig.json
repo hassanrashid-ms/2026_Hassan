@@ -5,7 +5,8 @@
     "rootDir": ".",
     "types": ["node"],
     "allowImportingTsExtensions": true,
-    "noEmit": true
+    "noEmit": true,
+    "declaration": false
   },
   "include": ["src", "tests", "drizzle.config.ts", "vitest.config.ts"]
 }

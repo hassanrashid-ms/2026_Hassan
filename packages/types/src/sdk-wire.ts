@@ -75,7 +75,12 @@ export const IncidentBody = z.object({
   incident_id: z.uuid().nullable().catch(null),
   session_id: z.uuid().nullable().catch(null),
   kind: z.string().min(1).max(120).catch('unknown'),
-  detail: z.string().max(2000).catch(''),
+  // `.max(2000).catch('')` would fire on the WHOLE parse failure for an over-length
+  // string, discarding 100% of the diagnostic content rather than truncating it.
+  // Validate the type first (falls back to '' only when it isn't a string at all),
+  // then truncate — so an abusive detail keeps its first 2000 characters instead of
+  // being wiped.
+  detail: z.string().catch('').transform((s) => s.slice(0, 2000)),
   sdk_version: z.string().max(60).catch(''),
   client_version: z.string().max(60).catch(''),
 })

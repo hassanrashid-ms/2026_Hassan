@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm'
 import { sendError } from '../errors.ts'
 import { workspace } from '../db/schema/index.ts'
 import { withoutWorkspace } from '../db/withWorkspace.ts'
-import { InvalidPlayerToken, verifyPlayerToken } from './jwt.ts'
+import { InvalidPlayerToken, verifyPlayerToken } from './playerToken.ts'
 
 export type PlayerContext = {
   workspaceId: string

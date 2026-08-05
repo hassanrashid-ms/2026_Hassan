@@ -6,7 +6,7 @@ import { closeDb } from '../src/db/client.ts'
 import { withWorkspace } from '../src/db/withWorkspace.ts'
 import { player } from '../src/db/schema/index.ts'
 import { generateWorkspaceSecret } from '../src/auth/workspaceSecret.ts'
-import { verifyPlayerToken } from '../src/auth/jwt.ts'
+import { verifyPlayerToken } from '../src/auth/playerToken.ts'
 import { closeOwnerPool, seedWorkspace, truncateAll } from './helpers/db.ts'
 
 const app = createApp()

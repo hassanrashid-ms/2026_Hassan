@@ -107,11 +107,14 @@ describe('POST /sdk/incidents', () => {
     expect(rows[0]!.sessionId).toBeNull()
   })
 
-  it('truncates an abusive detail rather than rejecting the report', async () => {
+  it('truncates an abusive detail to its first 2000 characters, not to empty', async () => {
     const f = await fixture()
-    await post(f, { kind: 'stack_overflow', detail: 'x'.repeat(50_000) }).expect(200)
+    const abusive = 'x'.repeat(50_000)
+    await post(f, { kind: 'stack_overflow', detail: abusive }).expect(200)
     const rows = await events(f.workspaceId)
-    expect((rows[0]!.payload.detail as string).length).toBeLessThanOrEqual(2000)
+    const storedDetail = rows[0]!.payload.detail as string
+    expect(storedDetail).toHaveLength(2000)
+    expect(storedDetail).toBe(abusive.slice(0, 2000))
   })
 
   it('400s on an unparseable body — the only 4xx it has', async () => {

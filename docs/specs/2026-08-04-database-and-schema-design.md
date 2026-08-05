@@ -858,6 +858,24 @@ small tables whose data **cannot be reconstructed later**.
 - **Deleting an article must not break the record of which article the bot offered** — that record is
   a snapshotted event payload, not a FK to live content.
 
+## Addendum — 2026-08-04, the SDK-path slice
+
+Three columns the wire contract requires that the table list above does not carry.
+Added in the first migration; the reasoning belongs here rather than in a plan.
+
+| Table | Column | Why |
+|---|---|---|
+| `workspace` | `secret_hash text NOT NULL` | `POST /auth/player-token` authenticates with `Authorization: Bearer <workspace_secret>`. Format `sk_<slug>.<32 random bytes base64url>`; the stored value is the sha256 of the random half. sha256 rather than a slow KDF because the secret is 256 bits of CSPRNG output — there is no guessable password to slow an attacker down to. (There is no agent password to contrast this with: agent auth is Google OAuth restricted to the mindstormstudios.com org — see `docs/decisions/2026-08-04-agent-auth-google-oauth.md`.) |
+| `workspace` | `disabled_at timestamptz` | The wire contract requires `404` for a workspace that is *"not found **or disabled**"*, and a disabled workspace must also invalidate live player tokens rather than waiting out their 15 minutes. |
+| `session` | `ended_by session_end_reason` (`client` \| `timeout`) | The wire contract's repeatable job marks sessions it closes `ended_by = 'timeout'`. Without the column, a timed-out session is indistinguishable from one the player closed — and *"a missing end must never silently shrink the denominator"* depends on being able to tell. |
+
+**Also decided in that slice, and not stated anywhere above:**
+
+- **`player_state_snapshot` is written `ON CONFLICT (session_id) DO NOTHING`, not `DO UPDATE`.** The wire contract says "upsert", but a redelivery arriving after a field was promoted would re-split against the newer `declared_field` set and move a key from `raw` into `declared` — retroactive promotion through the back door. First write wins, permanently.
+- **`is_missing` is judged on the six *provider* fields alone** (`player_id`, `player_level`, `total_spend`, `spend_tier`, `account_created_at`, `last_session_at`), not on all eleven declared ones. The SDK's `DeviceProbe` fills the five device fields with no game involvement, so a provider that throws on everything still delivers five populated keys; including them would make `is_missing` unreachable.
+- **`raw` reserves the `__` key prefix.** `raw.__player_id_mismatch` records a `snapshot.player_id` that disagrees with the JWT's `external_player_id`. Advisory only — the authoritative player is always the token's.
+- **`event.type` is `text`, not an `ENUM`.** New types arrive with every slice and `ALTER TYPE ... ADD VALUE` cannot run inside a transaction block. The enum list in *Postgres features this schema relies on* covers status, priority, delivery state, author type and visibility — deliberately not event type.
+
 ## Open
 
 Nothing blocking. Two items to revisit once there is live data:

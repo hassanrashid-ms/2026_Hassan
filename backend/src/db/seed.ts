@@ -1,17 +1,11 @@
-import { dirname, join } from 'node:path'
-import { config as loadDotenv } from 'dotenv'
-
-// `pnpm --filter @support/api db:seed` sets cwd to backend/, but .env lives at the repo
-// root one level above. Same pattern as db/setup.ts: dotenv's default override:false makes
-// this a no-op when a caller (e.g. a test) already populated process.env.
-//
 // This MUST run before anything below is imported, not merely before `seed()` is called:
 // `./client.ts` reads `getEnv()` at module top level to build its connection pool, and
 // static `import` statements are fully evaluated before this file's own body runs — so a
-// `loadDotenv()` call interleaved among top-level imports would run too late. Dynamic
-// `import()` defers evaluation to this exact point in the control flow, which is what
-// makes the ordering here actually work when this file is executed directly by node.
-loadDotenv({ path: join(dirname(new URL(import.meta.url).pathname), '..', '..', '..', '.env') })
+// call interleaved among top-level imports would run too late. Dynamic `import()` defers
+// evaluation to this exact point in the control flow, which is what makes the ordering
+// here actually work when this file is executed directly by node.
+const { loadRootEnv } = await import('../env/loadRootEnv.ts')
+loadRootEnv(import.meta.url)
 
 const { randomUUID } = await import('node:crypto')
 const { Client } = await import('pg')
