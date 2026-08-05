@@ -5522,9 +5522,21 @@ async function tenant(slug: string): Promise<Tenant> {
   return { workspaceId, playerId, token, slug }
 }
 
-async function rowCounts(): Promise<Record<string, number>> {
-  const tables = ['session', 'player_state_snapshot', 'event', 'conversation', 'message']
-  const counts: Record<string, number> = {}
+// A plain Record<string, number> return type makes every property access
+// `number | undefined` under noUncheckedIndexedAccess, which fails to typecheck
+// at the one call site that does arithmetic (`before.event + 1`). A fixed-shape
+// type sidesteps it without an assertion at each call site.
+type RowCounts = {
+  session: number
+  player_state_snapshot: number
+  event: number
+  conversation: number
+  message: number
+}
+
+async function rowCounts(): Promise<RowCounts> {
+  const tables = ['session', 'player_state_snapshot', 'event', 'conversation', 'message'] as const
+  const counts = {} as RowCounts
   for (const table of tables) {
     const { rows } = await ownerPool.query<{ n: number }>(`select count(*)::int as n from ${table}`)
     counts[table] = rows[0]!.n
