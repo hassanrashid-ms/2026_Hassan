@@ -4,6 +4,7 @@ import { getEnv } from './env.ts'
 import { errorMiddleware } from './errors.ts'
 import { playerTokenRouter } from './auth/playerTokenRoute.ts'
 import { sdkRouter } from './sdk/router.ts'
+import { surfaceRouter } from './surface/router.ts'
 
 export function createApp(): express.Express {
   const app = express()
@@ -31,7 +32,7 @@ export function createApp(): express.Express {
 
   app.use('/auth', playerTokenRouter)
   app.use('/sdk', sdkRouter)
-  // Task 14 mounts /surface.
+  app.use('/surface', surfaceRouter)
 
   app.use(errorMiddleware)
   return app
