@@ -16,7 +16,7 @@ const { closeDb } = await import('./client.ts')
 const { withWorkspace, withoutWorkspace } = await import('./withWorkspace.ts')
 const { generateWorkspaceSecret } = await import('../auth/workspaceSecret.ts')
 
-const SLUG = process.env.SEED_WORKSPACE_SLUG ?? 'demo-game'
+const SLUG = process.env.SEED_WORKSPACE_SLUG ?? 'demo-workspace'
 const ADMIN_EMAIL = process.env.SEED_ADMIN_EMAIL ?? 'admin@example.test'
 
 /**

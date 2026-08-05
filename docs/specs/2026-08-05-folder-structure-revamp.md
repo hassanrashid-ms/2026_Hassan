@@ -39,7 +39,8 @@ backend/src/
 │   └── routers/
 ├── shared/
 │   ├── db/              # ← db/ (client, schema/, seed, setup, withWorkspace) — pure move
-│   ├── auth/            # ← auth/ (playerToken, playerTokenRoute, requirePlayerToken, requireSdkHeaders, workspaceSecret)
+│   ├── auth/            # ← auth/ (playerToken, playerTokenRoute, workspaceSecret)
+│   ├── middleware/      # ← auth/ (requirePlayerToken, requireSdkHeaders)
 │   ├── jobs/            # ← jobs/ (queue, sessionTimeout)
 │   ├── events/          # ← events/ (appendEvent)
 │   └── playerState/     # ← playerState/ (declaredKeys, split)
@@ -57,6 +58,14 @@ immediately, per the earlier decision that no agent-console backend code exists 
 `shared/auth/` as-is — it's called by the game's own backend, not by any of the three
 verticals, so it isn't itself a vertical. `app.ts` keeps
 `app.use('/auth', playerTokenRouter)` unchanged.
+
+`shared/auth/` and `shared/middleware/` are a deliberate split, not one bucket: `auth/` holds
+token issuance and verification (`playerToken`, `playerTokenRoute`, `workspaceSecret`) —
+code that *produces* or *checks* credentials. `middleware/` holds the Express
+`RequestHandler`s that *gate* a request using those credentials
+(`requirePlayerToken`, `requireSdkHeaders`) — code that plugs into a router's `.use()`
+chain. Every vertical's router imports its gating middleware from `shared/middleware/`
+and, where it needs the token/claims shape, imports types from `shared/auth/`.
 
 ### Per-vertical split (controller / service / router / model)
 
