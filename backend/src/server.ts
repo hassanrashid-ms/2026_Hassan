@@ -10,7 +10,7 @@ loadRootEnv(import.meta.url)
 
 const { createApp } = await import('./app.ts')
 const { getEnv } = await import('./env.ts')
-const { registerJobs } = await import('./jobs/queue.ts')
+const { registerJobs } = await import('./shared/jobs/queue.ts')
 
 const port = getEnv().PORT
 const server = createApp().listen(port, () => {

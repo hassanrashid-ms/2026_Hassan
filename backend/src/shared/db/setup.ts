@@ -25,7 +25,7 @@ async function runSqlFile(url: string, file: string): Promise<void> {
 export async function setupDatabase(url: string = getEnv().MIGRATION_DATABASE_URL): Promise<void> {
   await runSqlFile(url, '001_extensions.sql')
   await run('pnpm', ['exec', 'drizzle-kit', 'push', '--force'], {
-    cwd: join(dirname(new URL(import.meta.url).pathname), '..', '..'),
+    cwd: join(dirname(new URL(import.meta.url).pathname), '..', '..', '..'),
     env: { ...process.env, MIGRATION_DATABASE_URL: url },
   })
   await runSqlFile(url, '002_rls.sql')
