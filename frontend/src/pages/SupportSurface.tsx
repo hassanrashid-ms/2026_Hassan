@@ -1,0 +1,140 @@
+import { useEffect, useRef, useState } from 'react'
+import type { BootstrapResponse, PlayerStateAvailability } from '@support/types'
+import { fetchBootstrap, reportArticleRead } from '../api/surfaceApi.ts'
+import { readBoot, scrubToken, type SurfaceBoot } from '../boot.ts'
+import { post } from '../services/bridgeService.ts'
+
+/** British spelling throughout, per the spec's own copy. */
+const AVAILABILITY_COPY: Record<PlayerStateAvailability, string> = {
+  ok: 'Player state received.',
+  degraded: 'Player state is partial — the game could not read every field.',
+  missing: 'Player state was delivered but the game returned nothing usable.',
+  absent: 'Player state has not arrived yet. It may still be queued on the device.',
+}
+
+const FAKE_ARTICLES = [
+  { id: 'a_123', title: 'My purchase did not arrive' },
+  { id: 'a_456', title: 'I cannot log in' },
+]
+
+export function SupportSurface() {
+  const [boot, setBoot] = useState<SurfaceBoot | null>(null)
+  const [data, setData] = useState<BootstrapResponse | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [read, setRead] = useState<string[]>([])
+
+  // StrictMode double-invokes mount effects in development. scrubToken removes the
+  // fragment as a side effect of the first invocation, so a naive second run would
+  // read an already-scrubbed URL, see no token, and set a false "no session token"
+  // error alongside whatever the first run already loaded. The ref makes the body
+  // idempotent instead of relying on removing StrictMode, which stays on deliberately.
+  const startedRef = useRef(false)
+
+  useEffect(() => {
+    if (startedRef.current) return
+    startedRef.current = true
+
+    const parsed = readBoot(window.location)
+    if (!parsed) {
+      setError('This page must be opened by the game. No session token was supplied.')
+      return
+    }
+    setBoot(parsed)
+    scrubToken(window.history, window.location)
+
+    fetchBootstrap(parsed.token, parsed.sessionId)
+      .then(setData)
+      .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : 'Could not load support.'))
+  }, [])
+
+  const onRead = (articleId: string) => {
+    if (!boot) return
+    // Both paths: the event the funnel counts, and the bridge message the SDK echoes
+    // back in sessions/end. Having both is how a silently dead bridge is detected.
+    void reportArticleRead(boot.token, boot.sessionId, articleId).catch(() => {})
+    post({ type: 'article_read', id: articleId })
+    setRead((current) => [...current, articleId])
+  }
+
+  return (
+    <main className="surface">
+      <h1>Support</h1>
+
+      {error !== null && <p className="notice">{error}</p>}
+
+      {data !== null && (
+        <>
+          <section>
+            <h2>Session</h2>
+            <dl>
+              <dt>Session</dt>
+              <dd>{data.session.id}</dd>
+              <dt>Opened from</dt>
+              <dd>{data.session.entry_point}</dd>
+              <dt>Started</dt>
+              <dd>{data.session.started_at}</dd>
+              <dt>Player</dt>
+              <dd>{data.player.external_player_id}</dd>
+              <dt>Unread replies</dt>
+              <dd>{data.unread_count}</dd>
+            </dl>
+          </section>
+
+          <section>
+            <h2>Player state</h2>
+            {/* Missing data is a state, not an error: always a sentence, never a
+                blank panel and never an error page. */}
+            <p className="notice">{AVAILABILITY_COPY[data.player_state.availability]}</p>
+            {data.player_state.degraded_reason !== null && (
+              <p className="notice">Reason: {data.player_state.degraded_reason}</p>
+            )}
+            {/* captured_at is shown prominently on purpose: a reopened conversation
+                keeps its original snapshot, so an agent could otherwise read a
+                six-month-old client version as current. */}
+            <p>Captured at: {data.player_state.captured_at ?? 'not captured'}</p>
+
+            <h3>Declared</h3>
+            <pre>{JSON.stringify(data.player_state.declared, null, 2)}</pre>
+
+            {data.player_state.raw !== undefined && (
+              <>
+                <h3>Freeform</h3>
+                <pre>{JSON.stringify(data.player_state.raw, null, 2)}</pre>
+              </>
+            )}
+          </section>
+
+          <section>
+            <h2>Help articles</h2>
+            <ul>
+              {FAKE_ARTICLES.map((article) => (
+                <li key={article.id}>
+                  <button type="button" onClick={() => onRead(article.id)}>
+                    {article.title}
+                  </button>
+                  {read.includes(article.id) && <span> — read</span>}
+                </li>
+              ))}
+            </ul>
+          </section>
+        </>
+      )}
+
+      {/* Always on screen, whatever else happened — including when bootstrap failed.
+          "Still need help?" and "Talk to a person" appear on every screen; there are
+          no dead ends. Neither does anything yet beyond posting a bridge message: the
+          real chat UI and handoff arrive with the conversation slice. */}
+      <section>
+        <button type="button" onClick={() => post({ type: 'conversation_created' })}>
+          Still need help?
+        </button>
+        <button type="button" onClick={() => post({ type: 'conversation_created' })}>
+          Talk to a person
+        </button>
+        <button type="button" onClick={() => post({ type: 'close' })}>
+          Close
+        </button>
+      </section>
+    </main>
+  )
+}

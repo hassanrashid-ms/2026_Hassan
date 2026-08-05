@@ -1,0 +1,7 @@
+packages:
+  - packages/*
+  - backend
+  - frontend
+allowBuilds:
+  esbuild: true
+  msgpackr-extract: true

@@ -10,6 +10,7 @@ __pycache__/
 .env
 .env.*
 !.env.example
+!.env.test.example
 
 # Build output
 dist/
@@ -27,3 +28,6 @@ yarn-error.log*
 .vscode/
 .idea/
 .DS_Store
+
+# Subagent-driven-development scratch workspaces
+.superpowers/

@@ -1,0 +1,37 @@
+{
+  "name": "@support/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch --experimental-strip-types src/server.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:setup": "node --experimental-strip-types src/shared/db/setup.ts",
+    "db:seed": "node --experimental-strip-types src/shared/db/seed.ts"
+  },
+  "dependencies": {
+    "@support/types": "workspace:*",
+    "bullmq": "^5",
+    "cors": "^2",
+    "dotenv": "^16",
+    "drizzle-orm": "latest",
+    "express": "^5",
+    "ioredis": "^5",
+    "jose": "^6",
+    "pg": "^8",
+    "zod": "^4"
+  },
+  "devDependencies": {
+    "@types/cors": "^2",
+    "@types/express": "^5",
+    "@types/node": "^22",
+    "@types/pg": "^8",
+    "@types/supertest": "^6",
+    "drizzle-kit": "latest",
+    "supertest": "^7",
+    "typescript": "^5",
+    "vitest": "latest"
+  }
+}

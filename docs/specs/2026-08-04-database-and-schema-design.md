@@ -64,7 +64,7 @@ Authenticate as workspace A and hit every endpoint with workspace B's IDs. **The
 `404`, not `403`** — under RLS the rows are invisible, so the handler genuinely cannot distinguish
 "not yours" from "not there." Assert this rather than discovering it.
 
-## The 32 tables
+## The 33 tables
 
 `workspace_id` is present on every scoped table and omitted below.
 
@@ -245,7 +245,7 @@ SELECT a.id, a.title, a.body
 RLS supplies the workspace predicate. Publishing an article and writing its embeddings happens in
 **one transaction**, so the bot can never see a published article it has no vector for.
 
-### Conversation core — 6
+### Conversation core — 7
 
 | Table | Key columns |
 |---|---|
@@ -253,8 +253,52 @@ RLS supplies the workspace predicate. Publishing an article and writing its embe
 | `resolution_cycle` | `id`, `conversation_id`, `cycle_no`, `opened_at`, `first_human_reply_at`, `resolved_at`, `resolution_kind`, `support_owed_reply`, `inactivity_stage`, `inactivity_due_at`, `closed_at` |
 | `message` | `id`, `conversation_id`, `seq`, `author_type`, `author_agent_id`, `body`, `visibility`, `delivery_state`, `created_at` |
 | `attachment` | `id`, `message_id` **NOT NULL**, `storage_key`, `mime_type`, `byte_size` |
-| `label` | `id`, `name`, `colour` |
-| `conversation_label` | `conversation_id`, `label_id`, `applied_by`, `applied_at` |
+| `label` | `id`, `name`, `colour`, `archived_at` |
+| `conversation_label` | `conversation_id`, `label_id`, `applied_by` (**nullable**), `applied_at` |
+| `subintent_label` | `subintent_id`, `label_id`, `created_by`, `created_at`; PK(`subintent_id`,`label_id`) |
+
+#### Tags are labels
+
+The spec calls them *"Label / tag"* (p3), and the console says "label" (p31–32). One table, two names.
+
+#### Auto-tagging from the subintent
+
+`subintent_label` is an admin-managed many-to-many: *when a conversation is classified as this
+subintent, apply these labels.* p29 shows the same intent as a rule example ("Subintent is a refund
+request → apply the refund label"), but a mapping table is the better home for it, because **p29 also
+says rule conditions read labels.** If labels came from rules, a rule routing on a tag would depend on
+the tag rule having fired first — and evaluation is capped at *exactly one extra pass*. That is
+ordering fragility in the subsystem that can least afford it.
+
+The layering instead:
+
+```
+1. Bot picks a subintent                    -- the only thing the bot decides
+2. Server applies that subintent's labels   -- declarative, from subintent_label
+3. Server applies default_priority
+4. Rules evaluate, and may read those labels as conditions
+```
+
+**The bot never invents a tag** — same principle as never inventing a subintent. It chooses a
+subintent; the server derives the labels.
+
+**Applied tags are permanent until an agent removes them.** Reclassification does not swap them, and
+neither does a merge. A tag is a marker someone or something put on this ticket, not a derived view of
+its current subintent — so re-deriving it on every classification change would erase real signal.
+`applied_by IS NULL` distinguishes an auto-applied tag from an agent's, which is all the provenance
+this needs; rule-applied labels are already traceable through `rule_firing`.
+
+**Priority is not a tag.** `subintent.default_priority` already exists, typed `p1`–`p4`. A
+`priority_high` label alongside it would be a second source of truth that every filter and report has
+to choose between.
+
+`label.archived_at` retires a tag from new use while keeping it on existing tickets — same treatment as
+an archived subintent, and for the same reason: deleting would break historical filters.
+
+**Permissions.** Applying or removing a tag on a ticket is `✓ ✓ ✓` (p43: *"Add or remove labels"*).
+**Creating a tag and mapping it to subintents is Admin** — vocabulary and automation are configuration,
+like subintents and forms. The spec never states who manages the label vocabulary; that is an omission
+in the same family as the missing intent rows.
 
 `assigned_agent_id IS NULL` **is** the unassigned queue. There is no `queue` table — see
 *Queues are views* below.
@@ -777,14 +821,14 @@ The inactivity clock, by contrast, **is** load-bearing: it produces resolutions 
 | Transactions | Article + embeddings atomically, so the bot never sees a published article with no vector |
 | `pgvector` HNSW | Filtered similarity search in the same query as the relational predicates |
 
-## Why 32 tables
+## Why 33 tables
 
-**Twelve are things the product has. Twenty are the price of three rules in the spec.**
+**Twelve are things the product has. Twenty-one are the price of three rules in the spec.**
 
 | Rule | Tables it generates |
 |---|---|
 | Nothing is deleted | `taxonomy_change`, `event`, `rule_firing`, `change_log`, `resolution_cycle` |
-| Support configures without a release | `intent`, `subintent`, `form`, `form_version`, `form_field`, `label`, `rule`, `bot_config`, `declared_field`, `saved_filter` |
+| Support configures without a release | `intent`, `subintent`, `form`, `form_version`, `form_field`, `label`, `subintent_label`, `rule`, `bot_config`, `declared_field`, `saved_filter` |
 | Reporting counts events | `session`, `article_feedback`, `article_embedding`, `article_phrasing`, `player_state_snapshot` |
 
 Four are genuinely collapsible and were considered:
@@ -813,6 +857,24 @@ small tables whose data **cannot be reconstructed later**.
 - **Version-stamp every form submission.**
 - **Deleting an article must not break the record of which article the bot offered** — that record is
   a snapshotted event payload, not a FK to live content.
+
+## Addendum — 2026-08-04, the SDK-path slice
+
+Three columns the wire contract requires that the table list above does not carry.
+Added in the first migration; the reasoning belongs here rather than in a plan.
+
+| Table | Column | Why |
+|---|---|---|
+| `workspace` | `secret_hash text NOT NULL` | `POST /auth/player-token` authenticates with `Authorization: Bearer <workspace_secret>`. Format `sk_<slug>.<32 random bytes base64url>`; the stored value is the sha256 of the random half. sha256 rather than a slow KDF because the secret is 256 bits of CSPRNG output — there is no guessable password to slow an attacker down to. (There is no agent password to contrast this with: agent auth is Google OAuth restricted to the mindstormstudios.com org — see `docs/decisions/2026-08-04-agent-auth-google-oauth.md`.) |
+| `workspace` | `disabled_at timestamptz` | The wire contract requires `404` for a workspace that is *"not found **or disabled**"*, and a disabled workspace must also invalidate live player tokens rather than waiting out their 15 minutes. |
+| `session` | `ended_by session_end_reason` (`client` \| `timeout`) | The wire contract's repeatable job marks sessions it closes `ended_by = 'timeout'`. Without the column, a timed-out session is indistinguishable from one the player closed — and *"a missing end must never silently shrink the denominator"* depends on being able to tell. |
+
+**Also decided in that slice, and not stated anywhere above:**
+
+- **`player_state_snapshot` is written `ON CONFLICT (session_id) DO NOTHING`, not `DO UPDATE`.** The wire contract says "upsert", but a redelivery arriving after a field was promoted would re-split against the newer `declared_field` set and move a key from `raw` into `declared` — retroactive promotion through the back door. First write wins, permanently.
+- **`is_missing` is judged on the six *provider* fields alone** (`player_id`, `player_level`, `total_spend`, `spend_tier`, `account_created_at`, `last_session_at`), not on all eleven declared ones. The SDK's `DeviceProbe` fills the five device fields with no game involvement, so a provider that throws on everything still delivers five populated keys; including them would make `is_missing` unreachable.
+- **`raw` reserves the `__` key prefix.** `raw.__player_id_mismatch` records a `snapshot.player_id` that disagrees with the JWT's `external_player_id`. Advisory only — the authoritative player is always the token's.
+- **`event.type` is `text`, not an `ENUM`.** New types arrive with every slice and `ALTER TYPE ... ADD VALUE` cannot run inside a transaction block. The enum list in *Postgres features this schema relies on* covers status, priority, delivery state, author type and visibility — deliberately not event type.
 
 ## Open
 
