@@ -1,6 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { SupportSurface } from './SupportSurface.tsx'
+import { SupportSurface } from './pages/SupportSurface.tsx'
 import './styles.css'
 
 const root = document.getElementById('root')

@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { BootstrapResponse, PlayerStateAvailability } from '@support/types'
-import { fetchBootstrap, reportArticleRead } from './api.ts'
-import { readBoot, scrubToken, type SurfaceBoot } from './boot.ts'
-import { post } from './bridge.ts'
+import { fetchBootstrap, reportArticleRead } from '../api/surfaceApi.ts'
+import { readBoot, scrubToken, type SurfaceBoot } from '../boot.ts'
+import { post } from '../services/bridgeService.ts'
 
 /** British spelling throughout, per the spec's own copy. */
 const AVAILABILITY_COPY: Record<PlayerStateAvailability, string> = {
