@@ -1,13 +1,13 @@
-import type { RequestHandler } from 'express'
-import { and, eq } from 'drizzle-orm'
-import { SessionStartBody, coerceInstant } from '@support/types'
-import { sendError } from '../errors.ts'
-import { appendEvent } from '../events/appendEvent.ts'
-import { playerStateSnapshot, session } from '../db/schema/index.ts'
-import { withWorkspace } from '../db/withWorkspace.ts'
-import { loadDeclaredKeys } from '../playerState/declaredKeys.ts'
-import { splitSnapshot } from '../playerState/split.ts'
-import { headerPayload } from './headers.ts'
+import { and, eq, isNull } from 'drizzle-orm'
+import { coerceInstant } from '@support/types'
+import { appendEvent } from '../../shared/events/appendEvent.ts'
+import { playerStateSnapshot, session } from '../../shared/db/schema/index.ts'
+import { withWorkspace } from '../../shared/db/withWorkspace.ts'
+import { loadDeclaredKeys } from '../../shared/playerState/declaredKeys.ts'
+import { splitSnapshot } from '../../shared/playerState/split.ts'
+import { headerPayload } from '../headers.ts'
+import type { PlayerContext } from '../../shared/middleware/requirePlayerToken.ts'
+import type { EndSessionInput, StartSessionInput } from '../models/sessionModels.ts'
 
 /**
  * Non-blocking on the SDK side, so this can land after the web app has already
@@ -15,27 +15,7 @@ import { headerPayload } from './headers.ts'
  * reaches it through conversation.session_id, so a late arrival simply becomes
  * visible — no repair step, no ordering requirement.
  */
-export const sessionsStart: RequestHandler = async (req, res) => {
-  const player = req.player!
-
-  console.log('[sdk/sessions/start] ▶ received', {
-    session_id: req.body?.session_id,
-    player_id:  player.externalPlayerId,
-    workspace:  player.workspaceId,
-    entry_point: req.body?.entry_point,
-    has_snapshot: req.body?.snapshot != null,
-  })
-
-  const parsed = SessionStartBody.safeParse(req.body)
-  if (!parsed.success) {
-    // The only 4xx this endpoint has: without a usable session_id there is no
-    // primary key to write against. Everything else about the body is recoverable.
-    console.warn('[sdk/sessions/start] ✗ invalid body', parsed.error.flatten())
-    sendError(res, 422, 'invalid_request', 'session_id must be a uuid.')
-    return
-  }
-
-  const body = parsed.data
+export async function startSession(player: PlayerContext, body: StartSessionInput): Promise<void> {
   const now = new Date()
   const startedAt = coerceInstant(body.started_at, now)
 
@@ -149,6 +129,55 @@ export const sessionsStart: RequestHandler = async (req, res) => {
       })
     }
   })
+}
 
-  res.status(200).json({ ok: true })
+/**
+ * If this never arrives the session simply has no ended_at. Two mitigations exist and
+ * both are needed: the session-timeout worker closes it as `timeout`, and self-serve
+ * rate counts sessions by started_at, never by ended_at — a missing end must never
+ * silently shrink the denominator.
+ */
+export async function endSession(player: PlayerContext, body: EndSessionInput): Promise<void> {
+  const now = new Date()
+
+  await withWorkspace(player.workspaceId, async (tx) => {
+    // The predicate carries the whole guard: RLS scopes it to the workspace,
+    // player_id scopes it to this player, and `ended_at IS NULL` makes a redelivery
+    // a no-op instead of moving the timestamp. Zero rows back means there is nothing
+    // to do — unknown session, someone else's session, or already ended.
+    const [ended] = await tx
+      .update(session)
+      .set({ endedAt: now, endedBy: 'client' })
+      .where(
+        and(
+          eq(session.id, body.session_id),
+          eq(session.playerId, player.playerId),
+          isNull(session.endedAt),
+        ),
+      )
+      .returning({ id: session.id, startedAt: session.startedAt })
+
+    if (!ended) return
+
+    await appendEvent(tx, {
+      workspaceId: player.workspaceId,
+      type: 'session_end',
+      sessionId: ended.id,
+      actorId: player.playerId,
+      actorType: 'player',
+      occurredAt: now,
+      payload: {
+        ended_by: 'client',
+        // Derived is what reporting reads.
+        duration_ms_derived: now.getTime() - ended.startedAt.getTime(),
+        // Reported is recorded for cross-checking a suspected bug, never aggregated.
+        // articles_read is a client-side echo of the article_read events the web
+        // surface writes; having both is how a silently dead bridge is detected.
+        duration_ms_reported: body.duration_ms,
+        conversation_created_reported: body.conversation_created,
+        articles_read_reported: body.articles_read,
+        ...headerPayload(player),
+      },
+    })
+  })
 }

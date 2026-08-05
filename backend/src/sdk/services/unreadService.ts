@@ -1,8 +1,7 @@
-import type { RequestHandler } from 'express'
 import { and, eq, ne, sql } from 'drizzle-orm'
-import type { UnreadResponse } from '@support/types'
-import { conversation, message } from '../db/schema/index.ts'
-import { withWorkspace } from '../db/withWorkspace.ts'
+import { conversation, message } from '../../shared/db/schema/index.ts'
+import { withWorkspace } from '../../shared/db/withWorkspace.ts'
+import type { PlayerContext } from '../../shared/middleware/requirePlayerToken.ts'
 
 /**
  * Derived, never stored. Polled coarsely by the SDK — on foreground/resume only,
@@ -11,10 +10,8 @@ import { withWorkspace } from '../db/withWorkspace.ts'
  * Push is best effort; this is the guaranteed path. No requirement may depend on
  * push alone, which is why the poll exists at all.
  */
-export const unread: RequestHandler = async (req, res) => {
-  const player = req.player!
-
-  const count = await withWorkspace(player.workspaceId, async (tx) => {
+export async function getUnreadCount(player: PlayerContext): Promise<number> {
+  return withWorkspace(player.workspaceId, async (tx) => {
     const [row] = await tx
       .select({ count: sql<number>`count(*)::int` })
       .from(message)
@@ -29,7 +26,4 @@ export const unread: RequestHandler = async (req, res) => {
       )
     return row?.count ?? 0
   })
-
-  const payload: UnreadResponse = { unread_count: count }
-  res.status(200).json(payload)
 }

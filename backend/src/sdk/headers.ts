@@ -1,4 +1,4 @@
-import type { PlayerContext } from '../auth/requirePlayerToken.ts'
+import type { PlayerContext } from '../shared/middleware/requirePlayerToken.ts'
 
 /**
  * The four SDK headers, shaped for an event payload. Never include the token.

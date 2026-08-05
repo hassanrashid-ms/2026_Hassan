@@ -1,14 +1,12 @@
 import { Router } from 'express'
-import { requirePlayerToken } from '../auth/requirePlayerToken.ts'
-import { requireSdkHeaders } from '../auth/requireSdkHeaders.ts'
+import { requirePlayerToken } from '../shared/middleware/requirePlayerToken.ts'
+import { requireSdkHeaders } from '../shared/middleware/requireSdkHeaders.ts'
 import { getEnv } from '../env.ts'
-import { sessionsStart } from './sessionsStart.ts'
-import { sessionsEnd } from './sessionsEnd.ts'
-import { incidents } from './incidents.ts'
-import { unread } from './unread.ts'
+import { sessionsRouter } from './routers/sessionsRouter.ts'
+import { incidentsRouter } from './routers/incidentsRouter.ts'
+import { unreadRouter } from './routers/unreadRouter.ts'
 
 export const sdkRouter = Router()
-
 sdkRouter.use(requirePlayerToken, requireSdkHeaders)
 
 /** Test-only introspection, kept only under NODE_ENV=test for auth.middleware.test.ts. */
@@ -18,7 +16,6 @@ if (getEnv().NODE_ENV === 'test') {
   })
 }
 
-sdkRouter.post('/sessions/start', sessionsStart)
-sdkRouter.post('/sessions/end', sessionsEnd)
-sdkRouter.post('/incidents', incidents)
-sdkRouter.get('/unread', unread)
+sdkRouter.use(sessionsRouter)
+sdkRouter.use(incidentsRouter)
+sdkRouter.use(unreadRouter)

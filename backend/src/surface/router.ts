@@ -1,7 +1,7 @@
 import { Router } from 'express'
-import { requirePlayerToken } from '../auth/requirePlayerToken.ts'
-import { articleRead } from './articleRead.ts'
-import { bootstrap } from './bootstrap.ts'
+import { requirePlayerToken } from '../shared/middleware/requirePlayerToken.ts'
+import { articleReadRouter } from './routers/articleReadRouter.ts'
+import { bootstrapRouter } from './routers/bootstrapRouter.ts'
 
 export const surfaceRouter = Router()
 
@@ -9,5 +9,5 @@ export const surfaceRouter = Router()
 // so requireSdkHeaders is deliberately absent here.
 surfaceRouter.use(requirePlayerToken)
 
-surfaceRouter.get('/bootstrap', bootstrap)
-surfaceRouter.post('/events/article_read', articleRead)
+surfaceRouter.use(bootstrapRouter)
+surfaceRouter.use(articleReadRouter)
