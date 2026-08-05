@@ -13,9 +13,20 @@ loadDotenv({ path: join(dirname(new URL(import.meta.url).pathname), '..', '..', 
 
 const { createApp } = await import('./app.ts')
 const { getEnv } = await import('./env.ts')
+const { registerJobs } = await import('./jobs/queue.ts')
 
 const port = getEnv().PORT
-createApp().listen(port, () => {
+const server = createApp().listen(port, () => {
   console.log(`api listening on http://localhost:${port}`)
 })
-// Task 13 adds registerJobs() here.
+
+const jobs = await registerJobs()
+
+for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+  process.on(signal, () => {
+    void (async () => {
+      await jobs.close()
+      server.close(() => process.exit(0))
+    })()
+  })
+}
