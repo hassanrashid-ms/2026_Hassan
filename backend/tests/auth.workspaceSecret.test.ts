@@ -4,7 +4,7 @@ import {
   hashSecret,
   parseWorkspaceSecret,
   secretMatches,
-} from '../src/auth/workspaceSecret.ts'
+} from '../src/shared/auth/workspaceSecret.ts'
 
 describe('workspace secret', () => {
   it('mints a secret that carries the slug and hashes the random half only', () => {

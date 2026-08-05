@@ -2,9 +2,9 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import request from 'supertest'
 import { eq } from 'drizzle-orm'
 import { DECLARED_FIELD_KEYS } from '@support/types'
-import { closeDb } from '../src/db/client.ts'
-import { withWorkspace } from '../src/db/withWorkspace.ts'
-import { event, playerStateSnapshot, session } from '../src/db/schema/index.ts'
+import { closeDb } from '../src/shared/db/client.ts'
+import { withWorkspace } from '../src/shared/db/withWorkspace.ts'
+import { event, playerStateSnapshot, session } from '../src/shared/db/schema/index.ts'
 import { app, mintToken } from './helpers/app.ts'
 import {
   closeOwnerPool,
