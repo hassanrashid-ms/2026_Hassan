@@ -1,11 +1,192 @@
-:root { color-scheme: light dark; font-family: system-ui, sans-serif; }
-.surface {
-  margin: 0 auto;
-  max-width: 40rem;
-  padding: max(1rem, env(safe-area-inset-top)) 1rem max(1rem, env(safe-area-inset-bottom));
+/* ─── Reset ──────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* ─── Tokens ─────────────────────────────────────────────────────────────── */
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+
+  --bg:      light-dark(#f5f5f7, #1c1c1e);
+  --surface: light-dark(#ffffff, #2c2c2e);
+  --border:  light-dark(#e0e0e5, #3a3a3c);
+  --text:    light-dark(#1c1c1e, #f5f5f7);
+  --muted:   light-dark(#6e6e73, #aeaeb2);
+  --accent:  #0a84ff;
+  --radius:  12px;
+  --shadow:  0 4px 24px rgb(0 0 0 / 0.18);
 }
-dl { display: grid; grid-template-columns: 10rem 1fr; gap: 0.25rem 1rem; }
-dt { font-weight: 600; }
-pre { overflow-x: auto; padding: 0.5rem; background: rgb(0 0 0 / 0.06); }
-.notice { padding: 0.5rem; border-left: 3px solid currentColor; }
-button { padding: 0.5rem 0.75rem; margin-right: 0.5rem; }
+
+/* ─── Height chain — the only reliable way in embedded webviews ──────────── */
+/* dvh / svh aren't supported in older WKWebView/Android WebView. Use the
+   classic 100% chain: html → body → #root → .surface, all height: 100%.     */
+html {
+  height: 100%;
+  width: 100%;
+  background: var(--bg);
+}
+
+body {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  /* stretch fills the full height without dvh */
+  align-items: stretch;
+  background: var(--bg);
+  color: var(--text);
+}
+
+#root {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
+}
+
+/* ─── Surface ────────────────────────────────────────────────────────────── */
+/* Full-bleed by default — inside a Unity webview, the webview IS the frame. */
+.surface {
+  width: 100%;
+  max-width: 420px;
+  /* stretch from parent, not from dvh */
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+
+  padding:
+    max(16px, env(safe-area-inset-top))
+    max(16px, env(safe-area-inset-right))
+    max(16px, env(safe-area-inset-bottom))
+    max(16px, env(safe-area-inset-left));
+}
+
+/* ─── Desktop: float the surface as a phone-shaped card ─────────────────── */
+@media (min-width: 480px) {
+  body, #root {
+    align-items: center;
+    padding: 24px;
+  }
+
+  .surface {
+    flex: 0 1 auto;
+    width: 420px;
+    height: min(812px, calc(100vh - 48px));
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+  }
+}
+
+/* ─── Header ─────────────────────────────────────────────────────────────── */
+.surface > h1 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 20px;
+  flex-shrink: 0;
+}
+
+/* ─── Sections ───────────────────────────────────────────────────────────── */
+section { margin-bottom: 24px; flex-shrink: 0; }
+
+section h2 {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+section h3 {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--muted);
+  margin: 12px 0 6px;
+}
+
+/* ─── Definition list ────────────────────────────────────────────────────── */
+dl {
+  display: grid;
+  grid-template-columns: 9rem 1fr;
+  gap: 6px 12px;
+  font-size: 0.875rem;
+}
+dt { font-weight: 500; color: var(--muted); }
+dd { word-break: break-all; }
+
+/* ─── Code / pre ─────────────────────────────────────────────────────────── */
+pre {
+  font-size: 0.75rem;
+  line-height: 1.6;
+  overflow-x: auto;
+  padding: 10px 12px;
+  background: light-dark(rgb(0 0 0 / 0.04), rgb(255 255 255 / 0.06));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+/* ─── Notice ─────────────────────────────────────────────────────────────── */
+.notice {
+  font-size: 0.8125rem;
+  padding: 10px 12px;
+  border-left: 3px solid var(--accent);
+  background: light-dark(rgb(10 132 255 / 0.06), rgb(10 132 255 / 0.12));
+  border-radius: 0 6px 6px 0;
+  margin-bottom: 8px;
+}
+
+/* ─── Article list ───────────────────────────────────────────────────────── */
+ul { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+ul li { display: flex; align-items: center; gap: 10px; }
+ul li span { font-size: 0.75rem; color: var(--muted); }
+
+/* ─── Buttons ────────────────────────────────────────────────────────────── */
+button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 16px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  font-family: inherit;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  background: var(--accent);
+  color: #fff;
+  transition: opacity 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+button:active { opacity: 0.75; }
+
+ul li button {
+  background: light-dark(rgb(0 0 0 / 0.06), rgb(255 255 255 / 0.1));
+  color: var(--text);
+  flex: 1;
+  justify-content: flex-start;
+}
+
+/* ─── Bottom action bar — always visible, no scroll needed ──────────────── */
+.surface > section:last-child {
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.surface > section:last-child button:last-child {
+  background: light-dark(rgb(0 0 0 / 0.06), rgb(255 255 255 / 0.1));
+  color: var(--text);
+  margin-left: auto;
+}

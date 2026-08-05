@@ -15,6 +15,12 @@ export function createApp(): express.Express {
   // body is ever dropped — "nothing the game sends is ever dropped".
   app.use(express.json({ limit: '64kb' }))
 
+  // Dev visibility: log every request so we can confirm traffic is arriving.
+  app.use((req, _res, next) => {
+    console.log(`[http] ${req.method} ${req.path}`)
+    next()
+  })
+
   // The SDK is not a browser and needs no CORS. The web surface does: it is served
   // from webviewBaseUrl and calls apiBaseUrl.
   app.use(
