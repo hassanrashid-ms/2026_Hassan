@@ -9,7 +9,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "db:setup": "node --experimental-strip-types src/shared/db/setup.ts",
-    "db:seed": "node --experimental-strip-types src/shared/db/seed.ts"
+    "db:seed": "node --experimental-strip-types src/shared/db/seed.ts",
+    "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
     "@support/types": "workspace:*",

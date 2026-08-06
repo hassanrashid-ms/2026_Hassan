@@ -117,6 +117,7 @@ Console ───┘         │
 - Emit to `conv:{id}:agents` and `conv:{id}:player` as separate Socket.io rooms.
 - **Signing a presigned GET must check `message.visibility`.** Walk `attachment → message → visibility` and refuse for player tokens.
 - **Permission checks run at the API.** Hiding a control in the UI is not enforcement.
+- **`PLAYER_TOKEN_TTL_SECONDS` env var is temporarily set to 21 days**, not the intended ~15 minutes (`backend/src/env.ts` default is still 900). Keeps the SDK's hardcoded dev token (`SupportIntegrationExample.cs`) from expiring mid-test. Drop this back down before shipping — it exists specifically because it's short-lived in a URL fragment.
 
 ### SDK wire contract
 - **Frozen: add response fields freely, never remove or retype one.** Shipped Unity builds sit in app stores for years.
