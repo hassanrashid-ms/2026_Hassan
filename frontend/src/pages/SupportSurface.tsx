@@ -216,6 +216,17 @@ export function SupportSurface() {
           <div className="chat-panel__thread">
             <ChatThread messages={chatMessages} currentAuthorType="player" onRetry={onRetry} />
           </div>
+          {(messagesQuery.data?.status === 'resolved' || messagesQuery.data?.status === 'closed') && (
+            <div className="notice">
+              <p>Your ticket is resolved.</p>
+              <p>
+                Still facing issues?{' '}
+                <button type="button" onClick={() => send.mutate("I'm still facing issues.")}>
+                  Yes
+                </button>
+              </p>
+            </div>
+          )}
           <Composer onSend={(body) => send.mutate(body)} disabled={send.isPending} />
         </section>
       )}
