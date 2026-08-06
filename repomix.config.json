@@ -1,0 +1,30 @@
+{
+  "output": {
+    "filePath": "repomix-output.xml",
+    "style": "xml",
+    "parsableStyle": true,
+    "headerText": "Repomix compressed AST snapshot for Support CRM monorepo.",
+    "topFilesFirst": true,
+    "showLineNumbers": false,
+    "copyToClipboard": false,
+    "compress": true
+  },
+  "ignore": {
+    "useGitignore": true,
+    "useDefaultPatterns": true,
+    "customPatterns": [
+      "**/node_modules/**",
+      "**/dist/**",
+      "**/.drizzle/**",
+      "**/coverage/**",
+      "pnpm-lock.yaml",
+      "repomix-output.xml",
+      "docs/plans/**",
+      "docs/specs/erd.html",
+      "**/*.png",
+      "**/*.jpg",
+      "**/*.ico",
+      "**/*.svg"
+    ]
+  }
+}

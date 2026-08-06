@@ -1,6 +1,7 @@
 import { Queue, Worker } from 'bullmq'
 import IORedis from 'ioredis'
 import { getEnv } from '../../env.ts'
+import { logger } from '../logging/logger.ts'
 import { closeStaleSessions } from './sessionTimeout.ts'
 
 const QUEUE_NAME = 'support-jobs'
@@ -33,14 +34,14 @@ export async function registerJobs(): Promise<{ close: () => Promise<void> }> {
     async (job) => {
       if (job.name !== SESSION_TIMEOUT_JOB) return
       const closed = await closeStaleSessions()
-      if (closed > 0) console.log(`[jobs] closed ${closed} stale session(s)`)
+      if (closed > 0) logger.info('jobs', `closed ${closed} stale session(s)`)
     },
     { connection: workerConnection, concurrency: 1 },
   )
 
   worker.on('failed', (job, error) => {
     // Failure is never silent. Until real alerting exists, this log is the alert.
-    console.error(`[jobs] ${job?.name ?? 'unknown'} failed:`, error.name, error.message)
+    logger.error('jobs', `${job?.name ?? 'unknown'} failed: ${error.name} ${error.message}`)
   })
 
   return {

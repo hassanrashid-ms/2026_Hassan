@@ -9,9 +9,12 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "db:setup": "node --experimental-strip-types src/shared/db/setup.ts",
-    "db:seed": "node --experimental-strip-types src/shared/db/seed.ts"
+    "db:seed": "node --experimental-strip-types src/shared/db/seed.ts",
+    "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
+    "@asteasolutions/zod-to-openapi": "^9.1.0",
+    "@socket.io/redis-adapter": "^8",
     "@support/types": "workspace:*",
     "bullmq": "^5",
     "cors": "^2",
@@ -21,6 +24,8 @@
     "ioredis": "^5",
     "jose": "^6",
     "pg": "^8",
+    "socket.io": "^4",
+    "swagger-ui-express": "^5.0.1",
     "zod": "^4"
   },
   "devDependencies": {
@@ -29,7 +34,9 @@
     "@types/node": "^22",
     "@types/pg": "^8",
     "@types/supertest": "^6",
+    "@types/swagger-ui-express": "^4.1.8",
     "drizzle-kit": "latest",
+    "socket.io-client": "^4",
     "supertest": "^7",
     "typescript": "^5",
     "vitest": "latest"

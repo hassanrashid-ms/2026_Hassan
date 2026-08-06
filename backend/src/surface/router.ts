@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { requirePlayerToken } from '../shared/middleware/requirePlayerToken.ts'
 import { articleReadRouter } from './routers/articleReadRouter.ts'
 import { bootstrapRouter } from './routers/bootstrapRouter.ts'
+import { messagesRouter } from './routers/messagesRouter.ts'
 
 export const surfaceRouter = Router()
 
@@ -11,3 +12,4 @@ surfaceRouter.use(requirePlayerToken)
 
 surfaceRouter.use(bootstrapRouter)
 surfaceRouter.use(articleReadRouter)
+surfaceRouter.use(messagesRouter)

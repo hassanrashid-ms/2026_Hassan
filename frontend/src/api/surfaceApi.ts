@@ -1,29 +1,12 @@
 import type { BootstrapResponse } from '@support/types'
-
-const BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000'
-
-async function call<T>(path: string, token: string, init: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      ...(init.headers ?? {}),
-    },
-  })
-  if (!res.ok) {
-    const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null
-    throw new Error(body?.error?.message ?? `Request failed with ${res.status}`)
-  }
-  return (await res.json()) as T
-}
+import { apiCall } from './httpClient.ts'
 
 export function fetchBootstrap(token: string, sessionId: string): Promise<BootstrapResponse> {
-  return call<BootstrapResponse>(`/surface/bootstrap?session_id=${encodeURIComponent(sessionId)}`, token)
+  return apiCall<BootstrapResponse>(`/surface/bootstrap?session_id=${encodeURIComponent(sessionId)}`, token)
 }
 
 export function reportArticleRead(token: string, sessionId: string, articleId: string): Promise<{ ok: true }> {
-  return call<{ ok: true }>('/surface/events/article_read', token, {
+  return apiCall<{ ok: true }>('/surface/events/article_read', token, {
     method: 'POST',
     body: JSON.stringify({ session_id: sessionId, article_id: articleId }),
   })

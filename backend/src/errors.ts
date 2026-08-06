@@ -1,9 +1,11 @@
 import type { ErrorRequestHandler, Response } from 'express'
 import { InvalidWorkspaceId } from './shared/db/withWorkspace.ts'
+import { logger } from './shared/logging/logger.ts'
 
 export type ErrorCode =
   | 'unauthorized'
   | 'workspace_mismatch'
+  | 'forbidden'
   | 'not_found'
   | 'unparseable_body'
   | 'invalid_request'
@@ -39,15 +41,15 @@ export const errorMiddleware: ErrorRequestHandler = (error, _req, res, _next) =>
   // Mapped to a generic 400 without ever reading `.workspaceId` — that field
   // exists for code to inspect, not for a response or a log line to echo.
   if (error instanceof InvalidWorkspaceId) {
-    console.error('[error]', error.name, error.message)
+    logger.error('error', `${error.name}: ${error.message}`)
     sendError(res, 400, 'invalid_request', 'Invalid workspace id.')
     return
   }
 
   if (error instanceof Error) {
-    console.error('[error]', error.name, error.message, error.stack)
+    logger.error('error', `${error.name}: ${error.message}`, { stack: error.stack })
   } else {
-    console.error('[error] non-Error thrown', typeof error)
+    logger.error('error', 'non-Error thrown', { type: typeof error })
   }
   sendError(res, 500, 'internal', 'Something went wrong.')
 }

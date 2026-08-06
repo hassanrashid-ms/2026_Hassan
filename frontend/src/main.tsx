@@ -1,13 +1,21 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { SupportSurface } from './pages/SupportSurface.tsx'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { BrowserRouter } from 'react-router-dom'
+import { AppRoutes } from './routes.tsx'
 import './styles.css'
 
 const root = document.getElementById('root')
 if (!root) throw new Error('#root is missing from index.html')
 
+const queryClient = new QueryClient()
+
 createRoot(root).render(
   <StrictMode>
-    <SupportSurface />
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <AppRoutes />
+      </BrowserRouter>
+    </QueryClientProvider>
   </StrictMode>,
 )

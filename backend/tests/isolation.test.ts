@@ -1,8 +1,11 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest'
+import { createServer } from 'node:http'
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import request from 'supertest'
 import { closeDb } from '../src/shared/db/client.ts'
 import { verifyPlayerToken } from '../src/shared/auth/playerToken.ts'
+import { signAgentSession } from '../src/shared/auth/agentSession.ts'
 import { generateWorkspaceSecret, parseWorkspaceSecret } from '../src/shared/auth/workspaceSecret.ts'
+import { closeSocketServer, createSocketServer } from '../src/shared/realtime/socketServer.ts'
 import { app, mintToken } from './helpers/app.ts'
 import {
   closeOwnerPool,
@@ -51,7 +54,15 @@ async function rowCounts(): Promise<RowCounts> {
 let a: Tenant
 let b: Tenant
 
+// POST /surface/messages calls getIo() after its transaction commits, so this
+// file's own process needs a live Socket.io instance — same pattern as
+// surface.messages.test.ts and agent.messages.test.ts.
+beforeAll(() => {
+  createSocketServer(createServer())
+})
+
 afterAll(async () => {
+  await closeSocketServer()
   await closeDb()
   await closeOwnerPool()
 })
@@ -173,5 +184,76 @@ describe('workspace A cannot reach workspace B', () => {
       [b.workspaceId],
     )
     expect(rows[0]!.n).toBe(1)
+  })
+
+  it('POST /surface/messages never lets A read or write into B\'s conversation', async () => {
+    // A's own POST only ever touches A's own (auto-created) conversation — there
+    // is no conversation_id in the request body for A to target B's with.
+    const before = await rowCounts()
+    await withA(request(app).post('/surface/messages')).send({ body: 'hello' }).expect(200)
+    const after = await rowCounts()
+    expect(after.conversation).toBe(before.conversation + 1)
+    expect(after.message).toBe(before.message + 1)
+  })
+
+  it('GET /agent/conversations/:id/messages on B\'s conversation is 404 for an A agent', async () => {
+    const { rows } = await ownerPool.query<{ id: string }>(
+      `insert into agent (email, display_name) values ('a-agent@example.test', 'A Agent') returning id`,
+    )
+    await ownerPool.query(`insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`, [
+      a.workspaceId,
+      rows[0]!.id,
+    ])
+    const bConversation = await seedConversation({ workspaceId: b.workspaceId, playerId: b.playerId })
+    const agentToken = await signAgentSession({ agent_id: rows[0]!.id, workspace_id: a.workspaceId })
+
+    await request(app)
+      .get(`/agent/conversations/${bConversation}/messages`)
+      .set('Authorization', `Bearer ${agentToken}`)
+      .expect(404)
+  })
+
+  it('POST /agent/conversations/:id/claim on B\'s conversation is a no-op false claim for an A agent', async () => {
+    const { rows } = await ownerPool.query<{ id: string }>(
+      `insert into agent (email, display_name) values ('a-agent2@example.test', 'A Agent 2') returning id`,
+    )
+    await ownerPool.query(`insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`, [
+      a.workspaceId,
+      rows[0]!.id,
+    ])
+    const bConversation = await seedConversation({ workspaceId: b.workspaceId, playerId: b.playerId })
+    const agentToken = await signAgentSession({ agent_id: rows[0]!.id, workspace_id: a.workspaceId })
+
+    const res = await request(app)
+      .post(`/agent/conversations/${bConversation}/claim`)
+      .set('Authorization', `Bearer ${agentToken}`)
+      .expect(200)
+    expect(res.body).toEqual({ claimed: false })
+
+    const { rows: check } = await ownerPool.query<{ assigned_agent_id: string | null }>(
+      `select assigned_agent_id from conversation where id = $1`,
+      [bConversation],
+    )
+    expect(check[0]!.assigned_agent_id).toBeNull()
+  })
+
+  it('POST /agent/messages targeting B\'s conversation is 404 for an A agent, and writes nothing', async () => {
+    const { rows } = await ownerPool.query<{ id: string }>(
+      `insert into agent (email, display_name) values ('a-agent3@example.test', 'A Agent 3') returning id`,
+    )
+    await ownerPool.query(`insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`, [
+      a.workspaceId,
+      rows[0]!.id,
+    ])
+    const bConversation = await seedConversation({ workspaceId: b.workspaceId, playerId: b.playerId })
+    const agentToken = await signAgentSession({ agent_id: rows[0]!.id, workspace_id: a.workspaceId })
+
+    const before = await rowCounts()
+    await request(app)
+      .post('/agent/messages')
+      .set('Authorization', `Bearer ${agentToken}`)
+      .send({ conversation_id: bConversation, body: 'leak attempt' })
+      .expect(404)
+    expect((await rowCounts()).message).toBe(before.message)
   })
 })

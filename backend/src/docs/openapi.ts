@@ -1,0 +1,472 @@
+import {
+  OpenAPIRegistry,
+  OpenApiGeneratorV3,
+  extendZodWithOpenApi,
+} from '@asteasolutions/zod-to-openapi'
+import { z } from 'zod'
+
+extendZodWithOpenApi(z)
+
+const registry = new OpenAPIRegistry()
+
+// Schema definitions
+const PlayerTokenRequestSchema = z.object({
+  external_player_id: z
+    .string()
+    .min(1)
+    .max(128)
+    .regex(/^[A-Za-z0-9._:-]+$/)
+    .openapi({ example: 'test-player-1', description: 'Game external player identifier' }),
+})
+
+const SessionStartBodySchema = z.object({
+  session_id: z.uuid().openapi({ example: '9a40fd09-f71d-4f4f-a909-8562c564b1ca' }),
+  entry_point: z.string().min(1).max(120).openapi({ example: 'settings_menu' }),
+  started_at: z.string().optional().openapi({ example: '2026-08-06T04:59:35.742Z' }),
+  snapshot: z.record(z.string(), z.unknown()).optional().openapi({ description: 'Captured Player State Snapshot' }),
+})
+
+const SessionEndBodySchema = z.object({
+  session_id: z.uuid().openapi({ example: '9a40fd09-f71d-4f4f-a909-8562c564b1ca' }),
+  duration_ms: z.number().int().nonnegative().nullable().openapi({ example: 184200 }),
+  conversation_created: z.boolean().nullable().openapi({ example: false }),
+  articles_read: z.array(z.string().max(200)).openapi({ example: ['a_123', 'a_456'] }),
+})
+
+const IncidentBodySchema = z.object({
+  incident_id: z.uuid().nullable().openapi({ example: 'c7a20fd0-f71d-4f4f-a909-8562c564b1ca' }),
+  session_id: z.uuid().nullable().openapi({ example: '9a40fd09-f71d-4f4f-a909-8562c564b1ca' }),
+  kind: z.string().min(1).max(120).openapi({ example: 'token_timeout' }),
+  detail: z.string().openapi({ example: '5s elapsed, no response' }),
+  sdk_version: z.string().max(60).optional().openapi({ example: '1.0.0' }),
+  client_version: z.string().max(60).optional().openapi({ example: '0.1.0' }),
+})
+
+// Register Component Schemas
+const playerTokenRequestComponent = registry.register('PlayerTokenRequest', PlayerTokenRequestSchema)
+const sessionStartBodyComponent = registry.register('SessionStartBody', SessionStartBodySchema)
+const sessionEndBodyComponent = registry.register('SessionEndBody', SessionEndBodySchema)
+const incidentBodyComponent = registry.register('IncidentBody', IncidentBodySchema)
+
+// Define Security Schemes
+const bearerWorkspaceSecret = registry.registerComponent('securitySchemes', 'WorkspaceSecretAuth', {
+  type: 'http',
+  scheme: 'bearer',
+  description: 'Game Backend Workspace Secret (sk_<slug>.<raw>)',
+})
+
+const bearerPlayerJwt = registry.registerComponent('securitySchemes', 'PlayerJwtAuth', {
+  type: 'http',
+  scheme: 'bearer',
+  bearerFormat: 'JWT',
+  description: 'Short-lived Player JWT (15-min TTL)',
+})
+
+const bearerAgentJwt = registry.registerComponent('securitySchemes', 'AgentJwtAuth', {
+  type: 'http',
+  scheme: 'bearer',
+  bearerFormat: 'JWT',
+  description: 'Agent Session JWT',
+})
+
+// Header Schemas
+const SdkHeadersSchema = z.object({
+  'x-support-workspace': z.string().openapi({ description: 'Workspace slug', example: 'demo-workspace' }),
+  'x-support-sdk': z.string().optional().openapi({ description: 'SDK Version', example: '1.0.0' }),
+  'x-support-client-version': z.string().optional().openapi({ description: 'Game Version', example: '0.1.0' }),
+  'idempotency-key': z.string().optional().openapi({ description: 'Idempotency UUID' }),
+})
+
+// --- 1. AUTH ROUTES ---
+registry.registerPath({
+  method: 'post',
+  path: '/auth/player-token',
+  summary: 'Mint Short-Lived Player JWT',
+  description: 'Called server-to-server by the Game Backend using the workspace secret.',
+  security: [{ [bearerWorkspaceSecret.name]: [] }],
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: playerTokenRequestComponent,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Player JWT issued successfully',
+      content: {
+        'application/json': {
+          schema: z.object({
+            token: z.string(),
+            expires_in: z.number().openapi({ example: 900 }),
+          }),
+        },
+      },
+    },
+    401: { description: 'Unauthorized — invalid or missing workspace secret' },
+    404: { description: 'Workspace not found' },
+    422: { description: 'Malformed external_player_id' },
+  },
+})
+
+registry.registerPath({
+  method: 'get',
+  path: '/auth/dev-agents',
+  summary: 'List Dev Agents (Dev Mode Only)',
+  description: 'Returns available dev agents for local testing.',
+  responses: {
+    200: {
+      description: 'List of agents',
+      content: {
+        'application/json': {
+          schema: z.object({
+            agents: z.array(
+              z.object({
+                id: z.string(),
+                email: z.string(),
+                display_name: z.string(),
+              }),
+            ),
+          }),
+        },
+      },
+    },
+  },
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/auth/dev-login',
+  summary: 'Dev Agent Login (Dev Mode Only)',
+  description: 'Mints an agent JWT for the selected dev agent.',
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: z.object({ agent_id: z.uuid() }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Agent token response',
+      content: {
+        'application/json': {
+          schema: z.object({
+            token: z.string(),
+            agent: z.object({ id: z.string(), display_name: z.string() }),
+            workspace: z.object({ id: z.string(), slug: z.string() }),
+          }),
+        },
+      },
+    },
+  },
+})
+
+// --- 2. SDK ENDPOINTS ---
+registry.registerPath({
+  method: 'post',
+  path: '/sdk/sessions/start',
+  summary: 'SDK Session Start (Outbox)',
+  description: 'Ingests SDK session start payload and player state snapshot.',
+  security: [{ [bearerPlayerJwt.name]: [] }],
+  request: {
+    headers: SdkHeadersSchema,
+    body: {
+      content: {
+        'application/json': {
+          schema: sessionStartBodyComponent,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Session recorded',
+      content: { 'application/json': { schema: z.object({ ok: z.boolean() }) } },
+    },
+    401: { description: 'Unauthorized — invalid player token' },
+  },
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/sdk/sessions/end',
+  summary: 'SDK Session End (Outbox)',
+  description: 'Records SDK session duration and articles read.',
+  security: [{ [bearerPlayerJwt.name]: [] }],
+  request: {
+    headers: SdkHeadersSchema,
+    body: {
+      content: {
+        'application/json': {
+          schema: sessionEndBodyComponent,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Session ended recorded',
+      content: { 'application/json': { schema: z.object({ ok: z.boolean() }) } },
+    },
+  },
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/sdk/incidents',
+  summary: 'SDK Incident Report (Outbox)',
+  description: 'Appends an incident event for triage.',
+  security: [{ [bearerPlayerJwt.name]: [] }],
+  request: {
+    headers: SdkHeadersSchema,
+    body: {
+      content: {
+        'application/json': {
+          schema: incidentBodyComponent,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Incident recorded',
+      content: { 'application/json': { schema: z.object({ ok: z.boolean() }) } },
+    },
+  },
+})
+
+registry.registerPath({
+  method: 'get',
+  path: '/sdk/unread',
+  summary: 'SDK Unread Poll',
+  description: 'Returns the count of unread public messages for the player.',
+  security: [{ [bearerPlayerJwt.name]: [] }],
+  request: {
+    headers: SdkHeadersSchema,
+  },
+  responses: {
+    200: {
+      description: 'Unread message count',
+      content: {
+        'application/json': {
+          schema: z.object({ unread_count: z.number() }),
+        },
+      },
+    },
+  },
+})
+
+// --- 3. SURFACE ENDPOINTS (WebView) ---
+registry.registerPath({
+  method: 'get',
+  path: '/surface/bootstrap',
+  summary: 'Surface Bootstrap',
+  description: 'Returns session, player info, and snapshot state for WebView launch.',
+  security: [{ [bearerPlayerJwt.name]: [] }],
+  request: {
+    query: z.object({ session_id: z.uuid() }),
+  },
+  responses: {
+    200: {
+      description: 'Bootstrap data',
+      content: {
+        'application/json': {
+          schema: z.object({
+            session: z.object({
+              id: z.string(),
+              entry_point: z.string(),
+              started_at: z.string(),
+              ended_at: z.string().nullable(),
+            }),
+            player: z.object({ external_player_id: z.string() }),
+            player_state: z.object({
+              availability: z.enum(['ok', 'degraded', 'missing', 'absent']),
+              captured_at: z.string().nullable(),
+              degraded_reason: z.string().nullable(),
+              declared: z.record(z.string(), z.unknown()),
+              raw: z.record(z.string(), z.unknown()).optional(),
+            }),
+            unread_count: z.number(),
+          }),
+        },
+      },
+    },
+  },
+})
+
+registry.registerPath({
+  method: 'get',
+  path: '/surface/conversations/active',
+  summary: 'Get Player Active Conversation',
+  description: 'Returns active conversation and messages for player.',
+  security: [{ [bearerPlayerJwt.name]: [] }],
+  request: {
+    query: z.object({ session_id: z.uuid() }),
+  },
+  responses: {
+    200: {
+      description: 'Active conversation or null',
+    },
+  },
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/surface/conversations',
+  summary: 'Create Player Conversation',
+  description: 'Creates a new support conversation linked to the session.',
+  security: [{ [bearerPlayerJwt.name]: [] }],
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: z.object({ session_id: z.uuid() }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: { description: 'Conversation created' },
+  },
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/surface/conversations/{id}/messages',
+  summary: 'Send Player Message',
+  description: 'Sends a player chat message.',
+  security: [{ [bearerPlayerJwt.name]: [] }],
+  request: {
+    params: z.object({ id: z.uuid() }),
+    body: {
+      content: {
+        'application/json': {
+          schema: z.object({ body: z.string().min(1) }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: { description: 'Message sent' },
+  },
+})
+
+// --- 4. AGENT ENDPOINTS ---
+registry.registerPath({
+  method: 'get',
+  path: '/agent/conversations',
+  summary: 'Agent List Conversations',
+  description: 'Lists open/unassigned conversations for the agent.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: {
+    query: z.object({ status: z.enum(['unassigned', 'mine', 'all']).optional() }),
+  },
+  responses: {
+    200: { description: 'Conversations list' },
+  },
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/agent/conversations/{id}/claim',
+  summary: 'Agent Claim Conversation',
+  description: 'Claims an unassigned conversation for the current agent.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: {
+    params: z.object({ id: z.uuid() }),
+  },
+  responses: {
+    200: {
+      description: 'Claim result',
+      content: {
+        'application/json': {
+          schema: z.object({ claimed: z.boolean() }),
+        },
+      },
+    },
+  },
+})
+
+registry.registerPath({
+  method: 'get',
+  path: '/agent/conversations/{id}/messages',
+  summary: 'Agent Get Conversation Messages',
+  description: 'Retrieves all messages (public and internal) for a conversation.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: {
+    params: z.object({ id: z.uuid() }),
+  },
+  responses: {
+    200: { description: 'Messages list' },
+  },
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/agent/conversations/{id}/messages',
+  summary: 'Agent Send Reply or Internal Note',
+  description: 'Sends an agent reply (visibility: public) or internal note (visibility: internal).',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: {
+    params: z.object({ id: z.uuid() }),
+    body: {
+      content: {
+        'application/json': {
+          schema: z.object({
+            body: z.string().min(1),
+            visibility: z.enum(['public', 'internal']).optional(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: { description: 'Agent message or internal note sent' },
+  },
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/agent/messages/read',
+  summary: 'Agent Mark Messages Read',
+  description: 'Marks messages as read up to the given sequence number.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: z.object({
+            conversation_id: z.uuid(),
+            up_to_seq: z.number().int().nonnegative(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: { description: 'Messages marked read' },
+  },
+})
+
+// Build Document
+const generator = new OpenApiGeneratorV3(registry.definitions)
+
+export const openApiDocument = generator.generateDocument({
+  openapi: '3.0.0',
+  info: {
+    title: 'Support CRM API',
+    version: '1.0.0',
+    description: 'Multi-tenant Support CRM REST API (SDK, Web Surface, and Agent Console).',
+  },
+  servers: [
+    {
+      url: 'http://localhost:4000',
+      description: 'Local Development Server',
+    },
+  ],
+})

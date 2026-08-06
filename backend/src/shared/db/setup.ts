@@ -37,6 +37,7 @@ if (process.argv[1]?.endsWith('setup.ts')) {
   // safe to run unconditionally here.
   const { loadRootEnv } = await import('../../env/loadRootEnv.ts')
   loadRootEnv(import.meta.url)
+  const { logger } = await import('../logging/logger.ts')
   await setupDatabase()
-  console.log('database ready')
+  logger.info('db', 'database ready')
 }

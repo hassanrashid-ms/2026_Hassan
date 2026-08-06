@@ -22,7 +22,7 @@ untouched.
 
 ```
 backend/src/
-├── agentside/          # agent/admin console API — scaffolded now, empty until that work starts
+├── agent/          # agent/admin console API — scaffolded now, empty until that work starts
 │   ├── models/
 │   ├── controllers/
 │   ├── services/
@@ -51,7 +51,7 @@ backend/src/
 └── errors.ts
 ```
 
-`agentside/` is scaffolded (four empty subfolders) so the next feature work has a home
+`agent/` is scaffolded (four empty subfolders) so the next feature work has a home
 immediately, per the earlier decision that no agent-console backend code exists yet.
 
 `shared/auth/playerTokenRoute.ts` (the `/auth/player-token` router) moves under
@@ -137,7 +137,7 @@ intended shape and what actually exists.
       relative import paths. Commit, run `pnpm typecheck` + `pnpm test`.
    2. Per-route controller/service extraction, one route at a time (start with `sdk/`,
       then `surface/`), each followed by `pnpm typecheck` + `pnpm test`.
-   3. Wire `agentside/` scaffold (empty folders, no code).
+   3. Wire `agent/` scaffold (empty folders, no code).
    4. Frontend move (independent of backend, can happen any time after step 1).
 3. **Verification gate after every step**: `pnpm typecheck` (this codebase has no path
    aliases — every move touches relative imports and typecheck will catch a missed
@@ -156,5 +156,5 @@ intended shape and what actually exists.
 
 - Unity SDK repo folder structure (already decided, see
   `sdk-distribution-plain-folder-not-upm` memory).
-- Any new agent-console functionality — `agentside/` is scaffolded empty only.
+- Any new agent-console functionality — `agent/` is scaffolded empty only.
 - Any behavior, validation, or contract change to existing routes.

@@ -1,6 +1,7 @@
 import type { RequestHandler } from 'express'
 import { SessionEndBody, SessionStartBody } from '@support/types'
 import { sendError } from '../../errors.ts'
+import { logger } from '../../shared/logging/logger.ts'
 import { endSession, startSession } from '../services/sessionsService.ts'
 
 /**
@@ -12,7 +13,7 @@ import { endSession, startSession } from '../services/sessionsService.ts'
 export const sessionsStart: RequestHandler = async (req, res) => {
   const player = req.player!
 
-  console.log('[sdk/sessions/start] ▶ received', {
+  logger.info('sdk/sessions/start', '▶ received', {
     session_id: req.body?.session_id,
     player_id:  player.externalPlayerId,
     workspace:  player.workspaceId,
@@ -24,7 +25,7 @@ export const sessionsStart: RequestHandler = async (req, res) => {
   if (!parsed.success) {
     // The only 4xx this endpoint has: without a usable session_id there is no
     // primary key to write against. Everything else about the body is recoverable.
-    console.warn('[sdk/sessions/start] ✗ invalid body', parsed.error.flatten())
+    logger.warn('sdk/sessions/start', '✗ invalid body', parsed.error.flatten())
     sendError(res, 422, 'invalid_request', 'session_id must be a uuid.')
     return
   }

@@ -162,6 +162,13 @@ the unassigned queue.
 then insert the message with that seq, both in one transaction. Unique index on
 (`conversation_id`, `seq`). Gaps are fine; order is not. **No I/O inside that transaction.**
 
+**API Documentation (Swagger / OpenAPI 3.0).**
+The API routes and Zod schemas (`@support/types`) are compiled into an OpenAPI 3.0 specification (`backend/src/docs/openapi.ts`).
+- **Interactive Swagger UI**: `http://localhost:4000/docs`
+- **Raw OpenAPI JSON Spec**: `http://localhost:4000/docs/json`
+All authentication schemes (`WorkspaceSecretAuth`, `PlayerJwtAuth`, `AgentJwtAuth`) are documented with "Try it out" enabled.
+- **Rule**: When adding any new API endpoint, always register its path and Zod schema in `backend/src/docs/openapi.ts` so the Swagger UI remains automatically updated.
+
 **Tenancy.** Every scoped table gets:
 ```sql
 CREATE POLICY tenant ON <t> USING (workspace_id = current_setting('app.workspace_id', true)::uuid)

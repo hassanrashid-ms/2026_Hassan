@@ -84,6 +84,9 @@ pnpm dev                             # api on :4000, web surface on :5173
 | `pnpm test` | every package's suite; the API's needs Postgres up |
 | `pnpm typecheck` | `tsc --noEmit` across the workspace |
 | `pnpm db:setup` | idempotent; re-run after any schema change |
+| `pnpm db:studio` | launch Drizzle Studio GUI DB dashboard (http://local.drizzle.studio) |
+| `http://localhost:4000/docs` | interactive Swagger UI API documentation |
+| `http://localhost:4000/docs/json` | raw OpenAPI 3.0 specification JSON |
 | `SEED_SECRET=… ./scripts/verify-seam.sh` | proves the SDK seam end to end against a running API |
 
 Tests run against `support_test`, created automatically. `globalSetup` refuses any database whose

@@ -3,12 +3,19 @@
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.20.0",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "pnpm --parallel --filter @support/api --filter @support/web dev",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "db:setup": "pnpm --filter @support/api db:setup",
-    "db:seed": "pnpm --filter @support/api db:seed"
+    "db:seed": "pnpm --filter @support/api db:seed",
+    "repomix": "repomix --compress",
+    "repomix:watch": "repomix --watch --compress"
+  },
+  "devDependencies": {
+    "repomix": "^1.18.0"
   }
 }

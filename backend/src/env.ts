@@ -10,7 +10,11 @@ const EnvSchema = z.object({
     .string()
     .min(32, 'PLAYER_JWT_SECRET must be at least 32 characters'),
   PLAYER_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(900),
+  AGENT_SESSION_JWT_SECRET: z
+    .string()
+    .min(32, 'AGENT_SESSION_JWT_SECRET must be at least 32 characters'),
   SESSION_TIMEOUT_MINUTES: z.coerce.number().int().positive().default(30),
+  LOG_LEVEL: z.enum(['none', 'mild', 'verbose']).default('mild'),
   SURFACE_ORIGINS: z
     .string()
     .default('http://localhost:5173')

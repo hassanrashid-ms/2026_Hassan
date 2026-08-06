@@ -6,6 +6,7 @@ const valid = {
   MIGRATION_DATABASE_URL: 'postgres://support_owner:pw@localhost:5432/support',
   REDIS_URL: 'redis://localhost:6379',
   PLAYER_JWT_SECRET: 'x'.repeat(32),
+  AGENT_SESSION_JWT_SECRET: 'y'.repeat(32),
 }
 
 describe('loadEnv', () => {
