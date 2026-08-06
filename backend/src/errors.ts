@@ -4,6 +4,7 @@ import { InvalidWorkspaceId } from './shared/db/withWorkspace.ts'
 export type ErrorCode =
   | 'unauthorized'
   | 'workspace_mismatch'
+  | 'forbidden'
   | 'not_found'
   | 'unparseable_body'
   | 'invalid_request'
