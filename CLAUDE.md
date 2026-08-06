@@ -11,9 +11,7 @@ multi-tenant customer support tool for mobile games. One of two repos:
 |---|---|
 | `2026_Hassan` (this one) | Core API + agent/admin console + web support surface |
 | `2026_Hassan_Sdk` | Unity game-client SDK |
-
 ---
-
 ## Commands
 
 | Command | What it does |
@@ -24,16 +22,15 @@ multi-tenant customer support tool for mobile games. One of two repos:
 | `pnpm db:setup` | idempotent; re-run after any schema change |
 | `pnpm db:seed` | seed dev data |
 | `pnpm db:studio` | launch Drizzle Studio GUI DB dashboard (http://local.drizzle.studio) |
+| `pnpm repomix` | generate compressed codebase AST snapshot (repomix-output.xml) |
+| `pnpm repomix:watch` | auto-update compressed AST snapshot on file changes |
 | `http://localhost:4000/docs` | interactive Swagger UI API documentation |
 | `http://localhost:4000/docs/json` | raw OpenAPI 3.0 specification JSON |
 | `SEED_SECRET=… ./scripts/verify-seam.sh` | proves the SDK seam end to end |
 
 See `README.md` for the full getting-started sequence and `.env.example` for required env vars.
-
 ---
-
 ## Stack
-
 | Layer | Choice |
 |---|---|
 | Repo | pnpm workspaces monorepo, shared `@support/types` as the SDK↔server contract |
