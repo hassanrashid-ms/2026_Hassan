@@ -3,6 +3,7 @@ import express from 'express'
 import { getEnv } from './env.ts'
 import { errorMiddleware } from './errors.ts'
 import { playerTokenRouter } from './shared/auth/playerTokenRoute.ts'
+import { agentRouter } from './agent/router.ts'
 import { sdkRouter } from './sdk/router.ts'
 import { surfaceRouter } from './surface/router.ts'
 
@@ -39,6 +40,7 @@ export function createApp(): express.Express {
   app.use('/auth', playerTokenRouter)
   app.use('/sdk', sdkRouter)
   app.use('/surface', surfaceRouter)
+  app.use('/agent', agentRouter)
 
   app.use(errorMiddleware)
   return app
