@@ -1,10 +1,12 @@
+import { createServer } from 'node:http'
 import express from 'express'
-import { afterAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import request from 'supertest'
 import { closeDb } from '../src/shared/db/client.ts'
 import { requireAgentSession } from '../src/shared/middleware/requireAgentSession.ts'
 import { errorMiddleware } from '../src/errors.ts'
 import { signAgentSession } from '../src/shared/auth/agentSession.ts'
+import { createSocketServer } from '../src/shared/realtime/socketServer.ts'
 import { conversationsRouter } from '../src/agent/routers/conversationsRouter.ts'
 import {
   closeOwnerPool,
@@ -25,6 +27,15 @@ const app = express()
 app.use(express.json())
 app.use(requireAgentSession, conversationsRouter)
 app.use(errorMiddleware)
+
+// claimConversationHandler calls getIo() after a successful claim, so this
+// file's own process needs a live Socket.io instance even though no test
+// connects a client to it — a bare, unlistened http server is enough to
+// satisfy getIo(). Same pattern as agent.messages.test.ts and
+// surface.messages.test.ts, which hit the same singleton requirement.
+beforeAll(() => {
+  createSocketServer(createServer())
+})
 
 afterAll(async () => {
   await closeDb()
