@@ -6,7 +6,7 @@ import { closeDb } from '../src/shared/db/client.ts'
 import { requireAgentSession } from '../src/shared/middleware/requireAgentSession.ts'
 import { errorMiddleware } from '../src/errors.ts'
 import { signAgentSession } from '../src/shared/auth/agentSession.ts'
-import { createSocketServer } from '../src/shared/realtime/socketServer.ts'
+import { closeSocketServer, createSocketServer } from '../src/shared/realtime/socketServer.ts'
 import { messagesRouter } from '../src/agent/routers/messagesRouter.ts'
 import { closeOwnerPool, ownerPool, seedConversation, seedPlayer, seedWorkspace, truncateAll } from './helpers/db.ts'
 
@@ -25,6 +25,7 @@ beforeAll(() => {
 })
 
 afterAll(async () => {
+  await closeSocketServer()
   await closeDb()
   await closeOwnerPool()
 })

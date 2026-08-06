@@ -5,7 +5,7 @@ import { closeDb } from '../src/shared/db/client.ts'
 import { verifyPlayerToken } from '../src/shared/auth/playerToken.ts'
 import { signAgentSession } from '../src/shared/auth/agentSession.ts'
 import { generateWorkspaceSecret, parseWorkspaceSecret } from '../src/shared/auth/workspaceSecret.ts'
-import { createSocketServer } from '../src/shared/realtime/socketServer.ts'
+import { closeSocketServer, createSocketServer } from '../src/shared/realtime/socketServer.ts'
 import { app, mintToken } from './helpers/app.ts'
 import {
   closeOwnerPool,
@@ -62,6 +62,7 @@ beforeAll(() => {
 })
 
 afterAll(async () => {
+  await closeSocketServer()
   await closeDb()
   await closeOwnerPool()
 })

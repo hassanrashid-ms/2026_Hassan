@@ -2,7 +2,7 @@ import { createServer } from 'node:http'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import request from 'supertest'
 import { closeDb } from '../src/shared/db/client.ts'
-import { createSocketServer } from '../src/shared/realtime/socketServer.ts'
+import { closeSocketServer, createSocketServer } from '../src/shared/realtime/socketServer.ts'
 import { app, mintToken } from './helpers/app.ts'
 import {
   closeOwnerPool,
@@ -24,6 +24,7 @@ beforeAll(() => {
 })
 
 afterAll(async () => {
+  await closeSocketServer()
   await closeDb()
   await closeOwnerPool()
 })

@@ -15,9 +15,12 @@ export type AgentSocketData = { role: 'agent'; workspaceId: string; agentId: str
 export type SocketData = PlayerSocketData | AgentSocketData
 
 let ioInstance: Server | undefined
+let redisClients: IORedis[] = []
 
 function redisConnection(): IORedis {
-  return new IORedis(getEnv().REDIS_URL, { maxRetriesPerRequest: null })
+  const client = new IORedis(getEnv().REDIS_URL, { maxRetriesPerRequest: null })
+  redisClients.push(client)
+  return client
 }
 
 async function canJoinConversation(data: SocketData, conversationId: string): Promise<boolean> {
@@ -100,4 +103,21 @@ export function createSocketServer(httpServer: HttpServer): Server {
 export function getIo(): Server {
   if (!ioInstance) throw new Error('Socket server not initialised — call createSocketServer first.')
   return ioInstance
+}
+
+/**
+ * Test-only teardown. Production never calls this (the process exit closes
+ * everything), but a test process shares one Postgres/Redis connection
+ * lifetime across every test file in this worker (see vitest.config.ts's
+ * fileParallelism: false) — leaving the Redis pub/sub pair open after each
+ * file that calls createSocketServer() accumulates real connections for the
+ * rest of the run and destabilises unrelated later tests.
+ */
+export async function closeSocketServer(): Promise<void> {
+  if (ioInstance) {
+    await new Promise<void>((resolve) => ioInstance!.close(() => resolve()))
+    ioInstance = undefined
+  }
+  await Promise.all(redisClients.map((client) => client.quit().catch(() => client.disconnect())))
+  redisClients = []
 }
