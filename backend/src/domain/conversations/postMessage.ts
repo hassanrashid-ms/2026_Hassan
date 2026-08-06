@@ -72,7 +72,7 @@ export async function postMessage(tx: Tx, input: PostMessageInput): Promise<Post
     conversationId: input.conversationId,
     actorId: input.actorId,
     actorType: input.authorType,
-    payload: { seq: bumped.seq, author_type: input.authorType },
+    payload: { seq: bumped.seq, author_type: input.authorType, visibility: input.visibility ?? 'public' },
   })
 
   return inserted

@@ -127,3 +127,91 @@ describe('POST /agent/messages/read', () => {
     expect(rows[0]!.delivery_state).toBe('read')
   })
 })
+
+describe('POST /agent/messages — internal notes and status transition', () => {
+  it('an internal note stores visibility internal and leaves status unchanged even from open', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const conversationId = await seedConversation({ workspaceId, playerId })
+    await ownerPool.query(`update conversation set status = 'open' where id = $1`, [conversationId])
+    const { token } = await setupAssignedAgent(workspaceId, conversationId)
+
+    const res = await request(app)
+      .post('/messages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ conversation_id: conversationId, body: 'internal note', visibility: 'internal' })
+      .expect(200)
+    expect(res.body.message).toMatchObject({ visibility: 'internal' })
+
+    const { rows } = await ownerPool.query<{ status: string }>(
+      `select status from conversation where id = $1`,
+      [conversationId],
+    )
+    expect(rows[0]!.status).toBe('open')
+  })
+
+  it('a public reply from open flips status to awaiting_player and appends conversation_awaiting_player', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const conversationId = await seedConversation({ workspaceId, playerId })
+    await ownerPool.query(`update conversation set status = 'open' where id = $1`, [conversationId])
+    const { token } = await setupAssignedAgent(workspaceId, conversationId)
+
+    await request(app)
+      .post('/messages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ conversation_id: conversationId, body: 'here is the fix' })
+      .expect(200)
+
+    const { rows } = await ownerPool.query<{ status: string }>(
+      `select status from conversation where id = $1`,
+      [conversationId],
+    )
+    expect(rows[0]!.status).toBe('awaiting_player')
+
+    const { rows: events } = await ownerPool.query<{ type: string }>(
+      `select type from event where conversation_id = $1 and type = 'conversation_awaiting_player'`,
+      [conversationId],
+    )
+    expect(events).toHaveLength(1)
+  })
+
+  it('a public reply from a status other than open leaves status unchanged', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const conversationId = await seedConversation({ workspaceId, playerId })
+    await ownerPool.query(`update conversation set status = 'awaiting_player' where id = $1`, [conversationId])
+    const { token } = await setupAssignedAgent(workspaceId, conversationId)
+
+    await request(app)
+      .post('/messages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ conversation_id: conversationId, body: 'still here' })
+      .expect(200)
+
+    const { rows } = await ownerPool.query<{ status: string }>(
+      `select status from conversation where id = $1`,
+      [conversationId],
+    )
+    expect(rows[0]!.status).toBe('awaiting_player')
+  })
+
+  it('message_sent event payload includes visibility', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const conversationId = await seedConversation({ workspaceId, playerId })
+    const { token } = await setupAssignedAgent(workspaceId, conversationId)
+
+    await request(app)
+      .post('/messages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ conversation_id: conversationId, body: 'note', visibility: 'internal' })
+      .expect(200)
+
+    const { rows } = await ownerPool.query<{ payload: { visibility?: string } }>(
+      `select payload from event where conversation_id = $1 and type = 'message_sent'`,
+      [conversationId],
+    )
+    expect(rows[0]!.payload.visibility).toBe('internal')
+  })
+})
