@@ -106,6 +106,26 @@ describe('GET /surface/messages', () => {
       .set('Authorization', `Bearer ${token}`)
       .expect(404)
   })
+
+  it('includes status and no internal-only fields', async () => {
+    const { workspaceId, playerId, token, sessionId } = await setup()
+    const conversationId = await seedConversation({ workspaceId, playerId })
+    await ownerPool.query(`update conversation set status = 'open' where id = $1`, [conversationId])
+    await ownerPool.query(
+      `insert into message (workspace_id, conversation_id, seq, author_type, body) values ($1, $2, 1, 'agent', 'hi')`,
+      [workspaceId, conversationId],
+    )
+
+    const res = await request(app)
+      .get('/surface/messages')
+      .query({ session_id: sessionId })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+
+    expect(res.body.status).toBe('open')
+    expect(res.body.messages[0]).not.toHaveProperty('visibility')
+    expect(res.body.messages[0]).not.toHaveProperty('author_agent_id')
+  })
 })
 
 describe('POST /surface/messages/read', () => {

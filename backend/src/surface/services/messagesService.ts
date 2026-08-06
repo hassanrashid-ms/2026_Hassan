@@ -1,6 +1,6 @@
 import { and, desc, eq, lte, ne } from 'drizzle-orm'
 import type { z } from 'zod'
-import { MarkPlayerReadBody, SendMessageBody, type PlayerMessageView } from '@support/types'
+import { MarkPlayerReadBody, SendMessageBody, type ConversationStatusValue, type PlayerMessageView } from '@support/types'
 
 type SendMessageBodyType = z.infer<typeof SendMessageBody>
 type MarkPlayerReadBodyType = z.infer<typeof MarkPlayerReadBody>
@@ -89,7 +89,7 @@ export async function sendPlayerMessage(
 export async function getPlayerMessages(
   ctx: PlayerContext,
   query: { session_id: string },
-): Promise<{ conversation_id: string | null; messages: PlayerMessageView[] } | null> {
+): Promise<{ conversation_id: string | null; messages: PlayerMessageView[]; status?: ConversationStatusValue } | null> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
     const [ownedSession] = await tx
       .select({ id: session.id })
@@ -99,7 +99,7 @@ export async function getPlayerMessages(
     if (!ownedSession) return null
 
     const [found] = await tx
-      .select({ id: conversation.id })
+      .select({ id: conversation.id, status: conversation.status })
       .from(conversation)
       .where(eq(conversation.playerId, ctx.playerId))
       .orderBy(desc(conversation.createdAt))
@@ -108,7 +108,7 @@ export async function getPlayerMessages(
 
     const rows = await tx.select().from(message).where(eq(message.conversationId, found.id)).orderBy(message.seq)
     const messages = rows.map(toPlayerView).filter((m): m is PlayerMessageView => m !== null)
-    return { conversation_id: found.id, messages }
+    return { conversation_id: found.id, messages, status: found.status }
   })
 }
 
