@@ -373,9 +373,44 @@ registry.registerPath({
 
 registry.registerPath({
   method: 'post',
+  path: '/agent/conversations/{id}/claim',
+  summary: 'Agent Claim Conversation',
+  description: 'Claims an unassigned conversation for the current agent.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: {
+    params: z.object({ id: z.uuid() }),
+  },
+  responses: {
+    200: {
+      description: 'Claim result',
+      content: {
+        'application/json': {
+          schema: z.object({ claimed: z.boolean() }),
+        },
+      },
+    },
+  },
+})
+
+registry.registerPath({
+  method: 'get',
   path: '/agent/conversations/{id}/messages',
-  summary: 'Agent Send Reply',
-  description: 'Sends an agent reply to a conversation.',
+  summary: 'Agent Get Conversation Messages',
+  description: 'Retrieves all messages (public and internal) for a conversation.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: {
+    params: z.object({ id: z.uuid() }),
+  },
+  responses: {
+    200: { description: 'Messages list' },
+  },
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/agent/conversations/{id}/messages',
+  summary: 'Agent Send Reply or Internal Note',
+  description: 'Sends an agent reply (visibility: public) or internal note (visibility: internal).',
   security: [{ [bearerAgentJwt.name]: [] }],
   request: {
     params: z.object({ id: z.uuid() }),
@@ -391,7 +426,30 @@ registry.registerPath({
     },
   },
   responses: {
-    200: { description: 'Agent message sent' },
+    200: { description: 'Agent message or internal note sent' },
+  },
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/agent/messages/read',
+  summary: 'Agent Mark Messages Read',
+  description: 'Marks messages as read up to the given sequence number.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: z.object({
+            conversation_id: z.uuid(),
+            up_to_seq: z.number().int().nonnegative(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: { description: 'Messages marked read' },
   },
 })
 
