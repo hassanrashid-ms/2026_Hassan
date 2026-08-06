@@ -155,3 +155,4 @@ independently.
 - Message ordering: concurrent sends into the same conversation never produce a duplicate `seq`
   (unique index already enforces this at the DB level; the test proves the app doesn't retry in a
   way that violates it).
+
