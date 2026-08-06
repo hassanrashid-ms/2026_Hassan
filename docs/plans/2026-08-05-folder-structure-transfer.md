@@ -18,7 +18,7 @@ behavior change.
 
 **Architecture:** Backend splits each vertical (`sdk/`, `surface/`) into
 `models/controllers/services/routers`, moves cross-vertical code into `shared/`, and scaffolds an
-empty `agentside/` vertical. Frontend moves the single screen into `pages/`, renames `api.ts` /
+empty `agent/` vertical. Frontend moves the single screen into `pages/`, renames `api.ts` /
 `bridge.ts` into `api/` / `services/`, and scaffolds empty `components/` and `lib/`. Frontend and
 both backend halves touch entirely disjoint file sets, so they run as independent tasks.
 
@@ -44,7 +44,7 @@ these — this is a directory/file reorganization only).
 
 ---
 
-### Task 1: Backend shared/ move + agentside/ scaffold
+### Task 1: Backend shared/ move + agent/ scaffold
 
 **Files:**
 - Move: `backend/src/db/` → `backend/src/shared/db/` (all contents: `client.ts`, `schema/`,
@@ -58,8 +58,8 @@ these — this is a directory/file reorganization only).
 - Move: `backend/src/events/` → `backend/src/shared/events/` (`appendEvent.ts`)
 - Move: `backend/src/playerState/` → `backend/src/shared/playerState/` (`declaredKeys.ts`,
   `split.ts`)
-- Create (empty, scaffold only): `backend/src/agentside/models/`, `backend/src/agentside/controllers/`,
-  `backend/src/agentside/services/`, `backend/src/agentside/routers/` — each gets a `.gitkeep` so
+- Create (empty, scaffold only): `backend/src/agent/models/`, `backend/src/agent/controllers/`,
+  `backend/src/agent/services/`, `backend/src/agent/routers/` — each gets a `.gitkeep` so
   git tracks the empty directory. No code in any of them.
 - Modify: `backend/src/app.ts` (only the `playerTokenRouter` import path)
 - Modify: `backend/tests/auth.playerToken.test.ts`, `backend/tests/auth.middleware.test.ts`,
@@ -128,12 +128,12 @@ and `../db/withWorkspace.ts` unchanged, `shared/playerState/declaredKeys.ts` imp
 `../db/schema/index.ts` unchanged) need **no path change** — verify each by reading the moved
 file, don't assume.
 
-- [ ] **Step 3: Scaffold agentside/**
+- [ ] **Step 3: Scaffold agent/**
 
 ```bash
 cd backend/src
-mkdir -p agentside/models agentside/controllers agentside/services agentside/routers
-touch agentside/models/.gitkeep agentside/controllers/.gitkeep agentside/services/.gitkeep agentside/routers/.gitkeep
+mkdir -p agent/models agent/controllers agent/services agent/routers
+touch agent/models/.gitkeep agent/controllers/.gitkeep agent/services/.gitkeep agent/routers/.gitkeep
 ```
 
 - [ ] **Step 4: Update `backend/src/app.ts`**
@@ -196,8 +196,8 @@ before editing — do not guess line numbers).
 - [ ] **Step 6: Commit**
 
 ```bash
-git add backend/src/shared backend/src/agentside backend/src/app.ts backend/tests
-git commit -m "refactor: move shared backend modules under shared/, scaffold agentside/"
+git add backend/src/shared backend/src/agent backend/src/app.ts backend/tests
+git commit -m "refactor: move shared backend modules under shared/, scaffold agent/"
 ```
 
 ---
@@ -511,13 +511,13 @@ Expected: pass — this is the one thing the spec says must not regress.
 
 ## Self-review notes
 
-- **Spec coverage:** backend top-level layout (Task 1 + agentside scaffold in Task 1), per-vertical
+- **Spec coverage:** backend top-level layout (Task 1 + agent scaffold in Task 1), per-vertical
   controller/service/router/model split (Task 2), frontend layout (Task 3), migration safety gate
   (Task 4) — all covered. `shared/auth/playerTokenRoute.ts` staying mounted at `/auth` unchanged is
   handled in Task 1 Step 4.
 - **Parallelism check:** Task 1 touches `backend/src/{db,auth,jobs,events,playerState}` (moved to
   `shared/db`, `shared/auth`, `shared/middleware`, `shared/jobs`, `shared/events`,
-  `shared/playerState`), `backend/src/agentside/`, `backend/src/app.ts` (one line), and 8 files
+  `shared/playerState`), `backend/src/agent/`, `backend/src/app.ts` (one line), and 8 files
   under `backend/tests/`. Task 2 touches `backend/src/sdk/`, `backend/src/surface/` only — it does
   not touch `app.ts`, because `sdk/router.ts` and `surface/router.ts` keep their current path and
   name. Task 3 touches `frontend/src/` only. No two tasks write the same file, so there's no need
