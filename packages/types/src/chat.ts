@@ -10,6 +10,7 @@ export const SendMessageBody = z.object({ body: z.string().min(1).max(4000) })
 export const SendAgentMessageBody = z.object({
   conversation_id: z.uuid(),
   body: z.string().min(1).max(4000),
+  visibility: z.enum(['public', 'internal']).default('public'),
 })
 
 export const MarkPlayerReadBody = z.object({ up_to_seq: z.number().int().nonnegative() })
@@ -45,7 +46,11 @@ export type AgentMessageView = PlayerMessageView & {
   visibility: 'public' | 'internal'
 }
 
-export type PlayerMessagesResponse = { conversation_id: string | null; messages: PlayerMessageView[] }
+export type PlayerMessagesResponse = {
+  conversation_id: string | null
+  messages: PlayerMessageView[]
+  status?: ConversationStatusValue
+}
 export type AgentMessagesResponse = { messages: AgentMessageView[] }
 export type ClaimResponse = { claimed: boolean }
 
