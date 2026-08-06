@@ -11,11 +11,13 @@ loadRootEnv(import.meta.url)
 const { createApp } = await import('./app.ts')
 const { getEnv } = await import('./env.ts')
 const { registerJobs } = await import('./shared/jobs/queue.ts')
+const { createSocketServer } = await import('./shared/realtime/socketServer.ts')
 
 const port = getEnv().PORT
 const server = createApp().listen(port, () => {
   console.log(`api listening on http://localhost:${port}`)
 })
+createSocketServer(server)
 
 const jobs = await registerJobs()
 
