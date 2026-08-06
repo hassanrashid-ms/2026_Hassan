@@ -5,6 +5,8 @@ import { errorMiddleware } from './errors.ts'
 import { requestLoggerMiddleware } from './shared/middleware/requestLogger.ts'
 import { playerTokenRouter } from './shared/auth/playerTokenRoute.ts'
 import { agentRouter } from './agent/router.ts'
+import swaggerUi from 'swagger-ui-express'
+import { openApiDocument } from './docs/openapi.ts'
 import { sdkRouter } from './sdk/router.ts'
 import { surfaceRouter } from './surface/router.ts'
 
@@ -35,6 +37,11 @@ export function createApp(): express.Express {
   app.get('/health', (_req, res) => {
     res.json({ ok: true })
   })
+
+  app.get('/docs/json', (_req, res) => {
+    res.json(openApiDocument)
+  })
+  app.use('/docs', swaggerUi.serve, swaggerUi.setup(openApiDocument))
 
   app.use('/auth', playerTokenRouter)
   app.use('/sdk', sdkRouter)

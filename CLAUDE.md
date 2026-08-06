@@ -23,6 +23,9 @@ multi-tenant customer support tool for mobile games. One of two repos:
 | `pnpm typecheck` | `tsc --noEmit` across the workspace |
 | `pnpm db:setup` | idempotent; re-run after any schema change |
 | `pnpm db:seed` | seed dev data |
+| `pnpm db:studio` | launch Drizzle Studio GUI DB dashboard (http://local.drizzle.studio) |
+| `http://localhost:4000/docs` | interactive Swagger UI API documentation |
+| `http://localhost:4000/docs/json` | raw OpenAPI 3.0 specification JSON |
 | `SEED_SECRET=… ./scripts/verify-seam.sh` | proves the SDK seam end to end |
 
 See `README.md` for the full getting-started sequence and `.env.example` for required env vars.
@@ -132,6 +135,7 @@ Console ───┘         │
 - `POST /sdk/sessions/start` is idempotent via `ON CONFLICT (id) DO NOTHING` on session id — the SDK generates the id, duplicate delivery is expected.
 
 ### General
+- **When adding any new API endpoint, always register its route and Zod schema in `backend/src/docs/openapi.ts`** so the interactive Swagger documentation (`http://localhost:4000/docs`) stays automatically in sync.
 - Missing player state is a state, not an error — never reject a conversation because of it.
 - Treat `state.raw` as PII by default.
 - `abandoned` status does not exist. Don't reintroduce it.
