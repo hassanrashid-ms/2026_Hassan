@@ -12,4 +12,5 @@ export type ChatMessage = {
   body: string
   createdAt: string
   deliveryState?: 'sending' | 'sent' | 'delivered' | 'read' | 'failed'
+  visibility?: 'public' | 'internal'
 }

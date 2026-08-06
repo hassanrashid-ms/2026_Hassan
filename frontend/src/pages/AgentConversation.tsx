@@ -10,7 +10,14 @@ import { Composer } from '../components/chat/Composer.tsx'
 import type { ChatMessage } from '../components/chat/types.ts'
 
 function toChatMessage(m: AgentMessageView): ChatMessage {
-  return { id: m.id, authorType: m.author_type, body: m.body, createdAt: m.created_at, deliveryState: m.delivery_state }
+  return {
+    id: m.id,
+    authorType: m.author_type,
+    body: m.body,
+    createdAt: m.created_at,
+    deliveryState: m.delivery_state,
+    visibility: m.visibility,
+  }
 }
 
 export function AgentConversation() {
@@ -30,7 +37,8 @@ export function AgentConversation() {
   })
 
   const send = useMutation({
-    mutationFn: (body: string) => sendAgentMessage(session!.token, id!, body),
+    mutationFn: ({ body, visibility }: { body: string; visibility?: 'public' | 'internal' }) =>
+      sendAgentMessage(session!.token, id!, body, visibility),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['conversation', id, 'messages'] })
     },
@@ -68,7 +76,11 @@ export function AgentConversation() {
       <div className="agent-conversation__thread">
         <ChatThread messages={chatMessages} currentAuthorType="agent" />
       </div>
-      <Composer onSend={(body) => send.mutate(body)} disabled={send.isPending} />
+      <Composer
+        onSend={(body, visibility) => send.mutate({ body, visibility })}
+        disabled={send.isPending}
+        allowVisibilityToggle
+      />
     </main>
   )
 }

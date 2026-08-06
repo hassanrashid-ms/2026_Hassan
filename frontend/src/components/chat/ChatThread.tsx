@@ -20,7 +20,13 @@ export function ChatThread({ messages, currentAuthorType, onRetry }: ChatThreadP
       followOutput="auto"
       itemContent={(_index, chatMessage) => (
         <div
-          className={`chat-message chat-message--${chatMessage.authorType}`}
+          className={[
+            'chat-message',
+            `chat-message--${chatMessage.authorType}`,
+            chatMessage.visibility === 'internal' ? 'chat-message--internal' : null,
+          ]
+            .filter(Boolean)
+            .join(' ')}
           data-own={chatMessage.authorType === currentAuthorType}
         >
           <p>{chatMessage.body}</p>

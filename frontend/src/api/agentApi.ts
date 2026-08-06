@@ -38,8 +38,16 @@ export function fetchConversationMessages(token: string, conversationId: string)
   return apiCall(`/agent/conversations/${conversationId}/messages`, token)
 }
 
-export function sendAgentMessage(token: string, conversationId: string, body: string): Promise<{ message: unknown }> {
-  return apiCall(`/agent/messages`, token, { method: 'POST', body: JSON.stringify({ conversation_id: conversationId, body }) })
+export function sendAgentMessage(
+  token: string,
+  conversationId: string,
+  body: string,
+  visibility?: 'public' | 'internal',
+): Promise<{ message: unknown }> {
+  return apiCall(`/agent/messages`, token, {
+    method: 'POST',
+    body: JSON.stringify({ conversation_id: conversationId, body, visibility }),
+  })
 }
 
 export function markAgentMessagesRead(token: string, conversationId: string, upToSeq: number): Promise<{ ok: true }> {

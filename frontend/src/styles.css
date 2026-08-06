@@ -220,6 +220,12 @@ ul li button {
   border: 1px solid var(--border);
 }
 
+.chat-message.chat-message--internal {
+  background: light-dark(#fef3c7, #78350f);
+  color: light-dark(#78350f, #fef3c7);
+  border: 1px solid light-dark(#f59e0b, #b45309);
+}
+
 .chat-message p { margin: 0; color: inherit; }
 
 .chat-message time {
