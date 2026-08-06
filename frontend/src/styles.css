@@ -181,3 +181,12 @@ ul li button {
   color: var(--text);
   margin-left: auto;
 }
+
+/* ─── Chat ───────────────────────────────────────────────────────────────── */
+.chat-message { padding: 0.5rem 0.75rem; margin: 0.25rem 0; border-radius: 0.5rem; max-width: 80%; }
+.chat-message[data-own='true'] { margin-left: auto; background: #dbeafe; }
+.chat-message[data-own='false'] { background: #f3f4f6; }
+.chat-message time { display: block; font-size: 0.75rem; opacity: 0.6; }
+.chat-message__status { font-size: 0.75rem; opacity: 0.7; }
+.composer { display: flex; gap: 0.5rem; padding: 0.5rem; }
+.composer textarea { flex: 1; resize: none; min-height: 2.5rem; }
