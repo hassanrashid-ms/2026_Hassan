@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { BootstrapResponse, PlayerStateAvailability } from '@support/types'
 import { fetchBootstrap, reportArticleRead } from '../api/surfaceApi.ts'
+import { fetchPlayerMessages, markPlayerMessagesRead, sendPlayerMessage } from '../api/playerChatApi.ts'
+import { ChatThread } from '../components/chat/ChatThread.tsx'
+import { Composer } from '../components/chat/Composer.tsx'
+import type { ChatMessage } from '../components/chat/types.ts'
+import { createSocket } from '../lib/socket.ts'
+import { reconcilePending, type PendingMessage } from './chatReconcile.ts'
 import { readBoot, scrubToken, type SurfaceBoot } from '../boot.ts'
 import { post } from '../services/bridgeService.ts'
 
@@ -16,6 +23,10 @@ const FAKE_ARTICLES = [
   { id: 'a_123', title: 'My purchase did not arrive' },
   { id: 'a_456', title: 'I cannot log in' },
 ]
+
+function toChatMessage(m: { id: string; author_type: ChatMessage['authorType']; body: string; created_at: string; delivery_state: NonNullable<ChatMessage['deliveryState']> }): ChatMessage {
+  return { id: m.id, authorType: m.author_type, body: m.body, createdAt: m.created_at, deliveryState: m.delivery_state }
+}
 
 export function SupportSurface() {
   const [boot, setBoot] = useState<SurfaceBoot | null>(null)
@@ -55,6 +66,70 @@ export function SupportSurface() {
     post({ type: 'article_read', id: articleId })
     setRead((current) => [...current, articleId])
   }
+
+  const [chatOpen, setChatOpen] = useState(false)
+  const [pending, setPending] = useState<PendingMessage[]>([])
+  const queryClient = useQueryClient()
+
+  const messagesQuery = useQuery({
+    queryKey: ['playerMessages', boot?.sessionId],
+    queryFn: () => fetchPlayerMessages(boot!.token, boot!.sessionId),
+    enabled: chatOpen && boot !== null,
+  })
+
+  const send = useMutation({
+    mutationFn: (body: string) => sendPlayerMessage(boot!.token, body),
+    onMutate: (body: string) => {
+      const tempId = `temp-${Date.now()}-${Math.random()}`
+      setPending((current) => [
+        ...current,
+        { tempId, id: tempId, authorType: 'player', body, createdAt: new Date().toISOString(), deliveryState: 'sending' },
+      ])
+      return { tempId }
+    },
+    onSuccess: () => {
+      // Deliberately does not clear `pending` here: chatReconcile.ts's
+      // reconcilePending drops a pending entry only once the refetched server
+      // list actually contains a matching message, so the optimistic bubble
+      // never disappears and reappears in the gap before that refetch lands.
+      void queryClient.invalidateQueries({ queryKey: ['playerMessages', boot?.sessionId] })
+    },
+    onError: (_error, _body, context) => {
+      setPending((current) =>
+        current.map((p) => (p.tempId === context?.tempId ? { ...p, deliveryState: 'failed' } : p)),
+      )
+    },
+  })
+
+  const onRetry = (failed: ChatMessage) => {
+    setPending((current) => current.filter((p) => p.id !== failed.id))
+    send.mutate(failed.body)
+  }
+
+  useEffect(() => {
+    if (!chatOpen || !boot) return
+    const socket = createSocket(boot.token, 'player')
+    socket.on('connect', () => {
+      const conversationId = messagesQuery.data?.conversation_id
+      if (conversationId) socket.emit('join_conversation', { conversation_id: conversationId })
+    })
+    socket.on('message:new', () => {
+      void queryClient.invalidateQueries({ queryKey: ['playerMessages', boot.sessionId] })
+    })
+    return () => {
+      socket.close()
+    }
+  }, [chatOpen, boot, messagesQuery.data?.conversation_id, queryClient])
+
+  useEffect(() => {
+    const messages = messagesQuery.data?.messages
+    if (!chatOpen || !boot || !messages || messages.length === 0) return
+    const lastSeq = Math.max(...messages.map((m) => m.seq))
+    void markPlayerMessagesRead(boot.token, lastSeq)
+  }, [chatOpen, boot, messagesQuery.data])
+
+  const serverMessages: ChatMessage[] = messagesQuery.data?.messages.map(toChatMessage) ?? []
+  const chatMessages = reconcilePending(serverMessages, pending)
 
   return (
     <main className="surface">
@@ -125,16 +200,25 @@ export function SupportSurface() {
           no dead ends. Neither does anything yet beyond posting a bridge message: the
           real chat UI and handoff arrive with the conversation slice. */}
       <section>
-        <button type="button" onClick={() => post({ type: 'conversation_created' })}>
+        <button type="button" onClick={() => setChatOpen(true)}>
           Still need help?
         </button>
-        <button type="button" onClick={() => post({ type: 'conversation_created' })}>
+        <button type="button" onClick={() => setChatOpen(true)}>
           Talk to a person
         </button>
         <button type="button" onClick={() => post({ type: 'close' })}>
           Close
         </button>
       </section>
+
+      {chatOpen && (
+        <section className="chat-panel">
+          <div className="chat-panel__thread">
+            <ChatThread messages={chatMessages} currentAuthorType="player" onRetry={onRetry} />
+          </div>
+          <Composer onSend={(body) => send.mutate(body)} disabled={send.isPending} />
+        </section>
+      )}
     </main>
   )
 }
