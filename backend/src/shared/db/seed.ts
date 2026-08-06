@@ -15,6 +15,7 @@ const { agent, declaredField, workspaceMember } = await import('./schema/index.t
 const { closeDb } = await import('./client.ts')
 const { withWorkspace, withoutWorkspace } = await import('./withWorkspace.ts')
 const { generateWorkspaceSecret } = await import('../auth/workspaceSecret.ts')
+const { logger } = await import('../logging/logger.ts')
 
 const SLUG = process.env.SEED_WORKSPACE_SLUG ?? 'demo-workspace'
 const ADMIN_EMAIL = process.env.SEED_ADMIN_EMAIL ?? 'admin@example.test'
@@ -104,14 +105,12 @@ async function seed(): Promise<void> {
     }
   })
 
-  console.log(`workspace   ${SLUG} (${workspaceId})`)
-  console.log(`admin       ${ADMIN_EMAIL}`)
-  console.log(`declared    ${DECLARED_FIELD_SEED.length} fields`)
-  console.log('')
-  console.log('Workspace secret — printed only here, and only the game backend should hold it:')
-  console.log(`  ${secret}`)
-  console.log('')
-  console.log('Re-running this seed mints a NEW secret and invalidates the previous one.')
+  logger.info('db', `workspace   ${SLUG} (${workspaceId})`)
+  logger.info('db', `admin       ${ADMIN_EMAIL}`)
+  logger.info('db', `declared    ${DECLARED_FIELD_SEED.length} fields`)
+  logger.info('db', 'Workspace secret — printed only here, and only the game backend should hold it:')
+  logger.info('db', `  ${secret}`)
+  logger.info('db', 'Re-running this seed mints a NEW secret and invalidates the previous one.')
 }
 
 await seed()

@@ -5,6 +5,7 @@ import { playerStateSnapshot, session } from '../../shared/db/schema/index.ts'
 import { withWorkspace } from '../../shared/db/withWorkspace.ts'
 import { loadDeclaredKeys } from '../../shared/playerState/declaredKeys.ts'
 import { splitSnapshot } from '../../shared/playerState/split.ts'
+import { logger } from '../../shared/logging/logger.ts'
 import { headerPayload } from '../headers.ts'
 import type { PlayerContext } from '../../shared/middleware/requirePlayerToken.ts'
 import type { EndSessionInput, StartSessionInput } from '../models/sessionModels.ts'
@@ -34,10 +35,11 @@ export async function startSession(player: PlayerContext, body: StartSessionInpu
 
     const isNewSession = inserted.length > 0
 
-    console.log(
+    logger.info(
+      'sdk/sessions/start',
       isNewSession
-        ? '[sdk/sessions/start] ✓ new session created'
-        : '[sdk/sessions/start] ~ duplicate session_id (Outbox retry or conflict)',
+        ? '✓ new session created'
+        : '~ duplicate session_id (Outbox retry or conflict)',
       { session_id: body.session_id },
     )
 
@@ -56,7 +58,7 @@ export async function startSession(player: PlayerContext, body: StartSessionInpu
         .limit(1)
 
       if (!owned) {
-        console.warn('[sdk/sessions/start] ✗ session_id conflict — not owned by this player', {
+        logger.warn('sdk/sessions/start', '✗ session_id conflict — not owned by this player', {
           session_id: body.session_id,
           player_id: player.externalPlayerId,
         })
@@ -78,7 +80,7 @@ export async function startSession(player: PlayerContext, body: StartSessionInpu
     const declaredKeys = await loadDeclaredKeys(tx)
     const split = splitSnapshot(body.snapshot, declaredKeys, player.externalPlayerId)
 
-    console.log('[sdk/sessions/start] ✦ snapshot split', {
+    logger.info('sdk/sessions/start', '✦ snapshot split', {
       session_id:      body.session_id,
       is_missing:      split.isMissing,
       degraded_reason: split.degradedReason,
@@ -104,10 +106,11 @@ export async function startSession(player: PlayerContext, body: StartSessionInpu
       .onConflictDoNothing({ target: playerStateSnapshot.sessionId })
       .returning({ sessionId: playerStateSnapshot.sessionId })
 
-    console.log(
+    logger.info(
+      'sdk/sessions/start',
       snapshotInserted.length > 0
-        ? '[sdk/sessions/start] ✓ snapshot written to player_state_snapshot'
-        : '[sdk/sessions/start] ~ snapshot skipped — already exists (idempotent)',
+        ? '✓ snapshot written to player_state_snapshot'
+        : '~ snapshot skipped — already exists (idempotent)',
       { session_id: body.session_id },
     )
 

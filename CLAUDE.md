@@ -44,6 +44,7 @@ See `README.md` for the full getting-started sequence and `.env.example` for req
 | Bot retrieval | pgvector, HNSW index — same database |
 | Console | Vite + React + TanStack Query + Tailwind + shadcn/ui |
 | Charts | Recharts |
+| Logging | `logger` (`backend/src/shared/logging/logger.ts`) — see Logging below |
 
 Two Docker services: Postgres and Redis. Redis is a queue and pub/sub bus, not a system of record.
 
@@ -96,6 +97,13 @@ Console ───┘         │
 ```
 
 ---
+
+## Logging
+
+- **Never `console.*` directly. Use `logger` from `backend/src/shared/logging/logger.ts`** (`logger.info`/`logger.warn`/`logger.error(tag, message, meta?)`). It's the single choke point (`dispatchLog`) all log output flows through, so a future remote/telemetry sink is added there once, not at every call site.
+- `LOG_LEVEL` env var (`backend/src/env.ts`) controls verbosity: `none` (silent except errors), `mild` (default — one line per event), `verbose` (adds full request/response headers, query, and bodies for HTTP traffic).
+- `requestLoggerMiddleware` (`backend/src/shared/middleware/requestLogger.ts`), registered in `app.ts`, logs every request/response at the level set by `LOG_LEVEL`.
+- Never log a raw error object end-to-end — log `error.name`/`error.message`/`error.stack`, per the existing guard in `errors.ts` around `InvalidWorkspaceId`.
 
 ## Rules
 
