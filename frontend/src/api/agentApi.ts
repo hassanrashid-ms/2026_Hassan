@@ -1,4 +1,13 @@
-import type { AgentConversationsResponse, AgentMessagesResponse, ClaimResponse } from '@support/types'
+import type {
+  AgentArticleDetail,
+  AgentConversationsResponse,
+  AgentMessagesResponse,
+  AgentArticlesResponse,
+  ClaimResponse,
+  CreateIntentResponse,
+  CreateSubintentResponse,
+  IntentsResponse,
+} from '@support/types'
 import { apiCall } from './httpClient.ts'
 
 const BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000'
@@ -55,4 +64,47 @@ export function markAgentMessagesRead(token: string, conversationId: string, upT
     method: 'POST',
     body: JSON.stringify({ conversation_id: conversationId, up_to_seq: upToSeq }),
   })
+}
+
+export function fetchIntents(token: string): Promise<IntentsResponse> {
+  return apiCall('/agent/intents', token)
+}
+
+export function createIntent(token: string, name: string): Promise<CreateIntentResponse> {
+  return apiCall('/agent/intents', token, { method: 'POST', body: JSON.stringify({ name }) })
+}
+
+export function createSubintent(token: string, intentId: string, name: string): Promise<CreateSubintentResponse> {
+  return apiCall(`/agent/intents/${intentId}/subintents`, token, { method: 'POST', body: JSON.stringify({ name }) })
+}
+
+export function fetchArticles(token: string): Promise<AgentArticlesResponse> {
+  return apiCall('/agent/articles', token)
+}
+
+export function fetchArticle(token: string, id: string): Promise<AgentArticleDetail> {
+  return apiCall(`/agent/articles/${id}`, token)
+}
+
+export function createArticle(
+  token: string,
+  input: { title: string; body: string; summary?: string; intent_id?: string },
+): Promise<AgentArticleDetail> {
+  return apiCall('/agent/articles', token, { method: 'POST', body: JSON.stringify(input) })
+}
+
+export function updateArticle(
+  token: string,
+  id: string,
+  patch: { title?: string; body?: string; summary?: string | null; intent_id?: string | null },
+): Promise<AgentArticleDetail> {
+  return apiCall(`/agent/articles/${id}`, token, { method: 'PATCH', body: JSON.stringify(patch) })
+}
+
+export function publishArticle(token: string, id: string): Promise<AgentArticleDetail> {
+  return apiCall(`/agent/articles/${id}/publish`, token, { method: 'POST' })
+}
+
+export function archiveArticle(token: string, id: string): Promise<AgentArticleDetail> {
+  return apiCall(`/agent/articles/${id}/archive`, token, { method: 'POST' })
 }
