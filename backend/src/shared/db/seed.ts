@@ -53,7 +53,7 @@ async function seed(): Promise<void> {
 
   // Everything below stays on the APP pool deliberately, so the seed exercises the
   // real RLS path rather than bypassing it.
-  const { adminId } = await withoutWorkspace(async (tx) => {
+  const { adminId, alexId, samId } = await withoutWorkspace(async (tx) => {
 
     // No password: agent auth is Google OAuth restricted to the mindstormstudios.com
     // org. google_subject stays null until this person's first real login.
@@ -64,7 +64,19 @@ async function seed(): Promise<void> {
       .returning({ id: agent.id })
     if (!admin) throw new Error('agent upsert returned nothing')
 
-    return { adminId: admin.id }
+    const [alex] = await tx
+      .insert(agent)
+      .values({ email: 'alex@example.test', displayName: 'Alex Agent' })
+      .onConflictDoUpdate({ target: agent.email, set: { displayName: 'Alex Agent' } })
+      .returning({ id: agent.id })
+    const [sam] = await tx
+      .insert(agent)
+      .values({ email: 'sam@example.test', displayName: 'Sam Agent' })
+      .onConflictDoUpdate({ target: agent.email, set: { displayName: 'Sam Agent' } })
+      .returning({ id: agent.id })
+    if (!alex || !sam) throw new Error('agent upsert returned nothing')
+
+    return { adminId: admin.id, alexId: alex.id, samId: sam.id }
   })
 
   // workspace_member and declared_field are BOTH scoped, so they belong here rather
@@ -74,6 +86,14 @@ async function seed(): Promise<void> {
     await tx
       .insert(workspaceMember)
       .values({ workspaceId, agentId: adminId, role: 'admin' })
+      .onConflictDoNothing()
+    await tx
+      .insert(workspaceMember)
+      .values({ workspaceId, agentId: alexId, role: 'agent' })
+      .onConflictDoNothing()
+    await tx
+      .insert(workspaceMember)
+      .values({ workspaceId, agentId: samId, role: 'agent' })
       .onConflictDoNothing()
 
     for (const field of DECLARED_FIELD_SEED) {

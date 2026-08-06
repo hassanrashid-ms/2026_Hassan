@@ -1,0 +1,74 @@
+import { and, eq, isNull } from 'drizzle-orm'
+import { agent as agentTable, workspace, workspaceMember } from '../../shared/db/schema/index.ts'
+import { withoutWorkspace, withWorkspace } from '../../shared/db/withWorkspace.ts'
+import { signAgentSession } from '../../shared/auth/agentSession.ts'
+
+export type DevAgentOption = { id: string; email: string; display_name: string }
+
+/**
+ * `workspace_member` is RLS-scoped, so it can only be read inside
+ * `withWorkspace(someWorkspaceId, ...)` — there is no query that answers "which
+ * agents have any membership, across all workspaces" in one shot. This loops
+ * over every workspace instead, which is fine for a handful of dev workspaces
+ * and would need a different approach (e.g. a superuser reporting role) at real
+ * scale — acceptable because this whole endpoint is a throwaway stand-in for
+ * Google OAuth (docs/decisions/2026-08-04-agent-auth-google-oauth.md).
+ */
+export async function listDevAgents(): Promise<DevAgentOption[]> {
+  const workspaces = await withoutWorkspace(async (tx) => tx.select({ id: workspace.id }).from(workspace))
+
+  const seen = new Map<string, DevAgentOption>()
+  for (const ws of workspaces) {
+    const rows = await withWorkspace(ws.id, async (tx) =>
+      tx
+        .select({ id: agentTable.id, email: agentTable.email, displayName: agentTable.displayName })
+        .from(workspaceMember)
+        .innerJoin(agentTable, eq(agentTable.id, workspaceMember.agentId))
+        .where(isNull(workspaceMember.deactivatedAt)),
+    )
+    for (const row of rows) {
+      seen.set(row.id, { id: row.id, email: row.email, display_name: row.displayName })
+    }
+  }
+  return [...seen.values()]
+}
+
+export type DevLoginResult = {
+  token: string
+  agent: { id: string; display_name: string }
+  workspace: { id: string; slug: string }
+} | null
+
+export async function devLogin(agentId: string): Promise<DevLoginResult> {
+  const agentRow = await withoutWorkspace(async (tx) => {
+    const [row] = await tx
+      .select({ id: agentTable.id, displayName: agentTable.displayName })
+      .from(agentTable)
+      .where(eq(agentTable.id, agentId))
+      .limit(1)
+    return row ?? null
+  })
+  if (!agentRow) return null
+
+  const workspaces = await withoutWorkspace(async (tx) => tx.select({ id: workspace.id, slug: workspace.slug }).from(workspace))
+
+  for (const ws of workspaces) {
+    const membership = await withWorkspace(ws.id, async (tx) => {
+      const [row] = await tx
+        .select({ id: workspaceMember.id })
+        .from(workspaceMember)
+        .where(and(eq(workspaceMember.agentId, agentId), isNull(workspaceMember.deactivatedAt)))
+        .limit(1)
+      return row ?? null
+    })
+    if (membership) {
+      const token = await signAgentSession({ agent_id: agentRow.id, workspace_id: ws.id })
+      return {
+        token,
+        agent: { id: agentRow.id, display_name: agentRow.displayName },
+        workspace: { id: ws.id, slug: ws.slug },
+      }
+    }
+  }
+  return null
+}
