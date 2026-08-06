@@ -453,6 +453,161 @@ registry.registerPath({
   },
 })
 
+// --- 5. AGENT TAXONOMY & ARTICLE ENDPOINTS ---
+registry.registerPath({
+  method: 'get',
+  path: '/agent/intents',
+  summary: 'Agent List Intents',
+  description: 'Lists intents with nested subintents, for the category picker.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  responses: { 200: { description: 'Intents list' } },
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/agent/intents',
+  summary: 'Agent Create Intent',
+  description: 'Creates an intent inline. Admin-only, enforced server-side.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: { body: { content: { 'application/json': { schema: z.object({ name: z.string().min(1).max(120) }) } } } },
+  responses: {
+    201: { description: 'Intent created' },
+    403: { description: 'Forbidden — admin role required' },
+  },
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/agent/intents/{id}/subintents',
+  summary: 'Agent Create Subintent',
+  description: 'Creates a subintent under an intent. Admin-only.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: {
+    params: z.object({ id: z.uuid() }),
+    body: { content: { 'application/json': { schema: z.object({ name: z.string().min(1).max(120) }) } } },
+  },
+  responses: {
+    201: { description: 'Subintent created' },
+    403: { description: 'Forbidden — admin role required' },
+    404: { description: 'Intent not found' },
+  },
+})
+
+registry.registerPath({
+  method: 'get',
+  path: '/agent/articles',
+  summary: 'Agent List Articles',
+  description: 'Lists articles in all states for this workspace.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  responses: { 200: { description: 'Articles list' } },
+})
+
+registry.registerPath({
+  method: 'get',
+  path: '/agent/articles/{id}',
+  summary: 'Agent Get Article',
+  description: 'Fetches one article for editing.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: { params: z.object({ id: z.uuid() }) },
+  responses: { 200: { description: 'Article detail' }, 404: { description: 'Not found' } },
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/agent/articles',
+  summary: 'Agent Create Article',
+  description: 'Creates a draft article.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: z.object({
+            title: z.string().min(1).max(200),
+            body: z.string().min(1),
+            summary: z.string().max(500).optional(),
+            intent_id: z.uuid().optional(),
+          }),
+        },
+      },
+    },
+  },
+  responses: { 201: { description: 'Draft created' }, 404: { description: 'Intent not found' } },
+})
+
+registry.registerPath({
+  method: 'patch',
+  path: '/agent/articles/{id}',
+  summary: 'Agent Update Article',
+  description: 'Edits title/body/summary/intent while in draft.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: {
+    params: z.object({ id: z.uuid() }),
+    body: {
+      content: {
+        'application/json': {
+          schema: z.object({
+            title: z.string().min(1).max(200).optional(),
+            body: z.string().min(1).optional(),
+            summary: z.string().max(500).nullable().optional(),
+            intent_id: z.uuid().nullable().optional(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: { description: 'Article updated' },
+    404: { description: 'Not found' },
+    409: { description: 'Article is not a draft' },
+  },
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/agent/articles/{id}/publish',
+  summary: 'Agent Publish Article',
+  description: "draft -> published, stamps published_by/published_at.",
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: { params: z.object({ id: z.uuid() }) },
+  responses: {
+    200: { description: 'Article published' },
+    404: { description: 'Not found' },
+    409: { description: 'Not a draft, or title/body empty' },
+  },
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/agent/articles/{id}/archive',
+  summary: 'Agent Archive Article',
+  description: 'Any state -> archived. No delete route exists.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: { params: z.object({ id: z.uuid() }) },
+  responses: { 200: { description: 'Article archived' }, 404: { description: 'Not found' } },
+})
+
+// --- 6. SURFACE ARTICLE ENDPOINTS ---
+registry.registerPath({
+  method: 'get',
+  path: '/surface/articles',
+  summary: 'Public List Articles',
+  description: 'Lists published articles, optionally filtered by intent or keyword.',
+  security: [{ [bearerPlayerJwt.name]: [] }],
+  request: { query: z.object({ intentId: z.uuid().optional(), q: z.string().min(1).max(200).optional() }) },
+  responses: { 200: { description: 'Articles list' } },
+})
+
+registry.registerPath({
+  method: 'get',
+  path: '/surface/articles/{id}',
+  summary: 'Public Get Article',
+  description: 'Returns a single published article. 404 if draft/archived or wrong workspace.',
+  security: [{ [bearerPlayerJwt.name]: [] }],
+  request: { params: z.object({ id: z.uuid() }) },
+  responses: { 200: { description: 'Article detail' }, 404: { description: 'Not found' } },
+})
+
 // Build Document
 const generator = new OpenApiGeneratorV3(registry.definitions)
 

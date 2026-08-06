@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { requirePlayerToken } from '../shared/middleware/requirePlayerToken.ts'
 import { articleReadRouter } from './routers/articleReadRouter.ts'
+import { articlesRouter } from './routers/articlesRouter.ts'
 import { bootstrapRouter } from './routers/bootstrapRouter.ts'
 import { messagesRouter } from './routers/messagesRouter.ts'
 
@@ -12,4 +13,5 @@ surfaceRouter.use(requirePlayerToken)
 
 surfaceRouter.use(bootstrapRouter)
 surfaceRouter.use(articleReadRouter)
+surfaceRouter.use(articlesRouter)
 surfaceRouter.use(messagesRouter)
