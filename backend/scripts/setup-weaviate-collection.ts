@@ -9,6 +9,9 @@
 // `tokenization` as lowercase objects (not `Configure`/`DataType`/`Tokenization`) — confirmed
 // against node_modules/weaviate-client/dist/node/esm/collections/configure/index.d.ts.
 //
+// `configure.vectorizer` is deprecated in favor of `configure.vectors` (same
+// text2VecOpenAI() call, new namespace) — same file, index.d.ts:75.
+//
 // Lives under backend/ (not the repo-root scripts/) so Node's ESM resolver can find
 // `weaviate-client`, which is a backend-only dependency — a script outside the backend
 // workspace package can't resolve it. Run with:
@@ -25,7 +28,7 @@ async function main() {
 
   await client.collections.create({
     name: 'Article',
-    vectorizers: configure.vectorizer.text2VecOpenAI(),
+    vectorizers: configure.vectors.text2VecOpenAI(),
     properties: [
       { name: 'title', dataType: dataType.TEXT, tokenization: tokenization.TRIGRAM },
       { name: 'body', dataType: dataType.TEXT, tokenization: tokenization.TRIGRAM },
