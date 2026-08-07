@@ -88,7 +88,7 @@ export function fetchArticle(token: string, id: string): Promise<AgentArticleDet
 
 export function createArticle(
   token: string,
-  input: { title: string; body: string; summary?: string; intent_id?: string },
+  input: { title: string; body: string; keywords?: string[]; intent_id?: string },
 ): Promise<AgentArticleDetail> {
   return apiCall('/agent/articles', token, { method: 'POST', body: JSON.stringify(input) })
 }
@@ -96,7 +96,7 @@ export function createArticle(
 export function updateArticle(
   token: string,
   id: string,
-  patch: { title?: string; body?: string; summary?: string | null; intent_id?: string | null },
+  patch: { title?: string; body?: string; keywords?: string[]; intent_id?: string | null },
 ): Promise<AgentArticleDetail> {
   return apiCall(`/agent/articles/${id}`, token, { method: 'PATCH', body: JSON.stringify(patch) })
 }

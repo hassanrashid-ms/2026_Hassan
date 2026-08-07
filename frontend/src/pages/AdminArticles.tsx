@@ -14,17 +14,17 @@ import {
   updateArticle,
 } from '../api/agentApi.ts'
 import { loadAgentSession } from '../lib/agentSession.ts'
-import { canEditFields, canPublish } from './articleForm.ts'
+import { canEditFields, canPublish, parseKeywordsInput } from './articleForm.ts'
 
 export function AdminArticles() {
   const navigate = useNavigate()
   const session = loadAgentSession()
   const queryClient = useQueryClient()
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [draft, setDraft] = useState<{ title: string; body: string; summary: string; intentId: string }>({
+  const [draft, setDraft] = useState<{ title: string; body: string; keywordsInput: string; intentId: string }>({
     title: '',
     body: '',
-    summary: '',
+    keywordsInput: '',
     intentId: '',
   })
   const [newIntentName, setNewIntentName] = useState('')
@@ -55,7 +55,7 @@ export function AdminArticles() {
       setDraft({
         title: selected.data.title,
         body: selected.data.body,
-        summary: selected.data.summary ?? '',
+        keywordsInput: selected.data.keywords.join(', '),
         intentId: selected.data.intent_id ?? '',
       })
     }
@@ -71,7 +71,7 @@ export function AdminArticles() {
       createArticle(session!.token, {
         title: draft.title,
         body: draft.body,
-        summary: draft.summary || undefined,
+        keywords: parseKeywordsInput(draft.keywordsInput),
         intent_id: draft.intentId || undefined,
       }),
     onSuccess: (created: AgentArticleDetail) => {
@@ -85,7 +85,7 @@ export function AdminArticles() {
       updateArticle(session!.token, selectedId!, {
         title: draft.title,
         body: draft.body,
-        summary: draft.summary || null,
+        keywords: parseKeywordsInput(draft.keywordsInput),
         intent_id: draft.intentId || null,
       }),
     onSuccess: invalidateArticles,
@@ -159,7 +159,7 @@ export function AdminArticles() {
                 type="button"
                 onClick={() => {
                   setSelectedId(null)
-                  setDraft({ title: '', body: '', summary: '', intentId: '' })
+                  setDraft({ title: '', body: '', keywordsInput: '', intentId: '' })
                 }}
               >
                 + New
@@ -194,13 +194,12 @@ export function AdminArticles() {
             />
           </div>
           <div>
-            <label style={{ fontSize: '0.8em', color: 'var(--muted)', display: 'block', marginBottom: '0.2rem' }}>Summary</label>
-            <textarea
-              placeholder="Short summary for search & preview"
-              value={draft.summary}
+            <label style={{ fontSize: '0.8em', color: 'var(--muted)', display: 'block', marginBottom: '0.2rem' }}>Keywords</label>
+            <input
+              placeholder="refund, billing, cancel subscription"
+              value={draft.keywordsInput}
               disabled={!editable}
-              style={{ minHeight: '3.5rem' }}
-              onChange={(e) => setDraft({ ...draft, summary: e.target.value })}
+              onChange={(e) => setDraft({ ...draft, keywordsInput: e.target.value })}
             />
           </div>
           <div>

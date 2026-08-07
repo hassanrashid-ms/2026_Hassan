@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canEditFields, canPublish } from './articleForm.ts'
+import { canEditFields, canPublish, parseKeywordsInput } from './articleForm.ts'
 
 describe('canEditFields', () => {
   it('allows edits only while draft', () => {
@@ -15,5 +15,15 @@ describe('canPublish', () => {
     expect(canPublish('draft', '  ', 'Body')).toBe(false)
     expect(canPublish('draft', 'Title', '  ')).toBe(false)
     expect(canPublish('published', 'Title', 'Body')).toBe(false)
+  })
+})
+
+describe('parseKeywordsInput', () => {
+  it('splits on commas, trims, drops empties, and dedupes', () => {
+    expect(parseKeywordsInput('refund, billing ,, refund')).toEqual(['refund', 'billing'])
+  })
+
+  it('returns an empty array for blank input', () => {
+    expect(parseKeywordsInput('   ')).toEqual([])
   })
 })
