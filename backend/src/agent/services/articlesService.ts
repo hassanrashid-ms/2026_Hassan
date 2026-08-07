@@ -3,6 +3,7 @@ import type { AgentArticleDetail, AgentArticlesResponse } from '@support/types'
 import { article, intent } from '../../shared/db/schema/index.ts'
 import { withWorkspace } from '../../shared/db/withWorkspace.ts'
 import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts'
+import { deleteArticleObject, upsertArticleObject } from '../../shared/weaviate/articlesIndex.ts'
 
 function toDetail(row: typeof article.$inferSelect): AgentArticleDetail {
   return {
@@ -109,6 +110,13 @@ export async function publishArticle(ctx: AgentContext, id: string): Promise<Pub
       .set({ state: 'published', publishedBy: ctx.agentId, publishedAt: new Date() })
       .where(eq(article.id, id))
       .returning()
+    await upsertArticleObject({
+      id: row!.id,
+      title: row!.title,
+      body: row!.body,
+      keywords: row!.keywords,
+      intentId: row!.intentId,
+    })
     return { ok: true, article: toDetail(row!) }
   })
 }
@@ -119,6 +127,7 @@ export async function archiveArticle(ctx: AgentContext, id: string): Promise<Arc
   return withWorkspace(ctx.workspaceId, async (tx) => {
     const [row] = await tx.update(article).set({ state: 'archived' }).where(eq(article.id, id)).returning()
     if (!row) return { ok: false, reason: 'not_found' }
+    await deleteArticleObject(row.id)
     return { ok: true, article: toDetail(row) }
   })
 }

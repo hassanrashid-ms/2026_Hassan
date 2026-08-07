@@ -1,6 +1,6 @@
 import { createServer } from 'node:http'
 import express from 'express'
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import request from 'supertest'
 import { closeDb } from '../src/shared/db/client.ts'
 import { errorMiddleware } from '../src/errors.ts'
@@ -9,6 +9,12 @@ import { signAgentSession } from '../src/shared/auth/agentSession.ts'
 import { closeSocketServer, createSocketServer } from '../src/shared/realtime/socketServer.ts'
 import { articlesRouter } from '../src/agent/routers/articlesRouter.ts'
 import { closeOwnerPool, ownerPool, seedWorkspace, truncateAll } from './helpers/db.ts'
+import { deleteArticleObject, upsertArticleObject } from '../src/shared/weaviate/articlesIndex.ts'
+
+vi.mock('../src/shared/weaviate/articlesIndex.ts', () => ({
+  upsertArticleObject: vi.fn().mockResolvedValue(undefined),
+  deleteArticleObject: vi.fn().mockResolvedValue(undefined),
+}))
 
 const app = express()
 app.use(express.json())
@@ -25,7 +31,11 @@ afterAll(async () => {
   await closeOwnerPool()
 })
 
-beforeEach(truncateAll)
+beforeEach(async () => {
+  await truncateAll()
+  vi.mocked(upsertArticleObject).mockClear()
+  vi.mocked(deleteArticleObject).mockClear()
+})
 
 async function seedAgent(workspaceId: string): Promise<{ agentId: string; token: string }> {
   const { rows } = await ownerPool.query<{ id: string }>(
@@ -162,6 +172,44 @@ describe('draft -> publish -> archive', () => {
     const { token } = await seedAgent(workspaceId)
 
     await request(app).post(`/articles/${rows[0]!.id}/archive`).set('Authorization', `Bearer ${token}`).expect(200)
+  })
+
+  it('upserts the Weaviate object on publish and deletes it on archive', async () => {
+    const workspaceId = await seedWorkspace()
+    const { token } = await seedAgent(workspaceId)
+
+    const created = await request(app)
+      .post('/articles')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: 'X', body: 'Y', keywords: ['k'] })
+      .expect(201)
+    const id = created.body.id as string
+
+    await request(app).post(`/articles/${id}/publish`).set('Authorization', `Bearer ${token}`).expect(200)
+    expect(upsertArticleObject).toHaveBeenCalledWith(
+      expect.objectContaining({ id, title: 'X', body: 'Y', keywords: ['k'] }),
+    )
+
+    await request(app).post(`/articles/${id}/archive`).set('Authorization', `Bearer ${token}`).expect(200)
+    expect(deleteArticleObject).toHaveBeenCalledWith(id)
+  })
+
+  it('does not advance state when the Weaviate publish call fails', async () => {
+    const workspaceId = await seedWorkspace()
+    const { token } = await seedAgent(workspaceId)
+    vi.mocked(upsertArticleObject).mockRejectedValueOnce(new Error('weaviate unreachable'))
+
+    const created = await request(app)
+      .post('/articles')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: 'X', body: 'Y' })
+      .expect(201)
+    const id = created.body.id as string
+
+    await request(app).post(`/articles/${id}/publish`).set('Authorization', `Bearer ${token}`).expect(500)
+
+    const { rows } = await ownerPool.query<{ state: string }>(`select state from article where id = $1`, [id])
+    expect(rows[0]!.state).toBe('draft')
   })
 })
 
