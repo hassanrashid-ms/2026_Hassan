@@ -3,6 +3,7 @@ import { requirePlayerToken } from '../shared/middleware/requirePlayerToken.ts'
 import { articleReadRouter } from './routers/articleReadRouter.ts'
 import { articlesRouter } from './routers/articlesRouter.ts'
 import { bootstrapRouter } from './routers/bootstrapRouter.ts'
+import { intentsRouter } from './routers/intentsRouter.ts'
 import { messagesRouter } from './routers/messagesRouter.ts'
 
 export const surfaceRouter = Router()
@@ -14,4 +15,5 @@ surfaceRouter.use(requirePlayerToken)
 surfaceRouter.use(bootstrapRouter)
 surfaceRouter.use(articleReadRouter)
 surfaceRouter.use(articlesRouter)
+surfaceRouter.use(intentsRouter)
 surfaceRouter.use(messagesRouter)

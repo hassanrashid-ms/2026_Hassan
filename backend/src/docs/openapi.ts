@@ -608,6 +608,15 @@ registry.registerPath({
   responses: { 200: { description: 'Article detail' }, 404: { description: 'Not found' } },
 })
 
+registry.registerPath({
+  method: 'get',
+  path: '/surface/intents',
+  summary: 'Public List Intents',
+  description: 'Lists intents (categories) with at least one published article, alphabetical by name.',
+  security: [{ [bearerPlayerJwt.name]: [] }],
+  responses: { 200: { description: 'Intents list' } },
+})
+
 // Build Document
 const generator = new OpenApiGeneratorV3(registry.definitions)
 

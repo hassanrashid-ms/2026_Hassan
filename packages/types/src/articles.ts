@@ -59,6 +59,9 @@ export type AgentArticleDetail = {
 
 export type PublicArticleSummary = { id: string; title: string; keywords: string[]; intent_id: string | null }
 export type PublicArticlesResponse = { articles: PublicArticleSummary[] }
+
+export type PublicIntentSummary = { id: string; name: string }
+export type PublicIntentsResponse = { intents: PublicIntentSummary[] }
 export type PublicArticleDetail = {
   id: string
   title: string
