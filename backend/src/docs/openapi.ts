@@ -525,7 +525,7 @@ registry.registerPath({
           schema: z.object({
             title: z.string().min(1).max(200),
             body: z.string().min(1),
-            summary: z.string().max(500).optional(),
+            keywords: z.array(z.string()).optional(),
             intent_id: z.uuid().optional(),
           }),
         },
@@ -539,7 +539,7 @@ registry.registerPath({
   method: 'patch',
   path: '/agent/articles/{id}',
   summary: 'Agent Update Article',
-  description: 'Edits title/body/summary/intent while in draft.',
+  description: 'Edits title/body/keywords/intent while in draft.',
   security: [{ [bearerAgentJwt.name]: [] }],
   request: {
     params: z.object({ id: z.uuid() }),
@@ -549,7 +549,7 @@ registry.registerPath({
           schema: z.object({
             title: z.string().min(1).max(200).optional(),
             body: z.string().min(1).optional(),
-            summary: z.string().max(500).nullable().optional(),
+            keywords: z.array(z.string()).optional(),
             intent_id: z.uuid().nullable().optional(),
           }),
         },
