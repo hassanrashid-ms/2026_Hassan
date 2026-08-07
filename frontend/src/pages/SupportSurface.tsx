@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { BootstrapResponse, PlayerStateAvailability } from '@support/types'
-import { fetchArticleDetail, fetchArticles, fetchBootstrap, reportArticleRead } from '../api/surfaceApi.ts'
+import { fetchArticleDetail, fetchArticles, fetchBootstrap, fetchIntents, reportArticleRead } from '../api/surfaceApi.ts'
 import { fetchPlayerMessages, markPlayerMessagesRead, sendPlayerMessage } from '../api/playerChatApi.ts'
 import { ChatThread } from '../components/chat/ChatThread.tsx'
 import { Composer } from '../components/chat/Composer.tsx'
@@ -30,6 +30,7 @@ export function SupportSurface() {
   const [read, setRead] = useState<string[]>([])
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [selectedIntentId, setSelectedIntentId] = useState<string | null>(null)
   const [selectedArticleId, setSelectedArticleId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -94,9 +95,15 @@ export function SupportSurface() {
     return () => clearInterval(interval)
   }, [boot, data])
 
+  const intentsQuery = useQuery({
+    queryKey: ['surfaceIntents', boot?.token],
+    queryFn: () => fetchIntents(boot!.token),
+    enabled: boot !== null,
+  })
+
   const articlesQuery = useQuery({
-    queryKey: ['surfaceArticles', boot?.token, debouncedSearch],
-    queryFn: () => fetchArticles(boot!.token, debouncedSearch || undefined),
+    queryKey: ['surfaceArticles', boot?.token, debouncedSearch, selectedIntentId],
+    queryFn: () => fetchArticles(boot!.token, debouncedSearch || undefined, selectedIntentId || undefined),
     enabled: boot !== null,
   })
 
@@ -230,6 +237,29 @@ export function SupportSurface() {
 
           <section>
             <h2>Help Articles</h2>
+
+            {intentsQuery.data?.intents && intentsQuery.data.intents.length > 0 && (
+              <div className="surface-articles__tabs">
+                <button
+                  type="button"
+                  className={`surface-articles__tab ${selectedIntentId === null ? 'active' : ''}`}
+                  onClick={() => setSelectedIntentId(null)}
+                >
+                  All
+                </button>
+                {intentsQuery.data.intents.map((intent) => (
+                  <button
+                    key={intent.id}
+                    type="button"
+                    className={`surface-articles__tab ${selectedIntentId === intent.id ? 'active' : ''}`}
+                    onClick={() => setSelectedIntentId(intent.id)}
+                  >
+                    {intent.name}
+                  </button>
+                ))}
+              </div>
+            )}
+
             <div className="surface-articles__search">
               <input
                 type="search"

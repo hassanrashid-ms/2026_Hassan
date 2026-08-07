@@ -130,6 +130,37 @@ pre {
 }
 
 /* ─── Web Surface Articles & Modal (Relative Units Only) ─────────────────── */
+.surface-articles__tabs {
+  display: flex;
+  gap: 0.4em;
+  flex-wrap: wrap;
+  margin-bottom: 0.75em;
+}
+
+.surface-articles__tab {
+  background: var(--surface-sub);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 0.4em 0.8em;
+  border-radius: var(--radius);
+  font-size: 0.85em;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.surface-articles__tab:hover {
+  background: var(--surface);
+  border-color: var(--accent);
+}
+
+.surface-articles__tab.active {
+  background: var(--accent);
+  color: #ffffff;
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
 .surface-articles__search {
   margin-bottom: 0.75em;
 }

@@ -1,4 +1,4 @@
-import type { BootstrapResponse, PublicArticleDetail, PublicArticlesResponse } from '@support/types'
+import type { BootstrapResponse, PublicArticleDetail, PublicArticlesResponse, PublicIntentsResponse } from '@support/types'
 import { apiCall } from './httpClient.ts'
 
 export function fetchBootstrap(token: string, sessionId: string): Promise<BootstrapResponse> {
@@ -12,8 +12,15 @@ export function reportArticleRead(token: string, sessionId: string, articleId: s
   })
 }
 
-export function fetchArticles(token: string, search?: string): Promise<PublicArticlesResponse> {
-  const query = search ? `?q=${encodeURIComponent(search)}` : ''
+export function fetchIntents(token: string): Promise<PublicIntentsResponse> {
+  return apiCall<PublicIntentsResponse>('/surface/intents', token)
+}
+
+export function fetchArticles(token: string, search?: string, intentId?: string): Promise<PublicArticlesResponse> {
+  const params = new URLSearchParams()
+  if (search) params.set('q', search)
+  if (intentId) params.set('intentId', intentId)
+  const query = params.toString() ? `?${params.toString()}` : ''
   return apiCall<PublicArticlesResponse>(`/surface/articles${query}`, token)
 }
 
