@@ -52,16 +52,22 @@ export function SupportSurface() {
 
     fetchBootstrap(parsed.token, parsed.sessionId)
       .then(setData)
-      .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : 'Could not load support.'))
+      .catch(() => {
+        // Session might still be initializing via SDK POST /sdk/sessions/start.
+        // The polling effect below will retry fetchBootstrap until the session lands.
+      })
   }, [])
 
-  // When auto-provisioned, the player state snapshot might land from Unity Outbox
-  // a few milliseconds after the webview loaded. Poll until availability is no longer 'absent'.
+  // Poll until the session exists and player state snapshot availability is no longer 'absent'.
   useEffect(() => {
     if (!boot) return
     if (data !== null && data.player_state.availability !== 'absent') return
 
+    let attempts = 0
+    const maxAttempts = 15
+
     const interval = setInterval(() => {
+      attempts += 1
       fetchBootstrap(boot.token, boot.sessionId)
         .then((next) => {
           setData(next)
@@ -69,11 +75,16 @@ export function SupportSurface() {
             clearInterval(interval)
           }
         })
-        .catch(() => {})
+        .catch((cause: unknown) => {
+          if (attempts >= maxAttempts && data === null) {
+            clearInterval(interval)
+            setError(cause instanceof Error ? cause.message : 'Could not load support.')
+          }
+        })
     }, 800)
 
     return () => clearInterval(interval)
-  }, [boot, data?.player_state.availability])
+  }, [boot, data])
 
   const articlesQuery = useQuery({
     queryKey: ['surfaceArticles', boot?.token, search],

@@ -14,7 +14,7 @@ export async function loadBootstrap(ctx: PlayerContext, query: BootstrapQueryInp
     // RLS hides another workspace's row and the player_id predicate excludes another
     // player's, so a miss here cannot be distinguished from "never existed" — which
     // is exactly why the response is 404 rather than 403.
-    let [found] = await tx
+    const [found] = await tx
       .select({
         id: session.id,
         entryPoint: session.entryPoint,
@@ -26,36 +26,6 @@ export async function loadBootstrap(ctx: PlayerContext, query: BootstrapQueryInp
       .innerJoin(player, eq(player.id, session.playerId))
       .where(and(eq(session.id, query.session_id), eq(session.playerId, ctx.playerId)))
       .limit(1)
-
-    if (!found) {
-      // Auto-provision session for query.session_id so GET /surface/bootstrap always
-      // succeeds for an authenticated player token without a 404 error.
-      await tx
-        .insert(session)
-        .values({
-          id: query.session_id,
-          workspaceId: ctx.workspaceId,
-          playerId: ctx.playerId,
-          entryPoint: 'in_app',
-          startedAt: new Date(),
-        })
-        .onConflictDoNothing({ target: session.id })
-
-      const [provisioned] = await tx
-        .select({
-          id: session.id,
-          entryPoint: session.entryPoint,
-          startedAt: session.startedAt,
-          endedAt: session.endedAt,
-          externalPlayerId: player.externalId,
-        })
-        .from(session)
-        .innerJoin(player, eq(player.id, session.playerId))
-        .where(and(eq(session.id, query.session_id), eq(session.playerId, ctx.playerId)))
-        .limit(1)
-
-      if (provisioned) found = provisioned
-    }
 
     if (!found) return null
 
