@@ -7,6 +7,10 @@
 
 ## Decision
 
+> The vector-search row below (`pgvector`, HNSW) is superseded by
+> [`docs/specs/2026-08-07-weaviate-faq-search-design.md`](2026-08-07-weaviate-faq-search-design.md)
+> — see that doc for the current article search/data model.
+
 | Layer | Choice |
 |---|---|
 | Database | **PostgreSQL 17** (`pgvector/pgvector:pg17`) |
@@ -208,6 +212,10 @@ gap.
 
 ### Knowledge — 4
 
+> Superseded by [`docs/specs/2026-08-07-weaviate-faq-search-design.md`](2026-08-07-weaviate-faq-search-design.md)
+> — see that doc for the current article search/data model. `summary`, `article_phrasing` and
+> `article_embedding` described below no longer exist.
+
 | Table | Key columns |
 |---|---|
 | `article` | `id`, `intent_id`, `title`, `body`, `summary`, `state` (`draft`/`published`/`archived`), `created_by`, `published_by`, `published_at` |
@@ -224,6 +232,9 @@ change re-embeds without touching `article` rows.
 `article_feedback` is **not optional**: two reporting panels cannot exist without the "did this help
 / did this solve it" signal — the self-serve split between *found the answer* and *left without an
 answer*, and the bot's offered→rejected panel. Capture it from the first article a player reads.
+
+> The HNSW index and retrieval query below are superseded — see
+> [`docs/specs/2026-08-07-weaviate-faq-search-design.md`](2026-08-07-weaviate-faq-search-design.md).
 
 ```sql
 CREATE INDEX ON article_embedding
@@ -819,7 +830,7 @@ The inactivity clock, by contrast, **is** load-bearing: it produces resolutions 
 | BRIN on `occurred_at` | The events table only grows and is only queried by time range |
 | `generate_series` | Sparklines with no gaps; days with zero conversations render as zero rather than distorting the line |
 | Transactions | Article + embeddings atomically, so the bot never sees a published article with no vector |
-| `pgvector` HNSW | Filtered similarity search in the same query as the relational predicates |
+| `pgvector` HNSW | Filtered similarity search in the same query as the relational predicates (superseded — see [`docs/specs/2026-08-07-weaviate-faq-search-design.md`](2026-08-07-weaviate-faq-search-design.md)) |
 
 ## Why 33 tables
 
@@ -829,7 +840,7 @@ The inactivity clock, by contrast, **is** load-bearing: it produces resolutions 
 |---|---|
 | Nothing is deleted | `taxonomy_change`, `event`, `rule_firing`, `change_log`, `resolution_cycle` |
 | Support configures without a release | `intent`, `subintent`, `form`, `form_version`, `form_field`, `label`, `subintent_label`, `rule`, `bot_config`, `declared_field`, `saved_filter` |
-| Reporting counts events | `session`, `article_feedback`, `article_embedding`, `article_phrasing`, `player_state_snapshot` |
+| Reporting counts events | `session`, `article_feedback`, `article_embedding`, `article_phrasing`, `player_state_snapshot` (`article_embedding`/`article_phrasing` superseded — see [`docs/specs/2026-08-07-weaviate-faq-search-design.md`](2026-08-07-weaviate-faq-search-design.md)) |
 
 Four are genuinely collapsible and were considered:
 
@@ -882,5 +893,7 @@ Nothing blocking. Two items to revisit once there is live data:
 
 - **HNSW tuning** (`m`, `ef_construction`) is left at defaults. At a per-workspace corpus of dozens to
   low hundreds of articles this is irrelevant; revisit only if a workspace passes ~10k embeddings.
+  Superseded — see [`docs/specs/2026-08-07-weaviate-faq-search-design.md`](2026-08-07-weaviate-faq-search-design.md)
+  for the current article search/data model.
 - **`event` partitioning** is not needed yet. BRIN on `occurred_at` handles a long time. Revisit if
   the table passes ~50M rows.

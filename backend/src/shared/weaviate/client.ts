@@ -13,7 +13,7 @@ export async function getWeaviateClient(): Promise<WeaviateClient> {
   return client
 }
 
-/** Tests only — forces the next getWeaviateClient() call to reconnect. */
+/** Tests only — resets memoization so each test starts from a clean slate. */
 export function resetWeaviateClientCache(): void {
   client = undefined
 }

@@ -75,7 +75,7 @@ article
   intent_id      uuid REFERENCES intent(id) ON DELETE RESTRICT   -- nullable = uncategorized
   title          text NOT NULL
   body           text NOT NULL
-  keywords       text
+  keywords       text[] NOT NULL DEFAULT '{}'
   state          article_state NOT NULL DEFAULT 'draft'   -- draft | published | archived
   created_by     uuid NOT NULL REFERENCES agent(id) ON DELETE RESTRICT
   published_by   uuid REFERENCES agent(id) ON DELETE RESTRICT

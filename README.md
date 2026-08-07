@@ -71,7 +71,8 @@ exists** below. The database choice reverses an earlier written decision; ration
 ```bash
 git clone git@github.com:hassanrashid-ms/2026_Hassan.git
 cd 2026_Hassan
-cp .env.example .env                 # then set PLAYER_JWT_SECRET (32+ chars)
+cp .env.example .env                 # then set PLAYER_JWT_SECRET (32+ chars) and
+                                      # WEAVIATE_URL/WEAVIATE_API_KEY (Weaviate Cloud) — API won't boot without them
 docker compose up -d                 # Postgres 17 + Redis 7
 pnpm install
 pnpm db:setup                        # extensions → drizzle-kit push → RLS

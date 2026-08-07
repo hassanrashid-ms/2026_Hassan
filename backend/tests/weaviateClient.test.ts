@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('weaviate-client', () => {
   const connectToWeaviateCloud = vi.fn().mockResolvedValue({ collections: { get: vi.fn() } })
@@ -6,6 +6,11 @@ vi.mock('weaviate-client', () => {
 })
 
 describe('getWeaviateClient', () => {
+  beforeEach(async () => {
+    const { resetWeaviateClientCache } = await import('../src/shared/weaviate/client.ts')
+    resetWeaviateClientCache()
+  })
+
   it('memoises the connection across calls', async () => {
     const { getWeaviateClient } = await import('../src/shared/weaviate/client.ts')
     const weaviate = (await import('weaviate-client')).default
