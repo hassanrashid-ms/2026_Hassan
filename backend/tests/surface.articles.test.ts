@@ -78,6 +78,20 @@ describe('GET /articles', () => {
 
     expect(res.body.articles).toEqual([])
   })
+
+  it('returns keywords on each summary', async () => {
+    const { workspaceId, token } = await fixture()
+    await ownerPool.query(
+      `insert into agent (email, display_name) values ($1, 'A') returning id`,
+      [`kw-${Math.random().toString(36).slice(2)}@example.test`],
+    )
+    const id = await seedArticle(workspaceId, { title: 'Refund policy' })
+    await ownerPool.query(`update article set keywords = $1 where id = $2`, [['refund', 'billing'], id])
+
+    const res = await request(app).get('/articles').set('Authorization', `Bearer ${token}`).expect(200)
+
+    expect(res.body.articles[0].keywords).toEqual(['refund', 'billing'])
+  })
 })
 
 describe('GET /articles/:id', () => {

@@ -5,7 +5,7 @@ import { withWorkspace } from '../../shared/db/withWorkspace.ts'
 import type { PlayerContext } from '../../shared/middleware/requirePlayerToken.ts'
 
 function toSummary(row: typeof article.$inferSelect) {
-  return { id: row.id, title: row.title, summary: row.summary, intent_id: row.intentId }
+  return { id: row.id, title: row.title, keywords: row.keywords, intent_id: row.intentId }
 }
 
 function toDetail(row: typeof article.$inferSelect): PublicArticleDetail {
@@ -13,7 +13,7 @@ function toDetail(row: typeof article.$inferSelect): PublicArticleDetail {
     id: row.id,
     title: row.title,
     body: row.body,
-    summary: row.summary,
+    keywords: row.keywords,
     intent_id: row.intentId,
     published_at: row.publishedAt ? row.publishedAt.toISOString() : null,
   }
