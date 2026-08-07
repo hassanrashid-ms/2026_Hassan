@@ -40,7 +40,7 @@ export const createArticleHandler: RequestHandler = async (req, res) => {
   const result = await createArticle(req.agent!, {
     title: body.data.title,
     body: body.data.body,
-    summary: body.data.summary,
+    keywords: body.data.keywords,
     intentId: body.data.intent_id,
   })
   if (!result.ok) {
@@ -60,7 +60,7 @@ export const updateArticleHandler: RequestHandler = async (req, res) => {
   const result = await updateArticle(req.agent!, params.data.id, {
     title: body.data.title,
     body: body.data.body,
-    summary: body.data.summary,
+    keywords: body.data.keywords,
     intentId: body.data.intent_id,
   })
   if (!result.ok) {

@@ -9,7 +9,7 @@ function toDetail(row: typeof article.$inferSelect): AgentArticleDetail {
     id: row.id,
     title: row.title,
     body: row.body,
-    summary: row.summary,
+    keywords: row.keywords,
     state: row.state,
     intent_id: row.intentId,
     created_by: row.createdBy,
@@ -42,7 +42,7 @@ export async function getArticle(ctx: AgentContext, id: string): Promise<AgentAr
   })
 }
 
-export type CreateArticleInput = { title: string; body: string; summary?: string; intentId?: string }
+export type CreateArticleInput = { title: string; body: string; keywords?: string[]; intentId?: string }
 export type CreateArticleResult = { ok: true; article: AgentArticleDetail } | { ok: false; reason: 'intent_not_found' }
 
 export async function createArticle(ctx: AgentContext, input: CreateArticleInput): Promise<CreateArticleResult> {
@@ -58,7 +58,7 @@ export async function createArticle(ctx: AgentContext, input: CreateArticleInput
         intentId: input.intentId ?? null,
         title: input.title,
         body: input.body,
-        summary: input.summary ?? null,
+        keywords: input.keywords ?? [],
         createdBy: ctx.agentId,
       })
       .returning()
@@ -66,7 +66,7 @@ export async function createArticle(ctx: AgentContext, input: CreateArticleInput
   })
 }
 
-export type UpdateArticleInput = { title?: string; body?: string; summary?: string | null; intentId?: string | null }
+export type UpdateArticleInput = { title?: string; body?: string; keywords?: string[]; intentId?: string | null }
 export type UpdateArticleResult =
   | { ok: true; article: AgentArticleDetail }
   | { ok: false; reason: 'not_found' | 'not_draft' | 'intent_not_found' }
@@ -85,7 +85,7 @@ export async function updateArticle(ctx: AgentContext, id: string, patch: Update
       .set({
         ...(patch.title !== undefined ? { title: patch.title } : {}),
         ...(patch.body !== undefined ? { body: patch.body } : {}),
-        ...(patch.summary !== undefined ? { summary: patch.summary } : {}),
+        ...(patch.keywords !== undefined ? { keywords: patch.keywords } : {}),
         ...(patch.intentId !== undefined ? { intentId: patch.intentId } : {}),
       })
       .where(eq(article.id, id))

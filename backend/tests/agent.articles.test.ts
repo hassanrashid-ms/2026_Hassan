@@ -70,6 +70,37 @@ describe('POST /articles', () => {
       .send({ title: 'X', body: 'Y', intent_id: rows[0]!.id })
       .expect(404)
   })
+
+  it('persists keywords on create and update', async () => {
+    const workspaceId = await seedWorkspace()
+    const { token } = await seedAgent(workspaceId)
+
+    const created = await request(app)
+      .post('/articles')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: 'X', body: 'Y', keywords: ['refund', 'billing'] })
+      .expect(201)
+    expect(created.body.keywords).toEqual(['refund', 'billing'])
+
+    const patched = await request(app)
+      .patch(`/articles/${created.body.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ keywords: ['refund'] })
+      .expect(200)
+    expect(patched.body.keywords).toEqual(['refund'])
+  })
+
+  it('defaults keywords to an empty array when omitted', async () => {
+    const workspaceId = await seedWorkspace()
+    const { token } = await seedAgent(workspaceId)
+
+    const created = await request(app)
+      .post('/articles')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: 'X', body: 'Y' })
+      .expect(201)
+    expect(created.body.keywords).toEqual([])
+  })
 })
 
 describe('draft -> publish -> archive', () => {
