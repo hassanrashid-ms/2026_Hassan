@@ -6,8 +6,11 @@ let client: WeaviateClient | undefined
 /** Memoised so repeated calls in the same process reuse one connection. */
 export async function getWeaviateClient(): Promise<WeaviateClient> {
   if (!client) {
-    client = await weaviate.connectToWeaviateCloud(getEnv().WEAVIATE_URL, {
-      authCredentials: new weaviate.ApiKey(getEnv().WEAVIATE_API_KEY),
+    const env = getEnv()
+    const openaiKey = env.OPENAI_APIKEY || process.env.OPENAI_API_KEY
+    client = await weaviate.connectToWeaviateCloud(env.WEAVIATE_URL, {
+      authCredentials: new weaviate.ApiKey(env.WEAVIATE_API_KEY),
+      ...(openaiKey ? { headers: { 'X-OpenAI-Api-Key': openaiKey } } : {}),
     })
   }
   return client

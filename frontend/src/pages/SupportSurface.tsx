@@ -29,7 +29,15 @@ export function SupportSurface() {
   const [error, setError] = useState<string | null>(null)
   const [read, setRead] = useState<string[]>([])
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [selectedArticleId, setSelectedArticleId] = useState<string | null>(null)
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search)
+    }, 800) // 800ms debounce
+    return () => clearTimeout(timer)
+  }, [search])
 
   // StrictMode double-invokes mount effects in development. scrubToken removes the
   // fragment as a side effect of the first invocation, so a naive second run would
@@ -87,8 +95,8 @@ export function SupportSurface() {
   }, [boot, data])
 
   const articlesQuery = useQuery({
-    queryKey: ['surfaceArticles', boot?.token, search],
-    queryFn: () => fetchArticles(boot!.token, search || undefined),
+    queryKey: ['surfaceArticles', boot?.token, debouncedSearch],
+    queryFn: () => fetchArticles(boot!.token, debouncedSearch || undefined),
     enabled: boot !== null,
   })
 
