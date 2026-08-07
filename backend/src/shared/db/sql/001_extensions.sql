@@ -1,4 +1,3 @@
 -- citext backs agent.email. gen_random_uuid() is built in from Postgres 13, so
--- pgcrypto is not needed. pgvector backs article_embedding.embedding.
+-- pgcrypto is not needed.
 CREATE EXTENSION IF NOT EXISTS citext;
-CREATE EXTENSION IF NOT EXISTS vector;
