@@ -76,7 +76,11 @@ describe('GET /articles', () => {
 
     const res = await request(app).get('/articles').query({ q: 'reset refund' }).set('Authorization', `Bearer ${token}`).expect(200)
 
-    expect(searchArticleIds).toHaveBeenCalledWith('reset refund', { intentId: undefined, limit: expect.any(Number) })
+    expect(searchArticleIds).toHaveBeenCalledWith('reset refund', {
+      workspaceId,
+      intentId: undefined,
+      limit: expect.any(Number),
+    })
     expect(res.body.articles.map((a: { id: string }) => a.id)).toEqual([idB, idA])
   })
 

@@ -25,7 +25,7 @@ export async function listPublicArticles(
   filter: { intentId?: string; q?: string },
 ): Promise<PublicArticlesResponse> {
   if (filter.q) {
-    const rankedIds = await searchArticleIds(filter.q, { intentId: filter.intentId, limit: 50 })
+    const rankedIds = await searchArticleIds(filter.q, { workspaceId: ctx.workspaceId, intentId: filter.intentId, limit: 50 })
     if (rankedIds.length === 0) return { articles: [] }
     return withWorkspace(ctx.workspaceId, async (tx) => {
       const rows = await tx

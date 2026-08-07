@@ -116,6 +116,7 @@ export async function publishArticle(ctx: AgentContext, id: string): Promise<Pub
       body: row!.body,
       keywords: row!.keywords,
       intentId: row!.intentId,
+      workspaceId: row!.workspaceId,
     })
     return { ok: true, article: toDetail(row!) }
   })

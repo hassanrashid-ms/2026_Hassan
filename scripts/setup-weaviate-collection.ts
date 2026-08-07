@@ -28,6 +28,7 @@ async function main() {
       { name: 'keywords', dataType: dataType.TEXT_ARRAY, tokenization: tokenization.TRIGRAM },
       { name: 'intentId', dataType: dataType.TEXT, tokenization: tokenization.FIELD, skipVectorization: true },
       { name: 'articleId', dataType: dataType.TEXT, tokenization: tokenization.FIELD, skipVectorization: true },
+      { name: 'workspaceId', dataType: dataType.TEXT, tokenization: tokenization.FIELD, skipVectorization: true },
     ],
   })
 
