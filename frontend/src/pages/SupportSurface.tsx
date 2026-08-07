@@ -58,6 +58,26 @@ export function SupportSurface() {
       .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : 'Could not load support.'))
   }, [])
 
+  // When auto-provisioned, the player state snapshot might land from Unity Outbox
+  // a few milliseconds after the webview loaded. Poll until availability is no longer 'absent'.
+  useEffect(() => {
+    if (!boot) return
+    if (data !== null && data.player_state.availability !== 'absent') return
+
+    const interval = setInterval(() => {
+      fetchBootstrap(boot.token, boot.sessionId)
+        .then((next) => {
+          setData(next)
+          if (next.player_state.availability !== 'absent') {
+            clearInterval(interval)
+          }
+        })
+        .catch(() => {})
+    }, 800)
+
+    return () => clearInterval(interval)
+  }, [boot, data?.player_state.availability])
+
   const onRead = (articleId: string) => {
     if (!boot) return
     // Both paths: the event the funnel counts, and the bridge message the SDK echoes
