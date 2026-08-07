@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { BootstrapResponse, PlayerStateAvailability } from '@support/types'
-import { fetchBootstrap, reportArticleRead } from '../api/surfaceApi.ts'
+import { fetchArticleDetail, fetchArticles, fetchBootstrap, reportArticleRead } from '../api/surfaceApi.ts'
 import { fetchPlayerMessages, markPlayerMessagesRead, sendPlayerMessage } from '../api/playerChatApi.ts'
 import { ChatThread } from '../components/chat/ChatThread.tsx'
 import { Composer } from '../components/chat/Composer.tsx'
@@ -19,11 +19,6 @@ const AVAILABILITY_COPY: Record<PlayerStateAvailability, string> = {
   absent: 'Player state has not arrived yet. It may still be queued on the device.',
 }
 
-const FAKE_ARTICLES = [
-  { id: 'a_123', title: 'My purchase did not arrive' },
-  { id: 'a_456', title: 'I cannot log in' },
-]
-
 function toChatMessage(m: { id: string; author_type: ChatMessage['authorType']; body: string; created_at: string; delivery_state: NonNullable<ChatMessage['deliveryState']> }): ChatMessage {
   return { id: m.id, authorType: m.author_type, body: m.body, createdAt: m.created_at, deliveryState: m.delivery_state }
 }
@@ -33,6 +28,8 @@ export function SupportSurface() {
   const [data, setData] = useState<BootstrapResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [read, setRead] = useState<string[]>([])
+  const [search, setSearch] = useState('')
+  const [selectedArticleId, setSelectedArticleId] = useState<string | null>(null)
 
   // StrictMode double-invokes mount effects in development. scrubToken removes the
   // fragment as a side effect of the first invocation, so a naive second run would
@@ -78,13 +75,26 @@ export function SupportSurface() {
     return () => clearInterval(interval)
   }, [boot, data?.player_state.availability])
 
+  const articlesQuery = useQuery({
+    queryKey: ['surfaceArticles', boot?.token, search],
+    queryFn: () => fetchArticles(boot!.token, search || undefined),
+    enabled: boot !== null,
+  })
+
+  const selectedArticleQuery = useQuery({
+    queryKey: ['surfaceArticleDetail', boot?.token, selectedArticleId],
+    queryFn: () => fetchArticleDetail(boot!.token, selectedArticleId!),
+    enabled: boot !== null && selectedArticleId !== null,
+  })
+
   const onRead = (articleId: string) => {
     if (!boot) return
-    // Both paths: the event the funnel counts, and the bridge message the SDK echoes
-    // back in sessions/end. Having both is how a silently dead bridge is detected.
-    void reportArticleRead(boot.token, boot.sessionId, articleId).catch(() => {})
-    post({ type: 'article_read', id: articleId })
-    setRead((current) => [...current, articleId])
+    setSelectedArticleId(articleId)
+    if (!read.includes(articleId)) {
+      void reportArticleRead(boot.token, boot.sessionId, articleId).catch(() => {})
+      post({ type: 'article_read', id: articleId })
+      setRead((current) => [...current, articleId])
+    }
   }
 
   const [chatOpen, setChatOpen] = useState(false)
@@ -200,19 +210,55 @@ export function SupportSurface() {
           </section>
 
           <section>
-            <h2>Help articles</h2>
-            <ul>
-              {FAKE_ARTICLES.map((article) => (
-                <li key={article.id}>
-                  <button type="button" onClick={() => onRead(article.id)}>
-                    {article.title}
-                  </button>
-                  {read.includes(article.id) && <span> — read</span>}
-                </li>
-              ))}
-            </ul>
+            <h2>Help Articles</h2>
+            <div className="surface-articles__search">
+              <input
+                type="search"
+                placeholder="Search help articles..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+
+            {articlesQuery.isLoading ? (
+              <p className="notice">Loading help articles...</p>
+            ) : articlesQuery.data?.articles.length === 0 ? (
+              <p className="notice">No articles found.</p>
+            ) : (
+              <ul className="surface-articles__list">
+                {articlesQuery.data?.articles.map((article) => (
+                  <li key={article.id}>
+                    <button type="button" onClick={() => onRead(article.id)}>
+                      <span>{article.title}</span>
+                      {read.includes(article.id) && <span className="read-badge">Read</span>}
+                    </button>
+                    {article.summary && <p className="summary-snippet">{article.summary}</p>}
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
         </>
+      )}
+
+      {selectedArticleId !== null && selectedArticleQuery.data && (
+        <div className="surface-modal-overlay" onClick={() => setSelectedArticleId(null)}>
+          <div className="surface-modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="surface-modal-header">
+              <h2>{selectedArticleQuery.data.title}</h2>
+              <button type="button" onClick={() => setSelectedArticleId(null)}>✕</button>
+            </div>
+            {selectedArticleQuery.data.summary && (
+              <p className="surface-modal-summary">{selectedArticleQuery.data.summary}</p>
+            )}
+            <div className="surface-modal-body">
+              {selectedArticleQuery.data.body}
+            </div>
+            <div className="surface-modal-footer">
+              <button type="button" onClick={() => setSelectedArticleId(null)}>Close</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Always on screen, whatever else happened — including when bootstrap failed.
