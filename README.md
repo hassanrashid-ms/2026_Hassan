@@ -27,7 +27,7 @@ forms, players or issues. Multiple games are expected.
 Unity SDK ─┐
 Web SDK ───┼──▶ Core API (Express, Socket.io, RLS workspace scoping)
 Console ───┘         │
-                     ├── PostgreSQL (relational + append-only events + pgvector)
+                     ├── PostgreSQL (relational + append-only events)
                      ├── Redis + BullMQ (sockets, scheduled jobs)
                      └── Object storage (presigned uploads)
 ```
@@ -50,13 +50,13 @@ resolve more than once, and each resolution counts in the window it happened.
 |---|---|
 | Repo | pnpm workspaces monorepo, shared `@support/types` as the SDK↔server contract |
 | Server | Express 5 + TypeScript + Zod (schemas double as validation and types) |
-| Database | **PostgreSQL 17** (`pgvector/pgvector:pg17`) — self-hosted, Docker |
+| Database | **PostgreSQL 17** — self-hosted, Docker |
 | Access layer | **Drizzle ORM** + `drizzle-kit` migrations |
 | Tenancy | **Row-Level Security** — one policy per scoped table |
 | Realtime | Socket.io + `@socket.io/redis-adapter`, rooms per conversation |
 | Jobs | BullMQ repeatable jobs |
 | Files | S3 or Cloudflare R2, presigned PUT — never proxy uploads through Node |
-| Bot retrieval | **pgvector**, HNSW index — same database |
+| Bot retrieval | **Weaviate Cloud**, BM25 (see `docs/specs/2026-08-07-weaviate-faq-search-design.md`) |
 | Console | Vite + React + TanStack Query + Tailwind + shadcn/ui |
 | Charts | Recharts |
 
@@ -72,7 +72,7 @@ exists** below. The database choice reverses an earlier written decision; ration
 git clone git@github.com:hassanrashid-ms/2026_Hassan.git
 cd 2026_Hassan
 cp .env.example .env                 # then set PLAYER_JWT_SECRET (32+ chars)
-docker compose up -d                 # Postgres 17 (pgvector) + Redis 7
+docker compose up -d                 # Postgres 17 + Redis 7
 pnpm install
 pnpm db:setup                        # extensions → drizzle-kit push → RLS
 pnpm db:seed                         # prints the workspace secret ONCE — save it

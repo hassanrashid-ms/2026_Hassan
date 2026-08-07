@@ -5,8 +5,6 @@ const EXPECTED_TABLES = [
   'agent',
   'article',
   'article_attachment',
-  'article_embedding',
-  'article_phrasing',
   'conversation',
   'declared_field',
   'event',
@@ -43,7 +41,7 @@ async function columns(table: string): Promise<Map<string, { type: string; nulla
 describe('schema', () => {
   afterAll(closeOwnerPool)
 
-  it('creates exactly the sixteen tables of the SDK-path + articles-KB subset', async () => {
+  it('creates exactly the fourteen tables of the SDK-path + articles-KB subset', async () => {
     const { rows } = await ownerPool.query<{ table_name: string }>(
       `select table_name from information_schema.tables
         where table_schema = 'public' and table_type = 'BASE TABLE'

@@ -35,13 +35,13 @@ See `README.md` for the full getting-started sequence and `.env.example` for req
 |---|---|
 | Repo | pnpm workspaces monorepo, shared `@support/types` as the SDK↔server contract |
 | Server | Express 5 + TypeScript + Zod |
-| Database | PostgreSQL 17 (`pgvector/pgvector:pg17`) — self-hosted, Docker |
+| Database | PostgreSQL 17 — self-hosted, Docker |
 | Access layer | Drizzle ORM + `drizzle-kit` migrations |
 | Tenancy | Row-Level Security — one policy per scoped table, not an ORM hook |
 | Realtime | Socket.io + `@socket.io/redis-adapter`, rooms per conversation |
 | Jobs | BullMQ repeatable jobs |
 | Files | S3 or Cloudflare R2, presigned PUT — never proxy uploads through Node |
-| Bot retrieval | pgvector, HNSW index — same database |
+| Bot retrieval | Weaviate Cloud, BM25 (see `docs/specs/2026-08-07-weaviate-faq-search-design.md`) |
 | Console | Vite + React + TanStack Query + Tailwind + shadcn/ui |
 | Charts | Recharts |
 | Logging | `logger` (`backend/src/shared/logging/logger.ts`) — see Logging below |
@@ -56,7 +56,7 @@ Two Docker services: Postgres and Redis. Redis is a queue and pub/sub bus, not a
 Unity SDK ─┐
 Web SDK ───┼──▶ Core API (Express, Socket.io, RLS workspace scoping)
 Console ───┘         │
-                     ├── PostgreSQL (relational + append-only events + pgvector)
+                     ├── PostgreSQL (relational + append-only events)
                      ├── Redis + BullMQ (sockets, scheduled jobs)
                      └── Object storage (presigned uploads)
 ```

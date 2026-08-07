@@ -49,12 +49,11 @@ modelling, metrics, or any feature that touches the core entities.
   misclassification rate.
 
 **Articles**
-- `summary` and `knownPhrasings` live separately from `body`. Body text retrieves badly.
-  Embed summary and each phrasing, match against those, return `body`.
-- Vectors in `article_embedding` (`source` + nullable `phrasing_id`), separate from `article` rows.
-  A model change re-embeds without touching article rows.
-- **Publish and write embeddings in one transaction.** The bot must never see a published article
-  with no vector.
+- `keywords` lives separately from `body` for search matching. See
+  `docs/specs/2026-08-07-weaviate-faq-search-design.md` for the current article search/data model
+  (Weaviate Cloud BM25, superseding the earlier dead embedding scaffolding).
+- **Publish and sync to Weaviate in one flow.** The bot must never see a published article missing
+  from the search index.
 - Which article the bot offered is **not a column** — it's in `article_shown` / `article_rejected`
   events with the title snapshotted into the payload.
 
