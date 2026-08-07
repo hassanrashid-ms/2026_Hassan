@@ -1,5 +1,5 @@
 import express from 'express'
-import { afterAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import request from 'supertest'
 import { closeDb } from '../src/shared/db/client.ts'
 import { errorMiddleware } from '../src/errors.ts'
@@ -7,6 +7,11 @@ import { requirePlayerToken } from '../src/shared/middleware/requirePlayerToken.
 import { articlesRouter } from '../src/surface/routers/articlesRouter.ts'
 import { closeOwnerPool, ownerPool, seedPlayer, seedWorkspace, truncateAll } from './helpers/db.ts'
 import { mintToken } from './helpers/app.ts'
+import { searchArticleIds } from '../src/shared/weaviate/articlesIndex.ts'
+
+vi.mock('../src/shared/weaviate/articlesIndex.ts', () => ({
+  searchArticleIds: vi.fn(),
+}))
 
 const app = express()
 app.use(express.json())
@@ -19,6 +24,9 @@ afterAll(async () => {
 })
 
 beforeEach(truncateAll)
+beforeEach(() => {
+  vi.mocked(searchArticleIds).mockResolvedValue([])
+})
 
 async function fixture() {
   const workspaceId = await seedWorkspace()
@@ -60,15 +68,27 @@ describe('GET /articles', () => {
     expect(res.body.articles[0].title).toBe('Published one')
   })
 
-  it('filters by keyword across title and body', async () => {
+  it('ranks results using Weaviate BM25 order, not Postgres insertion order', async () => {
     const { workspaceId, token } = await fixture()
-    await seedArticle(workspaceId, { title: 'Refund policy', body: 'We refund within 30 days.' })
-    await seedArticle(workspaceId, { title: 'Password reset', body: 'Tap reset.' })
+    const idA = await seedArticle(workspaceId, { title: 'Refund policy', body: 'We refund within 30 days.' })
+    const idB = await seedArticle(workspaceId, { title: 'Password reset', body: 'Tap reset.' })
+    vi.mocked(searchArticleIds).mockResolvedValue([idB, idA])
+
+    const res = await request(app).get('/articles').query({ q: 'reset refund' }).set('Authorization', `Bearer ${token}`).expect(200)
+
+    expect(searchArticleIds).toHaveBeenCalledWith('reset refund', { intentId: undefined, limit: expect.any(Number) })
+    expect(res.body.articles.map((a: { id: string }) => a.id)).toEqual([idB, idA])
+  })
+
+  it('excludes ids Weaviate returns that are not published', async () => {
+    const { workspaceId, token } = await fixture()
+    const published = await seedArticle(workspaceId, { title: 'Refund policy', state: 'published' })
+    const draft = await seedArticle(workspaceId, { title: 'Draft refund note', state: 'draft' })
+    vi.mocked(searchArticleIds).mockResolvedValue([draft, published])
 
     const res = await request(app).get('/articles').query({ q: 'refund' }).set('Authorization', `Bearer ${token}`).expect(200)
 
-    expect(res.body.articles).toHaveLength(1)
-    expect(res.body.articles[0].title).toBe('Refund policy')
+    expect(res.body.articles.map((a: { id: string }) => a.id)).toEqual([published])
   })
 
   it('returns an empty list, never an error, when nothing matches', async () => {

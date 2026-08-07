@@ -29,3 +29,14 @@ export async function deleteArticleObject(id: string): Promise<void> {
   const collection = await getArticleCollection()
   await collection.data.deleteById(id)
 }
+
+export async function searchArticleIds(query: string, opts: { intentId?: string; limit: number }): Promise<string[]> {
+  const collection = await getArticleCollection()
+  const result = await collection.query.bm25(query, {
+    queryProperties: ['title^3', 'keywords^2', 'body'],
+    filters: opts.intentId ? collection.filter.byProperty('intentId').equal(opts.intentId) : undefined,
+    limit: opts.limit,
+    returnProperties: ['articleId'],
+  })
+  return result.objects.map((o) => (o.properties as { articleId: string }).articleId)
+}
