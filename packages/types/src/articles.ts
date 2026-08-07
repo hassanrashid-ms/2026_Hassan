@@ -10,14 +10,14 @@ export const CreateSubintentBody = z.object({ name: z.string().min(1).max(120) }
 export const CreateArticleBody = z.object({
   title: z.string().min(1).max(200),
   body: z.string().min(1),
-  summary: z.string().max(500).optional(),
+  keywords: z.array(z.string()).optional(),
   intent_id: z.uuid().optional(),
 })
 
 export const UpdateArticleBody = z.object({
   title: z.string().min(1).max(200).optional(),
   body: z.string().min(1).optional(),
-  summary: z.string().max(500).nullable().optional(),
+  keywords: z.array(z.string()).optional(),
   intent_id: z.uuid().nullable().optional(),
 })
 
@@ -48,7 +48,7 @@ export type AgentArticleDetail = {
   id: string
   title: string
   body: string
-  summary: string | null
+  keywords: string[]
   state: ArticleStateValue
   intent_id: string | null
   created_by: string
@@ -57,13 +57,13 @@ export type AgentArticleDetail = {
   created_at: string
 }
 
-export type PublicArticleSummary = { id: string; title: string; summary: string | null; intent_id: string | null }
+export type PublicArticleSummary = { id: string; title: string; keywords: string[]; intent_id: string | null }
 export type PublicArticlesResponse = { articles: PublicArticleSummary[] }
 export type PublicArticleDetail = {
   id: string
   title: string
   body: string
-  summary: string | null
+  keywords: string[]
   intent_id: string | null
   published_at: string | null
 }
