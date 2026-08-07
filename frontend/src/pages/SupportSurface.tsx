@@ -243,7 +243,7 @@ export function SupportSurface() {
                       <span>{article.title}</span>
                       {read.includes(article.id) && <span className="read-badge">Read</span>}
                     </button>
-                    {article.summary && <p className="summary-snippet">{article.summary}</p>}
+                    {article.keywords.length > 0 && <p className="summary-snippet">{article.keywords.join(', ')}</p>}
                   </li>
                 ))}
               </ul>
@@ -259,8 +259,8 @@ export function SupportSurface() {
               <h2>{selectedArticleQuery.data.title}</h2>
               <button type="button" onClick={() => setSelectedArticleId(null)}>✕</button>
             </div>
-            {selectedArticleQuery.data.summary && (
-              <p className="surface-modal-summary">{selectedArticleQuery.data.summary}</p>
+            {selectedArticleQuery.data.keywords.length > 0 && (
+              <p className="surface-modal-summary">{selectedArticleQuery.data.keywords.join(', ')}</p>
             )}
             <div className="surface-modal-body">
               {selectedArticleQuery.data.body}
