@@ -352,3 +352,110 @@ ul li button {
   border-radius: var(--radius);
   background: var(--surface-sub);
 }
+
+/* ─── Admin Articles / Knowledge Base ───────────────────────────────────── */
+.admin-articles {
+  max-width: 76rem;
+  margin: 0 auto;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.admin-articles h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.admin-articles__layout {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.admin-articles__card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+}
+
+.admin-articles__card h2 {
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin-bottom: 0.75rem;
+}
+
+.admin-articles__list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.admin-articles__list button {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: calc(var(--radius) * 0.75);
+  padding: 0.5rem 0.75rem;
+  color: var(--text);
+  font-size: 0.85em;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.admin-articles__list button:hover,
+.admin-articles__list button.active {
+  background: var(--surface-sub);
+  border-color: var(--border);
+}
+
+.admin-articles__editor {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.admin-articles__editor h2 {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.admin-articles__editor input,
+.admin-articles__editor textarea,
+.admin-articles__editor select {
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  border-radius: calc(var(--radius) * 0.75);
+  border: 1px solid var(--border);
+  background: var(--surface-sub);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.9em;
+}
+
+.admin-articles__editor textarea {
+  min-height: 5rem;
+  resize: vertical;
+}
+
+.admin-articles__actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  margin-top: 0.5rem;
+}
+
