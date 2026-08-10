@@ -4,10 +4,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
 import { fetchConversationMessages, markAgentMessagesRead, sendAgentMessage } from '../api/agentApi.ts'
 import { loadAgentSession } from '../lib/agentSession.ts'
-import { createSocket } from '../lib/socket.ts'
-import { ChatThread } from '../components/chat/ChatThread.tsx'
-import { Composer } from '../components/chat/Composer.tsx'
-import type { ChatMessage } from '../components/chat/types.ts'
+import { createSocket } from '../../../features/chat/api/socket.ts'
+import { ChatThread } from '../../../features/chat/components/ChatThread.tsx'
+import { Composer } from '../../../features/chat/components/Composer.tsx'
+import type { ChatMessage } from '../../../features/chat/components/types.ts'
 
 function toChatMessage(m: AgentMessageView): ChatMessage {
   return {

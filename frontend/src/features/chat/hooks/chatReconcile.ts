@@ -1,4 +1,4 @@
-import type { ChatMessage } from '../components/chat/types.ts'
+import type { ChatMessage } from '../components/types.ts'
 
 export type PendingMessage = ChatMessage & { tempId: string }
 

@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { fetchPublicArticles } from '../api/articlesApi.ts'
-import { readBoot } from '../boot.ts'
+import { fetchPublicArticles } from '../../../features/articles/api/articlesApi.ts'
+import { readBoot } from '../../../lib/boot.ts'
 
 export function ArticleList() {
   const navigate = useNavigate()

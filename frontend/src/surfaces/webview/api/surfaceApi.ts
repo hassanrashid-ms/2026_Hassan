@@ -1,5 +1,5 @@
 import type { BootstrapResponse, PublicArticleDetail, PublicArticlesResponse, PublicIntentsResponse } from '@support/types'
-import { apiCall } from './httpClient.ts'
+import { apiCall } from '../../../lib/httpClient.ts'
 
 export function fetchBootstrap(token: string, sessionId: string): Promise<BootstrapResponse> {
   return apiCall<BootstrapResponse>(`/surface/bootstrap?session_id=${encodeURIComponent(sessionId)}`, token)

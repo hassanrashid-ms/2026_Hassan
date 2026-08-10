@@ -1,5 +1,5 @@
 import type { PlayerMessageView, PlayerMessagesResponse } from '@support/types'
-import { apiCall } from './httpClient.ts'
+import { apiCall } from '../../../lib/httpClient.ts'
 
 export function fetchPlayerMessages(token: string, sessionId: string): Promise<PlayerMessagesResponse> {
   return apiCall<PlayerMessagesResponse>(`/surface/messages?session_id=${encodeURIComponent(sessionId)}`, token)

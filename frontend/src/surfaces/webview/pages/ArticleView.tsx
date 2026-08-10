@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
-import { fetchPublicArticle } from '../api/articlesApi.ts'
-import { readBoot } from '../boot.ts'
+import { fetchPublicArticle } from '../../../features/articles/api/articlesApi.ts'
+import { readBoot } from '../../../lib/boot.ts'
 
 export function ArticleView() {
   const { id } = useParams<{ id: string }>()

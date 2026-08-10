@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { claimConversation, fetchInbox } from '../api/agentApi.ts'
 import { loadAgentSession } from '../lib/agentSession.ts'
-import { createSocket } from '../lib/socket.ts'
+import { createSocket } from '../../../features/chat/api/socket.ts'
 
 export function AgentInbox() {
   const navigate = useNavigate()

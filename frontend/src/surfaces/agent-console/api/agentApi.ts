@@ -8,7 +8,7 @@ import type {
   CreateSubintentResponse,
   IntentsResponse,
 } from '@support/types'
-import { apiCall } from './httpClient.ts'
+import { apiCall } from '../../../lib/httpClient.ts'
 
 const BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000'
 

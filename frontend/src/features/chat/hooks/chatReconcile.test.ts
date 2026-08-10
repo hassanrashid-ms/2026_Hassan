@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { reconcilePending } from './chatReconcile.ts'
-import type { ChatMessage } from '../components/chat/types.ts'
+import type { ChatMessage } from '../components/types.ts'
 
 function msg(overrides: Partial<ChatMessage> = {}): ChatMessage {
   return { id: 'server-1', authorType: 'player', body: 'hi', createdAt: '2026-08-06T00:00:00Z', ...overrides }

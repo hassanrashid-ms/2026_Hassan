@@ -1,6 +1,6 @@
 import type { PublicArticleDetail, PublicArticlesResponse } from '@support/types'
-import { apiCall } from './httpClient.ts'
-import { buildArticleSearchParams } from '../pages/articleSearch.ts'
+import { apiCall } from '../../../lib/httpClient.ts'
+import { buildArticleSearchParams } from '../lib/articleSearch.ts'
 
 export function fetchPublicArticles(
   token: string,
