@@ -1,4 +1,4 @@
-import { Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes } from 'react-router-dom'
 import { SupportSurface } from '../surfaces/webview/pages/SupportSurface.tsx'
 import { ArticleList } from '../surfaces/webview/pages/ArticleList.tsx'
 import { ArticleView } from '../surfaces/webview/pages/ArticleView.tsx'
@@ -10,12 +10,17 @@ import { AdminArticles } from '../surfaces/agent-console/pages/AdminArticles.tsx
 export function AppRoutes() {
   return (
     <Routes>
-      {/* webview routes */}
-      <Route path="/" element={<SupportSurface />} />
-      <Route path="/articles" element={<ArticleList />} />
-      <Route path="/articles/:id" element={<ArticleView />} />
+      {/*
+        webview routes — deliberately not at "/" so an agent poking at the
+        console can't land on the player surface by accident. The SDK's
+        webviewBaseUrl points at this prefix.
+      */}
+      <Route path="/embed/support" element={<SupportSurface />} />
+      <Route path="/embed/support/articles" element={<ArticleList />} />
+      <Route path="/embed/support/articles/:id" element={<ArticleView />} />
 
       {/* agent-console routes */}
+      <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="/login" element={<AgentLogin />} />
       <Route path="/inbox" element={<AgentInbox />} />
       <Route path="/conversations/:id" element={<AgentConversation />} />

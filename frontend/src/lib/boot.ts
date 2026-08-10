@@ -6,6 +6,8 @@ export type SurfaceBoot = {
 
 /**
  * The SDK builds: {webviewBaseUrl}?session={sessionId}&entry={entryPoint}#t={jwt}
+ * where webviewBaseUrl ends in /embed/support — the player surface is not served
+ * from "/" so an agent-console user cannot wander into it.
  *
  * Only the token goes in the fragment: fragments never reach the server in a request
  * line, stay out of proxy and access logs, and are not forwarded in a Referer.

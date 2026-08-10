@@ -24,7 +24,7 @@ export function ArticleList() {
       <ul>
         {articles.data?.articles.map((a) => (
           <li key={a.id}>
-            <button type="button" onClick={() => navigate(`/articles/${a.id}`)}>
+            <button type="button" onClick={() => navigate(`/embed/support/articles/${a.id}`)}>
               {a.title}
             </button>
           </li>

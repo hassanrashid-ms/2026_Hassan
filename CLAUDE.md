@@ -82,9 +82,15 @@ Console ───┘         │
 │   └── package.json
 ├── frontend/
 │   ├── src/
-│   │   ├── pages/        route-level components
-│   │   ├── components/   shared UI
-│   │   └── lib/          api client, hooks
+│   │   ├── surfaces/         per-audience code, never cross-import
+│   │   │   ├── agent-console/  agent + admin (pages/api/components/hooks/lib/types)
+│   │   │   └── webview/        in-game player-facing (pages/api/components/hooks/types)
+│   │   ├── features/         shared across both surfaces (chat, articles)
+│   │   ├── components/       global, presentational only
+│   │   ├── routes/           AppRoutes.tsx — single router
+│   │   ├── services/         bridgeService.ts — Unity postMessage bridge
+│   │   ├── lib/, hooks/, store/, layouts/, types/, utils/, assets/
+│   │   └── App.tsx, main.tsx
 │   └── package.json
 ├── packages/
 │   └── types/            @support/types — shared SDK↔server contract
