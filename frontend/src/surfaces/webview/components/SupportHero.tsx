@@ -51,7 +51,7 @@ export function SupportHero({ gameName, imageUrl, onSearchTap }: SupportHeroProp
       )}
 
       <div className="relative flex flex-col gap-3">
-        <p className="text-2xl leading-tight font-extrabold text-white drop-shadow-sm">{gameName}</p>
+        <p className="text-2xl leading-tight font-extrabold text-white drop-shadow-sm">{gameName} Support</p>
 
         {/*
           A button that looks like an input, not an input.
@@ -62,7 +62,7 @@ export function SupportHero({ gameName, imageUrl, onSearchTap }: SupportHeroProp
         <button
           type="button"
           onClick={onSearchTap}
-          className="flex min-h-12 w-full items-center gap-3 rounded-card bg-bg/95 px-4 text-left transition-transform active:scale-[0.99] outline-none"
+          className="flex min-h-12 w-full items-center gap-3 rounded-full bg-bg/95 px-4 text-left transition-transform active:scale-[0.99] outline-none"
         >
           <Search className="size-5 shrink-0 text-muted" />
           <span className="truncate text-base text-muted">Search help</span>

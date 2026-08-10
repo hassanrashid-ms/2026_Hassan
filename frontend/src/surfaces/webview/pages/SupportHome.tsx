@@ -100,7 +100,6 @@ export function SupportHome() {
                 <ArticleCard
                   key={article.id}
                   title={article.title}
-                  keywords={article.keywords}
                   read={isRead(article.id)}
                   onOpen={() => navigate(`/embed/support/articles/${article.id}`)}
                 />

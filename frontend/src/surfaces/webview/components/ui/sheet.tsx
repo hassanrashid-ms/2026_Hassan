@@ -1,5 +1,6 @@
 import * as React from 'react'
 import * as SheetPrimitive from '@radix-ui/react-dialog'
+import { X } from 'lucide-react'
 import { cn } from '@/surfaces/webview/lib/cn'
 
 const Sheet = SheetPrimitive.Root
@@ -59,6 +60,10 @@ function SheetContent({ side = 'bottom', className, children, ...props }: SheetC
           </div>
         )}
         {children}
+        <SheetPrimitive.Close className="absolute right-3 top-3 flex h-14 w-14 items-center justify-center rounded-full bg-surface/50 text-muted outline-none">
+          <X className="h-8 w-8" />
+          <span className="sr-only">Close</span>
+        </SheetPrimitive.Close>
       </SheetPrimitive.Content>
     </SheetPortal>
   )

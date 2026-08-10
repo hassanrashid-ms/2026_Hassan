@@ -6,6 +6,7 @@ import { fetchBootstrap } from '@/surfaces/webview/api/surfaceApi'
 import { onBridgeReady, post } from '@/services/bridgeService'
 import { SupportContextProvider, type SupportContextValue } from '@/surfaces/webview/components/SupportContext'
 import { NoSessionScreen } from '@/surfaces/webview/components/StateScreens'
+import { useSurfaceReadySignal } from '@/surfaces/webview/hooks/useSurfaceReadySignal'
 
 // webview.css is imported HERE and nowhere else. main.tsx still imports only
 // styles.css, so an agent-console route never evaluates this module and Tailwind's
@@ -112,6 +113,14 @@ export function WebviewShell() {
     setRetryNonce((n) => n + 1)
   }, [])
 
+  // Bootstrap having landed is what turns this shell from an empty frame into a
+  // real screen, so it is the moment the SDK may reveal the webview. `error` counts
+  // too: a failure screen is something the player can read and act on, and the
+  // alternative is holding the SDK's loader over it until the grace timer expires.
+  // Deliberately not gated on the player-state poll below — that keeps running
+  // after first paint and would hold the reveal for seconds on a cold session.
+  useSurfaceReadySignal(data !== null || error !== null)
+
   const value = useMemo<SupportContextValue>(() => ({ boot, data, error, retry }), [boot, data, error, retry])
 
   return (
@@ -125,7 +134,6 @@ export function WebviewShell() {
       <div
         className="flex h-[100dvh] w-full flex-col overflow-hidden bg-bg text-text"
         style={{
-          paddingTop: 'env(safe-area-inset-top)',
           paddingBottom: 'env(safe-area-inset-bottom)',
           paddingLeft: 'env(safe-area-inset-left)',
           paddingRight: 'env(safe-area-inset-right)',
@@ -136,7 +144,17 @@ export function WebviewShell() {
           to close, nothing to retry, and no chat to fall back to. Every other
           failure is handled per-screen so that chat stays reachable.
         */}
-        {boot === null && error !== null ? <NoSessionScreen message={error} /> : <Outlet />}
+        {boot === null && error !== null ? (
+          <>
+            <div className="shrink-0 bg-bg" style={{ height: 'env(safe-area-inset-top)' }} />
+            <NoSessionScreen message={error} />
+          </>
+        ) : (
+          <>
+            <div className="shrink-0 bg-accent" style={{ height: 'env(safe-area-inset-top)' }} />
+            <Outlet />
+          </>
+        )}
       </div>
     </SupportContextProvider>
   )

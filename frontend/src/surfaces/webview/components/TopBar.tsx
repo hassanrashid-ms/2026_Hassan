@@ -34,8 +34,8 @@ function IconButton({
       aria-label={label}
       onClick={onClick}
       className={cn(
-        'inline-flex size-12 shrink-0 items-center justify-center rounded-full text-text',
-        'transition-colors active:bg-surface outline-none',
+        'inline-flex size-14 shrink-0 items-center justify-center rounded-full text-accent-fg',
+        'transition-colors active:bg-white/20 outline-none',
         className,
       )}
     >
@@ -56,9 +56,9 @@ function DebugButton({ onClick }: { onClick: () => void }) {
       type="button"
       aria-label="Session details"
       onClick={onClick}
-      className="inline-flex size-9 shrink-0 items-center justify-center rounded-full text-muted/40 transition-colors active:bg-surface outline-none"
+      className="inline-flex size-14 shrink-0 items-center justify-center rounded-full text-accent-fg transition-colors active:bg-white/20 outline-none"
     >
-      <MoreHorizontal className="size-5" />
+      <MoreHorizontal className="size-12" />
     </button>
   )
 }
@@ -73,7 +73,7 @@ export function TopBar(props: TopBarProps) {
   const { data } = useSupport()
   const unread = data?.unread_count ?? 0
 
-  const frame = 'flex h-16 shrink-0 items-center gap-1 px-2'
+  const frame = 'relative flex h-16 shrink-0 items-center gap-1 px-2 bg-accent text-accent-fg'
 
   if (props.variant === 'search') {
     return (
@@ -94,7 +94,7 @@ export function TopBar(props: TopBarProps) {
         <button
           type="button"
           onClick={() => navigate(-1)}
-          className="shrink-0 rounded-full px-3 py-2 text-base font-semibold text-accent transition-colors active:bg-surface outline-none"
+          className="shrink-0 rounded-full px-3 py-2 text-base font-semibold text-accent-fg transition-colors active:bg-white/20 outline-none"
         >
           Cancel
         </button>
@@ -107,22 +107,28 @@ export function TopBar(props: TopBarProps) {
       <div className={frame}>
         {/* ✕ posts the bridge's close message — the game owns dismissing the
             webview, the web app never tries to close its own window. */}
-        <IconButton label="Close support" onClick={() => post({ type: 'close' })}>
-          <X className="size-7" />
+        <IconButton label="Close support" onClick={() => post({ type: 'close' })} className="relative z-10">
+          <X className="size-12" />
         </IconButton>
-        <h1 className="min-w-0 flex-1 truncate text-center text-lg font-bold text-text">{gameName}</h1>
-        <IconButton label="Search help articles" onClick={() => navigate('/embed/support/search')}>
-          <Search className="size-7" />
-        </IconButton>
-        <IconButton label="Open chat" onClick={() => navigate('/embed/support/chat')} className="relative">
-          <MessageCircle className="size-7" />
-          {unread > 0 && (
-            <span className="absolute top-1.5 right-1.5 flex min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-xs font-bold text-accent-fg">
-              {unread > 9 ? '9+' : unread}
-            </span>
-          )}
-        </IconButton>
-        <DebugButton onClick={props.onOpenDebug} />
+        
+        <h1 className="flex-1 truncate px-2 text-center text-lg font-bold text-accent-fg pointer-events-none">
+          Support
+        </h1>
+        
+        <div className="flex items-center relative z-10">
+          <IconButton label="Search help articles" onClick={() => navigate('/embed/support/search')}>
+            <Search className="size-12" />
+          </IconButton>
+          <IconButton label="Open chat" onClick={() => navigate('/embed/support/chat')} className="relative">
+            <MessageCircle className="size-12" />
+            {unread > 0 && (
+              <span className="absolute top-1.5 right-1.5 flex min-w-5 items-center justify-center rounded-full bg-white px-1.5 text-xs font-bold text-accent shadow-sm">
+                {unread > 9 ? '9+' : unread}
+              </span>
+            )}
+          </IconButton>
+          <DebugButton onClick={props.onOpenDebug} />
+        </div>
       </div>
     )
   }
@@ -133,11 +139,17 @@ export function TopBar(props: TopBarProps) {
     <div className={frame}>
       {/* navigate(-1), not a hardcoded route: it is the same gesture Android's
           hardware back button fires, and real routes are what make that work. */}
-      <IconButton label="Back" onClick={() => navigate(-1)}>
-        <ArrowLeft className="size-7" />
+      <IconButton label="Back" onClick={() => navigate(-1)} className="relative z-10">
+        <ArrowLeft className="size-12" />
       </IconButton>
-      <h1 className="min-w-0 flex-1 truncate text-center text-lg font-bold text-text">{title}</h1>
-      <DebugButton onClick={props.onOpenDebug} />
+      
+      <h1 className="flex-1 truncate px-2 text-center text-lg font-bold text-accent-fg pointer-events-none">
+        {title}
+      </h1>
+      
+      <div className="flex items-center relative z-10">
+        <DebugButton onClick={props.onOpenDebug} />
+      </div>
     </div>
   )
 }

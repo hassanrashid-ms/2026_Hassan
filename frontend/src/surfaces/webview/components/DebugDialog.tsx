@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import type { PlayerStateAvailability } from '@support/types'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/surfaces/webview/components/ui/dialog'
 import { useSupport } from '@/surfaces/webview/components/SupportContext'
@@ -13,16 +13,16 @@ const AVAILABILITY_COPY: Record<PlayerStateAvailability, string> = {
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex flex-col gap-0.5 border-b border-muted/15 py-2 last:border-b-0">
+    <div className="flex min-w-0 flex-col gap-0.5 border-b border-muted/15 py-2 last:border-b-0">
       <dt className="text-xs font-medium tracking-wide text-muted uppercase">{label}</dt>
-      <dd className="text-sm break-all text-text">{children}</dd>
+      <dd className="min-w-0 text-sm break-all text-text">{children}</dd>
     </div>
   )
 }
 
 function Json({ value }: { value: unknown }) {
   return (
-    <pre className="mt-1 max-h-56 overflow-auto rounded-card bg-surface p-3 text-xs leading-relaxed whitespace-pre-wrap text-text">
+    <pre className="mt-1 max-w-full max-h-56 overflow-auto rounded-card bg-surface p-3 text-xs leading-relaxed whitespace-pre text-text">
       {JSON.stringify(value, null, 2)}
     </pre>
   )
@@ -40,8 +40,22 @@ function Json({ value }: { value: unknown }) {
 export function DebugDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const { boot, data, error } = useSupport()
 
+  useEffect(() => {
+    if (!open) return
+    window.history.pushState({ debugModal: true }, '')
+    const onPopState = () => onOpenChange(false)
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [open, onOpenChange])
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(newOpen) => {
+      if (!newOpen && open) {
+        window.history.back()
+      } else {
+        onOpenChange(newOpen)
+      }
+    }}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Session details</DialogTitle>
@@ -72,7 +86,9 @@ export function DebugDialog({ open, onOpenChange }: { open: boolean; onOpenChang
               <Row label="Declared">
                 <Json value={data.player_state.declared} />
               </Row>
+              <><Row label="" >Meta</Row></>
               {data.player_state.raw !== undefined && (
+                
                 <Row label="Freeform">
                   <Json value={data.player_state.raw} />
                 </Row>

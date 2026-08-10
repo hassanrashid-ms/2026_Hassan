@@ -4,14 +4,13 @@ import { cn } from '@/surfaces/webview/lib/cn'
 
 type ArticleCardProps = {
   title: string
-  keywords: readonly string[]
   read: boolean
   onOpen: () => void
 }
 
 /** Shown on home and on search results — the same card, so a result never reads
  *  as a different kind of thing from the list it came out of. */
-export function ArticleCard({ title, keywords, read, onOpen }: ArticleCardProps) {
+export function ArticleCard({ title, read, onOpen }: ArticleCardProps) {
   return (
     <button
       type="button"
@@ -34,15 +33,6 @@ export function ArticleCard({ title, keywords, read, onOpen }: ArticleCardProps)
           )}
         </span>
 
-        {keywords.length > 0 && (
-          <span className="flex flex-wrap gap-1.5">
-            {keywords.map((keyword) => (
-              <Badge key={keyword} variant="soft">
-                {keyword}
-              </Badge>
-            ))}
-          </span>
-        )}
       </span>
       <ChevronRight className="size-5 shrink-0 text-muted/50" />
     </button>

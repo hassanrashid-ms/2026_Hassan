@@ -43,8 +43,8 @@ function DialogContent({ className, children, ...props }: React.ComponentProps<t
         {...props}
       >
         {children}
-        <DialogPrimitive.Close className="absolute right-3 top-3 flex h-11 w-11 items-center justify-center rounded-card text-muted outline-none">
-          <X className="h-5 w-5" />
+        <DialogPrimitive.Close className="absolute right-3 top-3 flex h-14 w-14 items-center justify-center rounded-card text-muted outline-none">
+          <X className="h-8 w-8" />
           <span className="sr-only">Close</span>
         </DialogPrimitive.Close>
       </DialogPrimitive.Content>
