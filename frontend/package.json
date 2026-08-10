@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && eslint .",
+    "lint": "eslint .",
     "test": "vitest run"
   },
   "dependencies": {
@@ -23,7 +24,10 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "latest",
+    "eslint": "^10.8.1",
+    "eslint-plugin-boundaries": "^7.1.0",
     "typescript": "^5",
+    "typescript-eslint": "^8.66.0",
     "vite": "latest",
     "vitest": "latest"
   }
