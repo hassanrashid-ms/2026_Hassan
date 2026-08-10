@@ -1,7 +1,8 @@
 # Webview Game UI — Design
 
 **Date:** 2026-08-10
-**Status:** Approved, not yet implemented
+**Status:** Implemented (2026-08-10). Two clauses diverged in practice — see
+"Implementation notes" at the end.
 **Scope:** `frontend/src/surfaces/webview/**`, plus one backend field
 
 ---
@@ -326,3 +327,57 @@ about to change again.
 | `@/` alias bypasses surface boundaries | Add the boundaries rule in the same change as the alias |
 | Chat regressions during the move | Behaviour moves unchanged; `chatReconcile.test.ts` must pass untouched |
 | Search relevance silently lost | Explicit no-re-sort rule plus an order test |
+
+---
+
+## Implementation notes
+
+Two clauses above did not survive contact, both in the direction of the design
+being right and its stated mechanism being insufficient.
+
+### The import location does not isolate the console — the chunk boundary does
+
+"`webview.css` is imported by `WebviewShell`, not by `main.tsx`" is necessary but
+not sufficient. Vite concatenates every *statically reachable* stylesheet into one
+bundle, so with a plain `import` the console still received Tailwind's preflight in
+production even though no console module mentions it. Being the only importer means
+nothing if the importer is in the same chunk.
+
+`AppRoutes.tsx` therefore loads the webview through `React.lazy`. That puts
+`webview.css` in its own chunk, fetched only when an `/embed/support` route renders.
+The guarantee is now checkable in the build output rather than by inspection:
+
+```
+dist/assets/WebviewShell-*.css   preflight yes   console rules no
+dist/assets/index-*.css          preflight no    console rules yes
+```
+
+If a future change makes the webview statically reachable again, those two files
+collapse back into one — that is the regression signal to watch.
+
+### `.notice` stays
+
+It is on the deletion list under "styles.css cleanup", but `AgentInbox.tsx` and
+`AgentLogin.tsx` both use it. The spec's own rule — "a class the console also uses
+stays, whatever its name suggests" — outranks its own list. `.chat-message*` and
+`.composer*` stayed for the same reason: `features/chat/components/` renders in the
+console. `styles.css` went 628 → 405 lines.
+
+### Smaller things worth knowing
+
+- `index.html` gained `viewport-fit=cover`. Without it `env(safe-area-inset-*)`
+  resolves to `0` and the shell's safe-area padding is inert — the layout looked
+  correct in a desktop browser and would have been wrong on every notched phone.
+- The search query lives in the URL (`/embed/support/search?q=…`), not in component
+  state. Opening an article is a real navigation, so the screen unmounts; without
+  this, returning from an article lost the query.
+- The webview hand-builds its chat bubbles and composer rather than restyling
+  `features/chat/components/`. Those shared components are styled by `styles.css`
+  classes the webview no longer loads, and the console renders them. What is
+  actually shared is what matters: the `ChatMessage` shape, `reconcilePending`, the
+  socket, and the API module.
+- The `@/` alias is fenced with per-zone `no-restricted-imports` patterns rather
+  than an import resolver. `boundaries/dependencies` classifies by resolving to a
+  file on disk and does not see `@/…` without a resolver configured, so the alias
+  would otherwise have been a one-line bypass of every arrow it enforces. All three
+  directions were probed and confirmed to error.

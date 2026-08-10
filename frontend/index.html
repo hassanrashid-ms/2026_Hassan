@@ -2,7 +2,15 @@
 <html lang="en-GB">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <!--
+      viewport-fit=cover lets the page draw under the notch and home indicator,
+      which is also what makes env(safe-area-inset-*) resolve to anything other
+      than 0. WebviewShell's safe-area padding is inert without it.
+    -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
     <title>Support</title>
   </head>
   <body>

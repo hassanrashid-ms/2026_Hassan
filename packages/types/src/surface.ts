@@ -14,6 +14,7 @@ export const ArticleReadBody = z.object({
 export type PlayerStateAvailability = 'ok' | 'degraded' | 'missing' | 'absent'
 
 export type BootstrapResponse = {
+  workspace: { name: string }
   session: { id: string; entry_point: string; started_at: string; ended_at: string | null }
   player: { external_player_id: string }
   player_state: {

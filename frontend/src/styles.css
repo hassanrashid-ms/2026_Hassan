@@ -1,5 +1,15 @@
-/* ─── Reset ──────────────────────────────────────────────────────────────── */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+/*
+ * Every rule below (except the :root custom-property tokens, which don't
+ * compete for anything) is layered as `base`. This file loads globally,
+ * including on the webview surface, where it sits alongside webview.css's
+ * layered Tailwind output. Unlayered CSS always beats layered CSS regardless
+ * of load order or specificity — left unlayered, a bare `button { background:
+ * var(--accent) }` here silently overrode every `bg-accent` Tailwind utility
+ * on every real <button> in the webview (while non-button elements, like the
+ * hero's gradient <header>, were untouched — that mismatch is what made it
+ * look like only some things were themed wrong). Layering the whole file
+ * closes this off for every rule here, not just the ones already found.
+ */
 
 /* ─── Tokens ─────────────────────────────────────────────────────────────── */
 :root {
@@ -28,6 +38,10 @@
   --shadow:      0 4px 20px rgb(0 0 0 / 0.12);
 }
 
+@layer base {
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
 html, body, #root {
   height: 100%;
   width: 100%;
@@ -45,33 +59,6 @@ body {
   display: flex;
   justify-content: center;
   align-items: stretch;
-}
-
-/* ─── Surface (Player WebView) ───────────────────────────────────────────── */
-.surface {
-  width: 100%;
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-  background: var(--surface);
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  padding:
-    max(1em, env(safe-area-inset-top))
-    max(1em, env(safe-area-inset-right))
-    max(1em, env(safe-area-inset-bottom))
-    max(1em, env(safe-area-inset-left));
-}
-
-.surface > h1 {
-  font-size: 1.25em;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  padding-bottom: 0.75em;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 1em;
-  color: var(--text);
-  flex-shrink: 0;
 }
 
 section { margin-bottom: 1.25em; flex-shrink: 0; }
@@ -129,173 +116,6 @@ pre {
   margin-bottom: 0.75em;
 }
 
-/* ─── Web Surface Articles & Modal (Relative Units Only) ─────────────────── */
-.surface-articles__tabs {
-  display: flex;
-  gap: 0.4em;
-  flex-wrap: wrap;
-  margin-bottom: 0.75em;
-}
-
-.surface-articles__tab {
-  background: var(--surface-sub);
-  border: 1px solid var(--border);
-  color: var(--text);
-  padding: 0.4em 0.8em;
-  border-radius: var(--radius);
-  font-size: 0.85em;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
-}
-
-.surface-articles__tab:hover {
-  background: var(--surface);
-  border-color: var(--accent);
-}
-
-.surface-articles__tab.active {
-  background: var(--accent);
-  color: #ffffff;
-  border-color: var(--accent);
-  font-weight: 600;
-}
-
-.surface-articles__search {
-  margin-bottom: 0.75em;
-}
-
-.surface-articles__search input {
-  width: 100%;
-  padding: 0.65em 0.85em;
-  border-radius: var(--radius);
-  border: 1px solid var(--border);
-  background: var(--surface-sub);
-  color: var(--text);
-  font-size: 0.9em;
-}
-
-.surface-articles__list {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5em;
-}
-
-.surface-articles__list li {
-  background: var(--surface-sub);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 0.75em;
-  display: flex;
-  flex-direction: column;
-  gap: 0.3em;
-}
-
-.surface-articles__list button {
-  background: transparent;
-  border: none;
-  color: var(--accent);
-  font-weight: 600;
-  font-size: 0.95em;
-  text-align: left;
-  cursor: pointer;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0;
-}
-
-.surface-articles__list .read-badge {
-  font-size: 0.75em;
-  font-weight: 500;
-  color: var(--muted);
-  background: var(--surface);
-  padding: 0.15em 0.5em;
-  border-radius: 0.5em;
-  border: 1px solid var(--border);
-}
-
-.surface-articles__list .summary-snippet {
-  font-size: 0.82em;
-  color: var(--muted);
-  line-height: 1.4;
-}
-
-.surface-modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(0.2em);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1.5em;
-  z-index: 100;
-}
-
-.surface-modal-content {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  max-width: 90vw;
-  width: 32rem;
-  max-height: 85vh;
-  display: flex;
-  flex-direction: column;
-  padding: 1.25em;
-  gap: 1em;
-  box-shadow: var(--shadow);
-}
-
-.surface-modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 0.5em;
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 0.75em;
-}
-
-.surface-modal-header h2 {
-  font-size: 1.1em;
-  font-weight: 700;
-  margin: 0;
-}
-
-.surface-modal-header button {
-  background: transparent;
-  border: none;
-  font-size: 1.2em;
-  color: var(--muted);
-  cursor: pointer;
-  padding: 0 0.25em;
-}
-
-.surface-modal-summary {
-  font-size: 0.88em;
-  color: var(--muted);
-  font-style: italic;
-}
-
-.surface-modal-body {
-  font-size: 0.9em;
-  line-height: 1.6;
-  overflow-y: auto;
-  flex: 1;
-  white-space: pre-wrap;
-}
-
-.surface-modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  border-top: 1px solid var(--border);
-  padding-top: 0.75em;
-}
-
 /* ─── Article list ───────────────────────────────────────────────────────── */
 ul { list-style: none; display: flex; flex-direction: column; gap: 0.5em; }
 ul li { display: flex; align-items: center; gap: 0.6em; }
@@ -330,37 +150,7 @@ ul li button {
   justify-content: flex-start;
 }
 
-/* ─── Bottom action bar ──────────────────────────────────────────────────── */
-.surface > section:last-child {
-  margin-top: auto;
-  padding-top: 1em;
-  border-top: 1px solid var(--border);
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5em;
-  flex-shrink: 0;
-}
-
-.surface > section:last-child button:last-child {
-  background: var(--surface-sub);
-  color: var(--text);
-  border: 1px solid var(--border);
-  margin-left: auto;
-}
-
 /* ─── Chat Thread & Messages ─────────────────────────────────────────────── */
-.chat-panel {
-  display: flex;
-  flex-direction: column;
-  height: 60vh;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface-sub);
-  overflow: hidden;
-  margin-top: 1em;
-}
-.chat-panel__thread { flex: 1; overflow: hidden; }
-
 .chat-message {
   padding: 0.6em 0.85em;
   margin: 0.4em 0.75em;
@@ -624,5 +414,7 @@ ul li button {
   gap: 0.5rem;
   justify-content: flex-end;
   margin-top: 0.5rem;
+}
+
 }
 

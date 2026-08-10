@@ -277,6 +277,7 @@ registry.registerPath({
       content: {
         'application/json': {
           schema: z.object({
+            workspace: z.object({ name: z.string() }),
             session: z.object({
               id: z.string(),
               entry_point: z.string(),

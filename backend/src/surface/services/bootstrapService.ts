@@ -1,5 +1,5 @@
 import { and, eq, ne, sql } from 'drizzle-orm'
-import { conversation, message, player, playerStateSnapshot, session } from '../../shared/db/schema/index.ts'
+import { conversation, message, player, playerStateSnapshot, session, workspace } from '../../shared/db/schema/index.ts'
 import { withWorkspace } from '../../shared/db/withWorkspace.ts'
 import type { PlayerContext } from '../../shared/middleware/requirePlayerToken.ts'
 
@@ -11,6 +11,10 @@ export type BootstrapQueryInput = { session_id: string }
  */
 export async function loadBootstrap(ctx: PlayerContext, query: BootstrapQueryInput) {
   return withWorkspace(ctx.workspaceId, async (tx) => {
+    // `workspace` is unscoped (no RLS policy), so this is a plain lookup by the
+    // already-verified id from the player token — no set_config dependency.
+    const [ws] = await tx.select({ name: workspace.name }).from(workspace).where(eq(workspace.id, ctx.workspaceId)).limit(1)
+
     // RLS hides another workspace's row and the player_id predicate excludes another
     // player's, so a miss here cannot be distinguished from "never existed" — which
     // is exactly why the response is 404 rather than 403.
@@ -48,6 +52,6 @@ export async function loadBootstrap(ctx: PlayerContext, query: BootstrapQueryInp
         ),
       )
 
-    return { found, snapshot, unreadCount: unread?.count ?? 0 }
+    return { found, snapshot, unreadCount: unread?.count ?? 0, workspaceName: ws?.name ?? '' }
   })
 }

@@ -63,4 +63,68 @@ export default tseslint.config(
       ],
     },
   },
+
+  // ── The `@/` alias must not become a hole in the boundary above ──
+  //
+  // `boundaries/dependencies` classifies an import by resolving it to a file on
+  // disk. It sees relative paths; it does not see `@/surfaces/agent-console/...`
+  // unless a matching import resolver is installed and configured. Introducing
+  // the alias for shadcn without this block would leave every cross-surface
+  // arrow above trivially bypassable by spelling the import with `@/`.
+  //
+  // Expressed as path patterns rather than a resolver so it holds with no extra
+  // dependency and no resolver configuration to drift out of sync.
+  {
+    files: ['src/surfaces/agent-console/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@/surfaces/webview', '@/surfaces/webview/*', '@/webview.css'],
+              message: 'agent-console must not import from webview (aliased path).',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ['src/surfaces/webview/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@/surfaces/agent-console', '@/surfaces/agent-console/*'],
+              message: 'webview must not import from agent-console (aliased path).',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    // Shared code — everything outside the two surface zones. AppRoutes.tsx is
+    // the one deliberate crossing and is exempt here for the same reason it is
+    // listed in `boundaries/ignore` above: it is the single composition root.
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['src/surfaces/**', 'src/routes/AppRoutes.tsx'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@/surfaces/*', '@/surfaces/**'],
+              message:
+                'shared must not import from either surface zone; the dependency arrow is one-directional (surfaces depend on shared, never the reverse).',
+            },
+          ],
+        },
+      ],
+    },
+  },
 )

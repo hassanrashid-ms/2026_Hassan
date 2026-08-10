@@ -1,0 +1,21 @@
+{
+  "$schema": "https://ui.shadcn.com/schema.json",
+  "style": "new-york",
+  "rsc": false,
+  "tsx": true,
+  "tailwind": {
+    "config": "",
+    "css": "src/webview.css",
+    "baseColor": "violet",
+    "cssVariables": true,
+    "prefix": ""
+  },
+  "aliases": {
+    "components": "@/surfaces/webview/components",
+    "ui": "@/surfaces/webview/components/ui",
+    "utils": "@/surfaces/webview/lib/cn",
+    "lib": "@/surfaces/webview/lib",
+    "hooks": "@/surfaces/webview/hooks"
+  },
+  "iconLibrary": "lucide"
+}
