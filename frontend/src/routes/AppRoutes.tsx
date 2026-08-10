@@ -1,9 +1,19 @@
 import { Suspense, lazy } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AgentLogin } from '../surfaces/agent-console/pages/AgentLogin.tsx'
-import { AgentInbox } from '../surfaces/agent-console/pages/AgentInbox.tsx'
-import { AgentConversation } from '../surfaces/agent-console/pages/AgentConversation.tsx'
-import { AdminArticles } from '../surfaces/agent-console/pages/AdminArticles.tsx'
+
+/*
+ * agent-console.css is scoped the same way webview.css is: lazily imported by
+ * AgentConsoleShell.tsx alone, never statically, so its Tailwind preflight
+ * reset never reaches the webview bundle (see the comment on WebviewShell below).
+ */
+const AgentConsoleShell = lazy(async () => ({
+  default: (await import('../surfaces/agent-console/components/AgentConsoleShell.tsx')).AgentConsoleShell,
+}))
+const Inbox = lazy(async () => ({ default: (await import('../surfaces/agent-console/pages/Inbox/Inbox.tsx')).Inbox }))
+const KnowledgeBase = lazy(async () => ({
+  default: (await import('../surfaces/agent-console/pages/KnowledgeBase/KnowledgeBase.tsx')).KnowledgeBase,
+}))
 
 /*
  * The webview is lazily imported, and that is a correctness requirement rather
@@ -58,9 +68,18 @@ export function AppRoutes() {
       {/* agent-console routes */}
       <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="/login" element={<AgentLogin />} />
-      <Route path="/inbox" element={<AgentInbox />} />
-      <Route path="/conversations/:id" element={<AgentConversation />} />
-      <Route path="/admin/articles" element={<AdminArticles />} />
+      <Route
+        path="/"
+        element={
+          <Suspense fallback={null}>
+            <AgentConsoleShell />
+          </Suspense>
+        }
+      >
+        <Route path="inbox" element={<Inbox />} />
+        <Route path="inbox/:conversationId" element={<Inbox />} />
+        <Route path="articles" element={<KnowledgeBase />} />
+      </Route>
     </Routes>
   )
 }

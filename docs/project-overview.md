@@ -57,18 +57,44 @@ modelling, metrics, or any feature that touches the core entities.
 - Which article the bot offered is **not a column** — it's in `article_shown` / `article_rejected`
   events with the title snapshotted into the payload.
 
-**Forms**
-- **Forms are conversational — the bot asks questions as messages in the same thread. No form modal.**
+**Forms** — *(2026-08-10: superseding the earlier conversational design below)*
+- **Forms are structured, Google-Form-style UIs opened in a modal — not messages in the
+  conversation thread.** The bot no longer asks form questions turn-by-turn in the thread; it
+  offers the form as a distinct UI action, the player fills it out in the modal, and the answers
+  land as one structured submission.
+- **Mapped at the subintent level, admin-decided.** An admin chooses which subintents get a
+  form and builds it. A subintent maps to exactly one form; a form can serve several subintents.
+  A subintent with no form mapped never shows one.
+- Field types: short text, long text, number, date, choice, attachment.
+- **The thread still shows the outcome, even though the form itself isn't in-thread.** A system
+  message/card reports the `form_submission.status` — completed, partial, or **skipped** — the
+  same way the bot's article-offered card does today. The modal is where the fields live; the
+  thread is still the record of what happened.
 - `form_submission.status` is `in_progress | completed | partial | skipped`. Row created when
-  the bot asks the first question (`started_at`); `submitted_at` is nullable.
-- `form_answer.message_id` records which message supplied the value. The bot extracts structure
-  from prose, so the original words must be reachable.
-- Attachments: an attachment answer is an image message. Reach it via
-  `form_answer → message → attachment`. `attachment.form_answer_id` does not exist.
-- **`is_required` is soft.** Re-ask once, then move on and record it unanswered. A bot that loops
-  on a required field breaks the hard constraint.
+  the modal opens (`started_at`); `submitted_at` is nullable.
+- `form_answer` now holds the field value written directly from the modal's structured input —
+  **not** extracted from a chat message. `form_answer.message_id` is dropped; there is no prose
+  to parse, so the earlier "original words must be reachable" reasoning no longer applies.
+- Attachments: an attachment answer is a direct upload from the form (same presigned-PUT path
+  as chat attachments), not an image message in the thread. `attachment.form_answer_id` now
+  needs to exist as the direct link — this reverses the earlier "does not exist" note.
+- **`is_required` stays soft, but the enforcement point moves.** There's no bot turn to "re-ask
+  once" anymore — the modal can validate a required field client-side, but the player can still
+  submit with the form skip option or leave it unanswered; nothing may block handoff.
 - **Answers are corrected by adding** a second `form_answer` row for the same field. Newest by
   `created_at` wins. Never update in place.
+
+<details>
+<summary>Superseded — original conversational design</summary>
+
+- Forms were conversational — the bot asked questions as messages in the same thread, no modal.
+- `form_answer.message_id` recorded which message supplied the value; the bot extracted
+  structure from prose, so the original words had to stay reachable.
+- Attachments: an attachment answer was an image message, reached via
+  `form_answer → message → attachment`. `attachment.form_answer_id` did not exist.
+- `is_required` was soft at the field level — re-ask once, then move on and record it unanswered.
+
+</details>
 
 **Labels**
 - Two tables + mapping: `label` (workspace vocabulary), `conversation_label` (applied tags),

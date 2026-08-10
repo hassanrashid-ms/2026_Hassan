@@ -63,6 +63,15 @@ export async function deleteArticleObject(id: string): Promise<void> {
   await withTimeout(collection.data.deleteById(id))
 }
 
+/**
+ * BM25 scores a document `0` when it shares no term with the query — Weaviate still
+ * returns up to `limit` of those zero-score objects rather than an empty set, so a
+ * meaningless/unrelated query would otherwise come back with "matches" anyway. Asking
+ * for the score back and dropping anything at or below this floor is what makes an
+ * irrelevant query actually return nothing.
+ */
+export const MIN_BM25_SCORE = 0
+
 export async function searchArticleIds(
   query: string,
   opts: { workspaceId: string; intentId?: string; limit: number },
@@ -77,6 +86,9 @@ export async function searchArticleIds(
     filters,
     limit: opts.limit,
     returnProperties: ['articleId'],
+    returnMetadata: ['score'],
   })
-  return result.objects.map((o) => (o.properties as { articleId: string }).articleId)
+  return result.objects
+    .filter((o) => (o.metadata?.score ?? 0) > MIN_BM25_SCORE)
+    .map((o) => (o.properties as { articleId: string }).articleId)
 }
