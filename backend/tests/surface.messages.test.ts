@@ -1,6 +1,6 @@
 import { createServer } from 'node:http'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import request from 'supertest'
+import { req as request } from './helpers/http.ts'
 import { closeDb } from '../src/shared/db/client.ts'
 import { closeSocketServer, createSocketServer } from '../src/shared/realtime/socketServer.ts'
 import { app, mintToken } from './helpers/app.ts'

@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
-import request from 'supertest'
+import { req as request } from './helpers/http.ts'
 import { closeDb } from '../src/shared/db/client.ts'
 import { withWorkspace } from '../src/shared/db/withWorkspace.ts'
 import { event } from '../src/shared/db/schema/index.ts'

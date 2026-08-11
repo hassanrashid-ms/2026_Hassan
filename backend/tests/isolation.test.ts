@@ -1,6 +1,7 @@
 import { createServer } from 'node:http'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import request from 'supertest'
+import type { Test as SupertestTest } from 'supertest'
+import { req as request } from './helpers/http.ts'
 import { closeDb } from '../src/shared/db/client.ts'
 import { verifyPlayerToken } from '../src/shared/auth/playerToken.ts'
 import { signAgentSession } from '../src/shared/auth/agentSession.ts'
@@ -81,7 +82,7 @@ beforeEach(async () => {
   await seedMessage({ workspaceId: b.workspaceId, conversationId, seq: 1, authorType: 'agent' })
 })
 
-const withA = (req: request.Test) =>
+const withA = (req: SupertestTest) =>
   req.set('Authorization', `Bearer ${a.token}`).set('X-Support-Workspace', a.slug)
 
 describe('workspace A cannot reach workspace B', () => {

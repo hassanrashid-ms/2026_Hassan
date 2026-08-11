@@ -1,7 +1,7 @@
 import { createServer } from 'node:http'
 import express from 'express'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import request from 'supertest'
+import { req as request } from './helpers/http.ts'
 import { closeDb } from '../src/shared/db/client.ts'
 import { errorMiddleware } from '../src/errors.ts'
 import { requireAgentSession } from '../src/shared/middleware/requireAgentSession.ts'

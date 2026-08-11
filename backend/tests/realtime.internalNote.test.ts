@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest'
-import request from 'supertest'
+import { req as request } from './helpers/http.ts'
 import { closeDb } from '../src/shared/db/client.ts'
 import { signAgentSession } from '../src/shared/auth/agentSession.ts'
 import { mintToken } from './helpers/app.ts'

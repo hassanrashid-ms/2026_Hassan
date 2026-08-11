@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
-import request from 'supertest'
+import { req as request } from './helpers/http.ts'
 import { eq } from 'drizzle-orm'
 import { closeDb } from '../src/shared/db/client.ts'
 import { withWorkspace } from '../src/shared/db/withWorkspace.ts'
@@ -86,8 +86,11 @@ describe('GET /surface/bootstrap', () => {
   })
 
   it('distinguishes the three no-data states', async () => {
+    // Each bootstrap asserts its status before reaching into the body: without
+    // it, any non-200 reads as `body = {}` and fails as an unrelated TypeError
+    // on the next property access, hiding the status that actually explains it.
     const absent = await fixture('absent-game')
-    expect((await bootstrap(absent.token)).body.player_state).toMatchObject({
+    expect((await bootstrap(absent.token).expect(200)).body.player_state).toMatchObject({
       availability: 'absent',
       captured_at: null,
       declared: {},
@@ -96,7 +99,7 @@ describe('GET /surface/bootstrap', () => {
     await truncateAll()
     const missing = await fixture('missing-game')
     await insertSnapshot({ workspaceId: missing.workspaceId, isMissing: true })
-    expect((await bootstrap(missing.token)).body.player_state.availability).toBe('missing')
+    expect((await bootstrap(missing.token).expect(200)).body.player_state.availability).toBe('missing')
 
     await truncateAll()
     const degraded = await fixture('degraded-game')
@@ -105,7 +108,7 @@ describe('GET /surface/bootstrap', () => {
       declared: { platform: 'ios' },
       degradedReason: 'total_spend threw',
     })
-    const res = await bootstrap(degraded.token)
+    const res = await bootstrap(degraded.token).expect(200)
     expect(res.body.player_state.availability).toBe('degraded')
     expect(res.body.player_state.degraded_reason).toBe('total_spend threw')
   })
