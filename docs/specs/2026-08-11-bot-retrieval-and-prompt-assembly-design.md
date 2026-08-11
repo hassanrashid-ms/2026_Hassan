@@ -270,8 +270,8 @@ prompt you cannot reproduce from a bug report.
 **`raw` is never read.** It is uncontrolled client input, PII by default, and the only reason it
 would ever reach a third-party model is a careless join. There is no code path here that selects it.
 
-**`declared` is player-controlled too.** It arrives from the SDK and lands in a system prompt — the
-one place in this system where client input outranks instructions. So:
+**`declared` is player-controlled too.** It arrives from the SDK and, *in this slice*, lands in the
+system prompt — the one place in this system where client input outranks instructions. So:
 
 - Non-scalar values (object, array, null) render `unknown`. Only string, number and boolean are
   formatted.
@@ -318,6 +318,10 @@ export type BotTurnInput = {
   indexToSubintentId: ReadonlyMap<number, string>
 }
 ```
+
+**Spec 3 adds two fields** — `botTurnCount` for the turn-cap guard and `playerContext`, which it
+moves out of the system prompt into a `user` message. Both are values this slice's gather step
+already holds; neither changes the three below.
 
 Three fields, and deliberately no `articles`, no `conversationId`, no raw config. The decider's whole
 job is: given this prompt and this history, what should happen — and given an index, which subintent

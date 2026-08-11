@@ -159,6 +159,10 @@ breaks nothing shipped.
 outcome they feed is built here, and a type that grows in the slice that consumes it would make spec
 3 a control-flow change rather than a one-function swap.
 
+**Spec 3 replaces this union** with the model-supplied set (`asked_for_person`, `no_article`,
+`sensitive`, `unsure`) plus `turn_cap`, because *"Asked for a person"* is a reported metric and
+`'model'` cannot answer it. Only the payload value changes; nothing here does.
+
 ### 5a · The internal failure note is driven by the reason, not by the outcome kind
 
 Two `unavailable` reasons are **not incidents**: `not_provisioned` (an admin deliberately switched
@@ -423,7 +427,8 @@ is a failure. One number cannot mean both.
 at read time rewrites history when an admin renames a subintent, and `subintent_merged` exists
 precisely because that distinction matters.
 
-`reason` values are exactly the two unions in §5: `HandoffReason` (`model`, `turn_cap`) on
+`reason` values are exactly the two unions in §5: `HandoffReason` (`model`, `turn_cap` — replaced by
+spec 3's model-supplied set) on
 `bot_handoff`, and `UnavailableReason` (`not_provisioned`, `not_implemented`, `error`, `timeout`,
 `invalid_response`) on `bot_unavailable`. This slice can only produce `not_provisioned`,
 `not_implemented` and `error`. Spec 2 adds `retrieval_failed` to the union; spec 3 adds the rest and
