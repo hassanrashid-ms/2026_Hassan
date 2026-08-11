@@ -142,5 +142,4 @@ Console ───┘         │
 - Missing player state is a state, not an error — never reject a conversation because of it.
 - Treat `state.raw` as PII by default.
 - `abandoned` status does not exist. Don't reintroduce it.
-- `is_required` on form fields is soft — re-ask once, then move on. Never block on a required field.
 - Bot containment is reported, never a goal.
