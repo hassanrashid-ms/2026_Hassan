@@ -122,6 +122,10 @@ modelling, metrics, or any feature that touches the core entities.
 
 ## Conversation status machine
 
+This section is the spec — the target machine, not the build state. For which transitions the
+backend actually enforces today and which are still unbuilt, see
+[`status-transitions.md`](status-transitions.md).
+
 | Status | Meaning | Player sees |
 |---|---|---|
 | `new` | Created, transient, always left immediately | Received |

@@ -28,8 +28,9 @@ export async function sendPlayerMessage(
 
     let conversationId: string
     // Set whenever the inbox needs to refetch: a brand-new conversation just
-    // appeared in Unassigned, or a reopen just moved one back into it. Claiming
-    // (Task 7) is the third trigger for the same event, from a different path.
+    // appeared in Unassigned, a reopen just moved one back into it, or a reply
+    // just took one out of Awaiting Player. Claiming (Task 7) is the fourth
+    // trigger for the same event, from a different path.
     let inboxStatus: string | null = null
 
     if (!existing) {
@@ -57,6 +58,21 @@ export async function sendPlayerMessage(
         await appendEvent(tx, {
           workspaceId: ctx.workspaceId,
           type: 'conversation_reopened',
+          conversationId,
+          actorId: ctx.playerId,
+          actorType: 'player',
+        })
+        inboxStatus = 'open'
+      } else if (existing.status === 'awaiting_player') {
+        // The other half of the pair `sendAgentMessage` opens with its
+        // `open → awaiting_player` flip: the player has now answered, so support
+        // owns the next action again. Deliberately NOT the reopen branch above —
+        // clearing assignedAgentId here would dump an actively-handled
+        // conversation back into Unassigned, and the agent who asked stays owner.
+        await tx.update(conversation).set({ status: 'open' }).where(eq(conversation.id, conversationId))
+        await appendEvent(tx, {
+          workspaceId: ctx.workspaceId,
+          type: 'conversation_player_replied',
           conversationId,
           actorId: ctx.playerId,
           actorType: 'player',

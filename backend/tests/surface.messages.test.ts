@@ -85,6 +85,49 @@ describe('POST /surface/messages', () => {
     )
     expect(events).toHaveLength(1)
   })
+
+  it('flips awaiting_player back to open, keeps the assignment, and appends conversation_player_replied', async () => {
+    const { workspaceId, playerId, token } = await setup()
+    const conversationId = await seedConversation({ workspaceId, playerId })
+    const agentRow = await ownerPool.query<{ id: string }>(
+      `insert into agent (email, display_name) values ('a2@example.test', 'A2') returning id`,
+    )
+    const agentId = agentRow.rows[0]!.id
+    await ownerPool.query(`update conversation set status = 'awaiting_player', assigned_agent_id = $2 where id = $1`, [
+      conversationId,
+      agentId,
+    ])
+
+    await request(app).post('/surface/messages').set('Authorization', `Bearer ${token}`).send({ body: 'here it is' }).expect(200)
+
+    const { rows } = await ownerPool.query<{ status: string; assigned_agent_id: string | null }>(
+      `select status, assigned_agent_id from conversation where id = $1`,
+      [conversationId],
+    )
+    expect(rows[0]!.status).toBe('open')
+    // A reply is not a reopen: the agent who asked stays the owner.
+    expect(rows[0]!.assigned_agent_id).toBe(agentId)
+
+    const { rows: events } = await ownerPool.query<{ type: string }>(
+      `select type from event where conversation_id = $1 order by id`,
+      [conversationId],
+    )
+    expect(events.map((e) => e.type)).toContain('conversation_player_replied')
+    expect(events.map((e) => e.type)).not.toContain('conversation_reopened')
+  })
+
+  it('leaves a status outside the transition table untouched on a player reply', async () => {
+    const { workspaceId, playerId, token } = await setup()
+    const conversationId = await seedConversation({ workspaceId, playerId })
+    await ownerPool.query(`update conversation set status = 'escalated' where id = $1`, [conversationId])
+
+    await request(app).post('/surface/messages').set('Authorization', `Bearer ${token}`).send({ body: 'any news?' }).expect(200)
+
+    const { rows } = await ownerPool.query<{ status: string }>(`select status from conversation where id = $1`, [
+      conversationId,
+    ])
+    expect(rows[0]!.status).toBe('escalated')
+  })
 })
 
 describe('GET /surface/messages', () => {
