@@ -11,11 +11,9 @@ import { useReadArticles } from '@/surfaces/webview/hooks/useReadArticles'
 import { fetchArticles } from '@/surfaces/webview/api/surfaceApi'
 
 /**
- * 250ms, down from the surface's previous 800ms. 800ms was tolerable on a filter
- * box beside other content; on a screen whose entire purpose is the search box it
- * reads as broken.
+ * 800ms to match the previous surface behavior.
  */
-const DEBOUNCE_MS = 250
+const DEBOUNCE_MS = 800
 
 export function SupportSearch() {
   const navigate = useNavigate()

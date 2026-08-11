@@ -102,7 +102,7 @@ export function SupportChat() {
       {/* min-h-0 is load-bearing: without it a flex child refuses to shrink below
           its content and the composer is pushed off the bottom of the viewport. */}
       <div className="min-h-0 flex-1">
-        {chatMessages.length === 0 && !messagesQuery.isPending ? (
+        {messagesQuery.isPending ? null : chatMessages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 px-8 text-center">
             <p className="text-lg font-semibold text-text">Say hello</p>
             <p className="text-base text-muted">Tell us what happened and we'll pick it up from here.</p>

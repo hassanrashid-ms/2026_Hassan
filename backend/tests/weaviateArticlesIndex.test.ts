@@ -80,7 +80,12 @@ describe('deleteArticleObject', () => {
 describe('searchArticleIds', () => {
   it('queries BM25 with weighted properties, workspace filter, and returns ranked article ids', async () => {
     const { searchArticleIds } = await import('../src/shared/weaviate/articlesIndex.ts')
-    bm25.mockResolvedValue({ objects: [{ properties: { articleId: 'a2' } }, { properties: { articleId: 'a1' } }] })
+    bm25.mockResolvedValue({
+      objects: [
+        { properties: { articleId: 'a2' }, metadata: { score: 1 } },
+        { properties: { articleId: 'a1' }, metadata: { score: 1 } },
+      ],
+    })
 
     const ids = await searchArticleIds('refund', { workspaceId: 'w1', intentId: 'i1', limit: 20 })
 

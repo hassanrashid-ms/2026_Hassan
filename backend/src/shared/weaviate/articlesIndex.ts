@@ -70,7 +70,7 @@ export async function deleteArticleObject(id: string): Promise<void> {
  * for the score back and dropping anything at or below this floor is what makes an
  * irrelevant query actually return nothing.
  */
-export const MIN_BM25_SCORE = 0
+export const MIN_BM25_SCORE = 0.05
 
 export async function searchArticleIds(
   query: string,
@@ -85,6 +85,7 @@ export async function searchArticleIds(
     queryProperties: ['title^3', 'keywords^2', 'body'],
     filters,
     limit: opts.limit,
+    autoLimit: 1, // Cut off irrelevant results automatically if there's a score cliff
     returnProperties: ['articleId'],
     returnMetadata: ['score'],
   })

@@ -105,9 +105,18 @@ export function TopBar(props: TopBarProps) {
   if (props.variant === 'home') {
     return (
       <div className={frame}>
-        {/* ✕ posts the bridge's close message — the game owns dismissing the
-            webview, the web app never tries to close its own window. */}
-        <IconButton label="Close support" onClick={() => post({ type: 'close' })} className="relative z-10">
+        {/* ✕ posts the bridge's close message. We hide the UI immediately for
+            responsiveness, but wait 500ms to allow pending network requests to finish. */}
+        <IconButton
+          label="Close support"
+          onClick={() => {
+            document.body.style.backgroundColor = 'transparent'
+            const root = document.getElementById('root')
+            if (root) root.style.display = 'none'
+            setTimeout(() => post({ type: 'close' }), 500)
+          }}
+          className="relative z-10"
+        >
           <X className="size-12" />
         </IconButton>
         

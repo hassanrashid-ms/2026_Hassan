@@ -27,6 +27,7 @@ export function ChatBubbles({
     <Virtuoso
       style={{ height: '100%' }}
       data={messages}
+      initialTopMostItemIndex={messages.length > 0 ? messages.length - 1 : 0}
       followOutput="auto"
       itemContent={(_index, message) => <ChatBubble message={message} onRetry={onRetry} />}
     />

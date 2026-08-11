@@ -119,7 +119,7 @@ export function WebviewShell() {
   // alternative is holding the SDK's loader over it until the grace timer expires.
   // Deliberately not gated on the player-state poll below — that keeps running
   // after first paint and would hold the reveal for seconds on a cold session.
-  useSurfaceReadySignal(data !== null || error !== null)
+  useSurfaceReadySignal(boot !== null || error !== null)
 
   const value = useMemo<SupportContextValue>(() => ({ boot, data, error, retry }), [boot, data, error, retry])
 
