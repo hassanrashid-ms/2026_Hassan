@@ -5,6 +5,8 @@ import { getEnv } from '../src/env.ts'
 import { closeDb } from '../src/shared/db/client.ts'
 import { withWorkspace } from '../src/shared/db/withWorkspace.ts'
 import { appendChangeLog } from '../src/shared/changeLog/appendChangeLog.ts'
+import { saveBotConfig } from '../src/domain/bot/botConfig.ts'
+import { DEFAULT_BOT_PROMPT } from '../src/domain/bot/defaultPrompt.ts'
 import { closeOwnerPool, ownerPool, seedAgent, seedWorkspace, truncateAll } from './helpers/db.ts'
 
 let workspaceId: string
@@ -251,5 +253,94 @@ describe('the change_log CHECK constraint', () => {
       ),
     ).rejects.toThrow(/change_log_value_changed|check constraint/i)
     await app.query('rollback')
+  })
+})
+
+describe('saveBotConfig writes its own audit trail', () => {
+  it('writes exactly one row per changed column, named for the column', async () => {
+    await withWorkspace(workspaceId, (tx) =>
+      saveBotConfig(tx, { workspaceId, actorId, isProvisioned: true, prompt: 'be helpful' }),
+    )
+    const written = await rows()
+    expect(written.map((r) => r.field)).toEqual(['is_provisioned', 'prompt'])
+    expect(written.map((r) => r.before_value)).toEqual([false, null])
+    expect(written.map((r) => r.after_value)).toEqual([true, 'be helpful'])
+    expect(written.every((r) => r.actor_id === actorId)).toBe(true)
+    expect(written.every((r) => r.entity_id === workspaceId)).toBe(true)
+    expect(written[0]?.changed_at.getTime()).toBe(written[1]?.changed_at.getTime())
+  })
+
+  it('writes nothing when a save changes nothing observable', async () => {
+    // First save with both fields at their resolved defaults: the row is created,
+    // but an absent row already resolved identically, so nothing changed.
+    await withWorkspace(workspaceId, (tx) =>
+      saveBotConfig(tx, { workspaceId, actorId, isProvisioned: false, prompt: null }),
+    )
+    expect(await rows()).toHaveLength(0)
+
+    await withWorkspace(workspaceId, (tx) =>
+      saveBotConfig(tx, { workspaceId, actorId, prompt: 'set it' }),
+    )
+    expect(await rows()).toHaveLength(1)
+
+    // Re-saving the same value is a no-op, not a duplicate audit row.
+    await withWorkspace(workspaceId, (tx) =>
+      saveBotConfig(tx, { workspaceId, actorId, prompt: 'set it' }),
+    )
+    expect(await rows()).toHaveLength(1)
+  })
+
+  it('rolls the config change back when the audit write fails — no unaudited edit can commit', async () => {
+    await withWorkspace(workspaceId, (tx) =>
+      saveBotConfig(tx, { workspaceId, actorId, isProvisioned: false, prompt: 'original' }),
+    )
+
+    // A real FK violation inside the real transaction. Not a mock: the invariant
+    // is that Postgres rolls the upsert back, and only Postgres can prove that.
+    // drizzle-orm's node-postgres driver wraps the underlying pg error in a
+    // DrizzleQueryError ("Failed query: ...") and preserves the real message on
+    // `.cause` rather than in `.message` — check both.
+    const ghostAgent = randomUUID()
+    let caught: unknown
+    try {
+      await withWorkspace(workspaceId, (tx) =>
+        saveBotConfig(tx, { workspaceId, actorId: ghostAgent, isProvisioned: true, prompt: 'tampered' }),
+      )
+    } catch (error) {
+      caught = error
+    }
+    expect(caught).toBeInstanceOf(Error)
+    const err = caught as Error & { cause?: unknown }
+    const message = `${err.message} ${err.cause instanceof Error ? err.cause.message : ''}`
+    expect(message).toMatch(/foreign key|violates/i)
+
+    const { rows: config } = await ownerPool.query<{ is_provisioned: boolean; prompt: string | null }>(
+      `select is_provisioned, prompt from bot_config where workspace_id = $1`,
+      [workspaceId],
+    )
+    expect(config[0]).toEqual({ is_provisioned: false, prompt: 'original' })
+    expect((await rows()).map((r) => r.after_value)).toEqual(['original'])
+  })
+
+  it('stores the prompt before-value in full, so "what did it say before" is answerable', async () => {
+    const long = 'x'.repeat(4000)
+    await withWorkspace(workspaceId, (tx) => saveBotConfig(tx, { workspaceId, actorId, prompt: long }))
+    await withWorkspace(workspaceId, (tx) => saveBotConfig(tx, { workspaceId, actorId, prompt: 'short' }))
+
+    const { rows: history } = await ownerPool.query<{ before_value: unknown; after_value: unknown }>(
+      `select before_value, after_value from change_log
+        where workspace_id = $1 and field = 'prompt' order by id desc limit 1`,
+      [workspaceId],
+    )
+    expect(history[0]?.before_value).toBe(long)
+    expect(history[0]?.after_value).toBe('short')
+  })
+
+  it('never writes an event for a config change — two audit homes diverge', async () => {
+    await withWorkspace(workspaceId, (tx) =>
+      saveBotConfig(tx, { workspaceId, actorId, isProvisioned: true, prompt: 'p' }),
+    )
+    const { rows: events } = await ownerPool.query(`select count(*)::int as n from event`)
+    expect(events[0]).toEqual({ n: 0 })
   })
 })
