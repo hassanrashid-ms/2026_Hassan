@@ -137,14 +137,16 @@ Emit **after** the transaction commits, matching how `sendPlayerMessage` and
 `sendAgentMessage` already order their emits. Both services currently return
 `boolean` from inside `withWorkspace`; they need to return the conversation id
 and the row count so the caller can emit once, outside the transaction, and skip
-the emit entirely when nothing changed. Their controllers
-(`backend/src/surface/controllers/messagesController.ts:34`,
-`backend/src/agent/controllers/messagesController.ts:27`) branch on that boolean
-and need updating to match — the HTTP response shape does not change.
+the emit entirely when nothing changed. Both controllers already discard that
+return value (`surface/controllers/messagesController.ts:39`,
+`agent/controllers/messagesController.ts:32` both `await` and ignore it), so
+widening the return type touches no caller and the HTTP response shape is
+unchanged.
 
-`backend/src/docs/openapi.ts` needs the `read_at` field added to the message
-response schemas (`/agent/messages/read` is already registered at line 436). Per
-`CLAUDE.md`, Swagger stays in sync with every contract change.
+`backend/src/docs/openapi.ts` needs no edit: it registers paths only, with
+`responses: { 200: { description: … } }` and no message response schema to
+extend. Both read endpoints are already registered. The `CLAUDE.md` rule covers
+*new* endpoints; this feature adds none.
 
 ## Frontend
 
