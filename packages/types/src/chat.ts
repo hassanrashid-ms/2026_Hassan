@@ -67,3 +67,15 @@ export type AgentConversationsResponse = { conversations: AgentConversationSumma
 
 /** The inbox-room payload: id and new status only, never the full row. */
 export type ConversationChangedEvent = { conversation_id: string; status: ConversationStatusValue }
+
+/**
+ * The read-receipt payload. A high-water sequence number and a timestamp — no
+ * bodies, no ids of individual messages. `reader_type` is who *did* the reading,
+ * so a client can ignore an echo of its own action.
+ */
+export type MessageReadEvent = {
+  conversation_id: string
+  up_to_seq: number
+  reader_type: 'player' | 'agent'
+  read_at: string
+}

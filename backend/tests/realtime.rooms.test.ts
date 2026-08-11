@@ -3,6 +3,7 @@ import { closeDb } from '../src/shared/db/client.ts'
 import { signAgentSession } from '../src/shared/auth/agentSession.ts'
 import { agentRoom, playerRoom } from '../src/shared/realtime/rooms.ts'
 import { getIo } from '../src/shared/realtime/socketServer.ts'
+import { emitReadReceipt } from '../src/shared/realtime/emit.ts'
 import { mintToken } from './helpers/app.ts'
 import { closeOwnerPool, seedConversation, seedPlayer, seedWorkspace, truncateAll } from './helpers/db.ts'
 import { connectClient, startRealtimeServer } from './helpers/realtime.ts'
@@ -79,5 +80,54 @@ describe('socket rooms stay separated by audience', () => {
     )
     expect(allowed).toBe(false)
     socket.close()
+  })
+
+  it('routes a read receipt to the opposite audience only, and carries no message body', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const conversationId = await seedConversation({ workspaceId, playerId })
+
+    const playerToken = await mintToken({ workspace_id: workspaceId, player_id: playerId, external_player_id: 'p1' })
+    const agentToken = await signAgentSession({ agent_id: 'agent-1', workspace_id: workspaceId })
+    const playerSocket = connectClient(server.url, { token: playerToken, role: 'player' })
+    const agentSocket = connectClient(server.url, { token: agentToken, role: 'agent' })
+    await Promise.all([waitFor(playerSocket, 'connect'), waitFor(agentSocket, 'connect')])
+
+    const join = (socket: ReturnType<typeof connectClient>) =>
+      new Promise<boolean>((resolve) => socket.emit('join_conversation', { conversation_id: conversationId }, resolve))
+    expect(await join(playerSocket)).toBe(true)
+    expect(await join(agentSocket)).toBe(true)
+
+    const playerReceived: unknown[] = []
+    const agentReceived: unknown[] = []
+    playerSocket.on('message:read', (payload: unknown) => playerReceived.push(payload))
+    agentSocket.on('message:read', (payload: unknown) => agentReceived.push(payload))
+
+    // An agent read is news for the player, who wrote the messages being read.
+    emitReadReceipt(getIo(), 'player', {
+      conversation_id: conversationId,
+      up_to_seq: 4,
+      reader_type: 'agent',
+      read_at: '2026-08-11T10:43:07.000Z',
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 150))
+
+    expect(playerReceived).toEqual([
+      { conversation_id: conversationId, up_to_seq: 4, reader_type: 'agent', read_at: '2026-08-11T10:43:07.000Z' },
+    ])
+    // Never an echo back to the audience that did the reading.
+    expect(agentReceived).toEqual([])
+    // The payload is exactly the contract — a body leaking here would cross the
+    // internal-note boundary the two serializers exist to protect.
+    expect(Object.keys(playerReceived[0] as object).sort()).toEqual([
+      'conversation_id',
+      'read_at',
+      'reader_type',
+      'up_to_seq',
+    ])
+
+    playerSocket.close()
+    agentSocket.close()
   })
 })
