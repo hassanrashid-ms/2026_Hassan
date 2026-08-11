@@ -32,6 +32,19 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public
 REVOKE UPDATE, DELETE ON event FROM support_app;
 REVOKE UPDATE, DELETE ON event FROM PUBLIC;
 
+-- 2a - change_log is the audit trail. An editable audit trail is not one, so
+-- UPDATE and DELETE come straight back off after the blanket GRANT above.
+--
+-- bot_config deliberately KEEPS UPDATE: its only writer is an
+-- INSERT ... ON CONFLICT (workspace_id) DO UPDATE, so revoking here would break
+-- the second save on every workspace. Do not "tidy" these two into symmetry.
+--
+-- form_answer gets the same REVOKE UPDATE treatment when that table lands. It
+-- cannot be listed here yet: this file re-runs on every db:setup, and naming a
+-- table that does not exist aborts setup for everyone.
+REVOKE UPDATE, DELETE ON change_log FROM support_app;
+REVOKE UPDATE, DELETE ON change_log FROM PUBLIC;
+
 -- 2b - workspace and agent are the two unscoped tables, but they are NOT
 -- treated identically, and that asymmetry is intentional — do not "tidy" it
 -- into symmetry.

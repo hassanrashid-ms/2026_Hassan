@@ -22,6 +22,8 @@ const SCOPED_TABLES = [
   'conversation',
   'message',
   'event',
+  'bot_config',
+  'change_log',
 ]
 
 beforeAll(async () => {
@@ -92,6 +94,61 @@ describe('row-level security', () => {
       asWorkspace(WS_A, () => app.query(`update event set type = 'tampered'`)),
     ).rejects.toThrow(/permission denied/i)
     await expect(asWorkspace(WS_A, () => app.query('delete from event'))).rejects.toThrow(/permission denied/i)
+  })
+
+  it('cannot update or delete a change_log row — an editable audit trail is not one', async () => {
+    const agentId = 'cccccccc-3333-3333-3333-333333333333'
+    await ownerPool.query(
+      `insert into agent (id, email, display_name) values ($1, 'auditor@example.test', 'Auditor')`,
+      [agentId],
+    )
+    await ownerPool.query(
+      `insert into change_log (workspace_id, entity_type, entity_id, field, before_value, after_value, actor_id)
+       values ($1, 'bot_config', $1, 'is_provisioned', 'false'::jsonb, 'true'::jsonb, $2)`,
+      [WS_A, agentId],
+    )
+
+    await expect(
+      asWorkspace(WS_A, () => app.query(`update change_log set after_value = 'false'::jsonb`)),
+    ).rejects.toThrow(/permission denied/i)
+    await expect(asWorkspace(WS_A, () => app.query('delete from change_log'))).rejects.toThrow(
+      /permission denied/i,
+    )
+  })
+
+  it('keeps bot_config updatable — its writer is ON CONFLICT DO UPDATE', async () => {
+    await ownerPool.query(
+      `insert into bot_config (workspace_id, is_provisioned) values ($1, false)`,
+      [WS_A],
+    )
+    const rows = await asWorkspace(WS_A, async () => {
+      await app.query(`update bot_config set is_provisioned = true`)
+      return (await app.query(`select is_provisioned from bot_config`)).rows
+    })
+    expect(rows).toEqual([{ is_provisioned: true }])
+
+    await expect(asWorkspace(WS_A, () => app.query('delete from bot_config'))).rejects.toThrow(
+      /permission denied/i,
+    )
+  })
+
+  it('hides another workspace audit trail entirely', async () => {
+    const agentId = 'dddddddd-4444-4444-4444-444444444444'
+    await ownerPool.query(
+      `insert into agent (id, email, display_name) values ($1, 'other@example.test', 'Other')`,
+      [agentId],
+    )
+    for (const ws of [WS_A, WS_B]) {
+      await ownerPool.query(
+        `insert into change_log (workspace_id, entity_type, entity_id, field, before_value, after_value, actor_id)
+         values ($1, 'bot_config', $1, 'prompt', null, '"hi"'::jsonb, $2)`,
+        [ws, agentId],
+      )
+    }
+    const rows = await asWorkspace(WS_A, async () =>
+      (await app.query('select workspace_id from change_log')).rows,
+    )
+    expect(rows).toEqual([{ workspace_id: WS_A }])
   })
 
   it('grants DELETE on nothing at all — no hard deletes anywhere', async () => {
@@ -263,6 +320,17 @@ describe('WITH CHECK on every scoped table', () => {
       {
         table: 'workspace_member',
         sql: `insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`,
+        params: [WS_B, AGENT_A],
+      },
+      {
+        table: 'bot_config',
+        sql: `insert into bot_config (workspace_id, is_provisioned) values ($1, false)`,
+        params: [WS_B],
+      },
+      {
+        table: 'change_log',
+        sql: `insert into change_log (workspace_id, entity_type, entity_id, field, before_value, after_value, actor_id)
+              values ($1, 'bot_config', $1, 'is_provisioned', null, 'true'::jsonb, $2)`,
         params: [WS_B, AGENT_A],
       },
     ]
