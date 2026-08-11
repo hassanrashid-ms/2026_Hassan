@@ -5,6 +5,8 @@ const EXPECTED_TABLES = [
   'agent',
   'article',
   'article_attachment',
+  'bot_config',
+  'change_log',
   'conversation',
   'declared_field',
   'event',
@@ -41,7 +43,7 @@ async function columns(table: string): Promise<Map<string, { type: string; nulla
 describe('schema', () => {
   afterAll(closeOwnerPool)
 
-  it('creates exactly the fourteen tables of the SDK-path + articles-KB subset', async () => {
+  it('creates exactly the sixteen tables of the SDK-path + articles-KB + bot-config subset', async () => {
     const { rows } = await ownerPool.query<{ table_name: string }>(
       `select table_name from information_schema.tables
         where table_schema = 'public' and table_type = 'BASE TABLE'
@@ -110,5 +112,64 @@ describe('schema', () => {
       `select indexdef from pg_indexes where tablename = 'message'`,
     )
     expect(rows.map((r) => r.indexdef).join('\n')).toMatch(/UNIQUE.*\(conversation_id, seq\)/)
+  })
+
+  it('keys bot_config by workspace_id itself — one row per workspace is structural', async () => {
+    const cols = await columns('bot_config')
+    expect(cols.has('id')).toBe(false)
+    expect(cols.get('is_provisioned')?.nullable).toBe(false)
+    expect(cols.get('is_provisioned')?.hasDefault).toBe(true)
+    expect(cols.get('prompt')?.nullable).toBe(true)
+    expect(cols.get('updated_at')?.nullable).toBe(false)
+
+    const { rows } = await ownerPool.query<{ column_name: string }>(
+      `select a.attname as column_name
+         from pg_constraint c
+         join pg_class t on t.oid = c.conrelid
+         join pg_attribute a on a.attrelid = t.oid and a.attnum = any(c.conkey)
+        where t.relname = 'bot_config' and c.contype = 'p'`,
+    )
+    expect(rows.map((r) => r.column_name)).toEqual(['workspace_id'])
+  })
+
+  it('gives change_log a growing bigserial key, both value columns nullable, and a NOT NULL actor', async () => {
+    const cols = await columns('change_log')
+    expect(cols.get('id')?.type).toBe('bigint')
+    expect(cols.get('entity_type')?.type).toBe('text')
+    expect(cols.get('entity_id')?.type).toBe('uuid')
+    expect(cols.get('before_value')?.nullable).toBe(true)
+    expect(cols.get('after_value')?.nullable).toBe(true)
+    expect(cols.get('actor_id')?.nullable).toBe(false)
+    expect(cols.get('changed_at')?.nullable).toBe(false)
+
+    const { rows } = await ownerPool.query<{ indexdef: string }>(
+      `select indexdef from pg_indexes where tablename = 'change_log'`,
+    )
+    const defs = rows.map((r) => r.indexdef).join('\n')
+    expect(defs).toMatch(/\(workspace_id, entity_type, entity_id, changed_at\)/)
+    expect(defs).toMatch(/brin \(changed_at\)/)
+  })
+
+  it('makes a no-op audit row impossible at the database layer', async () => {
+    const { rows } = await ownerPool.query<{ def: string }>(
+      `select pg_get_constraintdef(c.oid) as def
+         from pg_constraint c
+         join pg_class t on t.oid = c.conrelid
+        where t.relname = 'change_log' and c.contype = 'c'`,
+    )
+    expect(rows.map((r) => r.def).join('\n')).toMatch(/before_value IS DISTINCT FROM after_value/i)
+  })
+
+  it('restricts every delete on the two new tables — nothing is ever deleted', async () => {
+    const { rows } = await ownerPool.query<{ table_name: string; def: string }>(
+      `select t.relname as table_name, pg_get_constraintdef(c.oid) as def
+         from pg_constraint c
+         join pg_class t on t.oid = c.conrelid
+        where t.relname in ('bot_config', 'change_log') and c.contype = 'f'`,
+    )
+    expect(rows).toHaveLength(3) // bot_config→workspace, change_log→workspace, change_log→agent
+    for (const row of rows) {
+      expect(row.def, `${row.table_name}: ${row.def}`).toMatch(/ON DELETE RESTRICT/)
+    }
   })
 })

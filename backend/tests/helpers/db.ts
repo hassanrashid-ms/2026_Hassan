@@ -9,6 +9,8 @@ import { getEnv } from '../../src/env.ts'
 export const ownerPool = new Pool({ connectionString: getEnv().MIGRATION_DATABASE_URL, max: 4 })
 
 const SCOPED_TABLES = [
+  'change_log',
+  'bot_config',
   'event',
   'message',
   'conversation',
