@@ -426,7 +426,8 @@ precisely because that distinction matters.
 `reason` values are exactly the two unions in §5: `HandoffReason` (`model`, `turn_cap`) on
 `bot_handoff`, and `UnavailableReason` (`not_provisioned`, `not_implemented`, `error`, `timeout`,
 `invalid_response`) on `bot_unavailable`. This slice can only produce `not_provisioned`,
-`not_implemented` and `error`; the rest arrive with spec 3.
+`not_implemented` and `error`. Spec 2 adds `retrieval_failed` to the union; spec 3 adds the rest and
+removes `not_implemented`.
 
 ---
 
