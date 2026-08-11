@@ -28,6 +28,12 @@ export const botConfig = pgTable('bot_config', {
    *  or whitespace-only prompt is rejected before storage, so NULL stays the
    *  only representation of "no prompt". */
   prompt: text('prompt'),
+  /** The behavioural constraints, stored apart from the prompt so an admin can
+   *  rewrite the bot's persona without touching the safety rules, and so the two
+   *  are audited as separate fields. They are only ever joined at send time, by
+   *  buildSystemPrompt — never concatenated before storage. Same NULL semantics
+   *  as `prompt`: NULL means never customised and resolves to DEFAULT_BOT_RULES. */
+  rules: text('rules'),
   createdAt: timestamp('created_at', tz).notNull().defaultNow(),
   /** A convenience for the admin screen, not the audit record. Bumped explicitly
    *  by saveBotConfig — deliberately not a trigger, which would be a writer the

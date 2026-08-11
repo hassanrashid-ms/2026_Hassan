@@ -259,15 +259,30 @@ describe('the change_log CHECK constraint', () => {
 describe('saveBotConfig writes its own audit trail', () => {
   it('writes exactly one row per changed column, named for the column', async () => {
     await withWorkspace(workspaceId, (tx) =>
-      saveBotConfig(tx, { workspaceId, actorId, isProvisioned: true, prompt: 'be helpful' }),
+      saveBotConfig(tx, { workspaceId, actorId, isProvisioned: true, prompt: 'be helpful', rules: 'be careful' }),
     )
     const written = await rows()
-    expect(written.map((r) => r.field)).toEqual(['is_provisioned', 'prompt'])
-    expect(written.map((r) => r.before_value)).toEqual([false, null])
-    expect(written.map((r) => r.after_value)).toEqual([true, 'be helpful'])
+    expect(written.map((r) => r.field)).toEqual(['is_provisioned', 'prompt', 'rules'])
+    expect(written.map((r) => r.before_value)).toEqual([false, null, null])
+    expect(written.map((r) => r.after_value)).toEqual([true, 'be helpful', 'be careful'])
     expect(written.every((r) => r.actor_id === actorId)).toBe(true)
     expect(written.every((r) => r.entity_id === workspaceId)).toBe(true)
     expect(written[0]?.changed_at.getTime()).toBe(written[1]?.changed_at.getTime())
+    expect(written[1]?.changed_at.getTime()).toBe(written[2]?.changed_at.getTime())
+  })
+
+  it('audits prompt and rules as separate fields — editing one leaves no row for the other', async () => {
+    await withWorkspace(workspaceId, (tx) =>
+      saveBotConfig(tx, { workspaceId, actorId, prompt: 'p1', rules: 'r1' }),
+    )
+    await withWorkspace(workspaceId, (tx) => saveBotConfig(tx, { workspaceId, actorId, rules: 'r2' }))
+
+    const { rows: history } = await ownerPool.query<{ field: string; before_value: unknown; after_value: unknown }>(
+      `select field, before_value, after_value from change_log
+        where workspace_id = $1 order by id desc limit 1`,
+      [workspaceId],
+    )
+    expect(history[0]).toMatchObject({ field: 'rules', before_value: 'r1', after_value: 'r2' })
   })
 
   it('writes nothing when a save changes nothing observable', async () => {

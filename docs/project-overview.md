@@ -363,6 +363,9 @@ put things in front of players.
 - **No cross-workspace reads, enforced in the data layer.**
 - **No published articles in a workspace** → skip the article step, go straight to the bot.
 - **Changing taxonomy, forms, bot prompt or rules must never require a release.**
+- **Bot prompt and rules are two stored fields, sent as one system prompt.** `bot_config.prompt` and
+  `bot_config.rules` are separate nullable columns — separately editable, separately audited in
+  `change_log` — joined only at send time by `buildSystemPrompt`. Never store them merged.
 
 ---
 

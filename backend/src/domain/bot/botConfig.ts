@@ -1,18 +1,37 @@
 import { eq } from 'drizzle-orm'
 import type { Tx } from '../../shared/db/withWorkspace.ts'
 import { botConfig } from '../../shared/db/schema/index.ts'
-import { DEFAULT_BOT_PROMPT } from './defaultPrompt.ts'
+import { buildSystemPrompt, DEFAULT_BOT_PROMPT, DEFAULT_BOT_RULES } from './defaultPrompt.ts'
 import { appendChangeLog } from '../../shared/changeLog/appendChangeLog.ts'
 
-/** `prompt` is never null: the resolver has already substituted the default. */
+/**
+ * `prompt` and `rules` are never null: the resolver has already substituted the
+ * defaults. They stay separate here — two stored fields, audited separately —
+ * and `systemPrompt` is what actually goes to the bot, so no caller joins them
+ * itself and they cannot drift apart at different call sites.
+ */
 export type ResolvedBotConfig = {
   isProvisioned: boolean
   prompt: string
+  rules: string
+  systemPrompt: string
+}
+
+/** Both stored fields resolved, plus the one string the bot is sent. */
+function resolved(isProvisioned: boolean, prompt: string | null, rules: string | null): ResolvedBotConfig {
+  const resolvedPrompt = prompt ?? DEFAULT_BOT_PROMPT
+  const resolvedRules = rules ?? DEFAULT_BOT_RULES
+  return {
+    isProvisioned,
+    prompt: resolvedPrompt,
+    rules: resolvedRules,
+    systemPrompt: buildSystemPrompt(resolvedPrompt, resolvedRules),
+  }
 }
 
 /**
- * The one place three different "the bot is off" shapes collapse into one answer:
- * no row at all, `is_provisioned = false`, and `prompt IS NULL`. Every caller
+ * The one place four different "the bot is off" shapes collapse into one answer:
+ * no row at all, `is_provisioned = false`, `prompt IS NULL`, `rules IS NULL`. Every caller
  * goes through here, so an absent row and an explicit false can never diverge —
  * and no caller ever has to know which of the three it hit, or handle a null
  * prompt.
@@ -25,26 +44,29 @@ export type ResolvedBotConfig = {
  */
 export async function resolveBotConfig(tx: Tx, workspaceId: string): Promise<ResolvedBotConfig> {
   const [row] = await tx
-    .select({ isProvisioned: botConfig.isProvisioned, prompt: botConfig.prompt })
+    .select({ isProvisioned: botConfig.isProvisioned, prompt: botConfig.prompt, rules: botConfig.rules })
     .from(botConfig)
     .where(eq(botConfig.workspaceId, workspaceId))
     .limit(1)
 
-  if (!row) return { isProvisioned: false, prompt: DEFAULT_BOT_PROMPT }
-  return { isProvisioned: row.isProvisioned, prompt: row.prompt ?? DEFAULT_BOT_PROMPT }
+  if (!row) return resolved(false, null, null)
+  return resolved(row.isProvisioned, row.prompt, row.rules)
 }
 
 /** The `change_log.entity_type` this slice writes. The only one, for now. */
 export const BOT_CONFIG_ENTITY_TYPE = 'bot_config'
 
 /**
- * Thrown rather than stored. An empty or whitespace-only prompt would be a second
- * representation of "no prompt" alongside NULL, and the resolver would have to
- * guess. Clearing a prompt is `prompt: null`, explicitly.
+ * Thrown rather than stored. An empty or whitespace-only value would be a second
+ * representation of "not customised" alongside NULL, and the resolver would have
+ * to guess. Clearing a field is an explicit `null`.
+ *
+ * Carries the field name so an admin editing rules is not told their prompt is
+ * wrong. The name is the COLUMN name, matching the audit trail.
  */
 export class EmptyBotPrompt extends Error {
-  constructor() {
-    super('Bot prompt cannot be empty — pass null to reset it to the default')
+  constructor(readonly field: 'prompt' | 'rules' = 'prompt') {
+    super(`Bot ${field} cannot be empty — pass null to reset it to the default`)
     this.name = 'EmptyBotPrompt'
   }
 }
@@ -57,6 +79,8 @@ export type BotConfigSave = {
   isProvisioned?: boolean
   /** Omitted means leave alone; explicit null is a reset to DEFAULT_BOT_PROMPT. */
   prompt?: string | null
+  /** Omitted means leave alone; explicit null is a reset to DEFAULT_BOT_RULES. */
+  rules?: string | null
 }
 
 /**
@@ -73,23 +97,28 @@ export type BotConfigSave = {
  */
 export async function saveBotConfig(tx: Tx, input: BotConfigSave): Promise<ResolvedBotConfig> {
   if (typeof input.prompt === 'string' && input.prompt.trim() === '') {
-    throw new EmptyBotPrompt()
+    throw new EmptyBotPrompt('prompt')
+  }
+  if (typeof input.rules === 'string' && input.rules.trim() === '') {
+    throw new EmptyBotPrompt('rules')
   }
 
   const [existing] = await tx
-    .select({ isProvisioned: botConfig.isProvisioned, prompt: botConfig.prompt })
+    .select({ isProvisioned: botConfig.isProvisioned, prompt: botConfig.prompt, rules: botConfig.rules })
     .from(botConfig)
     .where(eq(botConfig.workspaceId, input.workspaceId))
     .limit(1)
 
-  // An absent row means the same thing as { false, null } — the same collapse
-  // resolveBotConfig performs — so a first save's before-values are those, not
-  // "unknown".
+  // An absent row means the same thing as { false, null, null } — the same
+  // collapse resolveBotConfig performs — so a first save's before-values are
+  // those, not "unknown".
   const beforeProvisioned = existing?.isProvisioned ?? false
   const beforePrompt = existing?.prompt ?? null
+  const beforeRules = existing?.rules ?? null
 
   const afterProvisioned = input.isProvisioned ?? beforeProvisioned
   const afterPrompt = input.prompt === undefined ? beforePrompt : input.prompt
+  const afterRules = input.rules === undefined ? beforeRules : input.rules
 
   await tx
     .insert(botConfig)
@@ -97,12 +126,14 @@ export async function saveBotConfig(tx: Tx, input: BotConfigSave): Promise<Resol
       workspaceId: input.workspaceId,
       isProvisioned: afterProvisioned,
       prompt: afterPrompt,
+      rules: afterRules,
     })
     .onConflictDoUpdate({
       target: botConfig.workspaceId,
       set: {
         isProvisioned: afterProvisioned,
         prompt: afterPrompt,
+        rules: afterRules,
         // Explicit, because there is no trigger — see the schema comment.
         updatedAt: new Date(),
       },
@@ -116,11 +147,9 @@ export async function saveBotConfig(tx: Tx, input: BotConfigSave): Promise<Resol
     changes: [
       { field: 'is_provisioned', before: beforeProvisioned, after: afterProvisioned },
       { field: 'prompt', before: beforePrompt, after: afterPrompt },
+      { field: 'rules', before: beforeRules, after: afterRules },
     ],
   })
 
-  return {
-    isProvisioned: afterProvisioned,
-    prompt: afterPrompt ?? DEFAULT_BOT_PROMPT,
-  }
+  return resolved(afterProvisioned, afterPrompt, afterRules)
 }

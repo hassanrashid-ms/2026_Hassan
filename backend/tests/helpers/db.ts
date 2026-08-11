@@ -139,9 +139,10 @@ export async function seedBotConfig(args: {
   workspaceId: string
   isProvisioned?: boolean
   prompt?: string | null
+  rules?: string | null
 }): Promise<void> {
   await ownerPool.query(
-    `insert into bot_config (workspace_id, is_provisioned, prompt) values ($1, $2, $3)`,
-    [args.workspaceId, args.isProvisioned ?? false, args.prompt ?? null],
+    `insert into bot_config (workspace_id, is_provisioned, prompt, rules) values ($1, $2, $3, $4)`,
+    [args.workspaceId, args.isProvisioned ?? false, args.prompt ?? null, args.rules ?? null],
   )
 }
