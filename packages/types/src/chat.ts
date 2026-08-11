@@ -37,6 +37,8 @@ export type PlayerMessageView = {
   author_type: ChatAuthorType
   body: string
   delivery_state: ChatDeliveryState
+  /** ISO 8601, or null until the other side reads it. Additive — the frozen contract permits new response fields. */
+  read_at: string | null
   created_at: string
 }
 
@@ -65,3 +67,15 @@ export type AgentConversationsResponse = { conversations: AgentConversationSumma
 
 /** The inbox-room payload: id and new status only, never the full row. */
 export type ConversationChangedEvent = { conversation_id: string; status: ConversationStatusValue }
+
+/**
+ * The read-receipt payload. A high-water sequence number and a timestamp — no
+ * bodies, no ids of individual messages. `reader_type` is who *did* the reading,
+ * so a client can ignore an echo of its own action.
+ */
+export type MessageReadEvent = {
+  conversation_id: string
+  up_to_seq: number
+  reader_type: 'player' | 'agent'
+  read_at: string
+}

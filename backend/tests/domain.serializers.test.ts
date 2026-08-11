@@ -13,6 +13,7 @@ function row(overrides: Partial<PostedMessageRow> = {}): PostedMessageRow {
     visibility: 'public',
     deliveryState: 'sent',
     createdAt: new Date('2026-08-06T00:00:00Z'),
+    readAt: null,
     ...overrides,
   }
 }
@@ -25,6 +26,7 @@ describe('toPlayerView', () => {
       author_type: 'agent',
       body: 'hello',
       delivery_state: 'sent',
+      read_at: null,
       created_at: '2026-08-06T00:00:00.000Z',
     })
   })
@@ -44,7 +46,21 @@ describe('toAgentView', () => {
       body: 'hello',
       visibility: 'internal',
       delivery_state: 'sent',
+      read_at: null,
       created_at: '2026-08-06T00:00:00.000Z',
     })
+  })
+})
+
+describe('read_at serialization', () => {
+  it('serializes a read timestamp as an ISO string in both views', () => {
+    const read = row({ deliveryState: 'read', readAt: new Date('2026-08-11T10:43:07Z') })
+    expect(toPlayerView(read)?.read_at).toBe('2026-08-11T10:43:07.000Z')
+    expect(toAgentView(read).read_at).toBe('2026-08-11T10:43:07.000Z')
+  })
+
+  it('serializes an unread message as null, not undefined or an empty string', () => {
+    expect(toPlayerView(row())?.read_at).toBeNull()
+    expect(toAgentView(row()).read_at).toBeNull()
   })
 })

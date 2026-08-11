@@ -10,12 +10,14 @@
     "test:watch": "vitest",
     "db:setup": "node --experimental-strip-types src/shared/db/setup.ts",
     "db:seed": "node --experimental-strip-types src/shared/db/seed.ts",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "weaviate:setup": "node --experimental-strip-types scripts/setup-weaviate-collection.ts"
   },
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "^9.1.0",
     "@socket.io/redis-adapter": "^8",
     "@support/types": "workspace:*",
+    "weaviate-client": "^3",
     "bullmq": "^5",
     "cors": "^2",
     "dotenv": "^16",

@@ -1,4 +1,5 @@
 import type { Server } from 'socket.io'
+import type { MessageReadEvent } from '@support/types'
 import { agentRoom, inboxRoom, playerRoom } from './rooms.ts'
 
 /**
@@ -22,4 +23,15 @@ export function emitMessageToRooms(
 /** id and new status only — never the full conversation row. */
 export function emitInboxChanged(io: Server, workspaceId: string, conversationId: string, status: string): void {
   io.to(inboxRoom(workspaceId)).emit('conversation:changed', { conversation_id: conversationId, status })
+}
+
+/**
+ * Routed by audience rather than by conversation alone: a receipt goes to whoever
+ * *wrote* the messages, never back to whoever read them. Unlike
+ * emitMessageToRooms this payload is typed — it is a fixed four-field contract,
+ * not a serializer's output passed through.
+ */
+export function emitReadReceipt(io: Server, audience: 'player' | 'agents', payload: MessageReadEvent): void {
+  const room = audience === 'player' ? playerRoom(payload.conversation_id) : agentRoom(payload.conversation_id)
+  io.to(room).emit('message:read', payload)
 }

@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: pgvector/pgvector:pg17
+    image: postgres:17
     container_name: support-postgres
     environment:
       POSTGRES_USER: support_owner

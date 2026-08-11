@@ -24,7 +24,7 @@ export const bootstrap: RequestHandler = async (req, res) => {
     return
   }
 
-  const { found, snapshot, unreadCount } = result
+  const { found, snapshot, unreadCount, workspaceName } = result
 
   // Three distinct no-data states, all rendered "unavailable" but diagnosed
   // differently. All three are states, never errors.
@@ -37,6 +37,7 @@ export const bootstrap: RequestHandler = async (req, res) => {
         : 'ok'
 
   const payload: BootstrapResponse = {
+    workspace: { name: workspaceName },
     session: {
       id: found.id,
       entry_point: found.entryPoint,

@@ -1,0 +1,79 @@
+/*
+ * The agent-console surface's entire stylesheet.
+ *
+ * Imported only by AgentConsoleShell.tsx via a lazy route — never by main.tsx
+ * or any statically-reachable module. Mirrors webview.css's isolation: Vite
+ * concatenates every statically reachable stylesheet into one bundle, so a
+ * static import here would leak Tailwind's preflight reset into the webview
+ * surface even though it never asks for it.
+ */
+
+@import "tailwindcss";
+
+@theme {
+  --color-bg:          #ffffff;
+  --color-surface:     #f8fafc;  /* slate-50, agent-console's neutral card background */
+  --color-accent:      #475569;  /* slate-600, primary */
+  --color-accent-deep: #1e293b;  /* slate-800 */
+  --color-accent-soft: #f1f5f9;  /* slate-100, selected row / active tab background */
+  --color-accent-fg:   #ffffff;
+  --color-text:        #0f172a;  /* slate-900 */
+  --color-muted:       #64748b;  /* slate-500 */
+  --radius-card:       0.75rem;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+@utility no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/*
+ * Tailwind's preflight (and the legacy global styles.css reset it sits next
+ * to) zeroes every <ul>/<ol>/<li>'s list-style, padding and display — correct
+ * for our own nav/row lists, which are all unstyled-by-design, but it also
+ * strips MDXEditor's bullet/number markers since the editor itself never sets
+ * those properties and instead relies on the browser default. Scoped to
+ * `.mdxeditor` (its own stable root class) so it doesn't leak back into
+ * CategorySidebar's or any other list in this surface.
+ *
+ * Checklist items (`li[role='checkbox']`) are deliberately excluded: MDXEditor
+ * draws their checkbox as an absolutely-positioned `::before` and already
+ * reserves the correct padding-left for it in its own stylesheet — forcing
+ * `display: list-item` on them fought that layout and made the checkbox glyph
+ * overlap the label text.
+ */
+.mdxeditor ul {
+  list-style: disc;
+  padding-left: 1.5em;
+}
+.mdxeditor ol {
+  list-style: decimal;
+  padding-left: 1.5em;
+}
+.mdxeditor li:not([role='checkbox']) {
+  display: list-item;
+}
+
+/*
+ * MDXEditor renders its popups (link dialog, tooltips) into a `div.mdxeditor-
+ * popup-container` it appends directly to <body> — a sibling of our Sheet's
+ * own portal, not a descendant, so `.mdxeditor` scoping can't reach it. Its
+ * own stylesheet gives it `z-index: 2`, far below our Sheet's `z-50`, so it
+ * painted underneath the sheet instead of on top of it.
+ */
+.mdxeditor-popup-container {
+  /* !important: MDXEditor's own stylesheet sets z-index: 2 on this same
+     element via a second (CSS-module-hashed) class, and its chunk loads
+     after this one (KnowledgeBase is a lazily-loaded route) — so on equal
+     specificity, its rule would otherwise win the cascade regardless of
+     source order here. */
+  z-index: 60 !important;
+}

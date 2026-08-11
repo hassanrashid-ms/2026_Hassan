@@ -26,3 +26,4 @@ export const messageDeliveryState = pgEnum('message_delivery_state', [
 ])
 export const eventActorType = pgEnum('event_actor_type', ['player', 'agent', 'bot', 'system'])
 export const declaredFieldType = pgEnum('declared_field_type', ['string', 'number', 'boolean', 'timestamp'])
+export const articleState = pgEnum('article_state', ['draft', 'published', 'archived'])

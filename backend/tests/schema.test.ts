@@ -3,13 +3,17 @@ import { ownerPool, closeOwnerPool } from './helpers/db.ts'
 
 const EXPECTED_TABLES = [
   'agent',
+  'article',
+  'article_attachment',
   'conversation',
   'declared_field',
   'event',
+  'intent',
   'message',
   'player',
   'player_state_snapshot',
   'session',
+  'subintent',
   'workspace',
   'workspace_member',
 ]
@@ -37,7 +41,7 @@ async function columns(table: string): Promise<Map<string, { type: string; nulla
 describe('schema', () => {
   afterAll(closeOwnerPool)
 
-  it('creates exactly the ten tables of the SDK-path subset', async () => {
+  it('creates exactly the fourteen tables of the SDK-path + articles-KB subset', async () => {
     const { rows } = await ownerPool.query<{ table_name: string }>(
       `select table_name from information_schema.tables
         where table_schema = 'public' and table_type = 'BASE TABLE'

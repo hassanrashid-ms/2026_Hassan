@@ -11,9 +11,13 @@ A basic knowledge base: agents author and publish articles from a console page; 
 published articles on an unauthenticated public page. No bot, no retrieval, no self-serve funnel
 reporting — those are later slices that reuse this schema.
 
-**In scope:** `intent`/`subintent` taxonomy tables, `article`, `article_phrasing`,
-`article_embedding` (schema only), `article_attachment` (schema only), agent CRUD + publish
-workflow, public read + keyword search, OpenAPI registration.
+**In scope:** `intent`/`subintent` taxonomy tables, `article`, `article_attachment` (schema only),
+agent CRUD + publish workflow, public read + keyword search, OpenAPI registration.
+
+> The article search/data model described in this doc is superseded by
+> [`docs/specs/2026-08-07-weaviate-faq-search-design.md`](2026-08-07-weaviate-faq-search-design.md)
+> — see that doc for the current article `keywords` field and Weaviate-backed search. The
+> `article_phrasing`/`article_embedding` tables described below no longer exist.
 
 **Out of scope:** `taxonomy_change` audit log, intent archive guards, subintent merge, embedding
 generation, file upload (S3/R2), `article_feedback`, bot retrieval.
@@ -71,29 +75,12 @@ article
   intent_id      uuid REFERENCES intent(id) ON DELETE RESTRICT   -- nullable = uncategorized
   title          text NOT NULL
   body           text NOT NULL
-  summary        text
+  keywords       text[] NOT NULL DEFAULT '{}'
   state          article_state NOT NULL DEFAULT 'draft'   -- draft | published | archived
   created_by     uuid NOT NULL REFERENCES agent(id) ON DELETE RESTRICT
   published_by   uuid REFERENCES agent(id) ON DELETE RESTRICT
   published_at   timestamptz
   created_at     timestamptz NOT NULL DEFAULT now()
-
-article_phrasing
-  id             uuid PK
-  workspace_id   uuid NOT NULL REFERENCES workspace(id)
-  article_id     uuid NOT NULL REFERENCES article(id) ON DELETE RESTRICT
-  phrase         text NOT NULL
-  created_at     timestamptz NOT NULL DEFAULT now()
-
-article_embedding
-  id             uuid PK
-  workspace_id   uuid NOT NULL REFERENCES workspace(id)
-  article_id     uuid NOT NULL REFERENCES article(id) ON DELETE RESTRICT
-  source         text NOT NULL          -- 'summary' | 'phrasing'
-  phrasing_id    uuid REFERENCES article_phrasing(id)
-  embedding      vector(1536)
-  model          text
-  synced_at      timestamptz
 
 article_attachment
   id             uuid PK
@@ -105,18 +92,12 @@ article_attachment
   created_at     timestamptz NOT NULL DEFAULT now()
 ```
 
-`article_phrasing` and `article_embedding` exist now with their `pgvector` HNSW index, but nothing
-writes to them in this slice — no embedding call happens on publish. They are schema-only,
-populated when the bot retrieval feature lands, per the approved schema doc's design (embeddings
-are per-summary/per-phrasing rows, kept separate from `article` so a model change re-embeds
-without touching article rows).
-
-`article_attachment` is schema-only the same way: the console shows an "Attachments — coming soon"
+`article_attachment` is schema-only: the console shows an "Attachments — coming soon"
 control, disabled, with no upload endpoint. `storage_key` stays nullable until the presigned-PUT
 upload flow (S3/R2) is built, following the same pattern already decided for message attachments
 in the approved schema doc.
 
-All four tables: `workspace_id` + RLS policy, `ON DELETE RESTRICT`, no hard-delete route. Removing
+Both tables: `workspace_id` + RLS policy, `ON DELETE RESTRICT`, no hard-delete route. Removing
 an article means transitioning `state` to `archived`, never deleting the row.
 
 ## API surface
@@ -131,7 +112,7 @@ an article means transitioning `state` to `archived`, never deleting the row.
 | GET | `/agent/articles` | List articles (all states) for this workspace |
 | GET | `/agent/articles/:id` | Fetch one article for editing |
 | POST | `/agent/articles` | Create a draft |
-| PATCH | `/agent/articles/:id` | Edit title/body/summary/intent while in `draft` |
+| PATCH | `/agent/articles/:id` | Edit title/body/keywords/intent while in `draft` |
 | POST | `/agent/articles/:id/publish` | `draft` → `published`, stamps `published_by`/`published_at` |
 | POST | `/agent/articles/:id/archive` | Any state → `archived`. No delete route exists |
 
@@ -186,7 +167,7 @@ step.
 ## Migration
 
 New Drizzle schema files: `shared/db/schema/taxonomy.ts` (`intent`, `subintent`) and
-`shared/db/schema/articles.ts` (`article`, `article_phrasing`, `article_embedding`,
-`article_attachment`), plus the `article_state` enum in `enums.ts`. RLS policies added per table in
+`shared/db/schema/articles.ts` (`article`, `article_attachment`), plus the `article_state` enum in
+`enums.ts`. RLS policies added per table in
 the existing migration SQL alongside the other tenant-scoped tables. `pnpm db:setup` picks them up
 as usual.

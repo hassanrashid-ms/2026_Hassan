@@ -6,6 +6,9 @@ const EnvSchema = z.object({
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
   MIGRATION_DATABASE_URL: z.string().min(1, 'MIGRATION_DATABASE_URL is required'),
   REDIS_URL: z.string().min(1, 'REDIS_URL is required'),
+  WEAVIATE_URL: z.string().min(1, 'WEAVIATE_URL is required'),
+  WEAVIATE_API_KEY: z.string().min(1, 'WEAVIATE_API_KEY is required'),
+  OPENAI_APIKEY: z.string().optional(),
   PLAYER_JWT_SECRET: z
     .string()
     .min(32, 'PLAYER_JWT_SECRET must be at least 32 characters'),

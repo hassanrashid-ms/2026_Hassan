@@ -3,6 +3,8 @@ import { requireAgentSession } from '../shared/middleware/requireAgentSession.ts
 import { authRouter } from './routers/authRouter.ts'
 import { conversationsRouter } from './routers/conversationsRouter.ts'
 import { messagesRouter } from './routers/messagesRouter.ts'
+import { taxonomyRouter } from './routers/taxonomyRouter.ts'
+import { articlesRouter } from './routers/articlesRouter.ts'
 
 export const agentRouter = Router()
 
@@ -10,5 +12,7 @@ export const agentRouter = Router()
 agentRouter.use(authRouter)
 
 agentRouter.use(requireAgentSession)
+agentRouter.use(taxonomyRouter)
+agentRouter.use(articlesRouter)
 agentRouter.use(conversationsRouter)
 agentRouter.use(messagesRouter)

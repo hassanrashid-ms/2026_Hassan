@@ -5,6 +5,8 @@ const valid = {
   DATABASE_URL: 'postgres://support_app:pw@localhost:5432/support',
   MIGRATION_DATABASE_URL: 'postgres://support_owner:pw@localhost:5432/support',
   REDIS_URL: 'redis://localhost:6379',
+  WEAVIATE_URL: 'https://weaviate-test.example.com',
+  WEAVIATE_API_KEY: 'weaviate-test-api-key',
   PLAYER_JWT_SECRET: 'x'.repeat(32),
   AGENT_SESSION_JWT_SECRET: 'y'.repeat(32),
 }

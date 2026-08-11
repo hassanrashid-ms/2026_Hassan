@@ -31,6 +31,12 @@ notes."*
   (`open → awaiting_player`) — sending a public reply from any other status is a no-op on
   status, not rejected.
 
+> **Superseded in part (2026-08-11):** scoping this slice to the forward flip alone left
+> `awaiting_player → open` (player replies) unimplemented, so a conversation stayed in Awaiting
+> Player after the player had answered. That transition now ships in `sendPlayerMessage`. The
+> rest of this "out of scope" list still stands — see `docs/status-transitions.md` for the
+> current per-transition build state.
+
 ## Internal notes
 
 **Data model:** no schema changes. `message.visibility` (`'public' | 'internal'`, default
