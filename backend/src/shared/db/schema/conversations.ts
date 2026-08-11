@@ -60,6 +60,8 @@ export const message = pgTable(
     /** Never filtered in a query — two serializers do that. Internal notes leaking is safety-critical. */
     visibility: messageVisibility('visibility').notNull().default('public'),
     deliveryState: messageDeliveryState('delivery_state').notNull().default('sent'),
+    /** Set once, by the first mark-read that matches this row. Never rewritten — see docs/specs/2026-08-11-read-receipts-design.md. */
+    readAt: timestamp('read_at', tz),
     createdAt: timestamp('created_at', tz).notNull().defaultNow(),
   },
   (t) => [

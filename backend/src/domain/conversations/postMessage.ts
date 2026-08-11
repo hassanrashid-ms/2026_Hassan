@@ -24,6 +24,7 @@ export type PostedMessageRow = {
   body: string
   visibility: 'public' | 'internal'
   deliveryState: ChatDeliveryState
+  readAt: Date | null
   createdAt: Date
 }
 

@@ -37,6 +37,8 @@ export type PlayerMessageView = {
   author_type: ChatAuthorType
   body: string
   delivery_state: ChatDeliveryState
+  /** ISO 8601, or null until the other side reads it. Additive — the frozen contract permits new response fields. */
+  read_at: string | null
   created_at: string
 }
 
