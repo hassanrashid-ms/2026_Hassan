@@ -92,6 +92,11 @@ export function SupportChat() {
     socket.on('message:new', () => {
       void queryClient.invalidateQueries({ queryKey: ['playerMessages', boot.sessionId] })
     })
+    // The payload's up_to_seq/read_at are deliberately unused. Refetching keeps
+    // the "which messages count as read" rule in exactly one place — the server.
+    socket.on('message:read', () => {
+      void queryClient.invalidateQueries({ queryKey: ['playerMessages', boot.sessionId] })
+    })
     return () => {
       socket.close()
     }

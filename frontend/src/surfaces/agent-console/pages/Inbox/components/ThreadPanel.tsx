@@ -59,6 +59,9 @@ export function ThreadPanel({
     socket.on('message:new', () => {
       void queryClient.invalidateQueries({ queryKey: ['conversation', conversationId, 'messages'] })
     })
+    socket.on('message:read', () => {
+      void queryClient.invalidateQueries({ queryKey: ['conversation', conversationId, 'messages'] })
+    })
     return () => {
       socket.emit('leave_conversation', { conversation_id: conversationId })
       socket.close()
