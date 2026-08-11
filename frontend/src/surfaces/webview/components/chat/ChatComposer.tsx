@@ -25,11 +25,10 @@ export function ChatComposer({ onSend, disabled }: { onSend: (body: string) => v
 
   return (
     <div
-      className="flex shrink-0 items-end gap-2 border-t border-muted/15 bg-bg px-3 py-3"
+      className="flex shrink-0 items-end gap-2 border-t border-muted/15 bg-bg px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
       // The safe-area inset is applied here as well as on the shell frame: this
       // row is the bottom-most thing on screen and must clear the home indicator
       // even while the keyboard is up and the shell's own padding is collapsed.
-      style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
     >
       <textarea
         rows={1}
@@ -61,7 +60,7 @@ export function ChatComposer({ onSend, disabled }: { onSend: (body: string) => v
           empty || disabled === true ? 'bg-surface text-muted' : 'bg-accent text-accent-fg active:bg-accent-deep',
         )}
       >
-        <SendHorizontal className="size-5" />
+        <SendHorizontal size={24} className="shrink-0" />
       </button>
     </div>
   )

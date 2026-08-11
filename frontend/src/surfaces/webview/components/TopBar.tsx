@@ -34,7 +34,7 @@ function IconButton({
       aria-label={label}
       onClick={onClick}
       className={cn(
-        'inline-flex size-14 shrink-0 items-center justify-center rounded-full text-accent-fg',
+        'inline-flex size-11 shrink-0 items-center justify-center rounded-full text-accent-fg',
         'transition-colors active:bg-white/20 outline-none',
         className,
       )}
@@ -56,9 +56,9 @@ function DebugButton({ onClick }: { onClick: () => void }) {
       type="button"
       aria-label="Session details"
       onClick={onClick}
-      className="inline-flex size-14 shrink-0 items-center justify-center rounded-full text-accent-fg transition-colors active:bg-white/20 outline-none"
+      className="inline-flex size-11 shrink-0 items-center justify-center rounded-full text-accent-fg transition-colors active:bg-white/20 outline-none"
     >
-      <MoreHorizontal className="size-12" />
+      <MoreHorizontal size={24} />
     </button>
   )
 }
@@ -117,7 +117,7 @@ export function TopBar(props: TopBarProps) {
           }}
           className="relative z-10"
         >
-          <X className="size-12" />
+          <X size={24} />
         </IconButton>
         
         <h1 className="flex-1 truncate px-2 text-center text-lg font-bold text-accent-fg pointer-events-none">
@@ -126,10 +126,10 @@ export function TopBar(props: TopBarProps) {
         
         <div className="flex items-center relative z-10">
           <IconButton label="Search help articles" onClick={() => navigate('/embed/support/search')}>
-            <Search className="size-12" />
+            <Search size={24} />
           </IconButton>
           <IconButton label="Open chat" onClick={() => navigate('/embed/support/chat')} className="relative">
-            <MessageCircle className="size-12" />
+            <MessageCircle size={24} />
             {unread > 0 && (
               <span className="absolute top-1.5 right-1.5 flex min-w-5 items-center justify-center rounded-full bg-white px-1.5 text-xs font-bold text-accent shadow-sm">
                 {unread > 9 ? '9+' : unread}
@@ -149,7 +149,7 @@ export function TopBar(props: TopBarProps) {
       {/* navigate(-1), not a hardcoded route: it is the same gesture Android's
           hardware back button fires, and real routes are what make that work. */}
       <IconButton label="Back" onClick={() => navigate(-1)} className="relative z-10">
-        <ArrowLeft className="size-12" />
+        <ArrowLeft size={24} />
       </IconButton>
       
       <h1 className="flex-1 truncate px-2 text-center text-lg font-bold text-accent-fg pointer-events-none">

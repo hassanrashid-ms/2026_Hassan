@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { Badge } from '@/surfaces/webview/components/ui/badge'
 import { ScrollArea } from '@/surfaces/webview/components/ui/scroll-area'
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/surfaces/webview/components/ui/sheet'
+import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from '@/surfaces/webview/components/ui/drawer'
 import { Skeleton } from '@/surfaces/webview/components/ui/skeleton'
 import { useSupport } from '@/surfaces/webview/components/SupportContext'
 import { hasReadArticle, markArticleRead } from '@/surfaces/webview/hooks/useReadArticles'
@@ -34,21 +34,21 @@ export function ArticleSheet({ articleId, onClose }: ArticleSheetProps) {
   }, [boot, articleId])
 
   return (
-    <Sheet open={articleId !== null} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent className="h-[90dvh]">
-        <SheetHeader>
+    <Drawer open={articleId !== null} onOpenChange={(open) => !open && onClose()}>
+      <DrawerContent className="h-[90dvh]">
+        <DrawerHeader>
           {article.data ? (
-            <SheetTitle className="text-xl leading-snug">{article.data.title}</SheetTitle>
+            <DrawerTitle className="text-xl leading-snug">{article.data.title}</DrawerTitle>
           ) : (
             <>
               {/* Radix requires an accessible title on every dialog; a visually
                   hidden one keeps the contract while the real one loads. */}
-              <SheetTitle className="sr-only">Loading article</SheetTitle>
+              <DrawerTitle className="sr-only">Loading article</DrawerTitle>
               <Skeleton className="h-6 w-2/3 bg-muted/15" />
             </>
           )}
-          <SheetDescription className="sr-only">Help article</SheetDescription>
-        </SheetHeader>
+          <DrawerDescription className="sr-only">Help article</DrawerDescription>
+        </DrawerHeader>
 
         {article.data && article.data.keywords.length > 0 && (
           <div className="flex shrink-0 flex-wrap gap-1.5 px-4 pb-3">
@@ -77,7 +77,7 @@ export function ArticleSheet({ articleId, onClose }: ArticleSheetProps) {
             )}
           </div>
         </ScrollArea>
-      </SheetContent>
-    </Sheet>
+      </DrawerContent>
+    </Drawer>
   )
 }
