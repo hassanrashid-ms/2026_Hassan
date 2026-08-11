@@ -3,7 +3,7 @@
 **Date:** 2026-08-11
 **Status:** Accepted
 **Scope:** Everything that turns a conversation into the exact string sent to a model, and nothing
-that sends it. Five new modules, one filled-in type, one new `UnavailableReason` member. **No LLM.**
+that sends it. Five new modules, one new Weaviate query function, one filled-in type, one new `UnavailableReason` member. **No LLM.**
 
 ---
 
@@ -27,13 +27,15 @@ that runs in milliseconds and never flakes.
 |---|---|
 | 1 — bot turn seam and handoff | Gating, queue, outcome application, handoff, assignment, events |
 | **2 — this one** | Retrieval, taxonomy view, player context, history, substitution |
-| 3 — Gemini call and decision | `@google/genai`, response schema, turn cap, index→subintent resolution, the `Other` seed |
+| 3 — OpenAI call and decision | `openai` SDK, structured outputs, turn cap, index→subintent resolution, the `Other` seed |
 
 ### In scope
 
 | Thing | Why here |
 |---|---|
-| `retrieval.ts` | BM25 ids → hydrated published article rows, ranked |
+| `retrieval.ts` | Hybrid search ids → hydrated published article rows, ranked |
+| `searchArticleIdsHybrid` in `shared/weaviate/articlesIndex.ts` | The bot's query strategy, separate from public FAQ search |
+| `OPENAI_APIKEY` becomes required in `env.ts` | Hybrid cannot vectorize the query without it |
 | `taxonomyView.ts` | The numbered subintent list **and** the index→id map that decodes it |
 | `playerContext.ts` | `{{player_level}}` / `{{spend_tier}}` from `declared`, `unknown` for every no-data state |
 | `history.ts` | Player and bot turns, through `toPlayerView` |
@@ -44,17 +46,20 @@ that runs in milliseconds and never flakes.
 
 ### Out of scope — named so nobody wonders
 
-- **The model call.** No `@google/genai`, no `GEMINI_*` env, no response schema, no turn cap. Spec 3.
+- **The model call.** No `openai` chat client, no `OPENAI_MODEL` env, no response schema, no turn
+  cap. Spec 3. (`OPENAI_APIKEY` *is* touched here — see §2 — but only as the Weaviate vectorizer
+  header it already is.)
 - **Resolving an index back to a subintent.** This slice *produces* the map; spec 3 reads it.
 - **Seeding the `Other` intent and its catch-all subintent.** `SEED_TAXONOMY` has eight intents and
   none of them is `Other`; `intent.is_system` is declared in the schema and set nowhere. That row is
   what an unclassifiable conversation lands on, and it is **spec 3's prerequisite** — the slice that
   first has an index to fail to resolve. Recorded here so it is not discovered there. This slice
   renders whatever subintents exist and needs no fallback of its own.
-- **Semantic / hybrid / `near_text` search.** The `Article` collection is pre-wired with
-  `text2vec_openai` for exactly this, but BM25 is what the article slice shipped and changing the
-  query strategy is a change to public FAQ search too, not just the bot.
-- **Re-ranking, query rewriting, multi-query retrieval.** One query, one BM25 call.
+- **Changing public FAQ search.** `listPublicArticles` keeps `searchArticleIds` and its BM25 floor,
+  untouched. The bot gets a second function against the same collection — see §2.
+- **Re-ranking, query rewriting, multi-query retrieval.** One query, one hybrid call.
+- **Tuning `alpha`.** It ships as a named constant at 0.5. Making it configurable, or fitting it to
+  real traffic, needs traffic first.
 - **Caching an assembled prompt.** Articles and taxonomy change without a release, by design.
 - **Admin visibility into the assembled prompt.** A "preview what the bot sees" screen is a good
   idea and is the bot-admin-screen slice's.
@@ -67,18 +72,57 @@ that runs in milliseconds and never flakes.
 
 Not the concatenated conversation, not a summary, not a rewritten query.
 
-BM25 scores on term overlap. Concatenating earlier turns dilutes the terms that matter with the
-terms of a question already answered, and the failure is silent — you get plausible-looking articles
-for the wrong turn. With the turn cap at 2 there are at most three player messages in a bot-active
-conversation anyway, so the recall lost is small and the precision kept is not.
+Both halves of a hybrid query suffer from concatenation: the keyword half dilutes the terms that
+matter with the terms of a question already answered, and the vector half averages two questions into
+an embedding that means neither. The failure is silent either way — you get plausible-looking
+articles for the wrong turn. With the turn cap at 2 there are at most three player messages in a
+bot-active conversation anyway, so the recall lost is small and the precision kept is not.
 
 The full history still reaches the model as `history`; it is only *retrieval* that reads one message.
 
-### 2 · Retrieval failure is `unavailable`, not zero articles
+### 2 · The bot searches hybrid; public FAQ search stays BM25
 
-`searchArticleIds` already bounds itself with `WEAVIATE_CALL_TIMEOUT_MS` (5 s) and throws on
-timeout. That throw propagates: the job retries, and on the final attempt the conversation takes
-spec 1's `unavailable` path with a new reason.
+Two query strategies against one collection, as two functions in
+`shared/weaviate/articlesIndex.ts`:
+
+```ts
+export const HYBRID_ALPHA = 0.5      // 0 = pure BM25, 1 = pure vector
+export const BOT_ARTICLE_LIMIT = 3
+
+export async function searchArticleIdsHybrid(
+  query: string,
+  opts: { workspaceId: string; limit: number },
+): Promise<string[]>
+```
+
+Same `workspaceId` filter, same `WEAVIATE_CALL_TIMEOUT_MS` wrapper, same
+`collection.query.hybrid(query, { alpha, filters, limit, returnProperties, returnMetadata })` shape
+the existing BM25 helper uses. `intentId` is not a parameter: the bot is classifying, so it has no
+intent to filter by.
+
+**`searchArticleIds` is not modified.** Public FAQ search is a player typing keywords into a search
+box, where BM25's literalness is what they expect and a zero-result state is meaningful. The bot is
+matching a full sentence against article prose, where paraphrase is the norm. Same index, two jobs,
+two functions — and changing one must not silently change the other.
+
+`alpha = 0.5` is a starting point, not a finding. It is a named constant so it moves in one edit.
+
+**`OPENAI_APIKEY` becomes required** in `env.ts` (it is `.optional()` today). `getWeaviateClient`
+already forwards it as the `X-OpenAI-Api-Key` header, which is what vectorizes the query at search
+time — so hybrid without it does not fail loudly, it degrades. Making it required at boot, alongside
+`WEAVIATE_URL`, is what stops that. One key now serves two purposes: the vectorizer header here, and
+spec 3's chat client.
+
+> **To verify before implementing:** that the header path is actually live and existing `Article`
+> objects carry vectors. If `OPENAI_APIKEY` was unset when articles were indexed, they were stored
+> unvectorized and hybrid will quietly behave as BM25 — a re-index, not a code fix. Cheap to check;
+> expensive to discover from bad answers.
+
+### 3 · Retrieval failure is `unavailable`, not zero articles
+
+The hybrid call inherits `WEAVIATE_CALL_TIMEOUT_MS` (5 s) and throws on timeout. That throw
+propagates: the job retries, and on the final attempt the conversation takes spec 1's `unavailable`
+path with a new reason.
 
 ```ts
 export type UnavailableReason =
@@ -86,37 +130,67 @@ export type UnavailableReason =
   | 'retrieval_failed'   // added by this slice
 ```
 
-The tempting alternative — treat a Weaviate outage as "no articles matched" — produces the same
-*visible* outcome (the rules tell the bot to hand off when nothing answers the question) while
-recording it as `bot_handoff`. The bot would be credited with a good decision every time the search
-index was down, and the Bot-fallbacks metric would read zero through an outage. **The two must not be
-confusable**, which is the same reasoning that split `bot_handoff` from `bot_unavailable` in spec 1.
+Hybrid **widens** what this covers. BM25 fails only if Weaviate is down; hybrid also fails if the
+vectorizer call from Weaviate to OpenAI fails — a second third party inside the same 5 s budget, on
+every single bot turn. `retrieval_failed` covers both, and the message logged alongside it carries
+the underlying error so the two are separable in the logs even though they are one reason in the
+metric.
 
-### 3 · Zero results is an explicit sentence, not an empty block
+The tempting alternative — treat an outage as "no articles matched" — produces the same *visible*
+outcome (the rules tell the bot to hand off when nothing answers the question) while recording it as
+`bot_handoff`. The bot would be credited with a good decision every time search was down, and the
+Bot-fallbacks metric would read zero through an outage. **The two must not be confusable**, which is
+the same reasoning that split `bot_handoff` from `bot_unavailable` in spec 1.
 
-A genuine zero-result search renders:
+### 4 · There is no relevance floor, and the model is now solely responsible for refusing
+
+BM25 scores 0 when a document shares no term with the query, which is why `searchArticleIds` carries
+`MIN_BM25_SCORE = 0.05` and why "nothing matched" is a state that occurs. **Vector similarity is
+never zero.** Under hybrid, an unanswerable question returns the three least-unrelated articles in
+the workspace with respectable fused scores.
+
+So the bot applies **no score threshold**. Top-3 by fused score always go to the model.
+
+The consequence has to be stated plainly rather than discovered: **retrieval no longer contributes
+anything to "don't answer from an irrelevant article."** That behaviour now rests entirely on one
+line of `DEFAULT_BOT_RULES` — *"If you are not confident an article answers the question, hand off"* —
+which is a field an admin can edit, in a table with no validation that it still says so.
+
+This is accepted deliberately. A fused-score threshold is not the fix: hybrid scores are
+rank-relative and not comparable across queries, so any constant would be a guess that drops good
+matches on some queries and admits noise on others, while *looking* like a safeguard. An honest
+absence beats a decorative gate.
+
+Two things follow, both for later slices, both recorded so they are choices rather than omissions:
+the bot-admin screen should warn when a custom `rules` value drops the refusal instruction, and spec
+3's response schema is where a model-reported confidence or an explicit "none of these are relevant"
+signal would belong.
+
+The zero-result sentinel still exists and still renders:
 
 ```
 No help articles matched this question.
 ```
 
-Never an empty string under the `{{articles}}` heading. A blank region in a prompt reads as a
-truncation bug to a model as easily as it reads as absence, and the one behaviour that must be
-reliable here is handing off when there is nothing to answer from. Saying it in words costs eight
-tokens.
+It is now reachable in exactly one situation — **a workspace with no published articles at all**,
+which is the non-negotiables' *"no published articles → skip the article step"* case and needs no
+special path. Never an empty region under the `{{articles}}` heading: a blank looks like a truncation
+bug to a model as easily as it reads as absence.
 
-This is also the **"no published articles in the workspace"** case from the non-negotiables, which
-needs no special path: an empty index returns no ids and renders the same sentence.
-
-### 4 · Everything that enters the prompt is size-capped
+### 5 · Everything that enters the prompt is size-capped
 
 | Bound | Value | Why |
 |---|---|---|
-| `MAX_ARTICLES` | 5 | The `searchArticleIds` limit |
-| `MAX_ARTICLE_BODY_CHARS` | 2000 | One long article must not crowd out four relevant ones |
+| `BOT_ARTICLE_LIMIT` | 3 | The hybrid `limit`. Three, not five — see below |
+| `MAX_ARTICLE_BODY_CHARS` | 2000 | One long article must not crowd out the other two |
 | `MAX_HISTORY_MESSAGES` | 20 | A player can send many messages before the worker runs |
 | `MAX_HISTORY_BODY_CHARS` | 1000 | Per message |
-| `MAX_PLAYER_VALUE_CHARS` | 100 | See §7 — this one is not about tokens |
+| `MAX_PLAYER_VALUE_CHARS` | 100 | See §8 — this one is not about tokens |
+
+**Three articles, not five, follows from §4.** With a BM25 floor, a fourth and fifth result were
+either relevant or filtered out. With no floor, every extra slot is a *guaranteed* extra article,
+relevant or not — so the tail is pure noise the model has to reject, and each one is another chance
+it doesn't. Fewer, better-ranked candidates is the right trade once retrieval stops gating.
 
 A truncated article body ends with `… [truncated]` rather than stopping mid-sentence silently, so a
 model reasoning about an incomplete instruction can see that it is incomplete, and so can whoever is
@@ -124,7 +198,7 @@ debugging the answer.
 
 History is capped from the **newest** end — the last 20, not the first 20.
 
-### 5 · Substitution runs on the joined prompt, and leaves unknown placeholders alone
+### 6 · Substitution runs on the joined prompt, and leaves unknown placeholders alone
 
 `buildSystemPrompt(prompt, rules)` joins the two stored fields; substitution runs on its output. That
 ordering is already required by the bot-config design, and it has a consequence worth stating:
@@ -146,7 +220,7 @@ keeps a prompt containing `{{` from being corrupted by a templating engine it ne
 A placeholder the admin **omits** is simply not substituted. Nothing is appended: the assembled
 prompt is the admin's text, not the admin's text plus what we thought they forgot.
 
-### 6 · The subintent list and its decoder are built together, or not at all
+### 7 · The subintent list and its decoder are built together, or not at all
 
 ```ts
 export type TaxonomyView = {
@@ -180,7 +254,7 @@ With the current seed this renders 40 lines. That is fine, and it is the honest 
 a workspace with 200 subintents is a prompt-engineering question for a later slice, not a reason to
 truncate the list silently here.
 
-### 7 · Player values are `unknown` for every no-data state, and are treated as hostile input
+### 8 · Player values are `unknown` for every no-data state, and are treated as hostile input
 
 `{{player_level}}` reads `declared['player_level']`; `{{spend_tier}}` reads `declared['spend_tier']`.
 Both are seeded `declared_field` keys, so this works on a fresh workspace.
@@ -211,7 +285,7 @@ text inside the system prompt, and the real answers (moving player context out o
 or declaring these fields untrusted to the model) belong in spec 3 where the message roles are
 decided. **Recorded here because it is a property of this design, not an oversight of it.**
 
-### 8 · History is player and bot only, through `toPlayerView`
+### 9 · History is player and bot only, through `toPlayerView`
 
 ```ts
 export type BotTurnHistoryEntry = { author: 'player' | 'bot'; body: string }
@@ -261,7 +335,7 @@ All under `backend/src/domain/bot/`, exported through `index.ts`.
 
 | File | Exports | Notes |
 |---|---|---|
-| `retrieval.ts` | `retrieveArticles(workspaceId, query)` | Calls `searchArticleIds`, hydrates from Postgres, re-orders to the BM25 ranking |
+| `retrieval.ts` | `retrieveArticles(workspaceId, query)` | Calls `searchArticleIdsHybrid`, hydrates from Postgres, re-orders to the fused ranking |
 | `taxonomyView.ts` | `buildTaxonomyView(tx, workspaceId)` → `TaxonomyView` | Renders and decodes together |
 | `playerContext.ts` | `resolvePlayerContext(tx, sessionId)` → `{ playerLevel, spendTier }` | `unknown` for all five no-data paths |
 | `history.ts` | `buildHistory(rows)` → `BotTurnHistoryEntry[]` | Through `toPlayerView` |
@@ -356,8 +430,15 @@ Every test below runs with no model, and all but two with no network.
 
 ### New `tests/bot.retrieval.test.ts` — Weaviate stubbed
 
-- The BM25 query is the latest player message only, and `limit` is `MAX_ARTICLES`.
-- Postgres hydration re-orders rows to the BM25 ranking, not to `published_at`.
+- The hybrid query is the latest player message only, with `limit` = `BOT_ARTICLE_LIMIT` and
+  `alpha` = `HYBRID_ALPHA`, and no `intentId` filter.
+- The `workspaceId` filter is applied — another workspace's articles are never retrievable.
+- Postgres hydration re-orders rows to the fused ranking, not to `published_at`.
+- **No score filtering:** a stubbed response of three low-scoring objects yields three articles, not
+  zero. The §4 decision, asserted rather than assumed — if someone later adds a threshold, this test
+  is what tells them it was deliberate that there wasn't one.
+- `searchArticleIds` (public FAQ search) is unchanged: its existing tests still pass, and it still
+  applies `MIN_BM25_SCORE`.
 - An id returned by Weaviate whose row is no longer `published` is dropped, not rendered blank —
   the index can lag Postgres.
 - A throwing/timing-out `searchArticleIds` propagates, and the orchestrator surfaces it as
@@ -370,8 +451,8 @@ Every test below runs with no model, and all but two with no network.
 ## Deviations
 
 None from `project-overview.md`. Two things it leaves open are decided here and worth naming: the
-retrieval query is one message rather than the conversation (§1), and a search-index outage counts
+retrieval query is one message rather than the conversation (§1), a search-index outage counts
 as a bot fallback rather than a bot handoff (§2).
 
-The player-context injection surface described in §7 is a **known, bounded risk carried forward to
+The player-context injection surface described in §8 is a **known, bounded risk carried forward to
 spec 3**, not a resolved one.

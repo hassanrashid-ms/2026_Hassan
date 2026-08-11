@@ -26,7 +26,7 @@ This is the first of three specs decomposing the bot orchestrator:
 |---|---|
 | **1 — this one** | Gating, queue, outcome application, handoff, assignment, events |
 | 2 — retrieval and prompt assembly | BM25 retrieval, `{{…}}` substitution, history construction. No LLM |
-| 3 — Gemini call and decision | `@google/genai`, response schema, turn cap, index→subintent resolution |
+| 3 — OpenAI call and decision | `openai` SDK, structured outputs, turn cap, index→subintent resolution |
 
 ### In scope
 
@@ -48,8 +48,8 @@ This is the first of three specs decomposing the bot orchestrator:
 
 ### Out of scope — named so nobody wonders
 
-- **Every LLM concern.** No `@google/genai` dependency, no `GEMINI_*` env var, no prompt assembly,
-  no retrieval, no response schema. Specs 2 and 3.
+- **Every LLM concern.** No `openai` dependency, no `OPENAI_MODEL` env var, no prompt assembly, no
+  retrieval, no response schema. Specs 2 and 3.
 - **The turn cap (N=2).** It is a guard inside the decider, and the decider is a stub here. Spec 3.
 - **The article-offer lifecycle** — `article_shown` / `article_rejected` / `article_read` /
   `still_need_help_reached`, and `bot_active → resolved` on player confirmation.
