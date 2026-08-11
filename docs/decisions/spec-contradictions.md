@@ -68,6 +68,47 @@ player-state snapshot or captures a new one.
 
 ---
 
+### 14. Form fields: a table, or jsonb on the version?
+
+**Conflict:** The schema spec models fields as `form_field` rows under a `form_version`, with
+`form_answer.form_field_id` as the FK, and explicitly rejects collapsing them
+("`form_field` → `jsonb` on `form_version`: defensible; **not taken**. Kept as a table for the FK
+from `form_answer`"). That reasoning was written when forms were conversational and the bot
+resolved one field at a time.
+
+**Decision:** **Fields are a validated jsonb array on `form_version`; answers are keyed by a text
+`field_key`.** The 2026-08-10 supersession makes forms a modal, so the whole field list is read in
+one shot and there is no per-field join to save. A stable string key also survives field reordering
+and relabelling without touching answer rows. The integrity the FK gave up — an answer naming a
+field that does not exist — moves to one guard in the submission service, and each answer
+snapshots its `field_type` so a stored value is interpretable without resolving the version.
+See `docs/specs/2026-08-11-forms-and-bot-config-data-model-design.md`.
+
+---
+
+### 15. `bot_config` shape
+
+**Conflict:** The schema spec gives `bot_config` a surrogate `id` with `workspace_id` UK, plus
+`last_synced_at`, `last_sync_outcome` and `last_sync_error`.
+
+**Decision:** **`workspace_id` is the primary key** — one row per workspace becomes structural
+rather than a unique key over a surrogate. The table still carries a `workspace_id` column, so
+`002_rls.sql`'s structural policy loop picks it up unchanged.
+
+The three `last_sync_*` columns are **dropped**. They are operational status, not audit — one row's
+worth of "did the last push succeed", overwritten each time, with no actor and no before/after — and
+nothing pushes bot config anywhere: the orchestrator reads `bot_config` from Postgres per message,
+and the only external sync in the system is article publishing to Weaviate. Re-add them in the slice
+that introduces an actual push, with a consumer.
+
+**Audit is `change_log`**, which the spec already designs and which lands in the same slice.
+`bot_config` edits write one `change_log` row per changed field, in the same transaction as the
+upsert. Reusing `event` for this was rejected: `event.actor_id` deliberately has no FK, and `event`
+is the conversation/session reporting spine.
+See `docs/specs/2026-08-11-forms-and-bot-config-data-model-design.md`.
+
+---
+
 ## Contradictions still open (no decision yet)
 
 These have not been resolved. Do not silently pick a side — add a decision here when one is made.
