@@ -1,4 +1,5 @@
 import { Virtuoso } from 'react-virtuoso'
+import { DeliveryTicks } from './DeliveryTicks.tsx'
 import type { ChatAuthorType, ChatMessage } from './types.ts'
 
 type ChatThreadProps = {
@@ -42,6 +43,14 @@ export function ChatThread({ messages, currentAuthorType, onRetry }: ChatThreadP
             <time dateTime={chatMessage.createdAt} className="mt-1 block text-xs opacity-80">
               {new Date(chatMessage.createdAt).toLocaleTimeString()}
             </time>
+            {/* Never on an internal note: the player cannot see the message, so
+                any receipt would be a claim about something they never got. */}
+            {isOwn && !isInternal && (
+              <span className="mt-0.5 block text-xs">
+                {/* sky-300, not the default sky-500: an own bubble here is slate-600, and the darker blue disappears against it. */}
+                <DeliveryTicks deliveryState={chatMessage.deliveryState} readClassName="text-sky-300" />
+              </span>
+            )}
             {chatMessage.deliveryState === 'sending' && <span className="mt-0.5 block text-xs opacity-80">Sending…</span>}
             {chatMessage.deliveryState === 'failed' && (
               <span className="mt-0.5 block text-xs opacity-80">

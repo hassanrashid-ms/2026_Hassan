@@ -12,5 +12,7 @@ export type ChatMessage = {
   body: string
   createdAt: string
   deliveryState?: 'sending' | 'sent' | 'delivered' | 'read' | 'failed'
+  /** ISO 8601 when the other side read it, null if they have not. Carried for tooltips and debugging — the tick itself keys off deliveryState alone. */
+  readAt?: string | null
   visibility?: 'public' | 'internal'
 }

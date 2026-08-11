@@ -1,5 +1,6 @@
 import { Virtuoso } from 'react-virtuoso'
 import { AlertCircle } from 'lucide-react'
+import { DeliveryTicks } from '@/features/chat/components/DeliveryTicks'
 import type { ChatMessage } from '@/features/chat/components/types'
 import { cn } from '@/surfaces/webview/lib/cn'
 
@@ -60,6 +61,8 @@ function ChatBubble({ message, onRetry }: { message: ChatMessage; onRetry: (mess
           <time dateTime={message.createdAt}>
             {new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </time>
+          {/* Default sky-500: this row sits on the page background, not on the accent bubble. */}
+          {own && <DeliveryTicks deliveryState={message.deliveryState} />}
           {message.deliveryState === 'sending' && <span>Sending…</span>}
           {failed && (
             <span className="inline-flex items-center gap-1 text-accent">

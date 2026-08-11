@@ -11,8 +11,22 @@ import { createSocket } from '@/features/chat/api/socket'
 import { reconcilePending, type PendingMessage } from '@/features/chat/hooks/chatReconcile'
 import type { ChatMessage } from '@/features/chat/components/types'
 
-function toChatMessage(m: { id: string; author_type: ChatMessage['authorType']; body: string; created_at: string; delivery_state: NonNullable<ChatMessage['deliveryState']> }): ChatMessage {
-  return { id: m.id, authorType: m.author_type, body: m.body, createdAt: m.created_at, deliveryState: m.delivery_state }
+function toChatMessage(m: {
+  id: string
+  author_type: ChatMessage['authorType']
+  body: string
+  created_at: string
+  delivery_state: NonNullable<ChatMessage['deliveryState']>
+  read_at: string | null
+}): ChatMessage {
+  return {
+    id: m.id,
+    authorType: m.author_type,
+    body: m.body,
+    createdAt: m.created_at,
+    deliveryState: m.delivery_state,
+    readAt: m.read_at,
+  }
 }
 
 /**

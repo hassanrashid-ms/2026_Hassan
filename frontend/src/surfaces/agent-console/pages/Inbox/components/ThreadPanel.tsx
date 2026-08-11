@@ -18,6 +18,7 @@ function toChatMessage(m: AgentMessageView): ChatMessage {
     body: m.body,
     createdAt: m.created_at,
     deliveryState: m.delivery_state,
+    readAt: m.read_at,
     visibility: m.visibility,
   }
 }
