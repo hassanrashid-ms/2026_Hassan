@@ -5,7 +5,7 @@ import { postMessage, toAgentView, toPlayerView } from '../../domain/conversatio
 import { conversation, message } from '../../shared/db/schema/index.ts'
 import { withWorkspace } from '../../shared/db/withWorkspace.ts'
 import { appendEvent } from '../../shared/events/appendEvent.ts'
-import { emitInboxChanged, emitMessageToRooms } from '../../shared/realtime/emit.ts'
+import { emitInboxChanged, emitMessageToRooms, emitReadReceipt } from '../../shared/realtime/emit.ts'
 import { getIo } from '../../shared/realtime/socketServer.ts'
 import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts'
 
@@ -65,17 +65,21 @@ export async function sendAgentMessage(
   return { outcome: 'ok', message: agentView }
 }
 
+export type MarkReadResult = { conversationId: string; upToSeq: number; readAt: Date } | null
+
 export async function markAgentMessagesRead(
   ctx: AgentContext,
   body: z.infer<typeof MarkAgentReadBody>,
-): Promise<boolean> {
-  return withWorkspace(ctx.workspaceId, async (tx) => {
-    const [found] = await tx.select({ id: conversation.id }).from(conversation).where(eq(conversation.id, body.conversation_id)).limit(1)
-    if (!found) return false
+): Promise<MarkReadResult> {
+  const readAt = new Date()
 
-    await tx
+  const result = await withWorkspace(ctx.workspaceId, async (tx) => {
+    const [found] = await tx.select({ id: conversation.id }).from(conversation).where(eq(conversation.id, body.conversation_id)).limit(1)
+    if (!found) return null
+
+    const updated = await tx
       .update(message)
-      .set({ deliveryState: 'read' })
+      .set({ deliveryState: 'read', readAt })
       .where(
         and(
           eq(message.conversationId, found.id),
@@ -84,6 +88,20 @@ export async function markAgentMessagesRead(
           lte(message.seq, body.up_to_seq),
         ),
       )
-    return true
+      .returning({ seq: message.seq })
+
+    if (updated.length === 0) return null
+    return { conversationId: found.id, upToSeq: Math.max(...updated.map((r) => r.seq)), readAt }
   })
+
+  if (result) {
+    emitReadReceipt(getIo(), 'player', {
+      conversation_id: result.conversationId,
+      up_to_seq: result.upToSeq,
+      reader_type: 'agent',
+      read_at: result.readAt.toISOString(),
+    })
+  }
+
+  return result
 }

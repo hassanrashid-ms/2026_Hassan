@@ -145,3 +145,63 @@ describe('POST /surface/messages/read', () => {
     expect(rows[0]!.delivery_state).toBe('read')
   })
 })
+
+describe('POST /surface/messages/read records when the player saw it', () => {
+  it("stamps read_at on agent messages and leaves the player's own untouched", async () => {
+    const { workspaceId, playerId, token } = await setup()
+    const conversationId = await seedConversation({ workspaceId, playerId })
+    const agentRow = await ownerPool.query<{ id: string }>(
+      `insert into agent (email, display_name) values ('r1@example.test', 'R1') returning id`,
+    )
+    await ownerPool.query(
+      `insert into message (workspace_id, conversation_id, seq, author_type, author_agent_id, body)
+       values ($1, $2, 1, 'agent', $3, 'from the agent'), ($1, $2, 2, 'player', null, 'from the player')`,
+      [workspaceId, conversationId, agentRow.rows[0]!.id],
+    )
+
+    await request(app)
+      .post('/surface/messages/read')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ up_to_seq: 2 })
+      .expect(200)
+
+    const { rows } = await ownerPool.query<{ seq: number; delivery_state: string; read_at: Date | null }>(
+      `select seq, delivery_state, read_at from message where conversation_id = $1 order by seq`,
+      [conversationId],
+    )
+    expect(rows[0]).toMatchObject({ seq: 1, delivery_state: 'read' })
+    expect(rows[0]!.read_at).toBeInstanceOf(Date)
+    // The player reading their own message is not a receipt.
+    expect(rows[1]).toMatchObject({ seq: 2, delivery_state: 'sent' })
+    expect(rows[1]!.read_at).toBeNull()
+  })
+
+  it('never moves read_at forward on a second read of the same message', async () => {
+    const { workspaceId, playerId, token } = await setup()
+    const conversationId = await seedConversation({ workspaceId, playerId })
+    const agentRow = await ownerPool.query<{ id: string }>(
+      `insert into agent (email, display_name) values ('r2@example.test', 'R2') returning id`,
+    )
+    await ownerPool.query(
+      `insert into message (workspace_id, conversation_id, seq, author_type, author_agent_id, body)
+       values ($1, $2, 1, 'agent', $3, 'first')`,
+      [workspaceId, conversationId, agentRow.rows[0]!.id],
+    )
+
+    const read = () =>
+      request(app).post('/surface/messages/read').set('Authorization', `Bearer ${token}`).send({ up_to_seq: 1 }).expect(200)
+    const readAtNow = async () => {
+      const { rows } = await ownerPool.query<{ read_at: Date }>(
+        `select read_at from message where conversation_id = $1 and seq = 1`,
+        [conversationId],
+      )
+      return rows[0]!.read_at.toISOString()
+    }
+
+    await read()
+    const first = await readAtNow()
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    await read()
+    expect(await readAtNow()).toBe(first)
+  })
+})

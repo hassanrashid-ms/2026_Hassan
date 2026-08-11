@@ -215,3 +215,65 @@ describe('POST /agent/messages — internal notes and status transition', () => 
     expect(rows[0]!.payload.visibility).toBe('internal')
   })
 })
+
+describe('POST /messages/read records when the agent saw it', () => {
+  it('stamps read_at on player messages and leaves agent messages untouched', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const conversationId = await seedConversation({ workspaceId, playerId })
+    const { agentId, token } = await setupAssignedAgent(workspaceId, conversationId)
+    await ownerPool.query(
+      `insert into message (workspace_id, conversation_id, seq, author_type, author_agent_id, body)
+       values ($1, $2, 1, 'player', null, 'my coins vanished'), ($1, $2, 2, 'agent', $3, 'looking into it')`,
+      [workspaceId, conversationId, agentId],
+    )
+
+    await request(app)
+      .post('/messages/read')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ conversation_id: conversationId, up_to_seq: 2 })
+      .expect(200)
+
+    const { rows } = await ownerPool.query<{ seq: number; delivery_state: string; read_at: Date | null }>(
+      `select seq, delivery_state, read_at from message where conversation_id = $1 order by seq`,
+      [conversationId],
+    )
+    expect(rows[0]).toMatchObject({ seq: 1, delivery_state: 'read' })
+    expect(rows[0]!.read_at).toBeInstanceOf(Date)
+    // An agent reading their own reply is not a receipt.
+    expect(rows[1]).toMatchObject({ seq: 2, delivery_state: 'sent' })
+    expect(rows[1]!.read_at).toBeNull()
+  })
+
+  it('never moves read_at forward on a second read of the same message', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const conversationId = await seedConversation({ workspaceId, playerId })
+    const { token } = await setupAssignedAgent(workspaceId, conversationId)
+    await ownerPool.query(
+      `insert into message (workspace_id, conversation_id, seq, author_type, author_agent_id, body)
+       values ($1, $2, 1, 'player', null, 'my coins vanished')`,
+      [workspaceId, conversationId],
+    )
+
+    const read = () =>
+      request(app)
+        .post('/messages/read')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ conversation_id: conversationId, up_to_seq: 1 })
+        .expect(200)
+    const readAtNow = async () => {
+      const { rows } = await ownerPool.query<{ read_at: Date }>(
+        `select read_at from message where conversation_id = $1 and seq = 1`,
+        [conversationId],
+      )
+      return rows[0]!.read_at.toISOString()
+    }
+
+    await read()
+    const first = await readAtNow()
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    await read()
+    expect(await readAtNow()).toBe(first)
+  })
+})

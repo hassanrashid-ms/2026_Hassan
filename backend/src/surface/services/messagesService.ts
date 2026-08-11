@@ -8,7 +8,7 @@ import { postMessage, toAgentView, toPlayerView } from '../../domain/conversatio
 import { appendEvent } from '../../shared/events/appendEvent.ts'
 import { conversation, message, session } from '../../shared/db/schema/index.ts'
 import { withWorkspace } from '../../shared/db/withWorkspace.ts'
-import { emitInboxChanged, emitMessageToRooms } from '../../shared/realtime/emit.ts'
+import { emitInboxChanged, emitMessageToRooms, emitReadReceipt } from '../../shared/realtime/emit.ts'
 import { getIo } from '../../shared/realtime/socketServer.ts'
 import type { PlayerContext } from '../../shared/middleware/requirePlayerToken.ts'
 
@@ -112,22 +112,51 @@ export async function getPlayerMessages(
   })
 }
 
-export async function markPlayerMessagesRead(ctx: PlayerContext, body: MarkPlayerReadBodyType): Promise<boolean> {
-  return withWorkspace(ctx.workspaceId, async (tx) => {
-    const [found] = await tx.select({ id: conversation.id }).from(conversation).where(eq(conversation.playerId, ctx.playerId)).limit(1)
-    if (!found) return false
+/**
+ * `null` means there is nothing to announce — no conversation, or every message
+ * in range was already read. The caller uses that to skip the socket emit.
+ */
+export type MarkReadResult = { conversationId: string; upToSeq: number; readAt: Date } | null
 
-    await tx
+export async function markPlayerMessagesRead(
+  ctx: PlayerContext,
+  body: MarkPlayerReadBodyType,
+): Promise<MarkReadResult> {
+  // One timestamp for the whole batch: every message in this range was seen in
+  // the same glance, and a per-row now() would imply an ordering that did not happen.
+  const readAt = new Date()
+
+  const result = await withWorkspace(ctx.workspaceId, async (tx) => {
+    const [found] = await tx.select({ id: conversation.id }).from(conversation).where(eq(conversation.playerId, ctx.playerId)).limit(1)
+    if (!found) return null
+
+    const updated = await tx
       .update(message)
-      .set({ deliveryState: 'read' })
+      .set({ deliveryState: 'read', readAt })
       .where(
         and(
           eq(message.conversationId, found.id),
           ne(message.authorType, 'player'),
+          // Load-bearing: this is what makes read_at first-write-wins. Removing
+          // it would let every thread open overwrite the original read time.
           ne(message.deliveryState, 'read'),
           lte(message.seq, body.up_to_seq),
         ),
       )
-    return true
+      .returning({ seq: message.seq })
+
+    if (updated.length === 0) return null
+    return { conversationId: found.id, upToSeq: Math.max(...updated.map((r) => r.seq)), readAt }
   })
+
+  if (result) {
+    emitReadReceipt(getIo(), 'agents', {
+      conversation_id: result.conversationId,
+      up_to_seq: result.upToSeq,
+      reader_type: 'player',
+      read_at: result.readAt.toISOString(),
+    })
+  }
+
+  return result
 }
