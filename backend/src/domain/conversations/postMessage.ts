@@ -8,8 +8,13 @@ export type PostMessageInput = {
   workspaceId: string
   conversationId: string
   authorType: ChatAuthorType
-  /** The player id or agent id behind this send — recorded on the event, not the message row. */
-  actorId: string
+  /**
+   * The player id or agent id behind this send — recorded on the event, not the
+   * message row. Null for a `system` message: it has no player and no agent
+   * behind it, and inventing a sentinel actor id would put a fictional uuid in
+   * the reporting spine.
+   */
+  actorId: string | null
   authorAgentId?: string | null
   body: string
   visibility?: 'public' | 'internal'
