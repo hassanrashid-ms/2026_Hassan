@@ -19,7 +19,9 @@ multi-tenant customer support tool for mobile games. One of two repos:
 | `pnpm dev` | start all services |
 | `pnpm test` | every package's suite; API suite needs Postgres up |
 | `pnpm typecheck` | `tsc --noEmit` across the workspace |
-| `pnpm db:setup` | idempotent; re-run after any schema change |
+| `pnpm db:generate` | generate a SQL migration after editing `backend/src/shared/db/schema/**` — commit the generated file |
+| `pnpm db:setup` | idempotent; extensions → migrations → RLS. Re-run after any schema change |
+| `pnpm db:baseline` | stamp a database that already has the correct schema as migrated, without running DDL |
 | `pnpm db:seed` | seed dev data |
 | `pnpm db:studio` | launch Drizzle Studio GUI DB dashboard (http://local.drizzle.studio) |
 | `pnpm repomix` | generate compressed codebase AST snapshot (repomix-output.xml) |
