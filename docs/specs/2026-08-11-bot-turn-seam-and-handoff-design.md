@@ -1,7 +1,16 @@
 # Bot turn seam and handoff — design
 
 **Date:** 2026-08-11
-**Status:** Accepted
+**Status:** Accepted — revised in part on 2026-08-12 by
+`2026-08-12-bot-tool-calling-decider-design.md` (spec 4)
+
+> **What spec 4 changed here.** The control flow, the gate, the queue, the assignment rule and the
+> transaction discipline all stand as written. Four things do not: `HandoffReason` gains
+> `article_rejected`, `BotTurnDecision` gains a fifth `resolve` shape, the reopen branch in §Control
+> flow now posts the handoff message and assigns, and `conversation.bot_phase` joins the schema.
+> Each is marked inline below. The decider that fills the seam is spec 4's tool loop, not spec 3's
+> single structured-output call.
+
 **Scope:** The control flow a bot turn runs inside, and every way that turn can end in a human
 picking the conversation up. One new column, one new unique key, one new queue, one widened type,
 three new event types. **No LLM call.**
@@ -13,20 +22,21 @@ three new event types. **No LLM call.**
 The orchestrator has a shape before it has a brain. This slice builds the shape: when the bot is
 allowed to run, where the turn executes, what a turn's outcome does to the database, and what the
 player and the agent each see when the bot hands off. The decision itself is behind a one-function
-seam that a stub fills until spec 3 replaces it.
+seam that a stub fills until spec 4 replaces it.
 
 **It ships as a correct, complete system.** With the stub in place every conversation hands off
 immediately, with a real system message, a real event and a real assignment — which is exactly the
 behaviour the non-negotiables demand when the bot is unavailable. Nothing in this slice can be wrong
 because of a model, because no model runs.
 
-This is the first of three specs decomposing the bot orchestrator:
+This is the first of the specs decomposing the bot orchestrator:
 
 | Spec | Contents |
 |---|---|
 | **1 — this one** | Gating, queue, outcome application, handoff, assignment, events |
-| 2 — retrieval and prompt assembly | BM25 retrieval, `{{…}}` substitution, history construction. No LLM |
-| 3 — OpenAI call and decision | `openai` SDK, structured outputs, turn cap, index→subintent resolution |
+| 2 — retrieval and prompt assembly | Hybrid search, `{{…}}` substitution, taxonomy view, history. No LLM |
+| ~~3 — OpenAI call and decision~~ | **Superseded by spec 4** |
+| 4 — tool-calling decider | `openai` SDK, five tools, budgets, `bot_phase`, context assembly, reopen |
 
 ### In scope
 
@@ -39,7 +49,7 @@ This is the first of three specs decomposing the bot orchestrator:
 | `bot-turns` BullMQ queue + worker | The existing worker runs `concurrency: 1` and would serialise every workspace |
 | `SILENT_UNAVAILABLE_REASONS` | A deliberately-disabled bot must not file an incident note per conversation |
 | `runBotTurn` — the impure shell | Gather, delegate to the decider, apply, emit |
-| `BotDecider` seam + `stubDecider` | The one function specs 2 and 3 fill in |
+| `BotDecider` seam + `stubDecider` | The one function specs 2 and 4 fill in |
 | `applyBotTurn` — four outcomes, one transaction each | State changes never go through ad-hoc updates |
 | `assignOnHandoff` | "Bot handoffs are auto-assigned" |
 | Player-visible handoff message, agent-visible failure note | Player sees no error; support is told |
@@ -50,9 +60,10 @@ This is the first of three specs decomposing the bot orchestrator:
 
 - **Every LLM concern.** No `openai` dependency, no `OPENAI_MODEL` env var, no prompt assembly, no
   retrieval, no response schema. Specs 2 and 3.
-- **The turn cap (N=2).** It is a guard inside the decider, and the decider is a stub here. Spec 3.
-- **The article-offer lifecycle** — `article_shown` / `article_rejected` / `article_read` /
-  `still_need_help_reached`, and `bot_active → resolved` on player confirmation.
+- **The turn budgets.** Guards inside the decider, and the decider is a stub here. Spec 4 sets them
+  at 4 tool calls per turn and 8 bot messages per conversation.
+- **The article-offer lifecycle** and `bot_active → resolved` on player confirmation. Spec 4 builds
+  both, as `bot_article_offered` / `bot_article_rejected` and the `resolve` outcome.
 - **Form offering.** Blocked on the form-builder and the player modal, neither of which exists.
 - **The inactivity resolution turn** (the 24 h "Is your issue resolved?" bot message) and
   `resolution_cycle`. A worker slice with its own clock semantics.
@@ -129,16 +140,18 @@ export type HandoffReason = 'model' | 'turn_cap'
 
 export type UnavailableReason =
   | 'not_provisioned'    // admin has the bot switched off
-  | 'not_implemented'    // no decider exists yet — removed by spec 3
-  | 'error'              // spec 3
-  | 'timeout'            // spec 3
-  | 'invalid_response'   // spec 3
+  | 'not_implemented'    // no decider exists yet — removed by spec 4
+  | 'error'              // spec 4
+  | 'timeout'            // spec 4
+  | 'invalid_response'   // spec 4
 
 export type BotTurnDecision =
   | { kind: 'noop' }
   | { kind: 'answer';      reply: string; subintentId: string }
   | { kind: 'handoff';     reason: HandoffReason; subintentId: string | null }
   | { kind: 'unavailable'; reason: UnavailableReason }
+  // spec 4 adds: | { kind: 'resolve' }   — bot_active → resolved, player-confirmed
+  // spec 4 adds: articleId?: string  to the `answer` shape
 
 export type BotDecider = (input: BotTurnInput) => Promise<BotTurnDecision>
 ```
@@ -155,18 +168,18 @@ unavailable"*. Calling it a handoff would count a missing feature as a bot makin
 forces its removal. It is a value in an `event` payload, not in the SDK wire contract, so removing it
 breaks nothing shipped.
 
-`HandoffReason`'s two members are both spec 3's to produce. They are declared here because the
+`HandoffReason`'s two members are both spec 4's to produce. They are declared here because the
 outcome they feed is built here, and a type that grows in the slice that consumes it would make spec
 3 a control-flow change rather than a one-function swap.
 
-**Spec 3 replaces this union** with the model-supplied set (`asked_for_person`, `no_article`,
-`sensitive`, `unsure`) plus `turn_cap`, because *"Asked for a person"* is a reported metric and
-`'model'` cannot answer it. Only the payload value changes; nothing here does.
+**Spec 4 replaces this union** with the model-supplied set (`asked_for_person`, `article_rejected`,
+`no_article`, `sensitive`, `unsure`) plus `turn_cap`, because *"Asked for a person"* is a reported
+metric and `'model'` cannot answer it. Only the payload value changes; nothing here does.
 
 ### 5a · The internal failure note is driven by the reason, not by the outcome kind
 
 Two `unavailable` reasons are **not incidents**: `not_provisioned` (an admin deliberately switched
-the bot off) and `not_implemented` (spec 3 has not landed). A workspace running with its bot off
+the bot off) and `not_implemented` (spec 4 has not landed). A workspace running with its bot off
 would otherwise collect a *"Bot could not respond"* internal note on every single conversation —
 noise that trains agents to ignore the one note that matters.
 
@@ -181,8 +194,8 @@ place, rather than a `notifyAgent` boolean each caller has to remember to set co
 The `bot_unavailable` **event is always written**, silent reason or not. Suppressing the note is a
 statement about who needs waking up; it is never a statement about what gets recorded.
 
-The seam is what makes specs 2 and 3 additive: every outcome path below is built and tested here,
-against a decider a test can make return anything, so spec 3 changes one injected function and no
+The seam is what makes specs 2 and 4 additive: every outcome path below is built and tested here,
+against a decider a test can make return anything, so spec 4 changes one injected function and no
 control flow.
 
 ### 6 · Every outcome is one transaction through one function
@@ -269,7 +282,7 @@ workspace's.
 `close()`. Separate queues also mean a backlog of bot turns cannot starve the session-timeout sweep,
 and the two have unrelated retry policies.
 
-**Retries: 2 attempts, exponential backoff.** Spec 3 owns the per-call timeout; this slice owns the
+**Retries: 2 attempts, exponential backoff.** Spec 4 owns the per-call timeout; this slice owns the
 attempt count, because the fallback that fires after the last attempt is defined here. A job that
 throws on its final attempt runs `applyBotTurn` with `{ kind: 'unavailable', reason: 'error' }` in
 the worker's `failed` handler — the fallback must not itself depend on the thing that just failed.
@@ -354,6 +367,11 @@ resolveBotConfig(tx, workspaceId)
 announces the status the conversation actually ended the request in, not the `bot_active` it passed
 through. The agent console must never be told about a status that lasted microseconds.
 
+> **Revised by spec 4 §10.** The reopen branch additionally posts `HANDOFF_PLAYER_MESSAGE` and
+> assigns — `assignOnHandoff` for a bot-resolved conversation, the previous owner for an
+> agent-resolved one if they are still active. `awaiting_player → open` posts nothing and is
+> unchanged.
+
 The reopen and `awaiting_player` branches leave the status at `open` and never reach this — the bot
 does not run on a conversation an agent owns or has owned.
 
@@ -364,14 +382,14 @@ if (shouldEnqueue) enqueueBotTurn({ workspaceId, conversationId, seq })
 ```
 
 Then the existing emits. The HTTP response carries the player's own message and nothing else; a bot
-reply, when spec 3 makes one possible, arrives over the socket.
+reply, when spec 4 makes one possible, arrives over the socket.
 
 ### Phase 3 — the `bot-turns` worker
 
 `runBotTurn(workspaceId, conversationId, decider)`:
 
 1. **Gather**, in one read transaction: the conversation row (`status`, `subintent_id`,
-   `assigned_agent_id`) and the message history. Spec 2 adds retrieval, the subintent list and
+   `assigned_agent_id`) and the message history. Spec 2 adds the subintent list and
    player state to this step.
 2. **Guard:** `status !== 'bot_active'` → return `{ kind: 'noop' }`. No writes, no event, no retry.
 3. **Decide:** `await decider(input)`. A throw propagates to BullMQ, which retries; on the final
@@ -389,7 +407,8 @@ predicate in the query.
 
 ## Outcomes
 
-`applyBotTurn(tx, decision)` — one transaction, four shapes.
+`applyBotTurn(tx, decision)` — one transaction, four shapes. **Spec 4 adds a fifth, `resolve`**, and
+a `bot_phase` write to each of the four below.
 
 | `kind` | Message(s) | Status | Assign | Classification | Events |
 |---|---|---|---|---|---|
@@ -398,8 +417,8 @@ predicate in the query.
 | `handoff` | `system`, public | → `open` | `assignOnHandoff` | set if NULL | `intent_set` if written, then `bot_handoff` |
 | `unavailable` | `system` public, **+** `system` internal unless the reason is silent | → `open` | `assignOnHandoff` | untouched, stays NULL | `bot_unavailable` |
 
-`answer` is fully implemented here even though `stubDecider` never returns it — it is the path spec 3
-switches on, and building it behind an injectable decider is what lets spec 3 be a one-function
+`answer` is fully implemented here even though `stubDecider` never returns it — it is the path spec 4
+switches on, and building it behind an injectable decider is what lets spec 4 be a one-function
 change.
 
 `unavailable` never writes a classification. An unclassified conversation is the honest record of a
@@ -428,10 +447,10 @@ at read time rewrites history when an admin renames a subintent, and `subintent_
 precisely because that distinction matters.
 
 `reason` values are exactly the two unions in §5: `HandoffReason` (`model`, `turn_cap` — replaced by
-spec 3's model-supplied set) on
+spec 4's model-supplied set) on
 `bot_handoff`, and `UnavailableReason` (`not_provisioned`, `not_implemented`, `error`, `timeout`,
 `invalid_response`) on `bot_unavailable`. This slice can only produce `not_provisioned`,
-`not_implemented` and `error`. Spec 2 adds `retrieval_failed` to the union; spec 3 adds the rest and
+`not_implemented` and `error`. Spec 2 adds `retrieval_failed` to the union; spec 4 adds the rest and
 removes `not_implemented`.
 
 ---

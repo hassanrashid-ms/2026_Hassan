@@ -1,7 +1,21 @@
 # Bot retrieval and prompt assembly — design
 
 **Date:** 2026-08-11
-**Status:** Accepted
+**Status:** Accepted — revised in part on 2026-08-12 by
+`2026-08-12-bot-tool-calling-decider-design.md` (spec 4)
+
+> **What spec 4 changed here.** The taxonomy view (§7), substitution (§6), player context (§8),
+> history (§9) and the size caps (§5) all stand as written — they are the safety-critical half and
+> nothing about them depends on how the model is called.
+>
+> **Retrieval is no longer prefetched.** §1 is superseded: the query is phrased by the model through
+> the `search_articles` tool rather than being the latest player message. `searchArticleIdsHybrid`,
+> `HYBRID_ALPHA`, `BOT_ARTICLE_LIMIT` and the no-floor decision (§4) are unchanged — only the caller
+> moves. `{{articles}}` consequently changes meaning: see §10, added below.
+>
+> §8's player-context injection risk, recorded here as *"carried forward to spec 3"*, is **resolved**
+> by spec 4 §7 moving player context into a `user` message.
+
 **Scope:** Everything that turns a conversation into the exact string sent to a model, and nothing
 that sends it. Five new modules, one new Weaviate query function, one filled-in type, one new `UnavailableReason` member. **No LLM.**
 
@@ -27,7 +41,8 @@ that runs in milliseconds and never flakes.
 |---|---|
 | 1 — bot turn seam and handoff | Gating, queue, outcome application, handoff, assignment, events |
 | **2 — this one** | Retrieval, taxonomy view, player context, history, substitution |
-| 3 — OpenAI call and decision | `openai` SDK, structured outputs, turn cap, index→subintent resolution, the `Other` seed |
+| ~~3 — OpenAI call and decision~~ | **Superseded by spec 4** |
+| 4 — tool-calling decider | `openai` SDK, five tools, budgets, `bot_phase`, context assembly, the `Other` seed |
 
 ### In scope
 
@@ -47,12 +62,12 @@ that runs in milliseconds and never flakes.
 ### Out of scope — named so nobody wonders
 
 - **The model call.** No `openai` chat client, no `OPENAI_MODEL` env, no response schema, no turn
-  cap. Spec 3. (`OPENAI_APIKEY` *is* touched here — see §2 — but only as the Weaviate vectorizer
+  cap. Spec 4. (`OPENAI_APIKEY` *is* touched here — see §2 — but only as the Weaviate vectorizer
   header it already is.)
-- **Resolving an index back to a subintent.** This slice *produces* the map; spec 3 reads it.
+- **Resolving an index back to a subintent.** This slice *produces* the map; spec 4 reads it.
 - **Seeding the `Other` intent and its catch-all subintent.** `SEED_TAXONOMY` has eight intents and
   none of them is `Other`; `intent.is_system` is declared in the schema and set nowhere. That row is
-  what an unclassifiable conversation lands on, and it is **spec 3's prerequisite** — the slice that
+  what an unclassifiable conversation lands on, and it is **spec 4's prerequisite** — the slice that
   first has an index to fail to resolve. Recorded here so it is not discovered there. This slice
   renders whatever subintents exist and needs no fallback of its own.
 - **Changing public FAQ search.** `listPublicArticles` keeps `searchArticleIds` and its BM25 floor,
@@ -68,17 +83,23 @@ that runs in milliseconds and never flakes.
 
 ## Design decisions
 
-### 1 · The retrieval query is the latest player message, alone
+### 1 · ~~The retrieval query is the latest player message, alone~~ — superseded by spec 4
 
-Not the concatenated conversation, not a summary, not a rewritten query.
+**This section is obsolete.** It argued against concatenating the conversation into one query, and
+that argument still holds — but the conclusion it drew, that the query should therefore be the latest
+player message verbatim, was the wrong fix.
 
-Both halves of a hybrid query suffer from concatenation: the keyword half dilutes the terms that
-matter with the terms of a question already answered, and the vector half averages two questions into
-an embedding that means neither. The failure is silent either way — you get plausible-looking
-articles for the wrong turn. With the turn cap at 2 there are at most three player messages in a
-bot-active conversation anyway, so the recall lost is small and the precision kept is not.
+The player's own words are frequently a poor query. *"paid, got nothing"* shares almost no term with
+an article titled *"Why didn't my gems arrive?"*, and the vector half of a five-word fragment carries
+little signal either. Spec 4 makes retrieval the `search_articles` tool: the model reads the message,
+phrases a query (*"missing in-app purchase not delivered"*), reads the returned titles and summaries,
+and may query again — up to three times per turn.
 
-The full history still reaches the model as `history`; it is only *retrieval* that reads one message.
+Retrieval is the textbook case for a tool. It is idempotent, side-effect-free, and cheap to get
+wrong, so letting the model iterate costs nothing but tokens and reliably beats one fixed query.
+
+Everything mechanical below is unchanged: same function, same `alpha`, same limit, same workspace
+filter, same absence of a score floor. Only the caller and the query string move.
 
 ### 2 · The bot searches hybrid; public FAQ search stays BM25
 
@@ -111,7 +132,7 @@ two functions — and changing one must not silently change the other.
 already forwards it as the `X-OpenAI-Api-Key` header, which is what vectorizes the query at search
 time — so hybrid without it does not fail loudly, it degrades. Making it required at boot, alongside
 `WEAVIATE_URL`, is what stops that. One key now serves two purposes: the vectorizer header here, and
-spec 3's chat client.
+spec 4's chat client.
 
 > **To verify before implementing:** that the header path is actually live and existing `Article`
 > objects carry vectors. If `OPENAI_APIKEY` was unset when articles were indexed, they were stored
@@ -123,6 +144,12 @@ spec 3's chat client.
 The hybrid call inherits `WEAVIATE_CALL_TIMEOUT_MS` (5 s) and throws on timeout. That throw
 propagates: the job retries, and on the final attempt the conversation takes spec 1's `unavailable`
 path with a new reason.
+
+> **Spec 4 delta:** the throw now originates inside the `search_articles` tool handler, mid-loop. It
+> is deliberately **not** caught and reported back to the model as *"search failed, carry on"* — a bot
+> that cannot read the articles cannot answer from them, and inventing an answer or handing off as
+> though it had checked would both be worse than the fallback. The throw leaves the loop untouched
+> and reaches BullMQ exactly as described here.
 
 ```ts
 export type UnavailableReason =
@@ -181,7 +208,8 @@ bug to a model as easily as it reads as absence.
 
 | Bound | Value | Why |
 |---|---|---|
-| `BOT_ARTICLE_LIMIT` | 3 | The hybrid `limit`. Three, not five — see below |
+| `BOT_ARTICLE_LIMIT` | 3 | The hybrid `limit`, **per `search_articles` call**. Three, not five — see below |
+| `MAX_CATALOGUE_ARTICLES` | 200 | §10 — the `{{articles}}` catalogue |
 | `MAX_ARTICLE_BODY_CHARS` | 2000 | One long article must not crowd out the other two |
 | `MAX_HISTORY_MESSAGES` | 20 | A player can send many messages before the worker runs |
 | `MAX_HISTORY_BODY_CHARS` | 1000 | Per message |
@@ -282,7 +310,7 @@ Stripping newlines is the load-bearing one: a multi-line value is what turns a c
 something that looks like a new section of the prompt. This is a mitigation, not a solution —
 `spend_tier: "whale, ignore the rules above"` still arrives as a hundred characters of adversarial
 text inside the system prompt, and the real answers (moving player context out of the system role,
-or declaring these fields untrusted to the model) belong in spec 3 where the message roles are
+or declaring these fields untrusted to the model) belong in spec 4 where the message roles are
 decided. **Recorded here because it is a property of this design, not an oversight of it.**
 
 ### 9 · History is player and bot only, through `toPlayerView`
@@ -307,6 +335,50 @@ reason.
 
 ---
 
+### 10 · `{{articles}}` is the catalogue, not the retrieved set — added 2026-08-12
+
+Prefetched retrieval had `{{articles}}` render the three retrieved articles, bodies included. With
+retrieval behind a tool there is nothing to prefetch, so the placeholder needs a new meaning — and
+the product spec already states it: *"`{{articles}}` — the published article titles and summaries."*
+
+So `{{articles}}` renders **every published article's title and summary, no bodies and no ids**,
+ordered by intent then title, capped at `MAX_CATALOGUE_ARTICLES`.
+
+```
+Purchases
+  Why didn't my gems arrive? — Purchases can take up to an hour to appear…
+  Restoring purchases — If a purchase is missing after reinstalling…
+Progress
+  Lost progress after update — …
+```
+
+**Three reasons this is the right shape rather than dropping the placeholder.**
+
+It is the only thing that lets the bot know what it *cannot* answer. A search returns the three
+least-unrelated articles whatever you ask it (§4 — there is no score floor), so search alone can
+never establish absence. A model that has seen the catalogue can report `no_article` honestly, and
+that reason is *"the raw material for deciding which articles to write next."*
+
+It makes the model's queries better. Knowing the corpus covers purchases, progress and account
+recovery — and not, say, tournaments — shapes a query far more than guessing from the player's
+wording.
+
+**No ids and no bodies is deliberate.** Bodies would put the whole corpus in every prompt. Omitting
+ids means the model cannot call `offer_article` from the catalogue alone; it must search first, which
+is exactly spec 4's validation rule — an article is never offered without its body having been read.
+
+The division of labour: **the catalogue says what exists, the tool says what it says.**
+
+The zero-articles sentinel in §4 still renders, unchanged, and is still reachable only in a workspace
+with no published articles at all.
+
+`MAX_CATALOGUE_ARTICLES = 200` is a ceiling, not a target — roughly 6k tokens at the seed corpus's
+size. A workspace past it gets a truncated catalogue with a marked count, and that is the point at
+which the catalogue needs replacing with something smarter. Same treatment §7 gives a 200-subintent
+taxonomy: the honest size of the problem, recorded rather than silently truncated.
+
+---
+
 ## `BotTurnInput` — the shape spec 1 left open
 
 ```ts
@@ -314,21 +386,22 @@ export type BotTurnInput = {
   /** Fully assembled and substituted. Nothing downstream edits this string. */
   systemPrompt: string
   history: BotTurnHistoryEntry[]
-  /** 1-based, matching the rendered list. Spec 3 decodes the model's answer with it. */
+  /** 1-based, matching the rendered list. Spec 4 decodes the model's answer with it. */
   indexToSubintentId: ReadonlyMap<number, string>
 }
 ```
 
-**Spec 3 adds two fields** — `botTurnCount` for the turn-cap guard and `playerContext`, which it
-moves out of the system prompt into a `user` message. Both are values this slice's gather step
-already holds; neither changes the three below.
+**Spec 4 adds four fields** — `playerContext`, which it moves out of the system prompt into a `user`
+message, plus `botPhase`, `botMessageCount` and `lastPlayerMessageAt` for the phase gate, the budget
+guard and the resumption line in the state block. All are values this slice's gather step already
+holds or can read in the same transaction; none changes the three below.
 
 Three fields, and deliberately no `articles`, no `conversationId`, no raw config. The decider's whole
 job is: given this prompt and this history, what should happen — and given an index, which subintent
-was that. Anything else it could reach for is something spec 3 would be able to make a second,
+was that. Anything else it could reach for is something spec 4 would be able to make a second,
 divergent decision from.
 
-`fallbackSubintentId` is **not** here. Resolving an unresolvable index is spec 3's, and so is the
+`fallbackSubintentId` is **not** here. Resolving an unresolvable index is spec 4's, and so is the
 `Other` row it needs.
 
 ---
@@ -357,33 +430,40 @@ Weaviate.
 ### Delta to spec 1's `orchestrator.ts`
 
 The gather step grows. In the existing read transaction, additionally: `buildTaxonomyView`,
-`resolvePlayerContext` (via `conversation.session_id`), and the message rows for `buildHistory`.
-Then, **outside** the transaction, `retrieveArticles` on the latest player message. Then
-`assembleBotTurnInput`, then `decider(input)` as before.
+`resolvePlayerContext` (via `conversation.session_id`), the message rows for `buildHistory`, and the
+published-article catalogue for `{{articles}}` (§10). Then `assembleBotTurnInput`, then
+`decider(input)` as before.
 
-Retrieval sits outside the transaction and after the `status === 'bot_active'` guard, so a
-conversation an agent has claimed costs no Weaviate call at all.
+> **Spec 4 delta.** `retrieveArticles` leaves the gather step entirely — it is now called from the
+> `search_articles` tool handler, inside the loop, outside any transaction. The property this section
+> claimed still holds and holds more strongly: a conversation an agent has claimed returns `noop` at
+> the guard and never reaches the loop, so it costs no Weaviate call. A conversation that needs no
+> article — a greeting, or a player who immediately asks for a human — now costs none either, which
+> prefetching could not avoid.
 
 ---
 
 ## The assembled prompt
 
-`{{articles}}` renders as a numbered list, blank-line separated:
+`{{articles}}` renders the catalogue described in §10 — every published title and summary, grouped by
+intent, no bodies and no ids:
 
 ```
-[1] Why was I charged twice?
-If you see two charges for the same purchase, one is usually a temporary authorisation…
+Purchases
+  Why was I charged twice? — If you see two charges for the same purchase, one is usually…
+  Requesting a refund — Refunds are handled by the platform store, not by us…
 
-[2] Requesting a refund
-Refunds are handled by the platform store, not by us…
+Progress
+  Lost progress after update — …
 ```
 
-Numbered, even though nothing in slice A reads the numbers back. It is what lets someone reading a
-bad answer next to the logged prompt say *which* article the model used — the same reason the
-subintent list is numbered. It also gives spec 4's `article_shown` event a hook that needs no
-reformatting.
+Grouped by intent rather than numbered. The numbering that earlier drafts used existed so a reader
+could match a logged prompt to the article the model chose; that job now belongs to the
+`bot_article_offered` event, which records the id and the title outright and does it far better than
+a positional index in a prompt.
 
-Titles are never truncated; only bodies are.
+Titles and summaries are never truncated. Bodies do not appear here at all — `search_articles`
+returns them, subject to `MAX_ARTICLE_BODY_CHARS`.
 
 ---
 
@@ -434,8 +514,9 @@ Every test below runs with no model, and all but two with no network.
 
 ### New `tests/bot.retrieval.test.ts` — Weaviate stubbed
 
-- The hybrid query is the latest player message only, with `limit` = `BOT_ARTICLE_LIMIT` and
-  `alpha` = `HYBRID_ALPHA`, and no `intentId` filter.
+- The hybrid query is passed through verbatim from `search_articles`, with `limit` =
+  `BOT_ARTICLE_LIMIT` and `alpha` = `HYBRID_ALPHA`, and no `intentId` filter. (Was: *"the query is the
+  latest player message only"* — superseded by spec 4.)
 - The `workspaceId` filter is applied — another workspace's articles are never retrievable.
 - Postgres hydration re-orders rows to the fused ranking, not to `published_at`.
 - **No score filtering:** a stubbed response of three low-scoring objects yields three articles, not
@@ -458,5 +539,10 @@ None from `project-overview.md`. Two things it leaves open are decided here and 
 retrieval query is one message rather than the conversation (§1), a search-index outage counts
 as a bot fallback rather than a bot handoff (§2).
 
+**Resolved 2026-08-12:** spec 4 §7 moves player context out of the system prompt into a `user`
+message, which removes the structural privilege this paragraph was worried about. The residual risk
+it names — that a determined `user` turn can still talk a model out of its instructions — remains, and
+is contained by the bot having no action available but reply or hand off, both of which reach a human.
+
 The player-context injection surface described in §8 is a **known, bounded risk carried forward to
-spec 3**, not a resolved one.
+spec 4**, not a resolved one.

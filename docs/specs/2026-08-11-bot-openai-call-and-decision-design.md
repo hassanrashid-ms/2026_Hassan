@@ -1,7 +1,11 @@
 # Bot OpenAI call and decision — design
 
 **Date:** 2026-08-11
-**Status:** Accepted
+**Status:** Superseded by `2026-08-12-bot-tool-calling-decider-design.md` (2026-08-12)
+**Superseded because:** one structured-output call cannot express retrieval *after* the model has
+phrased a query, an article offer followed by player confirmation, or classification landing before
+handoff. Those are sequential decisions inside one turn. §5 (`Other` seeding), §3 (the role split)
+and §7 (determinism and logging) are carried forward into the replacement.
 **Scope:** The decider. One dependency, two env vars, one structured-output schema, one seed row,
 one edit to the shipped default prompt. The slice that makes the bot talk.
 
