@@ -104,7 +104,7 @@ unambiguous and free, not because they are the primary path.
 
 | Tool | Available | Effect |
 |---|---|---|
-| `search_articles(query)` | always, ≤3 per turn | Hybrid Weaviate query (spec 2). No side effects. Returns `{id, title, summary}[]` |
+| `search_articles(query)` | always, ≤3 per turn | Hybrid Weaviate query (spec 2). No side effects. Returns `{id, title, body}[]` |
 | `classify(subintent_index)` | always, **write-once per conversation** | A second call is accepted and ignored |
 | `offer_article(article_id)` | always; the id must have been returned by `search_articles` **in this turn** | Posts the article, sets `bot_phase = 'article_confirm'` |
 | `confirm_resolution(helped)` | **only while `bot_phase = 'article_confirm'`** | `true` → `resolve`. `false` → `handoff('article_rejected')` |
@@ -442,7 +442,7 @@ reasons and never inspects an SDK exception shape.
 - **Spec 2's prefetched retrieval is removed from `BotTurnInput`.** Retrieval is now `search_articles`,
   called from the tool handler outside any transaction.
 - **`{{articles}}` changes meaning** — from the three prefetched articles with bodies to the full
-  published catalogue of titles and summaries, no bodies, no ids. Reasoning in spec 2 §10, which this
+  published catalogue of titles grouped by intent, no bodies, no keywords, no ids. Reasoning in spec 2 §10, which this
   slice adds. It is what lets the model report `no_article` honestly, since retrieval has no score
   floor and can never establish absence.
 - Spec 2's taxonomy view, substitution, player context, history construction and size caps are

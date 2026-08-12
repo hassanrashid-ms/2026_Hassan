@@ -167,3 +167,22 @@ replies" rule ships on by default.
 
 **Likely compatible** — the locked rule covers *voluntarily asking* for a person; the
 switchable rule is about bot failure to help. But the wording collides.
+
+---
+
+### 14. Article `summary` field — rejected, not missing
+
+**Conflict:** `project-overview.md` gives an article five fields and labels `Summary` as
+*"search + bot"*, and the editor wireframe renders it. The `article` table has `title`, `body`,
+`keywords`, `intent_id`, `state` — no `summary`, and no slice plans one.
+
+**Decided 2026-08-12 — the field is not wanted.** A summary is a second copy of the answer that
+has to be kept in step with the first, and a stale summary is worse than no summary because it is
+the copy the bot reads. `keywords` covers the machine-reader case it was meant to serve: it is
+indexed in Weaviate and boosted `^2` in the query, so the retrieval benefit arrives through
+ranking rather than through prompt tokens.
+
+`{{articles}}` therefore renders titles grouped by intent, not *"titles and summaries"*. See
+`2026-08-11-bot-retrieval-and-prompt-assembly-design.md` §10.
+
+**Do not add it back on the strength of the wireframe.**

@@ -92,7 +92,7 @@ player message verbatim, was the wrong fix.
 The player's own words are frequently a poor query. *"paid, got nothing"* shares almost no term with
 an article titled *"Why didn't my gems arrive?"*, and the vector half of a five-word fragment carries
 little signal either. Spec 4 makes retrieval the `search_articles` tool: the model reads the message,
-phrases a query (*"missing in-app purchase not delivered"*), reads the returned titles and summaries,
+phrases a query (*"missing in-app purchase not delivered"*), reads the returned titles and bodies,
 and may query again — up to three times per turn.
 
 Retrieval is the textbook case for a tool. It is idempotent, side-effect-free, and cheap to get
@@ -338,19 +338,35 @@ reason.
 ### 10 · `{{articles}}` is the catalogue, not the retrieved set — added 2026-08-12
 
 Prefetched retrieval had `{{articles}}` render the three retrieved articles, bodies included. With
-retrieval behind a tool there is nothing to prefetch, so the placeholder needs a new meaning — and
-the product spec already states it: *"`{{articles}}` — the published article titles and summaries."*
+retrieval behind a tool there is nothing to prefetch, so the placeholder needs a new meaning.
 
-So `{{articles}}` renders **every published article's title and summary, no bodies and no ids**,
-ordered by intent then title, capped at `MAX_CATALOGUE_ARTICLES`.
+`{{articles}}` renders **every published article's title, grouped by intent** — no bodies, no
+keywords, no ids — capped at `MAX_CATALOGUE_ARTICLES`.
 
 ```
 Purchases
-  Why didn't my gems arrive? — Purchases can take up to an hour to appear…
-  Restoring purchases — If a purchase is missing after reinstalling…
+  Why didn't my gems arrive?
+  Restoring purchases
 Progress
-  Lost progress after update — …
+  Lost progress after update
 ```
+
+**There is no `summary` field and none is wanted.** `project-overview.md` describes this placeholder
+as *"titles and summaries"*, and the editor wireframe shows a `Summary` field labelled *"search +
+bot"*, but `article` has only `title`, `body`, `keywords`, `intent_id` and `state`. That is
+deliberate, not a gap: a summary is a second copy of the answer that has to be kept in step with the
+first, and a stale summary is worse than none because it is the copy the bot reads. Recorded in
+`docs/decisions/spec-contradictions.md` as a rejected field so nobody adds it back on the strength of
+the wireframe.
+
+**Keywords stay out of the prompt, because they are a search field.** They are indexed in Weaviate and
+boosted `^2` in the query, so a model searching *"gems missing"* reaches the right article through the
+index without the catalogue ever naming them. Putting them in the prompt would duplicate in tokens
+what the index already does in ranking.
+
+Titles alone are enough for what the catalogue is for. Knowing that nothing in the corpus concerns
+tournaments is what lets the model report `no_article` honestly, and a title is sufficient to
+establish that.
 
 **Three reasons this is the right shape rather than dropping the placeholder.**
 
@@ -445,8 +461,8 @@ published-article catalogue for `{{articles}}` (§10). Then `assembleBotTurnInpu
 
 ## The assembled prompt
 
-`{{articles}}` renders the catalogue described in §10 — every published title and summary, grouped by
-intent, no bodies and no ids:
+`{{articles}}` renders the catalogue described in §10 — every published title, grouped by intent, with
+no bodies, no keywords and no ids:
 
 ```
 Purchases
@@ -462,7 +478,7 @@ could match a logged prompt to the article the model chose; that job now belongs
 `bot_article_offered` event, which records the id and the title outright and does it far better than
 a positional index in a prompt.
 
-Titles and summaries are never truncated. Bodies do not appear here at all — `search_articles`
+Titles are never truncated. Bodies do not appear here at all — `search_articles`
 returns them, subject to `MAX_ARTICLE_BODY_CHARS`.
 
 ---
