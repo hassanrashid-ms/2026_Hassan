@@ -5,6 +5,7 @@ import { MarkPlayerReadBody, SendMessageBody, type ConversationStatusValue, type
 type SendMessageBodyType = z.infer<typeof SendMessageBody>
 type MarkPlayerReadBodyType = z.infer<typeof MarkPlayerReadBody>
 import { postMessage, toAgentView, toPlayerView } from '../../domain/conversations/index.ts'
+import { applyBotTurn, resolveBotConfig } from '../../domain/bot/index.ts'
 import { appendEvent } from '../../shared/events/appendEvent.ts'
 import { conversation, message, session } from '../../shared/db/schema/index.ts'
 import { withWorkspace } from '../../shared/db/withWorkspace.ts'
@@ -46,11 +47,11 @@ export async function sendPlayerMessage(
 
       const [created] = await tx
         .insert(conversation)
-        .values({ workspaceId: ctx.workspaceId, playerId: ctx.playerId, sessionId: latestSession?.id ?? null, status: 'open' })
+        .values({ workspaceId: ctx.workspaceId, playerId: ctx.playerId, sessionId: latestSession?.id ?? null })
         .returning({ id: conversation.id })
       if (!created) throw new Error('conversation insert returned nothing')
       conversationId = created.id
-      inboxStatus = 'open'
+      inboxStatus = 'bot_active'
     } else {
       conversationId = existing.id
       if (REOPENABLE_STATUSES.has(existing.status)) {
@@ -89,7 +90,25 @@ export async function sendPlayerMessage(
       body: body.body,
     })
 
-    return { conversationId, posted, inboxStatus }
+    let shouldEnqueue = false
+    const [afterPost] = await tx
+      .select({ status: conversation.status })
+      .from(conversation)
+      .where(eq(conversation.id, conversationId))
+      .limit(1)
+
+    if (afterPost?.status === 'bot_active') {
+      const config = await resolveBotConfig(tx, ctx.workspaceId)
+      if (config.isProvisioned) {
+        // Part 2 (2026-08-12-bot-turn-async-pipeline.md) enqueues bot-turns here.
+        shouldEnqueue = true
+      } else {
+        await applyBotTurn(tx, { workspaceId: ctx.workspaceId, conversationId }, { kind: 'unavailable', reason: 'not_provisioned' })
+        inboxStatus = 'open'
+      }
+    }
+
+    return { conversationId, posted, inboxStatus, shouldEnqueue }
   })
 
   const playerView = toPlayerView(result.posted)

@@ -7,10 +7,13 @@ import { app, mintToken } from './helpers/app.ts'
 import {
   closeOwnerPool,
   ownerPool,
+  seedAgent,
+  seedBotConfig,
   seedConversation,
   seedPlayer,
   seedSession,
   seedWorkspace,
+  seedWorkspaceMember,
   truncateAll,
 } from './helpers/db.ts'
 
@@ -49,6 +52,61 @@ describe('POST /surface/messages', () => {
       .expect(200)
     expect(res.body.conversation_id).toBeDefined()
     expect(res.body.message).toMatchObject({ author_type: 'player', body: 'hello', seq: 1 })
+  })
+
+  it('creates a new conversation at bot_active, not open', async () => {
+    const { workspaceId, token } = await setup()
+    // Provisioned: this first message resolves to `shouldEnqueue`, which this
+    // plan computes but does not act on, so the transaction never touches
+    // status again and it stays at the schema default.
+    await seedBotConfig({ workspaceId, isProvisioned: true })
+    const res = await request(app)
+      .post('/surface/messages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ body: 'hi' })
+      .expect(200)
+
+    const { rows } = await ownerPool.query(`select status from conversation where id = $1`, [res.body.conversation_id])
+    expect(rows[0].status).toBe('bot_active')
+  })
+
+  it('a not-provisioned bot hands off inline: open, assigned, one public system message, no internal note, one bot_unavailable event, no job', async () => {
+    const { workspaceId, token } = await setup()
+    const availableAgent = await seedAgent()
+    await seedWorkspaceMember({ workspaceId, agentId: availableAgent })
+    await seedBotConfig({ workspaceId, isProvisioned: false })
+
+    const res = await request(app)
+      .post('/surface/messages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ body: 'hi' })
+      .expect(200)
+
+    const conversationId = res.body.conversation_id
+
+    const { rows: convRows } = await ownerPool.query(
+      `select status, assigned_agent_id from conversation where id = $1`,
+      [conversationId],
+    )
+    expect(convRows[0].status).toBe('open')
+    expect(convRows[0].assigned_agent_id).toBe(availableAgent)
+
+    const { rows: msgRows } = await ownerPool.query(
+      `select author_type, visibility from message where conversation_id = $1 and author_type = 'system'`,
+      [conversationId],
+    )
+    expect(msgRows.length).toBe(1)
+    expect(msgRows[0].visibility).toBe('public')
+
+    const { rows: eventRows } = await ownerPool.query(
+      `select type, payload from event where conversation_id = $1 and type = 'bot_unavailable'`,
+      [conversationId],
+    )
+    expect(eventRows.length).toBe(1)
+    expect(eventRows[0].payload).toEqual({ reason: 'not_provisioned' })
+
+    // Only the player's own message comes back in the response body.
+    expect(res.body.message.body).toBe('hi')
   })
 
   it('rejects an empty body with 422', async () => {
