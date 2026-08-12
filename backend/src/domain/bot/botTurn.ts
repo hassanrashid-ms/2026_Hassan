@@ -1,5 +1,7 @@
 // backend/src/domain/bot/botTurn.ts
 
+import type { PlayerMessageView } from '@support/types'
+
 /**
  * Both members are spec 4's to produce (a real decider never runs here). Declared
  * here because the outcome they feed — `applyBotTurn`'s `handoff` shape — is built
@@ -24,6 +26,8 @@ export type BotTurnDecision =
 export type BotTurnInput = {
   workspaceId: string
   conversationId: string
+  subintentId: string | null
+  history: PlayerMessageView[]
 }
 
 export type BotDecider = (input: BotTurnInput) => Promise<BotTurnDecision>
