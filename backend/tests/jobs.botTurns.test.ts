@@ -1,11 +1,30 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
+import { Queue } from 'bullmq'
+import IORedis from 'ioredis'
 import { closeDb } from '../src/shared/db/client.ts'
 import { withWorkspace } from '../src/shared/db/withWorkspace.ts'
 import { conversation, event, message } from '../src/shared/db/schema/index.ts'
 import { enqueueBotTurn, registerBotTurnWorker } from '../src/shared/jobs/botTurns.ts'
+import { registerJobs } from '../src/shared/jobs/queue.ts'
+import { getEnv } from '../src/env.ts'
 import type { BotDecider, BotTurnDecision } from '../src/domain/bot/botTurn.ts'
 import { closeOwnerPool, seedConversation, seedPlayer, seedWorkspace, truncateAll } from './helpers/db.ts'
+
+// Matches SESSION_TIMEOUT_JOB / QUEUE_NAME in ../src/shared/jobs/queue.ts. registerJobs()
+// upserts this repeatable job scheduler against real Redis; a test that calls
+// registerJobs() must remove it afterwards so it doesn't leak into
+// jobs.sessionTimeout.test.ts or any other run against the same Redis instance.
+const SUPPORT_JOBS_QUEUE_NAME = 'support-jobs'
+const SESSION_TIMEOUT_JOB = 'session-timeout'
+
+async function removeSessionTimeoutScheduler(): Promise<void> {
+  const connection = new IORedis(getEnv().REDIS_URL, { maxRetriesPerRequest: null })
+  const queue = new Queue(SUPPORT_JOBS_QUEUE_NAME, { connection })
+  await queue.removeJobScheduler(SESSION_TIMEOUT_JOB)
+  await queue.close()
+  connection.disconnect()
+}
 
 afterAll(async () => {
   await closeDb()
@@ -122,5 +141,61 @@ describe('bot-turns queue and worker', () => {
     await waitFor(async () => runCount >= 1)
     await new Promise((resolve) => setTimeout(resolve, 300))
     expect(runCount).toBe(1)
+  })
+
+  it('registerJobs() registers a live bot-turns worker and its single close() stops it too', async () => {
+    const workspaceId = await seedWorkspace({ slug: 'demo-game' })
+    const playerId = await seedPlayer(workspaceId, 'UserId1')
+    const conversationId = await seedConversation({ workspaceId, playerId })
+
+    const jobs = await registerJobs()
+    try {
+      // Proves registerBotTurnWorker() is actually wired in: with no decider
+      // override, registerJobs()'s bot-turns worker runs the default
+      // stubDecider, which always resolves bot_unavailable(not_implemented).
+      await enqueueBotTurn({ workspaceId, conversationId, seq: 1 })
+
+      await waitFor(async () => {
+        const events = await withWorkspace(workspaceId, (tx) =>
+          tx.select().from(event).where(eq(event.type, 'bot_unavailable')),
+        )
+        return events.length === 1
+      })
+
+      const events = await withWorkspace(workspaceId, (tx) =>
+        tx.select().from(event).where(eq(event.type, 'bot_unavailable')),
+      )
+      expect(events[0]!.payload).toMatchObject({ reason: 'not_implemented' })
+    } finally {
+      await jobs.close()
+    }
+
+    // The single close() awaited above must have stopped the bot-turns worker
+    // alongside support-jobs. Enqueue one more turn for a fresh conversation and
+    // prove, with a bounded wait, that nothing picks it up.
+    const conversationId2 = await seedConversation({ workspaceId, playerId })
+    await enqueueBotTurn({ workspaceId, conversationId: conversationId2, seq: 1 })
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+    const eventsAfterClose = await withWorkspace(workspaceId, (tx) =>
+      tx
+        .select()
+        .from(event)
+        .where(and(eq(event.type, 'bot_unavailable'), eq(event.conversationId, conversationId2))),
+    )
+    expect(eventsAfterClose).toHaveLength(0)
+
+    // Cleanup: drain the still-queued job (registered against real Redis, so it
+    // would otherwise run the moment any later test starts a bot-turns worker)
+    // and remove the session-timeout scheduler registerJobs() upserted, so this
+    // test leaves no repeatable job or pending job behind for
+    // jobs.sessionTimeout.test.ts or any later run.
+    let drained = false
+    const drainingWorker = registerBotTurnWorker(async () => {
+      drained = true
+      return { kind: 'noop' }
+    })
+    await waitFor(async () => drained)
+    await drainingWorker.close()
+    await removeSessionTimeoutScheduler()
   })
 })

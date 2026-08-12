@@ -193,7 +193,7 @@ describe('POST /surface/messages', () => {
     expect(rows[0]!.status).toBe('escalated')
   })
 
-  it('enqueues exactly one bot-turn job with id conversationId:seq when the bot is provisioned', async () => {
+  it('enqueues exactly one bot-turn job with id conversationId__seq when the bot is provisioned', async () => {
     const { workspaceId, token } = await setup()
     await seedBotConfig({ workspaceId, isProvisioned: true })
 
@@ -207,7 +207,16 @@ describe('POST /surface/messages', () => {
     const call = vi.mocked(enqueueBotTurn).mock.calls[0]![0]
     expect(call.workspaceId).toBe(workspaceId)
     expect(call.conversationId).toBe(res.body.conversation_id)
-    expect(typeof call.seq).toBe('number')
+    // The posted player message's own seq, not just "some number" — a regression
+    // to a wrong or zero seq (e.g. always enqueuing seq 1) must fail this.
+    expect(call.seq).toBe(res.body.message.seq)
+
+    const { rows } = await ownerPool.query<{ seq: number }>(
+      `select seq from message where conversation_id = $1 and author_type = 'player'`,
+      [res.body.conversation_id],
+    )
+    expect(rows).toHaveLength(1)
+    expect(call.seq).toBe(rows[0]!.seq)
   })
 
   it('does not enqueue on the reopen branch', async () => {
