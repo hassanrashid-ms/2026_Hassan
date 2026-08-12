@@ -3,6 +3,7 @@ import IORedis from 'ioredis'
 import { getEnv } from '../../env.ts'
 import { logger } from '../logging/logger.ts'
 import { closeStaleSessions } from './sessionTimeout.ts'
+import { registerBotTurnWorker } from './botTurns.ts'
 
 const QUEUE_NAME = 'support-jobs'
 const SESSION_TIMEOUT_JOB = 'session-timeout'
@@ -44,12 +45,15 @@ export async function registerJobs(): Promise<{ close: () => Promise<void> }> {
     logger.error('jobs', `${job?.name ?? 'unknown'} failed: ${error.name} ${error.message}`)
   })
 
+  const botTurns = registerBotTurnWorker()
+
   return {
     close: async () => {
       await worker.close()
       await queue.close()
       queueConnection.disconnect()
       workerConnection.disconnect()
+      await botTurns.close()
     },
   }
 }
