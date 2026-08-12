@@ -109,6 +109,21 @@ See `docs/specs/2026-08-11-forms-and-bot-config-data-model-design.md`.
 
 ---
 
+### 16. Agent assignment on handoff: round-robin, or least-loaded?
+
+**Conflict:** §7 of the spec specifies round-robin agent assignment on handoff.
+
+**Decision:** **Deterministic least-loaded assignment.** The active workspace member with the
+fewest conversations in a live status (`open`, `awaiting_player`, `escalated`) is assigned, ties
+broken by `agent.id` ascending. This is testable without controlling a rotation cursor's starting
+position, and it balances actual load rather than arrival order. "Active" means
+`workspace_member.deactivated_at IS NULL AND agent.status = 'active'`; role is never consulted.
+Implemented in `backend/src/domain/bot/assignOnHandoff.ts`, plan
+`docs/plans/2026-08-12-bot-turn-domain-core.md` Task 5.
+See `docs/specs/2026-08-11-bot-turn-seam-and-handoff-design.md` §7.
+
+---
+
 ## Contradictions still open (no decision yet)
 
 These have not been resolved. Do not silently pick a side — add a decision here when one is made.
