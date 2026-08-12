@@ -12,6 +12,7 @@ import { withWorkspace } from '../../shared/db/withWorkspace.ts'
 import { emitInboxChanged, emitMessageToRooms, emitReadReceipt } from '../../shared/realtime/emit.ts'
 import { getIo } from '../../shared/realtime/socketServer.ts'
 import type { PlayerContext } from '../../shared/middleware/requirePlayerToken.ts'
+import { enqueueBotTurn } from '../../shared/jobs/botTurns.ts'
 
 const REOPENABLE_STATUSES = new Set(['resolved', 'closed'])
 
@@ -116,6 +117,9 @@ export async function sendPlayerMessage(
   emitMessageToRooms(getIo(), result.conversationId, playerView, agentView)
   if (result.inboxStatus) {
     emitInboxChanged(getIo(), ctx.workspaceId, result.conversationId, result.inboxStatus)
+  }
+  if (result.shouldEnqueue) {
+    await enqueueBotTurn({ workspaceId: ctx.workspaceId, conversationId: result.conversationId, seq: result.posted.seq })
   }
 
   return { conversation_id: result.conversationId, message: playerView }

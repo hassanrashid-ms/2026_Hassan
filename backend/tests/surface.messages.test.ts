@@ -1,5 +1,5 @@
 import { createServer } from 'node:http'
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { req as request } from './helpers/http.ts'
 import { closeDb } from '../src/shared/db/client.ts'
 import { closeSocketServer, createSocketServer } from '../src/shared/realtime/socketServer.ts'
@@ -16,6 +16,9 @@ import {
   seedWorkspaceMember,
   truncateAll,
 } from './helpers/db.ts'
+import { enqueueBotTurn } from '../src/shared/jobs/botTurns.ts'
+
+vi.mock('../src/shared/jobs/botTurns.ts', () => ({ enqueueBotTurn: vi.fn().mockResolvedValue(undefined) }))
 
 // This suite's pool runs each test file in an isolated module registry, so the
 // realtime singleton getIo() relies on isn't populated by realtime.rooms.test.ts
@@ -32,7 +35,10 @@ afterAll(async () => {
   await closeOwnerPool()
 })
 
-beforeEach(truncateAll)
+beforeEach(async () => {
+  await truncateAll()
+  vi.clearAllMocks()
+})
 
 async function setup() {
   const workspaceId = await seedWorkspace()
@@ -185,6 +191,47 @@ describe('POST /surface/messages', () => {
       conversationId,
     ])
     expect(rows[0]!.status).toBe('escalated')
+  })
+
+  it('enqueues exactly one bot-turn job with id conversationId:seq when the bot is provisioned', async () => {
+    const { workspaceId, token } = await setup()
+    await seedBotConfig({ workspaceId, isProvisioned: true })
+
+    const res = await request(app)
+      .post('/surface/messages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ body: 'hello' })
+      .expect(200)
+
+    expect(enqueueBotTurn).toHaveBeenCalledTimes(1)
+    const call = vi.mocked(enqueueBotTurn).mock.calls[0]![0]
+    expect(call.workspaceId).toBe(workspaceId)
+    expect(call.conversationId).toBe(res.body.conversation_id)
+    expect(typeof call.seq).toBe('number')
+  })
+
+  it('does not enqueue on the reopen branch', async () => {
+    const { workspaceId, playerId, token } = await setup()
+    await seedBotConfig({ workspaceId, isProvisioned: true })
+    const conversationId = await seedConversation({ workspaceId, playerId })
+    await ownerPool.query(`update conversation set status = 'resolved', assigned_agent_id = null where id = $1`, [
+      conversationId,
+    ])
+
+    await request(app).post('/surface/messages').set('Authorization', `Bearer ${token}`).send({ body: 'hello again' }).expect(200)
+
+    expect(enqueueBotTurn).not.toHaveBeenCalled()
+  })
+
+  it('does not enqueue on the awaiting_player -> open branch', async () => {
+    const { workspaceId, playerId, token } = await setup()
+    await seedBotConfig({ workspaceId, isProvisioned: true })
+    const conversationId = await seedConversation({ workspaceId, playerId })
+    await ownerPool.query(`update conversation set status = 'awaiting_player' where id = $1`, [conversationId])
+
+    await request(app).post('/surface/messages').set('Authorization', `Bearer ${token}`).send({ body: 'answer' }).expect(200)
+
+    expect(enqueueBotTurn).not.toHaveBeenCalled()
   })
 })
 
