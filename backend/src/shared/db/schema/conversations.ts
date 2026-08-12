@@ -1,4 +1,4 @@
-import { index, integer, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
+import { foreignKey, index, integer, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
 import {
   classificationSource,
   conversationPriority,
@@ -9,6 +9,7 @@ import {
 } from './enums.ts'
 import { agent, workspace } from './identity.ts'
 import { player, session } from './players.ts'
+import { subintent } from './taxonomy.ts'
 
 const tz = { withTimezone: true, mode: 'date' } as const
 
@@ -36,10 +37,24 @@ export const conversation = pgTable(
     assignedAgentId: uuid('assigned_agent_id').references(() => agent.id, { onDelete: 'restrict' }),
     /** NULL means unset — the bot never ran. Only 'bot' or 'agent' otherwise. */
     classificationSource: classificationSource('classification_source'),
+    /**
+     * NULL means the bot never classified this conversation — never "unknown
+     * category". `Other`'s catch-all subintent is where an unplaceable
+     * conversation lands, and the two must stay distinguishable.
+     */
+    subintentId: uuid('subintent_id'),
     messageSeq: integer('message_seq').notNull().default(0),
     createdAt: timestamp('created_at', tz).notNull().defaultNow(),
   },
-  (t) => [index('conversation_workspace_player_idx').on(t.workspaceId, t.playerId)],
+  (t) => [
+    index('conversation_workspace_player_idx').on(t.workspaceId, t.playerId),
+    index('conversation_workspace_subintent_idx').on(t.workspaceId, t.subintentId),
+    foreignKey({
+      name: 'conversation_subintent_fk',
+      columns: [t.workspaceId, t.subintentId],
+      foreignColumns: [subintent.workspaceId, subintent.id],
+    }).onDelete('restrict'),
+  ],
 )
 
 export const message = pgTable(

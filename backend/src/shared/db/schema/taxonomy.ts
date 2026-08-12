@@ -40,5 +40,11 @@ export const subintent = pgTable(
     archivedAt: timestamp('archived_at', tz),
     createdAt: timestamp('created_at', tz).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex('subintent_workspace_intent_name_uk').on(t.workspaceId, t.intentId, t.name)],
+  (t) => [
+    uniqueIndex('subintent_workspace_intent_name_uk').on(t.workspaceId, t.intentId, t.name),
+    // Composite-FK parent key: conversation.subintent_id references (workspace_id, id)
+    // together, so a conversation can never name another workspace's subintent — see
+    // docs/decisions/2026-08-04-composite-foreign-keys-for-tenancy.md.
+    uniqueIndex('subintent_workspace_id_uk').on(t.workspaceId, t.id),
+  ],
 )

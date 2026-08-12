@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it } from 'vitest'
 import { ownerPool, closeOwnerPool } from './helpers/db.ts'
 
 const EXPECTED_TABLES = [
@@ -175,5 +175,42 @@ describe('schema', () => {
     for (const row of rows) {
       expect(row.def, `${row.table_name}: ${row.def}`).toMatch(/ON DELETE RESTRICT/)
     }
+  })
+
+  it('gives subintent a (workspace_id, id) unique key for the composite FK', async () => {
+    const { rows } = await ownerPool.query<{ indexdef: string }>(
+      `select indexdef from pg_indexes where tablename = 'subintent'`,
+    )
+    const defs = rows.map((r) => r.indexdef).join('\n')
+    expect(defs).toMatch(/UNIQUE INDEX .* ON public\.subintent USING btree \(workspace_id, id\)/)
+  })
+
+  it('adds a nullable, composite-FK conversation.subintent_id', async () => {
+    const cols = await columns('conversation')
+    expect(cols.has('subintent_id')).toBe(true)
+    expect(cols.get('subintent_id')?.nullable).toBe(true)
+
+    const { rows } = await ownerPool.query<{ conname: string; confdeltype: string }>(
+      `select conname, confdeltype
+         from pg_constraint
+        where conrelid = 'conversation'::regclass
+          and contype = 'f'
+          and conkey = (
+            select array_agg(attnum order by attnum)
+              from pg_attribute
+             where attrelid = 'conversation'::regclass
+               and attname in ('workspace_id', 'subintent_id')
+          )`,
+    )
+    expect(rows.length).toBe(1)
+    expect(rows[0]?.confdeltype).toBe('r') // ON DELETE RESTRICT
+  })
+
+  it('conversation.status still defaults to bot_active', async () => {
+    const { rows } = await ownerPool.query<{ column_default: string }>(
+      `select column_default from information_schema.columns
+        where table_schema = 'public' and table_name = 'conversation' and column_name = 'status'`,
+    )
+    expect(rows[0]?.column_default).toContain('bot_active')
   })
 })
