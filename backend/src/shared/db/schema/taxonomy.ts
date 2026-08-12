@@ -1,4 +1,4 @@
-import { boolean, pgTable, text, timestamp, uniqueIndex, uuid, type AnyPgColumn } from 'drizzle-orm/pg-core'
+import { boolean, pgTable, text, timestamp, unique, uniqueIndex, uuid, type AnyPgColumn } from 'drizzle-orm/pg-core'
 import { conversationPriority } from './enums.ts'
 import { workspace } from './identity.ts'
 
@@ -45,6 +45,6 @@ export const subintent = pgTable(
     // Composite-FK parent key: conversation.subintent_id references (workspace_id, id)
     // together, so a conversation can never name another workspace's subintent — see
     // docs/decisions/2026-08-04-composite-foreign-keys-for-tenancy.md.
-    uniqueIndex('subintent_workspace_id_uk').on(t.workspaceId, t.id),
+    unique('subintent_workspace_id_uk').on(t.workspaceId, t.id),
   ],
 )

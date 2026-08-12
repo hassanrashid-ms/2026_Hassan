@@ -9,6 +9,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "db:setup": "node --experimental-strip-types src/shared/db/setup.ts",
+    "db:generate": "drizzle-kit generate",
+    "db:baseline": "node --experimental-strip-types src/shared/db/baseline.ts",
     "db:seed": "node --experimental-strip-types src/shared/db/seed.ts",
     "db:studio": "drizzle-kit studio",
     "weaviate:setup": "node --experimental-strip-types scripts/setup-weaviate-collection.ts"

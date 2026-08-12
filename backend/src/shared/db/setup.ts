@@ -1,12 +1,12 @@
-import { execFile } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { promisify } from 'node:util'
-import { Client } from 'pg'
+import { drizzle } from 'drizzle-orm/node-postgres'
+import { migrate } from 'drizzle-orm/node-postgres/migrator'
+import { Client, Pool } from 'pg'
 import { getEnv } from '../../env.ts'
 
-const run = promisify(execFile)
 const sqlDir = join(dirname(new URL(import.meta.url).pathname), 'sql')
+const migrationsFolder = join(dirname(new URL(import.meta.url).pathname), '..', '..', '..', 'drizzle')
 
 async function runSqlFile(url: string, file: string): Promise<void> {
   const client = new Client({ connectionString: url })
@@ -19,15 +19,23 @@ async function runSqlFile(url: string, file: string): Promise<void> {
 }
 
 /**
- * Idempotent and ordered: extensions must exist before push (citext is a column
- * type), and the RLS file must run after push so it can see the tables.
+ * Extensions, then generated migrations, then RLS. `drizzle-kit push` used to
+ * sit in the middle of this: it exits 0 even when its SQL fails (a half-applied
+ * schema looked like success), it re-plans the composite FK on every run so it
+ * was never idempotent, and `--force` still prompts interactively when adding a
+ * unique constraint to a populated table — with no TTY it aborted silently.
+ * Committed migrations applied via drizzle-orm's migrator throw on failure and
+ * are naturally idempotent, so none of that applies.
  */
 export async function setupDatabase(url: string = getEnv().MIGRATION_DATABASE_URL): Promise<void> {
   await runSqlFile(url, '001_extensions.sql')
-  await run('pnpm', ['exec', 'drizzle-kit', 'push', '--force'], {
-    cwd: join(dirname(new URL(import.meta.url).pathname), '..', '..', '..'),
-    env: { ...process.env, MIGRATION_DATABASE_URL: url },
-  })
+  const pool = new Pool({ connectionString: url })
+  try {
+    const db = drizzle(pool)
+    await migrate(db, { migrationsFolder })
+  } finally {
+    await pool.end()
+  }
   await runSqlFile(url, '002_rls.sql')
 }
 
