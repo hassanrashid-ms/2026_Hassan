@@ -102,6 +102,56 @@ describe('bot-turns queue and worker', () => {
     expect(rows[0]!.status).toBe('open')
   })
 
+  it('suppresses the error fallback when the conversation left bot_active during retries', async () => {
+    // Same race as the orchestrator test, but from the worker's failed-handler
+    // side. enqueueBotTurn configures attempts: 2, so the decider throws on
+    // both invocations — genuine, status-unrelated failures (e.g. the model
+    // API is down) — and runBotTurn's own cheap pre-decide guard passes both
+    // times because the conversation is still bot_active at the start of each
+    // attempt. The race is narrower than "between attempt 1 and attempt 2":
+    // it's the gap between the *last* attempt's decider call (which already
+    // passed the pre-guard) and the exhausted-retries fallback that runs
+    // after it. This decider simulates an agent claiming the conversation in
+    // that exact gap: on its final (2nd) invocation, it moves the
+    // conversation to 'open' in its own committed transaction immediately
+    // before throwing. If the pre-guard alone protected this (flip on the
+    // *first* invocation instead), retry 2's own gather() would already
+    // no-op the whole turn before ever calling the decider again — which
+    // proves nothing about the failed-handler's fallback specifically. Only
+    // a flip landing after the last passed guard check exercises the bug: the
+    // failed handler's fallback must re-read status and skip applying, rather
+    // than force a bot_unavailable handoff over an agent's claim.
+    const workspaceId = await seedWorkspace({ slug: 'demo-game' })
+    const playerId = await seedPlayer(workspaceId, 'UserId1')
+    const conversationId = await seedConversation({ workspaceId, playerId })
+
+    let attempts = 0
+    const decider: BotDecider = async () => {
+      attempts += 1
+      if (attempts === 2) {
+        await withWorkspace(workspaceId, (tx) =>
+          tx.update(conversation).set({ status: 'open' }).where(eq(conversation.id, conversationId)),
+        )
+      }
+      throw new Error('decider blew up')
+    }
+    activeWorker = registerBotTurnWorker(decider)
+
+    await enqueueBotTurn({ workspaceId, conversationId, seq: 1 })
+
+    await waitFor(async () => attempts >= 2, 10_000)
+    // Give the failed handler's fallback a bounded window to (not) apply.
+    await new Promise((resolve) => setTimeout(resolve, 500))
+
+    const events = await withWorkspace(workspaceId, (tx) => tx.select().from(event).where(eq(event.type, 'bot_unavailable')))
+    expect(events).toHaveLength(0)
+
+    const rows = await withWorkspace(workspaceId, (tx) =>
+      tx.select().from(conversation).where(eq(conversation.id, conversationId)),
+    )
+    expect(rows[0]!.status).toBe('open')
+  })
+
   it('the default worker uses stubDecider, producing bot_unavailable(not_implemented) with no internal note', async () => {
     const workspaceId = await seedWorkspace({ slug: 'demo-game' })
     const playerId = await seedPlayer(workspaceId, 'UserId1')

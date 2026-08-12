@@ -101,4 +101,38 @@ describe('runBotTurn', () => {
     )
     expect(rows[0]!.status).toBe('bot_active')
   })
+
+  it('does not apply the decision when the conversation left bot_active while the decider was running', async () => {
+    // Reproduces the race the atomic guard exists for: the cheap pre-decide
+    // check in runBotTurn passes (status is still bot_active when gather()
+    // runs), but an agent claims the conversation in its own committed
+    // transaction *during* the decider call, before runBotTurn applies the
+    // decision. The apply must re-read status and no-op instead of trusting
+    // the stale read from gather().
+    const workspaceId = await seedWorkspace({ slug: 'demo-game' })
+    const playerId = await seedPlayer(workspaceId, 'UserId1')
+    const conversationId = await seedConversation({ workspaceId, playerId })
+
+    const decider = async (): Promise<BotTurnDecision> => {
+      await withWorkspace(workspaceId, (tx) =>
+        tx.update(conversation).set({ status: 'open' }).where(eq(conversation.id, conversationId)),
+      )
+      return { kind: 'unavailable', reason: 'error' }
+    }
+
+    await runBotTurn(workspaceId, conversationId, decider)
+
+    const rows = await withWorkspace(workspaceId, (tx) =>
+      tx.select().from(conversation).where(eq(conversation.id, conversationId)),
+    )
+    expect(rows[0]!.status).toBe('open')
+
+    const messages = await withWorkspace(workspaceId, (tx) =>
+      tx.select().from(message).where(eq(message.conversationId, conversationId)),
+    )
+    expect(messages).toHaveLength(0)
+
+    const events = await withWorkspace(workspaceId, (tx) => tx.select().from(event))
+    expect(events).toHaveLength(0)
+  })
 })

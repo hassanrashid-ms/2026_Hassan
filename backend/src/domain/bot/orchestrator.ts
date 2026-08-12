@@ -66,17 +66,55 @@ function emitApplied(
   }
 }
 
+export type ApplyIfBotActiveResult =
+  | { applied: true; posted: PostedMessageRow[]; statusChanged: boolean }
+  | { applied: false }
+
 /**
  * Shared by `runBotTurn`'s own apply/emit step and the BullMQ `failed` handler
  * (`shared/jobs/botTurns.ts`) — the fallback outcome after a final retry attempt
- * runs through the exact same apply-then-emit path a successful decide does.
+ * runs through the exact same guarded apply-then-emit path a successful decide
+ * does.
+ *
+ * The guard is made atomic with the apply by doing both inside a single
+ * transaction: `SELECT ... FOR UPDATE` row-locks the conversation so a
+ * concurrent claim serialises against this apply rather than racing it, then
+ * the status check and `applyBotTurn` call happen against that locked read.
+ * Reading status in an earlier, separate transaction (as a naive
+ * "check-then-apply" would) leaves a window between the check and the write
+ * where an agent can claim or reply — this closes that window rather than
+ * narrowing it.
+ *
+ * The socket emit happens after the transaction commits, never inside it, and
+ * only when the decision actually applied — a skip must not emit.
  */
-export async function applyDecisionAndEmit(
+export async function applyDecisionIfBotActive(
   workspaceId: string,
   conversationId: string,
   decision: BotTurnDecision,
-): Promise<{ posted: PostedMessageRow[]; statusChanged: boolean }> {
-  const result = await withWorkspace(workspaceId, (tx) => applyBotTurn(tx, { workspaceId, conversationId }, decision))
+): Promise<ApplyIfBotActiveResult> {
+  const result = await withWorkspace(workspaceId, async (tx) => {
+    const [conv] = await tx
+      .select({ status: conversation.status })
+      .from(conversation)
+      .where(eq(conversation.id, conversationId))
+      .for('update')
+      .limit(1)
+
+    if (!conv || conv.status !== 'bot_active') return { applied: false } as const
+
+    const applied = await applyBotTurn(tx, { workspaceId, conversationId }, decision)
+    return { applied: true, ...applied } as const
+  })
+
+  if (!result.applied) {
+    logger.info('bot.orchestrator', 'skipped fallback: conversation left bot_active before apply', {
+      workspaceId,
+      conversationId,
+    })
+    return result
+  }
+
   emitApplied(workspaceId, conversationId, result)
   return result
 }
@@ -85,6 +123,12 @@ export async function applyDecisionAndEmit(
  * The status is re-read here, not trusted from the enqueue site: an agent may have
  * claimed or replied to the conversation in the window between enqueue and this job
  * running. A no-op is the safe outcome of that race — see spec §4.
+ *
+ * This cheap pre-decide check is deliberately not the only guard: it saves calling
+ * the decider at all once the conversation has left `bot_active`, but status can
+ * still change while the decider itself is running (it may call out to a model).
+ * `applyDecisionIfBotActive` re-checks atomically with the apply, which is the
+ * authoritative guard.
  */
 export async function runBotTurn(workspaceId: string, conversationId: string, decider: BotDecider): Promise<void> {
   const { conv, history } = await withWorkspace(workspaceId, (tx) => gather(tx, conversationId))
@@ -93,5 +137,5 @@ export async function runBotTurn(workspaceId: string, conversationId: string, de
 
   const decision = await decider({ workspaceId, conversationId, subintentId: conv.subintentId, history })
 
-  await applyDecisionAndEmit(workspaceId, conversationId, decision)
+  await applyDecisionIfBotActive(workspaceId, conversationId, decision)
 }

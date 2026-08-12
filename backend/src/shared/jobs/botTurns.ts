@@ -2,7 +2,7 @@ import { Queue, Worker } from 'bullmq'
 import IORedis from 'ioredis'
 import { getEnv } from '../../env.ts'
 import { logger } from '../logging/logger.ts'
-import { applyDecisionAndEmit, runBotTurn } from '../../domain/bot/orchestrator.ts'
+import { applyDecisionIfBotActive, runBotTurn } from '../../domain/bot/orchestrator.ts'
 import { stubDecider, type BotDecider } from '../../domain/bot/botTurn.ts'
 
 const QUEUE_NAME = 'bot-turns'
@@ -69,9 +69,12 @@ export function registerBotTurnWorker(decider: BotDecider = stubDecider): { clos
     const attempts = job.opts.attempts ?? 1
     if (job.attemptsMade < attempts) return
     // Last attempt exhausted: the fallback must not itself depend on the thing
-    // that just failed, so this calls applyDecisionAndEmit directly rather than
-    // going through the decider again.
-    void applyDecisionAndEmit(job.data.workspaceId, job.data.conversationId, { kind: 'unavailable', reason: 'error' }).catch(
+    // that just failed, so this calls applyDecisionIfBotActive directly rather
+    // than going through the decider again. That guard re-reads status atomically
+    // with the apply, so an agent claiming or replying in the gap between this
+    // last attempt and this handler running is not overridden by a forced
+    // handoff — see orchestrator.ts.
+    void applyDecisionIfBotActive(job.data.workspaceId, job.data.conversationId, { kind: 'unavailable', reason: 'error' }).catch(
       (fallbackError: Error) => {
         logger.error('jobs', `bot-turn error fallback failed: ${fallbackError.name} ${fallbackError.message}`)
       },
