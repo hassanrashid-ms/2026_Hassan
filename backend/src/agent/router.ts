@@ -5,6 +5,7 @@ import { conversationsRouter } from './routers/conversationsRouter.ts'
 import { messagesRouter } from './routers/messagesRouter.ts'
 import { taxonomyRouter } from './routers/taxonomyRouter.ts'
 import { articlesRouter } from './routers/articlesRouter.ts'
+import { botConfigRouter } from './routers/botConfigRouter.ts'
 
 export const agentRouter = Router()
 
@@ -14,5 +15,6 @@ agentRouter.use(authRouter)
 agentRouter.use(requireAgentSession)
 agentRouter.use(taxonomyRouter)
 agentRouter.use(articlesRouter)
+agentRouter.use(botConfigRouter)
 agentRouter.use(conversationsRouter)
 agentRouter.use(messagesRouter)

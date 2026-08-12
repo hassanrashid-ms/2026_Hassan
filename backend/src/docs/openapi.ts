@@ -588,6 +588,66 @@ registry.registerPath({
   responses: { 200: { description: 'Article archived' }, 404: { description: 'Not found' } },
 })
 
+registry.registerPath({
+  method: 'get',
+  path: '/agent/bot-config',
+  summary: 'Agent Get Bot Config',
+  description:
+    'The resolved bot config for this workspace: is_provisioned, prompt, rules, the joined system_prompt, and which of the two text fields is customised. An absent row resolves to the off state on the defaults. Team Lead or Admin.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  responses: {
+    200: { description: 'Resolved bot config' },
+    403: { description: 'Forbidden — Team Lead or Admin role required' },
+  },
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/agent/bot-config',
+  summary: 'Agent Save Bot Config',
+  description:
+    'Partial upsert of this workspace bot config, audited field-by-field into change_log in the same transaction. An omitted key is left alone; an explicit null on prompt or rules resets it to the default. An empty or whitespace-only value is refused. Admin-only.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: z.object({
+            is_provisioned: z.boolean().optional().openapi({ example: true }),
+            prompt: z.string().nullable().optional().openapi({ example: 'You are the first-line support assistant…' }),
+            rules: z.string().nullable().optional().openapi({ example: 'Never promise a refund.' }),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: { description: 'Resolved bot config after the save' },
+    403: { description: 'Forbidden — admin role required' },
+    422: { description: 'Nothing to change, an unknown field, or an empty prompt/rules value' },
+  },
+})
+
+registry.registerPath({
+  method: 'get',
+  path: '/agent/bot-config/history',
+  summary: 'Agent Get Bot Config Audit Trail',
+  description:
+    'This workspace bot-config change_log rows, newest first, cursor-paged. `field` is the database column name. `before_value` null means the field had no value before; `after_value` null means it was reset to the default. Team Lead or Admin.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: {
+    query: z.object({
+      limit: z.coerce.number().int().min(1).max(200).optional().openapi({ example: 50 }),
+      cursor: z.string().optional().openapi({ description: 'Opaque next_cursor from the previous page' }),
+    }),
+  },
+  responses: {
+    200: { description: 'Audit trail page' },
+    403: { description: 'Forbidden — Team Lead or Admin role required' },
+    422: { description: 'Invalid limit or cursor' },
+  },
+})
+
 // --- 6. SURFACE ARTICLE ENDPOINTS ---
 registry.registerPath({
   method: 'get',
