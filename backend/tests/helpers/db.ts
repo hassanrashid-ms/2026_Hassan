@@ -14,6 +14,8 @@ const SCOPED_TABLES = [
   'event',
   'message',
   'conversation',
+  'subintent',
+  'intent',
   'player_state_snapshot',
   'declared_field',
   'session',
@@ -132,6 +134,42 @@ export async function seedMessage(args: {
       args.body ?? 'test message',
     ],
   )
+  return id
+}
+
+export async function seedWorkspaceMember(args: {
+  workspaceId: string
+  agentId: string
+  role?: 'agent' | 'team_lead' | 'admin'
+  deactivatedAt?: Date | null
+}): Promise<string> {
+  const id = randomUUID()
+  await ownerPool.query(
+    `insert into workspace_member (id, workspace_id, agent_id, role, deactivated_at) values ($1, $2, $3, $4, $5)`,
+    [id, args.workspaceId, args.agentId, args.role ?? 'agent', args.deactivatedAt ?? null],
+  )
+  return id
+}
+
+export async function seedIntent(workspaceId: string, name = `Intent ${randomUUID().slice(0, 8)}`): Promise<string> {
+  const id = randomUUID()
+  await ownerPool.query(`insert into intent (id, workspace_id, name) values ($1, $2, $3)`, [id, workspaceId, name])
+  return id
+}
+
+export async function seedSubintent(args: {
+  workspaceId: string
+  intentId: string
+  name?: string
+}): Promise<string> {
+  const id = randomUUID()
+  const name = args.name ?? `Subintent ${randomUUID().slice(0, 8)}`
+  await ownerPool.query(`insert into subintent (id, workspace_id, intent_id, name) values ($1, $2, $3, $4)`, [
+    id,
+    args.workspaceId,
+    args.intentId,
+    name,
+  ])
   return id
 }
 
