@@ -89,9 +89,11 @@ describe('resolution confirmation — cross-path', () => {
     const eventsA = await eventsFor(conversationA)
     const eventsB = await eventsFor(conversationB)
     expect(eventsA.map((e) => e.type)).toEqual(['conversation_resolved'])
-    expect(eventsB.map((e) => e.type)).toEqual(['conversation_resolved'])
+    // The agent path also posts the player's answer; the bot path must not, or
+    // a tap would stop matching the model's own confirm_resolution tool.
+    expect(eventsB.map((e) => e.type)).toEqual(['message_sent', 'conversation_resolved'])
     expect(eventsA[0]?.payload).toEqual({ source: 'bot', confirmed_by: 'player' })
-    expect(eventsB[0]?.payload).toEqual({ source: 'agent', confirmed_by: 'player' })
+    expect(eventsB.at(-1)?.payload).toEqual({ source: 'agent', confirmed_by: 'player' })
   })
 
   it('a tap and the model tool converge on identical rows and events for bot_article', async () => {

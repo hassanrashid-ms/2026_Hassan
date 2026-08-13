@@ -1,6 +1,7 @@
 import { Virtuoso } from 'react-virtuoso'
-import { AlertCircle } from 'lucide-react'
+import { AlertCircle, ArrowDown } from 'lucide-react'
 import { DeliveryTicks } from '@/features/chat/components/DeliveryTicks'
+import { useJumpToLatest } from '@/features/chat/hooks/useJumpToLatest'
 import type { ChatMessage } from '@/features/chat/components/types'
 import { cn } from '@/surfaces/webview/lib/cn'
 
@@ -24,14 +25,35 @@ export function ChatBubbles({
   messages: ChatMessage[]
   onRetry: (message: ChatMessage) => void
 }) {
+  const { ref, showJump, missed, onAtBottomChange, jump } = useJumpToLatest(messages.length)
+
   return (
-    <Virtuoso
-      style={{ height: '100%' }}
-      data={messages}
-      initialTopMostItemIndex={messages.length > 0 ? messages.length - 1 : 0}
-      followOutput="auto"
-      itemContent={(_index, message) => <ChatBubble message={message} onRetry={onRetry} />}
-    />
+    <div className="relative h-full">
+      <Virtuoso
+        ref={ref}
+        style={{ height: '100%' }}
+        data={messages}
+        initialTopMostItemIndex={messages.length > 0 ? messages.length - 1 : 0}
+        atBottomStateChange={onAtBottomChange}
+        atBottomThreshold={100}
+        followOutput="auto"
+        itemContent={(_index, message) => <ChatBubble message={message} onRetry={onRetry} />}
+      />
+
+      {/* Touch-scale: a 32px pill is an agent-console affordance, not something
+          a thumb finds on a phone. */}
+      {showJump && (
+        <button
+          type="button"
+          onClick={jump}
+          aria-label={missed > 0 ? `Jump to latest — ${missed} new` : 'Jump to latest'}
+          className="absolute inset-x-0 bottom-3 mx-auto inline-flex min-h-10 w-fit items-center gap-2 rounded-full bg-accent px-4 py-2 text-sm font-semibold text-accent-fg shadow-lg active:bg-accent-deep"
+        >
+          <ArrowDown className="size-4" />
+          {missed > 0 ? `${missed} new message${missed === 1 ? '' : 's'}` : 'Jump to latest'}
+        </button>
+      )}
+    </div>
   )
 }
 

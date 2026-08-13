@@ -150,6 +150,29 @@ describe('POST /surface/messages', () => {
     expect(events).toHaveLength(1)
   })
 
+  it('orders the reopen handoff message after the player message that triggered it', async () => {
+    const { workspaceId, playerId, token } = await setup()
+    const conversationId = await seedConversation({ workspaceId, playerId })
+    await ownerPool.query(`update conversation set status = 'resolved' where id = $1`, [conversationId])
+
+    await request(app)
+      .post('/surface/messages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ body: "I'm still facing issues." })
+      .expect(200)
+
+    const { rows } = await ownerPool.query<{ seq: number; author_type: string; body: string }>(
+      `select seq, author_type, body from message where conversation_id = $1 order by seq`,
+      [conversationId],
+    )
+    // Support cannot answer before the player has spoken: the handoff line is a
+    // response to this message, so it must carry the higher seq.
+    expect(rows.map((r) => r.author_type)).toEqual(['player', 'system'])
+    expect(rows[0]!.body).toBe("I'm still facing issues.")
+    expect(rows[1]!.body).toBe("You're being connected to our support team.")
+    expect(rows[0]!.seq).toBeLessThan(rows[1]!.seq)
+  })
+
   it('flips awaiting_player back to open, keeps the assignment, and appends conversation_player_replied', async () => {
     const { workspaceId, playerId, token } = await setup()
     const conversationId = await seedConversation({ workspaceId, playerId })

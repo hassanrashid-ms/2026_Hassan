@@ -69,6 +69,19 @@ describe('ChatThread read receipts', () => {
     expect(screen.queryByText('Sent')).not.toBeInTheDocument()
   })
 
+  it('renders a system message as its own centred note, neither own nor not-own', async () => {
+    render(
+      <div style={{ height: 600 }}>
+        <ChatThread messages={[message({ authorType: 'system', body: 'Did this solve it?' })]} currentAuthorType="agent" />
+      </div>,
+    )
+    const note = await screen.findByText('Did this solve it?')
+    // The two-state bubble tags every message it renders with data-own; a system
+    // note has no side to be on, so it must not carry that attribute at all.
+    expect(note.closest('[data-own]')).toBeNull()
+    expect(note.closest('[data-system]')).not.toBeNull()
+  })
+
   it("never shows a receipt on the other side's message", () => {
     render(
       <div style={{ height: 600 }}>

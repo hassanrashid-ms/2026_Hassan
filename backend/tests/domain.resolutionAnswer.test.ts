@@ -71,7 +71,7 @@ describe('applyResolutionAnswer', () => {
       applyResolutionAnswer(tx, { workspaceId, conversationId, playerId, sessionId: null }, true),
     )
 
-    expect(outcome).toEqual({ kind: 'resolved', source: 'bot' })
+    expect(outcome).toEqual({ kind: 'resolved', source: 'bot', posted: null })
     const row = await conversationRow(conversationId)
     expect(row.status).toBe('resolved')
     expect(row.confirm_phase).toBe('none')
@@ -82,7 +82,7 @@ describe('applyResolutionAnswer', () => {
     expect(await messagesFor(conversationId)).toEqual([])
   })
 
-  it('yes on agent_ask resolves with source agent and posts nothing', async () => {
+  it('yes on agent_ask resolves with source agent and posts the confirmation as the player', async () => {
     const workspaceId = await seedWorkspace()
     const playerId = await seedPlayer(workspaceId)
     const conversationId = await seedConversation({ workspaceId, playerId })
@@ -93,16 +93,20 @@ describe('applyResolutionAnswer', () => {
       applyResolutionAnswer(tx, { workspaceId, conversationId, playerId, sessionId: null }, true),
     )
 
-    expect(outcome).toEqual({ kind: 'resolved', source: 'agent' })
+    expect(outcome.kind).toBe('resolved')
     const row = await conversationRow(conversationId)
     expect(row.status).toBe('resolved')
     expect(row.confirm_phase).toBe('none')
     // The column, not the event, is what reopen actually reads.
     expect(row.resolution_source).toBe('agent')
+    // The answer lands in the transcript before the resolution it caused.
     expect(await eventsFor(conversationId)).toEqual([
+      { type: 'message_sent', payload: { seq: 1, author_type: 'player', visibility: 'public' } },
       { type: 'conversation_resolved', payload: { source: 'agent', confirmed_by: 'player' } },
     ])
-    expect(await messagesFor(conversationId)).toEqual([])
+    expect(await messagesFor(conversationId)).toEqual([
+      { author_type: 'player', visibility: 'public', body: 'Yes, my issue is resolved.' },
+    ])
   })
 
   it('no on bot_article still runs spec 4 handoff(article_rejected) unchanged', async () => {
@@ -136,7 +140,7 @@ describe('applyResolutionAnswer', () => {
     ])
   })
 
-  it('no on agent_ask clears the phase, touches no status, posts no message', async () => {
+  it('no on agent_ask clears the phase, touches no status, and posts the decline as the player', async () => {
     const workspaceId = await seedWorkspace()
     const playerId = await seedPlayer(workspaceId)
     const conversationId = await seedConversation({ workspaceId, playerId })
@@ -152,14 +156,19 @@ describe('applyResolutionAnswer', () => {
       applyResolutionAnswer(tx, { workspaceId, conversationId, playerId, sessionId: null }, false),
     )
 
-    expect(outcome).toEqual({ kind: 'declined' })
+    expect(outcome.kind).toBe('declined')
     const row = await conversationRow(conversationId)
     expect(row.status).toBe('awaiting_player')
     expect(row.confirm_phase).toBe('none')
     expect(row.assigned_agent_id).toBe(agentId)
     expect(row.resolution_source).toBe(null)
-    expect(await messagesFor(conversationId)).toEqual([])
+    // Player-authored, not system: the player answered, and the agent's
+    // transcript has to show that they did.
+    expect(await messagesFor(conversationId)).toEqual([
+      { author_type: 'player', visibility: 'public', body: "No, I'm still having issues." },
+    ])
     expect(await eventsFor(conversationId)).toEqual([
+      { type: 'message_sent', payload: { seq: 1, author_type: 'player', visibility: 'public' } },
       { type: 'resolution_check_declined', payload: { source: 'agent' } },
     ])
   })
@@ -174,6 +183,9 @@ describe('applyResolutionAnswer', () => {
     await withWorkspace(workspaceId, (tx) => applyResolutionAnswer(tx, base, false))
     const second = await withWorkspace(workspaceId, (tx) => applyResolutionAnswer(tx, base, false))
     expect(second).toEqual({ kind: 'rejected' })
-    expect((await eventsFor(conversationId)).length).toBe(1)
+    // The first decline's pair (message_sent, resolution_check_declined) and
+    // nothing from the second — a double tap must not post twice.
+    expect((await eventsFor(conversationId)).map((e) => e.type)).toEqual(['message_sent', 'resolution_check_declined'])
+    expect(await messagesFor(conversationId)).toHaveLength(1)
   })
 })

@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm'
 import { applyBotTurn } from '../bot/applyBotTurn.ts'
-import type { PostedMessageRow } from './postMessage.ts'
+import { postMessage, type PostedMessageRow } from './postMessage.ts'
+import { RESOLUTION_CONFIRM_MESSAGE, RESOLUTION_DECLINE_MESSAGE } from './resolutionMessages.ts'
 import { appendEvent } from '../../shared/events/appendEvent.ts'
 import { conversation } from '../../shared/db/schema/index.ts'
 import type { Tx } from '../../shared/db/withWorkspace.ts'
@@ -15,9 +16,13 @@ export type ResolutionAnswerContext = {
 
 export type ResolutionAnswerOutcome =
   | { kind: 'rejected' }
-  | { kind: 'resolved'; source: 'bot' | 'agent' }
+  /**
+   * `posted` is the player's answer as a message. Null on the bot path, which
+   * shares its writes with the confirm_resolution tool and so posts nothing.
+   */
+  | { kind: 'resolved'; source: 'bot' | 'agent'; posted: PostedMessageRow | null }
   | { kind: 'handed_off'; posted: PostedMessageRow }
-  | { kind: 'declined' }
+  | { kind: 'declined'; posted: PostedMessageRow }
 
 /**
  * The only place a player's Yes/No is applied, for both sources. One
@@ -53,7 +58,7 @@ export async function applyResolutionAnswer(
   if (found.confirmPhase === 'bot_article') {
     if (helped) {
       await applyBotTurn(tx, botCtx, { kind: 'resolve', subintentId: null })
-      return { kind: 'resolved', source: 'bot' }
+      return { kind: 'resolved', source: 'bot', posted: null }
     }
     const result = await applyBotTurn(tx, botCtx, { kind: 'handoff', reason: 'article_rejected', subintentId: null })
     const posted = result.posted[0]
@@ -63,6 +68,16 @@ export async function applyResolutionAnswer(
 
   // agent_ask.
   if (helped) {
+    // Posted before the status flip so the transcript reads in the order it
+    // happened: the player answers, then the conversation resolves.
+    const confirmed = await postMessage(tx, {
+      workspaceId: ctx.workspaceId,
+      conversationId: ctx.conversationId,
+      authorType: 'player',
+      actorId: ctx.playerId,
+      sessionId: ctx.sessionId,
+      body: RESOLUTION_CONFIRM_MESSAGE,
+    })
     await tx
       .update(conversation)
       // resolution_source is what reopen reads to keep the previous owner
@@ -78,11 +93,21 @@ export async function applyResolutionAnswer(
       actorType: 'player',
       payload: { source: 'agent', confirmed_by: 'player' },
     })
-    return { kind: 'resolved', source: 'agent' }
+    return { kind: 'resolved', source: 'agent', posted: confirmed }
   }
 
   // A decline touches no status: a human already owns this conversation, so
-  // there is nothing to hand off. The agent sees it through the phase event.
+  // there is nothing to hand off. It does post the player's answer, though —
+  // the phase event alone left the agent's transcript looking untouched, as if
+  // the question had gone unanswered.
+  const declined = await postMessage(tx, {
+    workspaceId: ctx.workspaceId,
+    conversationId: ctx.conversationId,
+    authorType: 'player',
+    actorId: ctx.playerId,
+    sessionId: ctx.sessionId,
+    body: RESOLUTION_DECLINE_MESSAGE,
+  })
   await tx.update(conversation).set({ confirmPhase: 'none' }).where(eq(conversation.id, ctx.conversationId))
   await appendEvent(tx, {
     workspaceId: ctx.workspaceId,
@@ -93,5 +118,5 @@ export async function applyResolutionAnswer(
     actorType: 'player',
     payload: { source: 'agent' },
   })
-  return { kind: 'declined' }
+  return { kind: 'declined', posted: declined }
 }

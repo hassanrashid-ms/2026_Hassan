@@ -36,6 +36,17 @@ function toChatMessage(m: {
 }
 
 /**
+ * Both banners are the same object: a sheet that rises above the dimmed screen
+ * and owns the player's next decision. Shared as a constant rather than a
+ * wrapper component because the two differ only in their contents, and a
+ * one-prop wrapper would hide that they must stay visually identical.
+ */
+const BANNER_CLASS = [
+  'relative z-20 shrink-0 rounded-t-card bg-surface px-4 pt-5 pb-5',
+  'shadow-[0_-10px_40px_rgba(0,0,0,0.45)]',
+].join(' ')
+
+/**
  * The chat that used to be a panel inside the support surface, now its own route.
  *
  * Everything below the presentation layer is the same code doing the same thing:
@@ -165,13 +176,21 @@ export function SupportChat() {
         )}
       </div>
 
+      {/* The scrim is `fixed`, not absolute: no ancestor here is positioned, and
+          the thing being dimmed is the whole screen — thread, top bar and the
+          now-disabled composer alike. The banner opts back out by sitting one
+          layer above it, which is what makes it read as the only live control
+          rather than one more row stacked at the bottom. */}
+      {(confirmPending || settled) && <div className="fixed inset-0 z-10 bg-black/55" aria-hidden="true" />}
+
       {confirmPending && (
-        <div className="shrink-0 border-t border-muted/15 bg-surface px-4 py-3">
-          <p className="text-base font-semibold text-text">Did this solve it?</p>
-          <div className="mt-2 flex items-center gap-3">
+        <div role="dialog" aria-modal="true" aria-label="Is your issue resolved?" className={BANNER_CLASS}>
+          <p className="text-lg font-semibold text-text">Is your issue resolved?</p>
+          <p className="mt-1 text-sm text-muted">Let us know so we can close this or keep helping.</p>
+          <div className="mt-4 flex items-center gap-3">
             <SupportButton
-              variant="soft"
-              className="min-h-9 px-4 py-2 text-sm"
+              variant="primary"
+              className="min-h-11 flex-1 px-4 py-2.5 text-base"
               disabled={answer.isPending}
               onClick={() => answer.mutate(true)}
             >
@@ -179,7 +198,7 @@ export function SupportChat() {
             </SupportButton>
             <SupportButton
               variant="soft"
-              className="min-h-9 px-4 py-2 text-sm"
+              className="min-h-11 flex-1 px-4 py-2.5 text-base"
               disabled={answer.isPending}
               onClick={() => answer.mutate(false)}
             >
@@ -190,23 +209,23 @@ export function SupportChat() {
       )}
 
       {settled && (
-        <div className="shrink-0 border-t border-muted/15 bg-surface px-4 py-3">
-          <p className="text-base font-semibold text-text">Your ticket is resolved.</p>
-          <div className="mt-2 flex items-center gap-3">
-            <p className="text-sm text-muted">Still facing issues?</p>
+        <div role="dialog" aria-modal="true" aria-label="Your ticket is resolved." className={BANNER_CLASS}>
+          <p className="text-lg font-semibold text-text">Your ticket is resolved.</p>
+          {/* Two exits, not one question with a Yes: reopen this thread, or end
+              it and start a clean one. The old row only ever offered the reopen,
+              so a player whose next problem was unrelated had nowhere to go. */}
+          <p className="mt-1 text-sm text-muted">Need anything else?</p>
+          <div className="mt-4 flex flex-col gap-2">
             <SupportButton
-              variant="soft"
-              className="min-h-9 px-4 py-2 text-sm"
+              variant="primary"
+              className="min-h-11 w-full px-4 py-2.5 text-base"
               onClick={() => send.mutate("I'm still facing issues.")}
             >
-              Yes
+              Still facing issues
             </SupportButton>
-            {/* The other half of the same question: reopen this thread, or end it
-                and start a clean one. The companion banner-UX spec restyles this
-                row; the action behind this button is what this change owns. */}
             <SupportButton
               variant="soft"
-              className="min-h-9 px-4 py-2 text-sm"
+              className="min-h-11 w-full px-4 py-2.5 text-base"
               disabled={newTicket.isPending}
               onClick={() => newTicket.mutate()}
             >
@@ -216,7 +235,10 @@ export function SupportChat() {
         </div>
       )}
 
-      <ChatComposer onSend={(body) => send.mutate(body)} disabled={send.isPending} />
+      {/* A banner is a question the player has to answer before typing again:
+          leaving the composer live let them talk past it and strand the
+          conversation mid-decision. */}
+      <ChatComposer onSend={(body) => send.mutate(body)} disabled={send.isPending || confirmPending || settled} />
 
       <DebugDialog open={debugOpen} onOpenChange={setDebugOpen} />
     </>

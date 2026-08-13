@@ -39,8 +39,8 @@ export function emitReadReceipt(io: Server, audience: 'player' | 'agents', paylo
 /**
  * Typed, unlike emitMessageToRooms: a two-field contract, not a serializer's
  * output. Goes to both rooms because both sides have UI keyed to the phase —
- * the player's banner and the agent's "Ask if resolved" button — and a decline
- * posts no message, so there is nothing else to refetch on.
+ * the player's banner and the agent's "Ask if resolved" button — which the
+ * decline's own message:new says nothing about.
  */
 export function emitPhaseChanged(io: Server, conversationId: string, payload: ConversationPhaseChangedEvent): void {
   io.to(agentRoom(conversationId)).emit('conversation:phase_changed', payload)

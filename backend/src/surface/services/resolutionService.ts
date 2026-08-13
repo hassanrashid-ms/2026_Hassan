@@ -61,8 +61,13 @@ export async function answerResolution(ctx: PlayerContext, body: Body): Promise<
 
   // Emits only after commit. Phase always changed if we got here.
   emitPhaseChanged(getIo(), result.conversationId, { conversation_id: result.conversationId, confirm_phase: 'none' })
-  if (result.outcome.kind === 'handed_off') {
-    emitMessageToRooms(getIo(), result.conversationId, toPlayerView(result.outcome.posted), toAgentView(result.outcome.posted))
+  // Every outcome that posts a message emits it the same way: the player's
+  // Yes/No reaches the agent's open thread over the normal `message:new` path,
+  // which already drives a refetch there. `posted` is null only on the bot
+  // path's Yes, which writes no message at all.
+  const posted = result.outcome.kind === 'handed_off' ? result.outcome.posted : (result.outcome.posted ?? null)
+  if (posted) {
+    emitMessageToRooms(getIo(), result.conversationId, toPlayerView(posted), toAgentView(posted))
   }
   // A decline changes no status, so the inbox has nothing to refetch for.
   if (result.outcome.kind !== 'declined') {

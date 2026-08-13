@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import type { AgentMessageView, ConfirmPhaseValue, ConversationStatusValue } from '@support/types'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, MessageSquare } from 'lucide-react'
+import { ArrowLeft, Clock, MessageSquare } from 'lucide-react'
 import { askResolved, fetchConversationMessages, markAgentMessagesRead, sendAgentMessage } from '../../../api/agentApi.ts'
 import { createSocket } from '../../../../../features/chat/api/socket.ts'
 import { ChatThread } from '../../../../../features/chat/components/ChatThread.tsx'
@@ -76,7 +76,8 @@ export function ThreadPanel({
     socket.on('message:read', () => {
       void queryClient.invalidateQueries({ queryKey: ['conversation', conversationId, 'messages'] })
     })
-    // Carries the decline, which posts no message and changes no status.
+    // The player's answer arrives as a message; this is what tells the panel the
+    // question is no longer outstanding, which no message body states.
     socket.on('conversation:phase_changed', () => {
       void queryClient.invalidateQueries({ queryKey: ['inbox', 'mine'] })
       void queryClient.invalidateQueries({ queryKey: ['inbox', 'unassigned'] })
@@ -132,8 +133,22 @@ export function ThreadPanel({
         )}
       </div>
       <div className="min-h-0 flex-1">
-        <ChatThread messages={chatMessages} currentAuthorType="agent" />
+        {/* Keyed on the conversation so switching threads remounts the list at
+            the bottom instead of holding the previous thread's scroll offset. */}
+        <ChatThread key={conversationId} messages={chatMessages} currentAuthorType="agent" />
       </div>
+      {/* The ask used to be visible only as a disabled header button with a
+          native title. It is a state the whole panel is in — the agent is
+          blocked on the player — so it says so where the agent is looking. */}
+      {waiting && (
+        <div
+          role="status"
+          className="flex shrink-0 items-center gap-2 border-t border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-900"
+        >
+          <Clock className="size-3.5 shrink-0" />
+          Waiting on the player&rsquo;s answer to &ldquo;Did this solve it?&rdquo;
+        </div>
+      )}
       <Composer onSend={(body, visibility) => send.mutate({ body, visibility })} disabled={send.isPending} allowVisibilityToggle />
     </div>
   )

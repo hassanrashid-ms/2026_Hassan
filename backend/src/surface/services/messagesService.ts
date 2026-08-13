@@ -51,6 +51,9 @@ export async function sendPlayerMessage(
     // Only the reopen branch sets this: the reopen's system message needs its
     // own socket emit, separate from the player's own message emitted below.
     let reopenPosted: PostedMessageRow | undefined
+    // The reopen branch defers its handoff message until after the player's own
+    // is posted — see below.
+    let reopening = false
 
     if (!existing) {
       // The originating session, so a future agent Game View reaches the
@@ -128,14 +131,7 @@ export async function sendPlayerMessage(
           .set({ status: 'open', assignedAgentId: nextAssignedAgentId, resolutionSource: null })
           .where(eq(conversation.id, conversationId))
 
-        reopenPosted = await postMessage(tx, {
-          workspaceId: ctx.workspaceId,
-          conversationId,
-          authorType: 'system',
-          actorId: null,
-          body: HANDOFF_PLAYER_MESSAGE,
-          visibility: 'public',
-        })
+        reopening = true
 
         await appendEvent(tx, {
           workspaceId: ctx.workspaceId,
@@ -176,6 +172,21 @@ export async function sendPlayerMessage(
       sessionId,
       body: body.body,
     })
+
+    // Deliberately after the player's message, not before it: "You're being
+    // connected to our support team." is a response to what the player just
+    // said, and a lower `seq` rendered it above the message that triggered the
+    // reopen — support appearing to answer before anyone had spoken.
+    if (reopening) {
+      reopenPosted = await postMessage(tx, {
+        workspaceId: ctx.workspaceId,
+        conversationId,
+        authorType: 'system',
+        actorId: null,
+        body: HANDOFF_PLAYER_MESSAGE,
+        visibility: 'public',
+      })
+    }
 
     let shouldEnqueue = false
     const [afterPost] = await tx
