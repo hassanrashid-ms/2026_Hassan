@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it } from 'vitest'
-import { ownerPool, closeOwnerPool } from './helpers/db.ts'
+import { ownerPool, closeOwnerPool, seedWorkspace, seedPlayer } from './helpers/db.ts'
 
 const EXPECTED_TABLES = [
   'agent',
@@ -212,5 +212,24 @@ describe('schema', () => {
         where table_schema = 'public' and table_name = 'conversation' and column_name = 'status'`,
     )
     expect(rows[0]?.column_default).toContain('bot_active')
+  })
+
+  it('conversation.bot_phase defaults to none and rejects an unknown value', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const { rows } = await ownerPool.query<{ id: string; bot_phase: string }>(
+      `insert into conversation (workspace_id, player_id) values ($1, $2) returning id, bot_phase`,
+      [workspaceId, playerId],
+    )
+    expect(rows[0]?.bot_phase).toBe('none')
+
+    await expect(
+      ownerPool.query(`update conversation set bot_phase = 'bogus' where id = $1`, [rows[0]?.id]),
+    ).rejects.toThrow()
+  })
+
+  it('adds a nullable conversation.resolution_source column', async () => {
+    const cols = await columns('conversation')
+    expect(cols.get('resolution_source')?.nullable).toBe(true)
   })
 })
