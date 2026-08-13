@@ -9,6 +9,7 @@ const EnvSchema = z.object({
   WEAVIATE_URL: z.string().min(1, 'WEAVIATE_URL is required'),
   WEAVIATE_API_KEY: z.string().min(1, 'WEAVIATE_API_KEY is required'),
   OPENAI_APIKEY: z.string().optional(),
+  OPENAI_MODEL: z.string().min(1, 'OPENAI_MODEL is required'),
   PLAYER_JWT_SECRET: z
     .string()
     .min(32, 'PLAYER_JWT_SECRET must be at least 32 characters'),

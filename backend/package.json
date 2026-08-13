@@ -19,7 +19,6 @@
     "@asteasolutions/zod-to-openapi": "^9.1.0",
     "@socket.io/redis-adapter": "^8",
     "@support/types": "workspace:*",
-    "weaviate-client": "^3",
     "bullmq": "^5",
     "cors": "^2",
     "dotenv": "^16",
@@ -27,9 +26,11 @@
     "express": "^5",
     "ioredis": "^5",
     "jose": "^6",
+    "openai": "^7.4.0",
     "pg": "^8",
     "socket.io": "^4",
     "swagger-ui-express": "^5.0.1",
+    "weaviate-client": "^3",
     "zod": "^4"
   },
   "devDependencies": {
