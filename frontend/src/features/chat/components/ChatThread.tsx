@@ -7,7 +7,7 @@ import type { ChatAuthorType, ChatMessage } from './types.ts'
 type ChatThreadProps = {
   messages: ChatMessage[]
   currentAuthorType: ChatAuthorType
-  /** Only ever called for a message with deliveryState 'failed'. Omit if the caller has no pending/optimistic sends to retry (e.g. the agent console, which never renders a 'sending' or 'failed' message). */
+  /** Only ever called for a message with deliveryState 'failed'. Omit only if the caller renders no optimistic sends at all — both surfaces do. */
   onRetry?: (message: ChatMessage) => void
 }
 
@@ -20,6 +20,15 @@ type ChatThreadProps = {
  * surface (agent-console, webview) defines those tokens differently in its own
  * scoped stylesheet. A hand-written CSS rule here would apply to whichever
  * surface's global stylesheet loaded last, not the one actually rendering it.
+ *
+ * Never put a vertical margin on what itemContent returns. Virtuoso sizes each
+ * item with `getBoundingClientRect().height` on its own wrapper div, which has
+ * no padding or border — so a `my-*` on the returned element collapses straight
+ * through the wrapper and is measured as zero. The list then believes it is
+ * shorter than it renders, and the gap accumulates per message: the viewport
+ * stops a few pixels per message short of the real bottom, clipping the newest
+ * bubble and leaving atBottom permanently false, which is what pins the "jump to
+ * latest" button on screen. Space items with padding on a wrapper instead.
  */
 export function ChatThread({ messages, currentAuthorType, onRetry }: ChatThreadProps) {
   const { ref, showJump, missed, onAtBottomChange, jump } = useJumpToLatest(messages.length)
@@ -33,16 +42,24 @@ export function ChatThread({ messages, currentAuthorType, onRetry }: ChatThreadP
         style={{ height: '100%' }}
         data={messages}
         atBottomStateChange={onAtBottomChange}
-        // Generous enough that the few pixels a new bubble pushes the list by
-        // don't read as "the reader scrolled away" and flash the button.
-        atBottomThreshold={100}
-        // Without these two the thread mounted scrolled to the *top*, which also
-        // meant Virtuoso never considered itself at the bottom — so followOutput
-        // had nothing to follow and new messages arrived off-screen. Callers
-        // remount this per conversation (a `key`), which is what re-applies the
+        // Deliberately the same Virtuoso configuration as the webview's
+        // ChatBubbles, which has always behaved correctly. `alignToBottom` and a
+        // manual scrollToIndex on send were tried here and both misplaced the
+        // viewport — Virtuoso measures a bubble after it renders, so scrolling
+        // to one in the same commit lands on its stale height, mid-message.
+        // followOutput does its own scrolling after measurement; leave it to it.
+        // Callers remount this per conversation (a `key`), which re-applies the
         // initial index when the agent switches threads.
+        //
+        // A bare index, not the `{ index: 'LAST', align: 'end' }` form that
+        // reads better: an aligned initial location keeps the whole list at
+        // `visibility: hidden` until Virtuoso reports that location reached,
+        // and on a list that mounts empty — which this one does for the frame
+        // before the messages query resolves — that never happens and nothing
+        // renders at all. The bare index relies on the browser clamping the
+        // scroll to the bottom, which is exact now that item heights measure
+        // correctly.
         initialTopMostItemIndex={messages.length > 0 ? messages.length - 1 : 0}
-        alignToBottom
         // A short spacer so the newest bubble never sits flush against whatever
         // the caller puts underneath — in the agent console, the composer.
         components={{ Footer: () => <div className="h-3" /> }}
@@ -58,11 +75,11 @@ export function ChatThread({ messages, currentAuthorType, onRetry }: ChatThreadP
           // itself.
           if (chatMessage.authorType === 'system') {
             return (
-              <div className="my-2 flex justify-center px-3" data-system="true">
+              <div className="flex justify-center px-3 py-2" data-system="true">
                 <p className="m-0 rounded-full border border-muted/20 bg-muted/10 px-3 py-1 text-center text-xs text-muted">
                   {chatMessage.body}
                   <time dateTime={chatMessage.createdAt} className="ml-2 opacity-70">
-                    {new Date(chatMessage.createdAt).toLocaleTimeString()}
+                    {new Date(chatMessage.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </time>
                 </p>
               </div>
@@ -70,41 +87,51 @@ export function ChatThread({ messages, currentAuthorType, onRetry }: ChatThreadP
           }
 
           return (
-            <div
-              className={[
-                'mx-3 my-1 max-w-[82%] rounded-2xl px-3 py-2 text-sm leading-snug break-words shadow-sm',
-                isOwn ? 'ml-auto rounded-br-sm bg-accent text-accent-fg' : 'mr-auto rounded-bl-sm border border-muted/20 bg-accent-soft text-text',
-                isInternal ? 'border border-amber-500 bg-amber-100 text-amber-900' : null,
-              ]
-                .filter(Boolean)
-                .join(' ')}
-              data-own={isOwn}
-            >
-              <p className="m-0">{chatMessage.body}</p>
-              <time dateTime={chatMessage.createdAt} className="mt-1 block text-xs opacity-80">
-                {new Date(chatMessage.createdAt).toLocaleTimeString()}
-              </time>
-              {/* Never on an internal note: the player cannot see the message, so
-                  any receipt would be a claim about something they never got. */}
-              {isOwn && !isInternal && (
-                <span className="mt-0.5 block text-xs">
-                  {/* sky-300, not the default sky-500: an own bubble here is slate-600, and the darker blue disappears against it. */}
-                  <DeliveryTicks deliveryState={chatMessage.deliveryState} readClassName="text-sky-300" />
-                </span>
-              )}
-              {chatMessage.deliveryState === 'sending' && <span className="mt-0.5 block text-xs opacity-80">Sending…</span>}
-              {chatMessage.deliveryState === 'failed' && (
-                <span className="mt-0.5 block text-xs opacity-80">
-                  Failed to send.{' '}
-                  <button
-                    type="button"
-                    className="ml-1 rounded bg-red-500 px-1.5 py-0.5 text-xs text-white hover:bg-red-600"
-                    onClick={() => onRetry?.(chatMessage)}
-                  >
-                    Retry
-                  </button>
-                </span>
-              )}
+            // Only the gap between bubbles moves to the wrapper, and only as
+            // padding — that is the whole of what Virtuoso mismeasures. The
+            // bubble keeps its own block layout: `mx-3` with `ml-auto`/`mr-auto`
+            // against `max-w-[82%]` gives every bubble the same 82% width and
+            // lets the leftover margin pick the side. Making it a flex item
+            // instead would silently switch that to shrink-to-fit, so short
+            // messages would stop matching long ones. Horizontal margins don't
+            // affect item height, so they can stay exactly where they were.
+            <div className="py-1">
+              <div
+                className={[
+                  'mx-3 max-w-[82%] rounded-2xl px-3 py-2 text-sm leading-snug break-words shadow-sm',
+                  isOwn ? 'ml-auto rounded-br-sm bg-accent text-accent-fg' : 'mr-auto rounded-bl-sm border border-muted/20 bg-accent-soft text-text',
+                  isInternal ? 'border border-amber-500 bg-amber-100 text-amber-900' : null,
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                data-own={isOwn}
+              >
+                <p className="m-0">{chatMessage.body}</p>
+                <time dateTime={chatMessage.createdAt} className="mt-1 block text-xs opacity-80">
+                  {new Date(chatMessage.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </time>
+                {/* Never on an internal note: the player cannot see the message, so
+                    any receipt would be a claim about something they never got. */}
+                {isOwn && !isInternal && (
+                  <span className="mt-0.5 block text-xs">
+                    {/* sky-300, not the default sky-500: an own bubble here is slate-600, and the darker blue disappears against it. */}
+                    <DeliveryTicks deliveryState={chatMessage.deliveryState} readClassName="text-sky-300" />
+                  </span>
+                )}
+                {chatMessage.deliveryState === 'sending' && <span className="mt-0.5 block text-xs opacity-80">Sending…</span>}
+                {chatMessage.deliveryState === 'failed' && (
+                  <span className="mt-0.5 block text-xs opacity-80">
+                    Failed to send.{' '}
+                    <button
+                      type="button"
+                      className="ml-1 rounded bg-red-500 px-1.5 py-0.5 text-xs text-white hover:bg-red-600"
+                      onClick={() => onRetry?.(chatMessage)}
+                    >
+                      Retry
+                    </button>
+                  </span>
+                )}
+              </div>
             </div>
           )
         }}

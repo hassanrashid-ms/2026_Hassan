@@ -270,7 +270,19 @@ export async function markPlayerMessagesRead(
   const readAt = new Date()
 
   const result = await withWorkspace(ctx.workspaceId, async (tx) => {
-    const [found] = await tx.select({ id: conversation.id }).from(conversation).where(eq(conversation.playerId, ctx.playerId)).limit(1)
+    // `orderBy` is load-bearing, not tidiness: a player has more than one
+    // conversation the moment they open a second ticket, and an unordered
+    // limit(1) let Postgres hand back whichever row it liked — usually the old
+    // closed one. The receipt then marked messages in a thread nobody was
+    // looking at, and the agent's live thread never turned blue. Same rule as
+    // getPlayerMessages/sendPlayerMessage: the latest conversation is the one
+    // on screen.
+    const [found] = await tx
+      .select({ id: conversation.id })
+      .from(conversation)
+      .where(eq(conversation.playerId, ctx.playerId))
+      .orderBy(desc(conversation.createdAt))
+      .limit(1)
     if (!found) return null
 
     const updated = await tx

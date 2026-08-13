@@ -67,6 +67,9 @@ export function Composer({ onSend, disabled, allowVisibilityToggle }: ComposerPr
           }
         }}
         placeholder="Type a message…"
+        // The visibility toggle above is labelled; this had no accessible name
+        // at all, which the webview's own composer has always carried.
+        aria-label="Message"
         className="min-h-9 max-h-24 flex-1 resize-none rounded-md border border-muted/20 bg-accent-soft px-3 py-1.5 text-sm text-text outline-none placeholder:text-muted focus:border-accent"
       />
       <button

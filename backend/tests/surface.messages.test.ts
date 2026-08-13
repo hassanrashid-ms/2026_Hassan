@@ -596,6 +596,36 @@ describe('POST /surface/messages/read', () => {
     )
     expect(rows[0]!.delivery_state).toBe('read')
   })
+
+  it('marks the latest conversation, not an older one the player also owns', async () => {
+    const { workspaceId, playerId, token } = await setup()
+    const older = await seedConversation({ workspaceId, playerId })
+    await ownerPool.query(`update conversation set status = 'closed', created_at = now() - interval '1 day' where id = $1`, [
+      older,
+    ])
+    const latest = await seedConversation({ workspaceId, playerId })
+
+    await ownerPool.query(
+      `insert into message (workspace_id, conversation_id, seq, author_type, body)
+       values ($1, $2, 1, 'agent', 'in the old thread'), ($1, $3, 1, 'agent', 'in the live thread')`,
+      [workspaceId, older, latest],
+    )
+
+    await request(app).post('/surface/messages/read').set('Authorization', `Bearer ${token}`).send({ up_to_seq: 1 }).expect(200)
+
+    const state = async (conversationId: string) => {
+      const { rows } = await ownerPool.query<{ delivery_state: string }>(
+        `select delivery_state from message where conversation_id = $1 and seq = 1`,
+        [conversationId],
+      )
+      return rows[0]!.delivery_state
+    }
+    // Once a player opens a second ticket the unordered lookup this replaced
+    // could pick either row, and picking the closed one meant the agent's live
+    // thread never showed a read receipt.
+    expect(await state(latest)).toBe('read')
+    expect(await state(older)).toBe('sent')
+  })
 })
 
 describe('POST /surface/messages/read records when the player saw it', () => {

@@ -2,6 +2,7 @@ import type {
   AgentArticleDetail,
   AgentConversationsResponse,
   AgentMessagesResponse,
+  AgentMessageView,
   AgentArticlesResponse,
   AskResolvedResponse,
   ClaimResponse,
@@ -53,7 +54,7 @@ export function sendAgentMessage(
   conversationId: string,
   body: string,
   visibility?: 'public' | 'internal',
-): Promise<{ message: unknown }> {
+): Promise<{ message: AgentMessageView }> {
   return apiCall(`/agent/messages`, token, {
     method: 'POST',
     body: JSON.stringify({ conversation_id: conversationId, body, visibility }),

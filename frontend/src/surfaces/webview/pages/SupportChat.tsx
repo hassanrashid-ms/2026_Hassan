@@ -80,11 +80,14 @@ export function SupportChat() {
       ])
       return { tempId }
     },
-    onSuccess: () => {
-      // Deliberately does not clear `pending` here: chatReconcile.ts's
-      // reconcilePending drops a pending entry only once the refetched server
-      // list actually contains a matching message, so the optimistic bubble
+    onSuccess: (data, _body, context) => {
+      // Deliberately does not clear `pending` here: stamping the server's id on
+      // the entry lets chatReconcile.ts's reconcilePending drop it only once the
+      // refetched list actually contains that message, so the optimistic bubble
       // never disappears and reappears in the gap before that refetch lands.
+      setPending((current) =>
+        current.map((p) => (p.tempId === context?.tempId ? { ...p, serverId: data.message.id } : p)),
+      )
       void queryClient.invalidateQueries({ queryKey: ['playerMessages', boot?.sessionId] })
     },
     onError: (_error, _body, context) => {

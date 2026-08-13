@@ -35,7 +35,6 @@ export function ChatBubbles({
         data={messages}
         initialTopMostItemIndex={messages.length > 0 ? messages.length - 1 : 0}
         atBottomStateChange={onAtBottomChange}
-        atBottomThreshold={100}
         followOutput="auto"
         itemContent={(_index, message) => <ChatBubble message={message} onRetry={onRetry} />}
       />
