@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { and, eq } from 'drizzle-orm'
 import { Queue } from 'bullmq'
 import IORedis from 'ioredis'
@@ -10,6 +10,16 @@ import { registerJobs } from '../src/shared/jobs/queue.ts'
 import { getEnv } from '../src/env.ts'
 import type { BotDecider, BotTurnDecision } from '../src/domain/bot/botTurn.ts'
 import { closeOwnerPool, seedConversation, seedPlayer, seedWorkspace, truncateAll } from './helpers/db.ts'
+
+// The default decider is toolLoopDecider (Task 10), which calls the real
+// OpenAI API. Two tests below exercise the *default*, unoverridden worker —
+// mock callModel so those still run the real toolLoopDecider code path
+// deterministically, per the global constraint that no test makes a live
+// model call.
+vi.mock('../src/domain/bot/openaiClient.ts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/domain/bot/openaiClient.ts')>()
+  return { ...actual, callModel: vi.fn().mockRejectedValue(new Error('no live model calls in tests')) }
+})
 
 // Matches SESSION_TIMEOUT_JOB / QUEUE_NAME in ../src/shared/jobs/queue.ts. registerJobs()
 // upserts this repeatable job scheduler against real Redis; a test that calls
@@ -152,7 +162,7 @@ describe('bot-turns queue and worker', () => {
     expect(rows[0]!.status).toBe('open')
   })
 
-  it('the default worker uses stubDecider, producing bot_unavailable(error) with an internal note', async () => {
+  it('the default worker uses toolLoopDecider, producing bot_unavailable(error) with an internal note', async () => {
     const workspaceId = await seedWorkspace({ slug: 'demo-game' })
     const playerId = await seedPlayer(workspaceId, 'UserId1')
     const conversationId = await seedConversation({ workspaceId, playerId })
@@ -202,7 +212,8 @@ describe('bot-turns queue and worker', () => {
     try {
       // Proves registerBotTurnWorker() is actually wired in: with no decider
       // override, registerJobs()'s bot-turns worker runs the default
-      // stubDecider, which always resolves bot_unavailable(error).
+      // toolLoopDecider, whose mocked callModel rejects, exhausting retries
+      // into bot_unavailable(error).
       await enqueueBotTurn({ workspaceId, conversationId, seq: 1 })
 
       await waitFor(async () => {
