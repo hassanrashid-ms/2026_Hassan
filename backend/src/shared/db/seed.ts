@@ -21,6 +21,7 @@ const { generateWorkspaceSecret } = await import('../auth/workspaceSecret.ts')
 const { logger } = await import('../logging/logger.ts')
 const { SEED_TAXONOMY } = await import('./seedTaxonomy.ts')
 const { upsertArticleObject } = await import('../weaviate/articlesIndex.ts')
+const { OTHER_INTENT_NAME, OTHER_SUBINTENT_NAME } = await import('../../domain/bot/fallbackSubintent.ts')
 
 const SLUG = process.env.SEED_WORKSPACE_SLUG ?? 'demo-workspace'
 const ADMIN_EMAIL = process.env.SEED_ADMIN_EMAIL ?? 'admin@example.test'
@@ -154,6 +155,15 @@ export async function seed(): Promise<void> {
           if (row) insertedArticles.push(row)
         }
       }
+    }
+
+    const [otherIntent] = await tx
+      .insert(intent)
+      .values({ workspaceId, name: OTHER_INTENT_NAME, isSystem: true })
+      .onConflictDoNothing()
+      .returning({ id: intent.id })
+    if (otherIntent) {
+      await tx.insert(subintent).values({ workspaceId, intentId: otherIntent.id, name: OTHER_SUBINTENT_NAME }).onConflictDoNothing()
     }
   })
 
