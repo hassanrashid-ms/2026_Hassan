@@ -27,5 +27,8 @@ export const messageDeliveryState = pgEnum('message_delivery_state', [
 export const eventActorType = pgEnum('event_actor_type', ['player', 'agent', 'bot', 'system'])
 export const declaredFieldType = pgEnum('declared_field_type', ['string', 'number', 'boolean', 'timestamp'])
 export const articleState = pgEnum('article_state', ['draft', 'published', 'archived'])
-export const botPhase = pgEnum('bot_phase', ['none', 'article_confirm'])
+// The forms slice adds 'form'. `bot_article` is set by the bot's offer_article,
+// `agent_ask` by POST /agent/conversations/:id/ask-resolved. Both mean the same
+// thing to the player: a yes/no question is on screen.
+export const confirmPhase = pgEnum('confirm_phase', ['none', 'bot_article', 'agent_ask'])
 export const resolutionSource = pgEnum('resolution_source', ['bot', 'agent'])

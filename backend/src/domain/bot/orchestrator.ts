@@ -15,7 +15,7 @@ export type { BotTurnInput }
 type GatherResult = {
   status: string
   subintentId: string | null
-  botPhase: 'none' | 'article_confirm'
+  confirmPhase: 'none' | 'bot_article' | 'agent_ask'
 } | null
 
 async function gather(
@@ -23,7 +23,7 @@ async function gather(
   conversationId: string,
 ): Promise<{ conv: GatherResult; history: PlayerMessageView[]; botMessageCount: number; lastPlayerMessageAt: Date | null }> {
   const [conv] = await tx
-    .select({ status: conversation.status, subintentId: conversation.subintentId, botPhase: conversation.botPhase })
+    .select({ status: conversation.status, subintentId: conversation.subintentId, confirmPhase: conversation.confirmPhase })
     .from(conversation)
     .where(eq(conversation.id, conversationId))
     .limit(1)
@@ -145,7 +145,7 @@ export async function runBotTurn(workspaceId: string, conversationId: string, de
     workspaceId,
     conversationId,
     subintentId: conv.subintentId,
-    botPhase: conv.botPhase,
+    confirmPhase: conv.confirmPhase,
     botMessageCount,
     lastPlayerMessageAt,
     history,

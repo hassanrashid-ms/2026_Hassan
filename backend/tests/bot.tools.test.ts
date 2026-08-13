@@ -8,8 +8,8 @@ describe('toolsForPhase', () => {
     expect(names).toEqual(expect.arrayContaining(['search_articles', 'classify', 'offer_article', 'handoff']))
   })
 
-  it('includes confirm_resolution when phase is article_confirm', () => {
-    const names = toolsForPhase('article_confirm').map((t: any) => t.function.name)
+  it('includes confirm_resolution when phase is bot_article', () => {
+    const names = toolsForPhase('bot_article').map((t: any) => t.function.name)
     expect(names).toContain(CONFIRM_RESOLUTION_TOOL_NAME)
   })
 })

@@ -36,7 +36,7 @@ beforeEach(() => {
 function baseInput(overrides: Partial<BotTurnInput> & { workspaceId: string; conversationId: string }): BotTurnInput {
   return {
     subintentId: null,
-    botPhase: 'none',
+    confirmPhase: 'none',
     botMessageCount: 0,
     lastPlayerMessageAt: null,
     history: [],
@@ -81,7 +81,7 @@ describe('toolLoopDecider', () => {
     expect(decision).toEqual({ kind: 'answer', reply: 'Hi! How can I help?', subintentId: null })
   })
 
-  it('search_articles then offer_article produces answer with articleId and would set article_confirm', async () => {
+  it('search_articles then offer_article produces answer with articleId and would set bot_article', async () => {
     const { workspaceId, conversationId } = await fixture()
     const articleId = await seedArticle(workspaceId, { title: 'Refund policy' })
     mockSearchArticleIds.mockResolvedValueOnce([articleId])
@@ -138,16 +138,16 @@ describe('toolLoopDecider', () => {
     expect(decision).toEqual({ kind: 'handoff', reason: 'asked_for_person', subintentId: null })
   })
 
-  it('confirm_resolution is absent from the tool set when bot_phase is none, present when article_confirm', async () => {
+  it('confirm_resolution is absent from the tool set when confirm_phase is none, present when bot_article', async () => {
     const { workspaceId, conversationId } = await fixture()
     mockCallModel.mockResolvedValueOnce({ toolCalls: [], text: 'ok' })
-    const input = baseInput({ workspaceId, conversationId, botPhase: 'none' })
+    const input = baseInput({ workspaceId, conversationId, confirmPhase: 'none' })
     await toolLoopDecider(input)
     const toolNames = mockCallModel.mock.calls[0]![1].map((t: any) => t.function.name)
     expect(toolNames).not.toContain('confirm_resolution')
 
     mockCallModel.mockResolvedValueOnce({ toolCalls: [], text: 'ok' })
-    const input2 = baseInput({ workspaceId, conversationId, botPhase: 'article_confirm' })
+    const input2 = baseInput({ workspaceId, conversationId, confirmPhase: 'bot_article' })
     await toolLoopDecider(input2)
     const toolNames2 = mockCallModel.mock.calls[1]![1].map((t: any) => t.function.name)
     expect(toolNames2).toContain('confirm_resolution')
@@ -199,14 +199,14 @@ describe('toolLoopDecider', () => {
   it('confirm_resolution(true) exits resolve', async () => {
     const { workspaceId, conversationId } = await fixture()
     mockCallModel.mockResolvedValueOnce({ toolCalls: [{ id: 't', name: 'confirm_resolution', arguments: '{"helped":true}' }], text: null })
-    const decision = await toolLoopDecider(baseInput({ workspaceId, conversationId, botPhase: 'article_confirm' }))
+    const decision = await toolLoopDecider(baseInput({ workspaceId, conversationId, confirmPhase: 'bot_article' }))
     expect(decision).toEqual({ kind: 'resolve', subintentId: null })
   })
 
   it('confirm_resolution(false) exits handoff(article_rejected)', async () => {
     const { workspaceId, conversationId } = await fixture()
     mockCallModel.mockResolvedValueOnce({ toolCalls: [{ id: 't', name: 'confirm_resolution', arguments: '{"helped":false}' }], text: null })
-    const decision = await toolLoopDecider(baseInput({ workspaceId, conversationId, botPhase: 'article_confirm' }))
+    const decision = await toolLoopDecider(baseInput({ workspaceId, conversationId, confirmPhase: 'bot_article' }))
     expect(decision).toEqual({ kind: 'handoff', reason: 'article_rejected', subintentId: null })
   })
 })

@@ -57,7 +57,7 @@ export const toolLoopDecider: BotDecider = async (input) => {
       const conversationMessages: ChatMessage[] = [...messages]
 
       while (toolCallCount < MAX_TOOL_CALLS_PER_TURN) {
-        const response = await callModel(conversationMessages, toolsForPhase(input.botPhase))
+        const response = await callModel(conversationMessages, toolsForPhase(input.confirmPhase))
 
         if (response.toolCalls.length === 0) {
           return { kind: 'answer', reply: response.text ?? '', subintentId: classifiedSubintentId }

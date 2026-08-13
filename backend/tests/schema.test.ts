@@ -214,17 +214,20 @@ describe('schema', () => {
     expect(rows[0]?.column_default).toContain('bot_active')
   })
 
-  it('conversation.bot_phase defaults to none and rejects an unknown value', async () => {
+  it('conversation.confirm_phase defaults to none, accepts agent_ask, and rejects an unknown value', async () => {
     const workspaceId = await seedWorkspace()
     const playerId = await seedPlayer(workspaceId)
-    const { rows } = await ownerPool.query<{ id: string; bot_phase: string }>(
-      `insert into conversation (workspace_id, player_id) values ($1, $2) returning id, bot_phase`,
+    const { rows } = await ownerPool.query<{ id: string; confirm_phase: string }>(
+      `insert into conversation (workspace_id, player_id) values ($1, $2) returning id, confirm_phase`,
       [workspaceId, playerId],
     )
-    expect(rows[0]?.bot_phase).toBe('none')
+    expect(rows[0]?.confirm_phase).toBe('none')
+
+    await ownerPool.query(`update conversation set confirm_phase = 'agent_ask' where id = $1`, [rows[0]?.id])
+    await ownerPool.query(`update conversation set confirm_phase = 'bot_article' where id = $1`, [rows[0]?.id])
 
     await expect(
-      ownerPool.query(`update conversation set bot_phase = 'bogus' where id = $1`, [rows[0]?.id]),
+      ownerPool.query(`update conversation set confirm_phase = 'bogus' where id = $1`, [rows[0]?.id]),
     ).rejects.toThrow()
   })
 

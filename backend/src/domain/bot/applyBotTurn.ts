@@ -42,7 +42,7 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
       if (decision.articleId) {
         await tx
           .update(conversation)
-          .set({ botPhase: 'article_confirm' })
+          .set({ confirmPhase: 'bot_article' })
           .where(eq(conversation.id, ctx.conversationId))
         const [row] = await tx.select({ title: article.title }).from(article).where(eq(article.id, decision.articleId)).limit(1)
         await appendEvent(tx, {
@@ -61,7 +61,7 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
       if (decision.subintentId) await classifyIfUnset(tx, ctx, decision.subintentId)
       await tx
         .update(conversation)
-        .set({ status: 'resolved', botPhase: 'none', resolutionSource: 'bot' })
+        .set({ status: 'resolved', confirmPhase: 'none', resolutionSource: 'bot' })
         .where(eq(conversation.id, ctx.conversationId))
       await appendEvent(tx, {
         workspaceId: ctx.workspaceId,
@@ -87,7 +87,7 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
       const assignedAgentId = await assignOnHandoff(tx, ctx.workspaceId)
       await tx
         .update(conversation)
-        .set({ status: 'open', botPhase: 'none', assignedAgentId })
+        .set({ status: 'open', confirmPhase: 'none', assignedAgentId })
         .where(eq(conversation.id, ctx.conversationId))
       if (decision.reason === 'article_rejected') {
         await appendEvent(tx, {
@@ -138,7 +138,7 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
       const assignedAgentId = await assignOnHandoff(tx, ctx.workspaceId)
       await tx
         .update(conversation)
-        .set({ status: 'open', botPhase: 'none', assignedAgentId })
+        .set({ status: 'open', confirmPhase: 'none', assignedAgentId })
         .where(eq(conversation.id, ctx.conversationId))
       await appendEvent(tx, {
         workspaceId: ctx.workspaceId,

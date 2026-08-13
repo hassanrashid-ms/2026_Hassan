@@ -6,7 +6,7 @@ import {
   messageAuthorType,
   messageDeliveryState,
   messageVisibility,
-  botPhase,
+  confirmPhase,
   resolutionSource,
 } from './enums.ts'
 import { agent, workspace } from './identity.ts'
@@ -46,8 +46,9 @@ export const conversation = pgTable(
      */
     subintentId: uuid('subintent_id'),
     /** Guard, not a scheduler — decides whether confirm_resolution is offered to
-     *  the model at all. The forms slice widens this to add 'form'. */
-    botPhase: botPhase('bot_phase').notNull().default('none'),
+     *  the model at all, and whether the player sees the Yes/No banner. The
+     *  forms slice widens this to add 'form'. */
+    confirmPhase: confirmPhase('confirm_phase').notNull().default('none'),
     /** NULL until the conversation is resolved. Read on reopen to decide
      *  assignment per spec §10, then cleared. */
     resolutionSource: resolutionSource('resolution_source'),

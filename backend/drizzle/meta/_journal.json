@@ -15,6 +15,13 @@
       "when": 1786605130399,
       "tag": "0001_cold_wiccan",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786613766330,
+      "tag": "0002_confirm_phase",
+      "breakpoints": true
     }
   ]
 }

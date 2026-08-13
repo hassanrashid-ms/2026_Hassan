@@ -25,7 +25,7 @@ beforeEach(truncateAll)
 function baseInput(overrides: Partial<BotTurnInput> & { workspaceId: string; conversationId: string }): BotTurnInput {
   return {
     subintentId: null,
-    botPhase: 'none',
+    confirmPhase: 'none',
     botMessageCount: 0,
     lastPlayerMessageAt: null,
     history: [],

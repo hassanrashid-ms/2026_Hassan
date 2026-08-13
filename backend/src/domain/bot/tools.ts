@@ -5,7 +5,7 @@ import { article } from '../../shared/db/schema/index.ts'
 import { searchArticleIds } from '../../shared/weaviate/articlesIndex.ts'
 import type { SubintentOption } from './contextAssembly.ts'
 
-export type ToolPhase = 'none' | 'article_confirm'
+export type ToolPhase = 'none' | 'bot_article' | 'agent_ask'
 
 export const CONFIRM_RESOLUTION_TOOL_NAME = 'confirm_resolution'
 const MAX_ARTICLES_PER_TURN = 3
@@ -67,11 +67,13 @@ const CONFIRM_RESOLUTION_TOOL = {
 export const TOOL_DEFS = [...ALWAYS_AVAILABLE_TOOLS, CONFIRM_RESOLUTION_TOOL]
 
 /**
- * confirm_resolution is offered to the model only while bot_phase =
- * 'article_confirm' — a property of the request, not of the prompt (spec §3).
+ * confirm_resolution is offered to the model only while confirm_phase =
+ * 'bot_article' — a property of the request, not of the prompt (spec 4 §3).
+ * 'agent_ask' deliberately does NOT unlock it: an agent-owned conversation
+ * runs no bot turn, and its answer arrives through the banner instead.
  */
 export function toolsForPhase(phase: ToolPhase): unknown[] {
-  return phase === 'article_confirm' ? [...ALWAYS_AVAILABLE_TOOLS, CONFIRM_RESOLUTION_TOOL] : [...ALWAYS_AVAILABLE_TOOLS]
+  return phase === 'bot_article' ? [...ALWAYS_AVAILABLE_TOOLS, CONFIRM_RESOLUTION_TOOL] : [...ALWAYS_AVAILABLE_TOOLS]
 }
 
 export { MAX_ARTICLES_PER_TURN }

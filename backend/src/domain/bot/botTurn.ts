@@ -28,7 +28,7 @@ export type BotTurnInput = {
   conversationId: string
   subintentId: string | null
   /** Guards whether confirm_resolution is offered to the model this turn. */
-  botPhase: 'none' | 'article_confirm'
+  confirmPhase: 'none' | 'bot_article' | 'agent_ask'
   /** Bot-authored messages so far, in this conversation. Drives MAX_BOT_MESSAGES. */
   botMessageCount: number
   /** Null if the player has never sent a message (should not happen once a turn runs). */
