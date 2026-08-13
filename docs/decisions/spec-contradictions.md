@@ -140,6 +140,147 @@ See `docs/specs/2026-08-12-bot-tool-calling-decider-design.md` §10.
 
 ---
 
+### 18. `bot_phase` — "never implemented," or shipped already?
+
+**Conflict:** The resolution-confirmation spec claims `bot_phase` "doesn't exist as a column yet"
+and frames the rename to `confirm_phase` as free. `enums.ts:30` already had
+`pgEnum('bot_phase', ['none','article_confirm'])`, `conversations.ts:50` already had the column,
+and `drizzle/0001_cold_wiccan.sql` had already applied it — so the spec's premise is wrong on both
+counts: there is a real migration cost, and the existing value is `article_confirm`, not
+`bot_article`.
+
+**Decision:** Do the full rename (type, column, value) via a real migration (`0002`), so the
+codebase and the spec speak one vocabulary. Safe because `bot_phase` is exposed on no wire — not in
+`@support/types`, not in any response, not in the frozen SDK contract.
+See `docs/specs/2026-08-13-resolution-confirmation-design.md`.
+
+---
+
+### 19. "The same fixed string the bot's flow already posts"
+
+**Conflict:** The spec says the agent-triggered ask reuses "the same string the bot's flow posts."
+No such fixed string exists: the bot's ask is generated inside the model-written reply that
+accompanies `offer_article`, and `messages.ts` only holds `HANDOFF_PLAYER_MESSAGE`.
+
+**Decision:** Add a new fixed `RESOLUTION_CHECK_MESSAGE` for the agent path; the bot path is
+unchanged and keeps phrasing its own ask. The player-facing *banner* is what is genuinely shared
+between the two paths, not the message text.
+See `docs/specs/2026-08-13-resolution-confirmation-design.md`.
+
+---
+
+### 20. Reopen's owner lookup: event payload, or a column?
+
+**Conflict:** The spec says reopen reads "exactly the signal that table's row keys off" from
+`conversation_resolved.source: 'agent'` in the event payload. The shipped reopen logic
+(`messagesService.ts:115`) reads `prior.resolutionSource === 'agent'` off the `conversation` row,
+not the event.
+
+**Decision:** The outcome the spec wants is right, the mechanism it describes is not. The
+`agent_ask` Yes branch writes `resolution_source = 'agent'` on the `conversation` row *and*
+`source: 'agent'` in the event payload — reopen keys off the column, per contradiction 17.
+See `docs/specs/2026-08-13-resolution-confirmation-design.md`.
+
+---
+
+### 21. "Both buttons call the same endpoint used for a typed confirmation"
+
+**Conflict:** The spec states both the tap and a typed confirmation reach the same endpoint. Not
+implementable as written: the typed path is `POST /surface/messages`, which for `bot_article` runs
+the model, not a direct write.
+
+**Decision:** A new dedicated `POST /surface/resolution-answer` carries the tap. Convergence is at
+the writer, not the route: a typed "yes" on `bot_article` reaches `applyBotTurn`'s `resolve` case
+through the model's `confirm_resolution` tool, and a tap reaches the same case directly — same row,
+same event, asserted in `backend/tests/resolution.crossPath.test.ts`.
+See `docs/specs/2026-08-13-resolution-confirmation-design.md`.
+
+---
+
+### 22. Does a typed answer to `agent_ask` get interpreted?
+
+**Conflict:** The spec is silent on whether a typed "yes"/"no" while `confirm_phase = 'agent_ask'`
+should be interpreted the same way a tap is.
+
+**Decision:** Buttons only. No keyword matching, no bot turn inside an agent-owned conversation. A
+typed "yes" there is an ordinary player message the agent reads.
+See `docs/specs/2026-08-13-resolution-confirmation-design.md`.
+
+---
+
+### 18. `bot_phase` — "rename with no migration cost"
+
+**Conflict:** The 2026-08-13 resolution-confirmation design spec claims `bot_phase` "was never
+implemented," so renaming it to `confirm_phase` would be free. `enums.ts:30` already had
+`pgEnum('bot_phase', ['none','article_confirm'])`, `conversations.ts:50` already had the column, and
+`drizzle/0001_cold_wiccan.sql` had already applied it — the spec is wrong on both counts: there is a
+migration, and the existing value is `article_confirm`, not `bot_article`.
+
+**Decision:** Do the full rename anyway — type, column, and value — so the codebase and the spec
+speak one vocabulary. This is safe because `bot_phase` is exposed on no wire: not in `@support/types`,
+not in any response, not in the frozen SDK contract. Implemented in
+`backend/drizzle/0002_confirm_phase.sql`. See
+`docs/plans/2026-08-13-resolution-confirmation-implementation.md`.
+
+---
+
+### 19. The "same fixed string the bot's flow posts"
+
+**Conflict:** The spec says the agent-triggered ask reuses "the same string the bot's flow posts,"
+but there is no fixed "Did this solve it?" string in the shipped bot path. The bot's ask is *inside
+the model-written reply* that accompanies `offer_article`; `messages.ts` only holds
+`HANDOFF_PLAYER_MESSAGE` — there is nothing to be the same as.
+
+**Decision:** Add `RESOLUTION_CHECK_MESSAGE = 'Did this solve it?'` for the agent path only; the bot
+path is unchanged and keeps phrasing its own ask inside the model's reply. The banner is what is
+genuinely shared between the two paths, not the copy. Implemented in
+`backend/src/domain/conversations/resolutionMessages.ts`. See
+`docs/plans/2026-08-13-resolution-confirmation-implementation.md`.
+
+---
+
+### 20. Reopen's signal: the event payload, or the column?
+
+**Conflict:** The spec says `conversation_resolved.source: 'agent'` is "exactly the signal that
+[the reopen-assignment] table's row keys off." `messagesService.ts:115`'s reopen logic actually reads
+`prior.resolutionSource === 'agent'` — a column on `conversation`, not the event payload. The outcome
+the spec describes is right; the mechanism it names is not.
+
+**Decision:** The `agent_ask` Yes branch writes `resolution_source = 'agent'` on the `conversation`
+row *and* `source: 'agent'` in the `conversation_resolved` event payload — the column is what reopen
+actually reads, the event is the audit trail. Implemented in
+`backend/src/domain/conversations/resolutionAnswer.ts`. See
+`docs/plans/2026-08-13-resolution-confirmation-implementation.md`.
+
+---
+
+### 21. "Both buttons call the same endpoint used for a typed confirmation"
+
+**Conflict:** The spec describes the banner's tap and a typed player confirmation as reaching the
+same endpoint. That is not implementable as written: the typed path is `POST /surface/messages`,
+which for `bot_article` runs the model, not a direct write.
+
+**Decision:** A new dedicated `POST /surface/resolution-answer` carries the tap; convergence is at
+the writer, not the route. A typed "yes" on `bot_article` still reaches `applyBotTurn`'s `resolve`
+case through the model's `confirm_resolution` tool, and a tap reaches the same case directly through
+`applyResolutionAnswer`, producing the same row and the same event — one handler, two callers.
+Implemented in `backend/src/domain/conversations/resolutionAnswer.ts` and
+`backend/src/surface/routers/resolutionRouter.ts`. See
+`docs/plans/2026-08-13-resolution-confirmation-implementation.md`.
+
+---
+
+### 22. A typed answer to an `agent_ask`
+
+**Conflict:** The spec is silent on whether a player who types "yes" instead of tapping, while an
+`agent_ask` is pending, should have that message interpreted as an answer.
+
+**Decision:** Buttons only, for `agent_ask`. No keyword matching, no bot turn inside an agent-owned
+conversation — a typed "yes" there is an ordinary player message the agent reads. Decided with the
+project owner. See `docs/plans/2026-08-13-resolution-confirmation-implementation.md`.
+
+---
+
 ## Contradictions still open (no decision yet)
 
 These have not been resolved. Do not silently pick a side — add a decision here when one is made.

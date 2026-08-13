@@ -1,11 +1,18 @@
 # Resolution confirmation — bot and agent-initiated — design
 
 **Date:** 2026-08-13
-**Status:** Proposed
+**Status:** Implemented (2026-08-13)
 **Builds on:** `2026-08-12-bot-tool-calling-decider-design.md` (spec 4)
 **Scope:** Implements spec 4's `confirm_resolution` flow (not yet built), and adds a parallel
 agent-triggered path that shares the same player-facing mechanism. One renamed column, one new
 endpoint, two new event types.
+
+**Implementation note:** `bot_phase` had in fact shipped (migration 0001), so the rename cost a
+migration (0002) and a value rename `article_confirm` → `bot_article`. The player's answer arrives
+through `POST /surface/resolution-answer`, not through the message endpoint; a typed answer to an
+`agent_ask` is not interpreted (buttons only). `confirm_phase` is exposed on `GET /surface/messages`
+and the agent inbox summary, with a `conversation:phase_changed` socket event. See
+`docs/plans/2026-08-13-resolution-confirmation-implementation.md` § Contradictions resolved.
 
 ---
 
