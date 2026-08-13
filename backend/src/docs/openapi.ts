@@ -4,6 +4,7 @@ import {
   extendZodWithOpenApi,
 } from '@asteasolutions/zod-to-openapi'
 import { z } from 'zod'
+import { ResolutionAnswerBody } from '@support/types'
 
 extendZodWithOpenApi(z)
 
@@ -450,6 +451,22 @@ registry.registerPath({
 })
 
 registry.registerPath({
+  method: 'post',
+  path: '/agent/conversations/{id}/ask-resolved',
+  summary: 'Agent Ask If Resolved',
+  description:
+    'Asks the player "Did this solve it?" and sets confirm_phase = agent_ask. Requires status open or awaiting_player, confirm_phase none, and either ownership or an unassigned conversation. There is no agent-side resolve: only the player\'s answer moves the status.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: { params: z.object({ id: z.uuid() }) },
+  responses: {
+    200: { description: 'Asked', content: { 'application/json': { schema: z.object({ asked: z.boolean() }) } } },
+    403: { description: 'Another agent owns this conversation' },
+    404: { description: 'Conversation not found' },
+    409: { description: 'Wrong status, or a check is already pending' },
+  },
+})
+
+registry.registerPath({
   method: 'get',
   path: '/agent/conversations/{id}/messages',
   summary: 'Agent Get Conversation Messages',
@@ -732,6 +749,24 @@ registry.registerPath({
   description: 'Lists intents (categories) with at least one published article, alphabetical by name.',
   security: [{ [bearerPlayerJwt.name]: [] }],
   responses: { 200: { description: 'Intents list' } },
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/surface/resolution-answer',
+  summary: 'Player Answer Resolution Check',
+  description:
+    "The banner's Yes/No, for both sources. Yes resolves the conversation (source bot or agent, per confirm_phase); No hands off to a human on bot_article, and only clears the phase on agent_ask. 409 when no check is pending.",
+  security: [{ [bearerPlayerJwt.name]: [] }],
+  request: { body: { content: { 'application/json': { schema: ResolutionAnswerBody } } } },
+  responses: {
+    200: {
+      description: 'Answer applied',
+      content: { 'application/json': { schema: z.object({ confirm_phase: z.string(), status: z.string() }) } },
+    },
+    404: { description: 'No conversation for this player' },
+    409: { description: 'No resolution check pending' },
+  },
 })
 
 // Build Document

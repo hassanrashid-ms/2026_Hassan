@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import {
+  askResolvedHandler,
   claimConversationHandler,
   getConversationMessagesHandler,
   listConversationsHandler,
@@ -9,3 +10,4 @@ export const conversationsRouter = Router()
 conversationsRouter.get('/conversations', listConversationsHandler)
 conversationsRouter.post('/conversations/:id/claim', claimConversationHandler)
 conversationsRouter.get('/conversations/:id/messages', getConversationMessagesHandler)
+conversationsRouter.post('/conversations/:id/ask-resolved', askResolvedHandler)
