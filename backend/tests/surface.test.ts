@@ -124,6 +124,18 @@ describe('GET /surface/bootstrap', () => {
     expect((await bootstrap(f.token)).body.unread_count).toBe(1)
   })
 
+  it('scopes the unread count to the current conversation, not closed history', async () => {
+    const f = await fixture()
+    const closed = await seedConversation({ workspaceId: f.workspaceId, playerId: f.playerId, sessionId: SESSION_ID })
+    await seedMessage({ workspaceId: f.workspaceId, conversationId: closed, seq: 1, authorType: 'agent' })
+    await seedMessage({ workspaceId: f.workspaceId, conversationId: closed, seq: 2, authorType: 'agent' })
+
+    const current = await seedConversation({ workspaceId: f.workspaceId, playerId: f.playerId, sessionId: SESSION_ID })
+    await seedMessage({ workspaceId: f.workspaceId, conversationId: current, seq: 1, authorType: 'agent' })
+
+    expect((await bootstrap(f.token)).body.unread_count).toBe(1)
+  })
+
   it('404s for another workspace session — invisible, so indistinguishable from absent', async () => {
     // victim-game owns SESSION_ID and has a snapshot on it.
     const victim = await fixture('victim-game')

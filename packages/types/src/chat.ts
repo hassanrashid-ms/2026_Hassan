@@ -117,6 +117,25 @@ export type ResolutionAnswerResponse = {
 
 export type AskResolvedResponse = { asked: boolean }
 
+/**
+ * "Open a new ticket" from the resolved banner. No conversation id, same as the
+ * rest of the surface: the thread being closed is the player's latest, resolved
+ * from the token under RLS. `session_id` is best-effort attribution — verified
+ * server-side, degraded to null on any miss.
+ */
+export const NewTicketBody = z.object({ session_id: z.uuid().optional() })
+
+/**
+ * Deliberately the same shape `POST /surface/messages` returns when it creates a
+ * conversation, so the webview reuses one response handler. `message` is always
+ * null here — a new ticket starts empty.
+ */
+export type NewTicketResponse = {
+  conversation_id: string
+  status: ConversationStatusValue
+  message: null
+}
+
 /** Emitted to both conversation rooms on every confirm_phase transition. A
  *  decline posts no message, so this is the only signal either client gets. */
 export type ConversationPhaseChangedEvent = {

@@ -6,7 +6,13 @@ import { ChatBubbles } from '@/surfaces/webview/components/chat/ChatBubbles'
 import { ChatComposer } from '@/surfaces/webview/components/chat/ChatComposer'
 import { SupportButton } from '@/surfaces/webview/components/SupportButton'
 import { useSupport } from '@/surfaces/webview/components/SupportContext'
-import { answerResolution, fetchPlayerMessages, markPlayerMessagesRead, sendPlayerMessage } from '@/features/chat/api/playerChatApi'
+import {
+  answerResolution,
+  fetchPlayerMessages,
+  markPlayerMessagesRead,
+  openNewTicket,
+  sendPlayerMessage,
+} from '@/features/chat/api/playerChatApi'
 import { createSocket } from '@/features/chat/api/socket'
 import { reconcilePending, type PendingMessage } from '@/features/chat/hooks/chatReconcile'
 import type { ChatMessage } from '@/features/chat/components/types'
@@ -80,6 +86,21 @@ export function SupportChat() {
   const answer = useMutation({
     mutationFn: (helped: boolean) => answerResolution(boot!.token, helped, boot!.sessionId),
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['playerMessages', boot?.sessionId] })
+    },
+  })
+
+  const newTicket = useMutation({
+    mutationFn: () => openNewTicket(boot!.token, boot!.sessionId),
+    onSuccess: () => {
+      // The query key is the session, not the conversation, so the cached list
+      // would otherwise still hold the closed ticket's messages while the
+      // refetch is in flight — the player would watch the old thread linger.
+      // Removing the entry first drops straight to the "Say hello" empty state.
+      queryClient.removeQueries({ queryKey: ['playerMessages', boot?.sessionId] })
+      // Optimistic bubbles belong to the conversation that just closed; nothing
+      // in the new thread will ever reconcile them.
+      setPending([])
       void queryClient.invalidateQueries({ queryKey: ['playerMessages', boot?.sessionId] })
     },
   })
@@ -179,6 +200,17 @@ export function SupportChat() {
               onClick={() => send.mutate("I'm still facing issues.")}
             >
               Yes
+            </SupportButton>
+            {/* The other half of the same question: reopen this thread, or end it
+                and start a clean one. The companion banner-UX spec restyles this
+                row; the action behind this button is what this change owns. */}
+            <SupportButton
+              variant="soft"
+              className="min-h-9 px-4 py-2 text-sm"
+              disabled={newTicket.isPending}
+              onClick={() => newTicket.mutate()}
+            >
+              Open a new ticket
             </SupportButton>
           </div>
         </div>

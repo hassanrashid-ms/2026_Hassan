@@ -9,8 +9,12 @@ Three gaps, found while investigating why an Android build and a Unity editor
 Play-mode session — both using the same `UnsafeStaticTokenProvider` token, and so
 the same player — appeared to hold two independent chat threads.
 
-**1. The threads were never split.** The database holds exactly one conversation
-for that player (`b0ec8ed3…`, 45 messages). `sendPlayerMessage` resolves the
+**1. The threads were never split.** The database holds exactly one *live*
+conversation for that player (`b0ec8ed3…`, 45 messages) — a player can now hold
+several closed ones in history via `POST /surface/new-ticket`
+(`docs/specs/2026-08-13-new-ticket-conversation-design.md`), but never two open at
+once, and the latest by `created_at` is always the current one.
+`sendPlayerMessage` resolves the
 thread by `player_id` alone, so a second thread is not reachable by construction.
 What the player saw was a rendering failure: `getPlayerMessages` returns `null`
 when the request's `session_id` has no row, the controller turns that into a 404,

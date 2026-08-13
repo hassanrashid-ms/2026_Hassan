@@ -1,4 +1,4 @@
-import type { PlayerMessageView, PlayerMessagesResponse, ResolutionAnswerResponse } from '@support/types'
+import type { NewTicketResponse, PlayerMessageView, PlayerMessagesResponse, ResolutionAnswerResponse } from '@support/types'
 import { apiCall } from '../../../lib/httpClient.ts'
 
 export function fetchPlayerMessages(token: string, sessionId: string): Promise<PlayerMessagesResponse> {
@@ -18,6 +18,18 @@ export function sendPlayerMessage(
   return apiCall(`/surface/messages`, token, {
     method: 'POST',
     body: JSON.stringify(sessionId ? { body, session_id: sessionId } : { body }),
+  })
+}
+
+/**
+ * "Open a new ticket" on the resolved banner. Carries no conversation id for the
+ * same reason the rest of this file does not: the server closes the player's
+ * latest thread and returns the fresh one it opened.
+ */
+export function openNewTicket(token: string, sessionId?: string): Promise<NewTicketResponse> {
+  return apiCall(`/surface/new-ticket`, token, {
+    method: 'POST',
+    body: JSON.stringify(sessionId ? { session_id: sessionId } : {}),
   })
 }
 

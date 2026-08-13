@@ -37,11 +37,18 @@ sees it."* Steps 1–4 (auth seam, the four `/sdk/*` endpoints, the web surface 
 No schema changes. `conversation` and `message` already carry everything this slice needs
 (`status`, `assigned_agent_id`, `message_seq`, `author_type`, `visibility`, `delivery_state`).
 
-**Reopen is a status write, not a new row.** A player has at most one conversation, ever, in this
-slice (no separate `resolution_cycle` table exists yet — see `conversations.ts`'s own comment that
-it is deliberately minimal). Sending into a `resolved`/`closed` conversation flips it back to
-`open`, clears `assigned_agent_id` (back to the unassigned queue), and appends a
-`conversation_reopened` event — all inside the same transaction as the message insert.
+**Reopen is a status write, not a new row.** A player has at most one *live* conversation (no
+separate `resolution_cycle` table exists yet — see `conversations.ts`'s own comment that it is
+deliberately minimal). Sending into a `resolved`/`closed` conversation flips it back to `open`,
+clears `assigned_agent_id` (back to the unassigned queue), and appends a `conversation_reopened`
+event — all inside the same transaction as the message insert.
+
+**The one carve-out: `POST /surface/new-ticket`.** "Open a new ticket" on the resolved banner
+closes the current conversation for good and inserts a genuinely separate row, so a player can
+accumulate several conversations over time — but still only one live one, since that endpoint 409s
+unless the latest is already `resolved`/`closed`. "The player's current conversation" therefore
+stays "their latest by `created_at`" everywhere, which is what keeps the reopen path above
+correct. See `docs/specs/2026-08-13-new-ticket-conversation-design.md`.
 
 **Delivery state** takes two values here: `sent` (written on insert) and `read` (written by a
 small batch endpoint when the thread is actually visible on screen — drives the unread badge

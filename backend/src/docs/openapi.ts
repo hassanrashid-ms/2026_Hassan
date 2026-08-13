@@ -4,7 +4,7 @@ import {
   extendZodWithOpenApi,
 } from '@asteasolutions/zod-to-openapi'
 import { z } from 'zod'
-import { ResolutionAnswerBody } from '@support/types'
+import { NewTicketBody, ResolutionAnswerBody } from '@support/types'
 
 extendZodWithOpenApi(z)
 
@@ -766,6 +766,28 @@ registry.registerPath({
     },
     404: { description: 'No conversation for this player' },
     409: { description: 'No resolution check pending' },
+  },
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/surface/new-ticket',
+  summary: 'Player Open New Ticket',
+  description:
+    "Closes the player's current conversation for good and opens a fresh one. Only valid when that conversation is already resolved or closed — 409 otherwise, since a player has at most one live conversation at a time. Returns the new conversation, which starts empty.",
+  security: [{ [bearerPlayerJwt.name]: [] }],
+  request: { body: { content: { 'application/json': { schema: NewTicketBody } } } },
+  responses: {
+    201: {
+      description: 'New conversation opened',
+      content: {
+        'application/json': {
+          schema: z.object({ conversation_id: z.uuid(), status: z.string(), message: z.null() }),
+        },
+      },
+    },
+    404: { description: 'No conversation for this player' },
+    409: { description: 'The current conversation is still open' },
   },
 })
 
