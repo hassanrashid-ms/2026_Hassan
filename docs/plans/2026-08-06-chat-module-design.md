@@ -1,5 +1,19 @@
 # Chat Module Implementation Plan
 
+> **Executed and partly superseded — read this before copying anything out of it.** This is a
+> historical execution record; it is not updated in place. Two behaviours it specifies were
+> replaced on 2026-08-13 by
+> [`docs/specs/2026-08-13-conversation-lifecycle-events-and-session-attribution-design.md`](../specs/2026-08-13-conversation-lifecycle-events-and-session-attribution-design.md):
+>
+> 1. **`GET /surface/messages` no longer 404s on a `session_id` that is not the caller's own.**
+>    The gate protected nothing (RLS already scopes the read by `player_id`) and broke live sync
+>    whenever the session row had not been uploaded yet. `session_id` is now validated and ignored.
+> 2. **`conversation.session_id` is no longer "the player's most recent session."** It is the
+>    verified session from the creating request, with latest-started only as a fallback.
+>
+> Also added since: creation writes `conversation_opened` + `conversation_assigned_bot`, and
+> `claimConversation` writes `conversation_assigned`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development
 > (recommended) or superpowers:executing-plans to implement this plan task-by-task — **with one
 > deviation from the default**: do **not** dispatch a review/validator subagent after each task.

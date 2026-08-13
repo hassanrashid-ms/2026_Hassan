@@ -357,6 +357,62 @@ registry.registerPath({
   },
 })
 
+registry.registerPath({
+  method: 'get',
+  path: '/surface/messages',
+  summary: 'Get Player Messages',
+  description:
+    "Returns the player's thread. `session_id` is validated but not used to resolve the thread — the conversation comes from the token's player under RLS.",
+  security: [{ [bearerPlayerJwt.name]: [] }],
+  request: {
+    query: z.object({ session_id: z.uuid() }),
+  },
+  responses: {
+    200: { description: 'Player thread (conversation_id is null when none exists yet)' },
+  },
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/surface/messages',
+  summary: 'Send Player Message',
+  description:
+    'Sends a player chat message. `session_id` is optional and best-effort: it is verified against the caller and used to attribute the resulting events, and is ignored when it cannot be verified.',
+  security: [{ [bearerPlayerJwt.name]: [] }],
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: z.object({ body: z.string().min(1).max(4000), session_id: z.uuid().optional() }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: { description: 'Message sent' },
+  },
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/surface/messages/read',
+  summary: 'Mark Player Messages Read',
+  description: 'Marks non-player messages as read up to the given sequence number.',
+  security: [{ [bearerPlayerJwt.name]: [] }],
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: z.object({ up_to_seq: z.number().int().nonnegative() }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: { description: 'Marked read' },
+  },
+})
+
 // --- 4. AGENT ENDPOINTS ---
 registry.registerPath({
   method: 'get',

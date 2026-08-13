@@ -142,7 +142,31 @@ describe('applyBotTurn', () => {
     // postMessage's own message_sent event precedes the bot-turn event.
     const events = await eventsFor(conversationId)
     expect(events.map((e) => e.type)).toEqual(['message_sent', 'bot_handoff'])
-    expect(events[1].payload).toEqual({ reason: 'model' })
+    expect(events[1].payload).toEqual({ reason: 'model', assigned_agent_id: availableAgent })
+    // The event snapshots exactly who the conversation landed on.
+    expect(events[1].payload.assigned_agent_id).toBe(row.assigned_agent_id)
+  })
+
+  it('handoff with no active agent in the workspace records a null assigned_agent_id', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const conversationId = await seedConversation({ workspaceId, playerId })
+    // Deactivated member only: assignOnHandoff has nobody to pick, which is
+    // explicitly not an error.
+    const deactivated = await seedAgent()
+    await seedWorkspaceMember({ workspaceId, agentId: deactivated, deactivatedAt: new Date() })
+
+    await withWorkspace(workspaceId, (tx) =>
+      applyBotTurn(tx, { workspaceId, conversationId }, { kind: 'handoff', reason: 'model', subintentId: null }),
+    )
+
+    const row = await conversationRow(conversationId)
+    expect(row.status).toBe('open')
+    expect(row.assigned_agent_id).toBeNull()
+
+    const events = await eventsFor(conversationId)
+    expect(events.map((e) => e.type)).toEqual(['message_sent', 'bot_handoff'])
+    expect(events[1].payload).toEqual({ reason: 'model', assigned_agent_id: null })
   })
 
   it('unavailable with a loud reason posts a public message and an internal note, appends bot_unavailable, no intent_set', async () => {

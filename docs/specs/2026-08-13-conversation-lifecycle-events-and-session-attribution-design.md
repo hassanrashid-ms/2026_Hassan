@@ -1,7 +1,7 @@
 # Conversation Lifecycle Events & Session Attribution — Design
 
 Date: 2026-08-13
-Status: approved, not yet implemented
+Status: implemented
 
 ## Problem
 

@@ -22,10 +22,6 @@ export const getMessagesHandler: RequestHandler = async (req, res) => {
     return
   }
   const result = await getPlayerMessages(ctx, query.data)
-  if (!result) {
-    sendError(res, 404, 'not_found', 'Session not found.')
-    return
-  }
   res.status(200).json(result)
 }
 

@@ -54,7 +54,7 @@ export function SupportChat() {
   })
 
   const send = useMutation({
-    mutationFn: (body: string) => sendPlayerMessage(boot!.token, body),
+    mutationFn: (body: string) => sendPlayerMessage(boot!.token, body, boot!.sessionId),
     onMutate: (body: string) => {
       const tempId = `temp-${Date.now()}-${Math.random()}`
       setPending((current) => [

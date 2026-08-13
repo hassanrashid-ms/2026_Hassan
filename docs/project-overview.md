@@ -22,7 +22,13 @@ modelling, metrics, or any feature that touches the core entities.
   it on `POST /sdk/sessions/start` — before any conversation exists. A conversation reaches its
   snapshot via `conversation.session_id`.
 - A reopen never rewrites that FK — "a reopened cycle keeps the original snapshot" is enforced
-  by the graph.
+  by the graph. `conversation.session_id` therefore says **where the conversation began**;
+  `conversation_reopened.session_id` says **where this reopen happened**. Those differing on
+  purpose is the design, not drift.
+- It is set from the **verified session on the creating request**, falling back to the player's
+  latest-started session only when the request carried none. The fallback is a proxy that is
+  correct with one live device and wrong with two (an Android build and the editor at once), so
+  it is a last resort, never the first choice.
 - Snapshot may arrive *after* the conversation (Outbox retries). `ON CONFLICT (id) DO NOTHING`
   on `session_id` makes delivery order irrelevant.
 - Three distinct no-data states, all rendered "unavailable" but diagnosed differently: **no row**
@@ -229,6 +235,23 @@ Event types needed: `intent_set` (with `source: bot|agent`), `intent_corrected`,
 `still_need_help_reached`, `session_end`, `first_human_reply`, `conversation_resolved`,
 `conversation_reopened`, `assignment_returned`, `form_started`, `form_completed`, `form_partial`,
 `form_skipped`, `sdk_incident`.
+
+Lifecycle types added since: `conversation_opened` (`{ entry_point }`),
+`conversation_assigned_bot` (`{}`), `conversation_assigned` (`{ agent_id, via }` — `via: 'claim'`
+today, so a future auto-assignment path writes the same type with a different `via`, not a second
+type), `conversation_player_replied`, `conversation_awaiting_player`, `bot_handoff`
+(`{ reason, assigned_agent_id }`), `bot_unavailable` (`{ reason }`), `message_sent`.
+
+**The session attribution rule.** *An event carries `session_id` when a verified player session
+accompanied the request that caused it. Otherwise `null`.* A client-supplied session id is
+**always** confirmed with a scoped `(id, player_id)` lookup before it is written — FK checks bypass
+RLS, so an unverified id would point across the tenant boundary — and any miss (absent, unknown,
+another player's, or not uploaded yet) degrades to `null` rather than failing the write. Nulls are
+deliberate: a background worker has no session, and inventing one puts a wrong answer into the
+`(session_id, type)` index rather than no answer. Player-caused events (`message_sent` from a
+player, `conversation_opened`, `conversation_assigned_bot`, `conversation_reopened`,
+`conversation_player_replied`) are stamped; agent-, bot- and system-caused ones are not. See
+`docs/specs/2026-08-13-conversation-lifecycle-events-and-session-attribution-design.md`.
 
 **`article_read` and `still_need_help_reached`** are what the funnel is made of (Opened → Viewed
 article → Reached "still need help?" → Created a ticket). `article_read` ≠ `article_feedback`:

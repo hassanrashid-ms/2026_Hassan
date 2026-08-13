@@ -201,6 +201,38 @@ describe('workspace A cannot reach workspace B', () => {
     expect(after.message).toBe(before.message + 2)
   })
 
+  it('POST /surface/messages with B\'s session_id writes no cross-tenant foreign key', async () => {
+    const before = await rowCounts()
+    await withA(request(app).post('/surface/messages')).send({ body: 'hello', session_id: B_SESSION }).expect(200)
+    const after = await rowCounts()
+
+    // The send still succeeds — an unverifiable session degrades to a null
+    // stamp, it never fails a player's message.
+    expect(after.conversation).toBe(before.conversation + 1)
+    expect(after.session).toBe(before.session)
+
+    const { rows } = await ownerPool.query<{ n: number }>(
+      `select count(*)::int as n from event where session_id = $1 or conversation_id in
+         (select id from conversation where session_id = $1 and workspace_id = $2)`,
+      [B_SESSION, a.workspaceId],
+    )
+    expect(rows[0]!.n).toBe(0)
+
+    const { rows: convRows } = await ownerPool.query<{ n: number }>(
+      `select count(*)::int as n from conversation where workspace_id = $1 and session_id is not null`,
+      [a.workspaceId],
+    )
+    expect(convRows[0]!.n).toBe(0)
+  })
+
+  it('GET /surface/messages with B\'s session_id returns A\'s own thread, never B\'s', async () => {
+    const conversationId = await seedConversation({ workspaceId: a.workspaceId, playerId: a.playerId })
+    const res = await withA(request(app).get('/surface/messages')).query({ session_id: B_SESSION }).expect(200)
+
+    expect(res.body.conversation_id).toBe(conversationId)
+    expect(res.body.messages).toEqual([])
+  })
+
   it('GET /agent/conversations/:id/messages on B\'s conversation is 404 for an A agent', async () => {
     const { rows } = await ownerPool.query<{ id: string }>(
       `insert into agent (email, display_name) values ('a-agent@example.test', 'A Agent') returning id`,

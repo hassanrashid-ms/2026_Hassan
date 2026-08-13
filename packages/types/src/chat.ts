@@ -5,7 +5,15 @@ import { z } from 'zod'
  * surface.ts. Shared between the surface (player) and agent verticals so both
  * sides of the chat loop agree on one shape.
  */
-export const SendMessageBody = z.object({ body: z.string().min(1).max(4000) })
+/**
+ * `session_id` is optional and best-effort: the server verifies it belongs to
+ * the caller and degrades to a `null` event stamp when it cannot (the session
+ * row may not have been uploaded yet). It never gates the send.
+ */
+export const SendMessageBody = z.object({
+  body: z.string().min(1).max(4000),
+  session_id: z.uuid().optional(),
+})
 
 export const SendAgentMessageBody = z.object({
   conversation_id: z.uuid(),

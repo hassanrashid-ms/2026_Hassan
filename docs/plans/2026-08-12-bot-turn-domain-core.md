@@ -1,5 +1,15 @@
 # Bot Turn Domain Core Implementation Plan
 
+> **Executed and partly superseded — read this before copying anything out of it.** This is a
+> historical execution record; it is not updated in place. The `bot_handoff` payload it shows
+> (`{ reason }`, at the code sample around line 1074 and the assertion around line 895) gained
+> `assigned_agent_id` on 2026-08-13 — `assignOnHandoff` had already computed the value and it was
+> being discarded. See
+> [`docs/specs/2026-08-13-conversation-lifecycle-events-and-session-attribution-design.md`](../specs/2026-08-13-conversation-lifecycle-events-and-session-attribution-design.md).
+> `null` there means no active agent exists, which is a valid outcome, not an error. All three bot
+> events stay unstamped (`session_id: null`) on purpose: they are bot-authored and generally run in
+> the BullMQ worker, so stamping would be inconsistent.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Give the bot orchestrator its shape before its brain: the `subintent_id` schema delta, the `BotDecider` seam with a stub that always defers to a human, `applyBotTurn`'s four outcomes as one transaction each, deterministic least-loaded assignment, the two fixed-copy messages, and the synchronous half of `sendPlayerMessage` — new conversations default to `bot_active`, and a not-provisioned workspace hands off inline with no job. No queue, no worker, no `openai` call.

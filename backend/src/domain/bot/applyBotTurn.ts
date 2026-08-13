@@ -63,7 +63,9 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
         conversationId: ctx.conversationId,
         actorId: null,
         actorType: 'bot',
-        payload: { reason: decision.reason },
+        // `null` is legitimate: assignOnHandoff returns null when no active
+        // agent exists, and that is explicitly not an error.
+        payload: { reason: decision.reason, assigned_agent_id: assignedAgentId },
       })
       return { posted: [posted], statusChanged: true }
     }

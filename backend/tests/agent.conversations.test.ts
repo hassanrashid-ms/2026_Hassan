@@ -91,6 +91,62 @@ describe('POST /agent/conversations/:id/claim', () => {
     expect(res.body).toEqual({ claimed: true })
   })
 
+  it('writes exactly one conversation_assigned event for a successful claim', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const conversationId = await seedConversation({ workspaceId, playerId })
+    const { agentId, token } = await setupAgent(workspaceId)
+
+    await request(app).post(`/conversations/${conversationId}/claim`).set('Authorization', `Bearer ${token}`).expect(200)
+
+    const { rows } = await ownerPool.query(
+      `select actor_type, actor_id, session_id, payload from event where conversation_id = $1 and type = 'conversation_assigned' order by id`,
+      [conversationId],
+    )
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({
+      actor_type: 'agent',
+      actor_id: agentId,
+      session_id: null,
+      payload: { agent_id: agentId, via: 'claim' },
+    })
+  })
+
+  it('a losing claim on an already-claimed conversation writes no extra event', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const conversationId = await seedConversation({ workspaceId, playerId })
+    const agentA = await setupAgent(workspaceId)
+    const { rows: agentBRows } = await ownerPool.query<{ id: string }>(
+      `insert into agent (email, display_name) values ('agent2@example.test', 'Agent Two') returning id`,
+    )
+    await ownerPool.query(`insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`, [
+      workspaceId,
+      agentBRows[0]!.id,
+    ])
+    const tokenB = await signAgentSession({ agent_id: agentBRows[0]!.id, workspace_id: workspaceId })
+
+    await request(app).post(`/conversations/${conversationId}/claim`).set('Authorization', `Bearer ${agentA.token}`).expect(200)
+    const resB = await request(app)
+      .post(`/conversations/${conversationId}/claim`)
+      .set('Authorization', `Bearer ${tokenB}`)
+      .expect(200)
+    expect(resB.body).toEqual({ claimed: false })
+
+    const { rows } = await ownerPool.query<{ n: number }>(
+      `select count(*)::int as n from event where conversation_id = $1 and type = 'conversation_assigned'`,
+      [conversationId],
+    )
+    expect(rows[0]!.n).toBe(1)
+
+    // The one event that exists is the winner's, not the loser's.
+    const { rows: actors } = await ownerPool.query<{ actor_id: string }>(
+      `select actor_id from event where conversation_id = $1 and type = 'conversation_assigned'`,
+      [conversationId],
+    )
+    expect(actors[0]!.actor_id).toBe(agentA.agentId)
+  })
+
   it('a claim race: exactly one of two concurrent claims succeeds', async () => {
     const workspaceId = await seedWorkspace()
     const playerId = await seedPlayer(workspaceId)

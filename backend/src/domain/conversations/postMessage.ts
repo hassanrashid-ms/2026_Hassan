@@ -15,6 +15,13 @@ export type PostMessageInput = {
    * the reporting spine.
    */
   actorId: string | null
+  /**
+   * The verified player session behind this send, stamped onto the
+   * `message_sent` event. Agent, bot and system callers omit it — they have no
+   * player request, and a guessed session would be a wrong answer on the
+   * `(session_id, type)` index rather than no answer.
+   */
+  sessionId?: string | null
   authorAgentId?: string | null
   body: string
   visibility?: 'public' | 'internal'
@@ -76,6 +83,7 @@ export async function postMessage(tx: Tx, input: PostMessageInput): Promise<Post
     workspaceId: input.workspaceId,
     type: 'message_sent',
     conversationId: input.conversationId,
+    sessionId: input.sessionId ?? null,
     actorId: input.actorId,
     actorType: input.authorType,
     payload: { seq: bumped.seq, author_type: input.authorType, visibility: input.visibility ?? 'public' },

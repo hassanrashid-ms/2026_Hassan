@@ -57,7 +57,7 @@ allowed to write and which serializer they read back with.
 | Endpoint | Caller | Auth | What it does |
 |---|---|---|---|
 | `POST /surface/messages` `{ body }` | player | player JWT | find-or-create/reopen the player's conversation, `postMessage(authorType: 'player')`, emit to both socket rooms |
-| `GET /surface/messages?session_id=` | player | player JWT | `{ conversation_id: string \| null, messages: [] }` for the player's conversation, `toPlayerView` — `conversation_id: null` and an empty list if none exists yet |
+| `GET /surface/messages?session_id=` | player | player JWT | `{ conversation_id: string \| null, messages: [] }` for the player's conversation, `toPlayerView` — `conversation_id: null` and an empty list if none exists yet. `session_id` is validated but **not** consulted, see the note below |
 | `POST /surface/messages/read` | player | player JWT | mark everything up to a given `seq` as `read` |
 | `GET /agent/conversations?status=unassigned\|mine` | agent | stub session | inbox rows: id, player, status, last message preview |
 | `POST /agent/conversations/:id/claim` | agent | stub session | `UPDATE ... SET assigned_agent_id = :agent WHERE id = :id AND assigned_agent_id IS NULL`; zero rows affected is "already claimed," not an error |
@@ -129,6 +129,16 @@ independently.
 - **RLS-shaped 404s, not 403s**, for the same reason as everywhere else in this codebase: an
   agent hitting an endpoint for a conversation outside their workspace gets a 404, indistinguishable
   from "never existed."
+- **`GET /surface/messages` never 404s on `session_id`** — superseded 2026-08-13 by
+  [`2026-08-13-conversation-lifecycle-events-and-session-attribution-design.md`](2026-08-13-conversation-lifecycle-events-and-session-attribution-design.md).
+  As built, this endpoint rejected any `session_id` with no row, which is the normal state while
+  `POST /sdk/sessions/start` is still queued in the Outbox (2s boot delay, skipped entirely under
+  `offlineDryRun`). The 404 cost the webview its `conversation_id`, so it never emitted
+  `join_conversation` — no history and no socket room, which looked like two devices holding
+  independent threads. The gate protected nothing: the thread is resolved from the token's
+  `player_id` under RLS, so a foreign `session_id` cannot name a foreign conversation. It is now
+  accepted, validated (`BootstrapQuery`, still the React Query cache key) and ignored.
+  **Do not reintroduce a session gate on a read path that RLS already scopes.**
 - **Claim race**: zero rows updated is a normal response (`{ claimed: false }`), not an error — the
   UI shows "already claimed" and refreshes the inbox row.
 - **Reply to an unassigned or someone-else's conversation** is a 403 (this one *is* a real

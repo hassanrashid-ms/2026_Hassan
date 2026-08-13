@@ -201,3 +201,29 @@ ranking rather than through prompt tokens.
 `2026-08-11-bot-retrieval-and-prompt-assembly-design.md` §10.
 
 **Do not add it back on the strength of the wireframe.**
+
+---
+
+### 15. Session as a *gate* vs. session as *attribution*
+
+**Conflict:** The chat module treated `session_id` on `GET /surface/messages` as an authorisation
+gate — no session row, no thread — while the schema treats `event.session_id` as attribution data
+(nullable, plus a `(session_id, type)` index). Those are two different jobs for one column, and
+the gate reading won.
+
+**Decided 2026-08-13** — they are separated for good:
+
+- **A session is never an authorisation gate.** Reads are scoped by the token's `player_id` under
+  RLS. A session id that is unknown, foreign, or simply not uploaded yet is accepted and ignored,
+  never a 404. The Outbox makes "not uploaded yet" the *normal* early state, so gating on it fails
+  exactly the players who most need the thread.
+- **A session is attribution, and attribution never blocks a write.** A client-supplied
+  `session_id` is verified with a scoped `(id, player_id)` lookup — mandatory, because FK checks
+  bypass RLS — and degrades to `null` on any miss. `event.session_id` is `ON DELETE RESTRICT`, so
+  stamping an unverified id would roll back the transaction carrying the player's message. Nothing
+  may prevent a player reaching a human, so the stamp is what gives way.
+- **`null` is an answer, not a gap.** Background-worker and agent-console events carry no session
+  on purpose. Inventing one puts a wrong row into the `(session_id, type)` index; consistent nulls
+  beat inconsistent stamps.
+
+See `docs/specs/2026-08-13-conversation-lifecycle-events-and-session-attribution-design.md`.

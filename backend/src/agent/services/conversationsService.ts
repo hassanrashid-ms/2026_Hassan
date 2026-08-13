@@ -1,6 +1,7 @@
 import { and, desc, eq, isNull } from 'drizzle-orm'
 import type { AgentConversationSummary, AgentMessageView } from '@support/types'
 import { toAgentView } from '../../domain/conversations/index.ts'
+import { appendEvent } from '../../shared/events/appendEvent.ts'
 import { conversation, message, player } from '../../shared/db/schema/index.ts'
 import { withWorkspace } from '../../shared/db/withWorkspace.ts'
 import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts'
@@ -50,7 +51,21 @@ export async function claimConversation(ctx: AgentContext, conversationId: strin
       .where(and(eq(conversation.id, conversationId), isNull(conversation.assignedAgentId)))
       .returning({ id: conversation.id, status: conversation.status })
     const [row] = claimed
-    return row ? { claimed: true, status: row.status } : { claimed: false, status: null }
+    if (!row) return { claimed: false, status: null }
+
+    // Guarded by the same `claimed` check as the update, so a losing racer
+    // writes nothing. `via` leaves room for a future auto-assignment path to
+    // write this same type rather than a second one. No session_id: this is an
+    // agent-console request, with no player session behind it.
+    await appendEvent(tx, {
+      workspaceId: ctx.workspaceId,
+      type: 'conversation_assigned',
+      conversationId,
+      actorId: ctx.agentId,
+      actorType: 'agent',
+      payload: { agent_id: ctx.agentId, via: 'claim' },
+    })
+    return { claimed: true, status: row.status }
   })
 }
 

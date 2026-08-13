@@ -21,6 +21,20 @@ export async function sendPlayerMessage(
   body: SendMessageBodyType,
 ): Promise<{ conversation_id: string; message: PlayerMessageView | null }> {
   const result = await withWorkspace(ctx.workspaceId, async (tx) => {
+    // Mandatory for tenant safety, not an optimisation: FK checks bypass RLS,
+    // so a client-supplied session id must be confirmed visible before it can
+    // be written to `event.session_id`. Any miss — absent, unknown, another
+    // player's, or not uploaded yet — degrades to null. It never fails the
+    // send: an FK rollback here would stop a player reaching a human.
+    const [verifiedSession] = body.session_id
+      ? await tx
+          .select({ id: session.id, entryPoint: session.entryPoint })
+          .from(session)
+          .where(and(eq(session.id, body.session_id), eq(session.playerId, ctx.playerId)))
+          .limit(1)
+      : []
+    const sessionId = verifiedSession?.id ?? null
+
     const [existing] = await tx
       .select({ id: conversation.id, status: conversation.status })
       .from(conversation)
@@ -36,23 +50,55 @@ export async function sendPlayerMessage(
     let inboxStatus: string | null = null
 
     if (!existing) {
-      // Best-effort: attaches the player's most recent session so a future
-      // agent Game View can reach the player-state snapshot. Never rewritten
+      // The originating session, so a future agent Game View reaches the
+      // player-state snapshot from when the problem happened. Never rewritten
       // on reopen — see docs/specs/2026-08-06-chat-module-design.md.
-      const [latestSession] = await tx
-        .select({ id: session.id })
-        .from(session)
-        .where(eq(session.playerId, ctx.playerId))
-        .orderBy(desc(session.startedAt))
-        .limit(1)
+      // The verified request session when there is one; the latest-started
+      // session is the fallback, correct with one live device and a guess with
+      // two, which is why the request's own session wins.
+      let originatingSessionId = sessionId
+      const entryPoint = verifiedSession?.entryPoint ?? null
+      if (!originatingSessionId) {
+        const [latestSession] = await tx
+          .select({ id: session.id })
+          .from(session)
+          .where(eq(session.playerId, ctx.playerId))
+          .orderBy(desc(session.startedAt))
+          .limit(1)
+        originatingSessionId = latestSession?.id ?? null
+      }
 
       const [created] = await tx
         .insert(conversation)
-        .values({ workspaceId: ctx.workspaceId, playerId: ctx.playerId, sessionId: latestSession?.id ?? null })
+        .values({ workspaceId: ctx.workspaceId, playerId: ctx.playerId, sessionId: originatingSessionId })
         .returning({ id: conversation.id })
       if (!created) throw new Error('conversation insert returned nothing')
       conversationId = created.id
       inboxStatus = 'bot_active'
+
+      // `entry_point` is context, never classification. It is null when the
+      // session could not be verified — an unknown entry point is recorded as
+      // unknown, not guessed from a different session.
+      await appendEvent(tx, {
+        workspaceId: ctx.workspaceId,
+        type: 'conversation_opened',
+        conversationId,
+        sessionId,
+        actorId: ctx.playerId,
+        actorType: 'player',
+        payload: { entry_point: entryPoint },
+      })
+      // The `bot_active` default status made visible. No `provisioned` flag:
+      // resolveBotConfig has not run yet, and the not-provisioned outcome is
+      // already recorded by `bot_unavailable`.
+      await appendEvent(tx, {
+        workspaceId: ctx.workspaceId,
+        type: 'conversation_assigned_bot',
+        conversationId,
+        sessionId,
+        actorId: ctx.playerId,
+        actorType: 'player',
+      })
     } else {
       conversationId = existing.id
       if (REOPENABLE_STATUSES.has(existing.status)) {
@@ -61,6 +107,9 @@ export async function sendPlayerMessage(
           workspaceId: ctx.workspaceId,
           type: 'conversation_reopened',
           conversationId,
+          // The *reopening* session, deliberately not `conversation.session_id`,
+          // which keeps saying where the conversation began.
+          sessionId,
           actorId: ctx.playerId,
           actorType: 'player',
         })
@@ -76,6 +125,7 @@ export async function sendPlayerMessage(
           workspaceId: ctx.workspaceId,
           type: 'conversation_player_replied',
           conversationId,
+          sessionId,
           actorId: ctx.playerId,
           actorType: 'player',
         })
@@ -88,6 +138,7 @@ export async function sendPlayerMessage(
       conversationId,
       authorType: 'player',
       actorId: ctx.playerId,
+      sessionId,
       body: body.body,
     })
 
@@ -125,18 +176,20 @@ export async function sendPlayerMessage(
   return { conversation_id: result.conversationId, message: playerView }
 }
 
+/**
+ * `session_id` is accepted, validated and then deliberately ignored. It stays
+ * required because `BootstrapQuery` is shared with bootstrap and it is the
+ * React Query cache key, but it must not gate: the thread is resolved from
+ * `ctx.playerId` under RLS, which the player token already grants, so a foreign
+ * or unknown session id can never name a foreign conversation. Gating on it
+ * turned "your session has not uploaded yet" into a 404 that killed history and
+ * the socket join alike — see the 2026-08-13 lifecycle-events design.
+ */
 export async function getPlayerMessages(
   ctx: PlayerContext,
-  query: { session_id: string },
-): Promise<{ conversation_id: string | null; messages: PlayerMessageView[]; status?: ConversationStatusValue } | null> {
+  _query: { session_id: string },
+): Promise<{ conversation_id: string | null; messages: PlayerMessageView[]; status?: ConversationStatusValue }> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
-    const [ownedSession] = await tx
-      .select({ id: session.id })
-      .from(session)
-      .where(and(eq(session.id, query.session_id), eq(session.playerId, ctx.playerId)))
-      .limit(1)
-    if (!ownedSession) return null
-
     const [found] = await tx
       .select({ id: conversation.id, status: conversation.status })
       .from(conversation)

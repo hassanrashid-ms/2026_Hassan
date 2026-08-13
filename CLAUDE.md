@@ -126,6 +126,15 @@ Console ───┘         │
 - **Nothing is deleted** — not a message, not a conversation, not a subintent.
 - All state changes go through one function that writes both `conversation` and `event` in a single transaction. Never ad-hoc updates.
 - Payload values in events are snapshotted, never live pointers.
+- **Entering a state counts as a state change.** Conversation creation and claiming append events
+  (`conversation_opened`, `conversation_assigned_bot`, `conversation_assigned`) — a state that is
+  only ever a column default is invisible to every metric.
+- **`event.session_id` is attribution, never a gate.** Stamp it when a *verified* player session
+  accompanied the request, `null` otherwise. Always confirm a client-supplied session id with a
+  scoped `(id, player_id)` select first (FK checks bypass RLS), and degrade to `null` on any miss —
+  the column is `ON DELETE RESTRICT`, so stamping an unverified id would roll back the player's
+  message. Never gate a read on a session row existing: the Outbox means it legitimately may not
+  yet. See `docs/specs/2026-08-13-conversation-lifecycle-events-and-session-attribution-design.md`.
 - Enforce `event` table append-only with `REVOKE UPDATE, DELETE`, not a convention.
 
 ### Security

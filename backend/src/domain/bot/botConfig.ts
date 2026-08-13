@@ -65,9 +65,16 @@ export const BOT_CONFIG_ENTITY_TYPE = 'bot_config'
  * wrong. The name is the COLUMN name, matching the audit trail.
  */
 export class EmptyBotPrompt extends Error {
-  constructor(readonly field: 'prompt' | 'rules' = 'prompt') {
+  // Declared-then-assigned rather than a `readonly` constructor parameter property:
+  // `node --experimental-strip-types` erases types only, and a parameter property
+  // needs a transform, so it fails the dev server at load with
+  // ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX. Matches InvalidWorkspaceId.
+  readonly field: 'prompt' | 'rules'
+
+  constructor(field: 'prompt' | 'rules' = 'prompt') {
     super(`Bot ${field} cannot be empty — pass null to reset it to the default`)
     this.name = 'EmptyBotPrompt'
+    this.field = field
   }
 }
 

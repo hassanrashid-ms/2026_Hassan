@@ -432,11 +432,18 @@ FK precisely because it holds different kinds of id, and a bot is not one of the
 | Type | Payload | New? |
 |---|---|---|
 | `intent_set` | `{ source: 'bot', subintent_name, intent_name }` | Listed in `project-overview.md`, first written here |
-| `bot_handoff` | `{ reason }` | New |
+| `bot_handoff` | `{ reason, assigned_agent_id }` | New |
 | `bot_unavailable` | `{ reason }` | New |
 
 Both new types are additions to `project-overview.md`'s event list and that document is updated in
 this slice.
+
+`bot_handoff.assigned_agent_id` was added by
+[`2026-08-13-conversation-lifecycle-events-and-session-attribution-design.md`](2026-08-13-conversation-lifecycle-events-and-session-attribution-design.md):
+`assignOnHandoff` already computed the value two statements earlier and it was being discarded.
+`null` is a legitimate value — no active agent exists — not a missing one. All three types stay
+unstamped (`session_id: null`): they are bot-authored, and the worker has no player request behind
+it. See that document's *Explicitly out of scope*.
 
 **`bot_handoff` and `bot_unavailable` are separate types, and folding them together would make the
 Bot-fallbacks metric lie.** A bot correctly recognising it cannot help is a success; a bot crashing

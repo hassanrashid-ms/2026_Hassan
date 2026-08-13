@@ -244,6 +244,217 @@ describe('POST /surface/messages', () => {
   })
 })
 
+describe('POST /surface/messages — lifecycle events and session attribution', () => {
+  async function eventsFor(conversationId: string) {
+    const { rows } = await ownerPool.query<{ type: string; session_id: string | null; payload: Record<string, unknown> }>(
+      `select type, session_id, payload from event where conversation_id = $1 order by id`,
+      [conversationId],
+    )
+    return rows
+  }
+
+  it('writes conversation_opened and conversation_assigned_bot on the first message, both stamped', async () => {
+    const { workspaceId, playerId, token } = await setup()
+    const sessionId = await seedSession({ workspaceId, playerId, entryPoint: 'pause_menu' })
+
+    const res = await request(app)
+      .post('/surface/messages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ body: 'hello', session_id: sessionId })
+      .expect(200)
+
+    const events = await eventsFor(res.body.conversation_id)
+    const opened = events.find((e) => e.type === 'conversation_opened')
+    const assignedBot = events.find((e) => e.type === 'conversation_assigned_bot')
+    const messageSent = events.find((e) => e.type === 'message_sent')
+
+    expect(opened).toBeDefined()
+    expect(opened!.session_id).toBe(sessionId)
+    expect(opened!.payload).toEqual({ entry_point: 'pause_menu' })
+    expect(assignedBot).toBeDefined()
+    expect(assignedBot!.session_id).toBe(sessionId)
+    expect(messageSent!.session_id).toBe(sessionId)
+  })
+
+  it('writes neither lifecycle event on the second message', async () => {
+    const { workspaceId, playerId, token } = await setup()
+    const sessionId = await seedSession({ workspaceId, playerId })
+
+    const res = await request(app)
+      .post('/surface/messages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ body: 'first', session_id: sessionId })
+      .expect(200)
+    await request(app)
+      .post('/surface/messages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ body: 'second', session_id: sessionId })
+      .expect(200)
+
+    const events = await eventsFor(res.body.conversation_id)
+    expect(events.filter((e) => e.type === 'conversation_opened')).toHaveLength(1)
+    expect(events.filter((e) => e.type === 'conversation_assigned_bot')).toHaveLength(1)
+  })
+
+  it('sets conversation.session_id to the verified request session, not the latest-started one', async () => {
+    const { workspaceId, playerId, token } = await setup()
+    const olderSessionId = await seedSession({
+      workspaceId,
+      playerId,
+      startedAt: new Date(Date.now() - 60_000),
+      entryPoint: 'settings',
+    })
+    // The newer session is a second live device; the request names the older one.
+    await seedSession({ workspaceId, playerId, startedAt: new Date() })
+
+    const res = await request(app)
+      .post('/surface/messages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ body: 'hello', session_id: olderSessionId })
+      .expect(200)
+
+    const { rows } = await ownerPool.query<{ session_id: string | null }>(
+      `select session_id from conversation where id = $1`,
+      [res.body.conversation_id],
+    )
+    expect(rows[0]!.session_id).toBe(olderSessionId)
+  })
+
+  it('falls back to the latest-started session when the client sends nothing', async () => {
+    const { workspaceId, playerId, token } = await setup()
+    await seedSession({ workspaceId, playerId, startedAt: new Date(Date.now() - 60_000) })
+    const newerSessionId = await seedSession({ workspaceId, playerId, startedAt: new Date() })
+
+    const res = await request(app)
+      .post('/surface/messages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ body: 'hello' })
+      .expect(200)
+
+    const { rows } = await ownerPool.query<{ session_id: string | null }>(
+      `select session_id from conversation where id = $1`,
+      [res.body.conversation_id],
+    )
+    expect(rows[0]!.session_id).toBe(newerSessionId)
+    const events = await eventsFor(res.body.conversation_id)
+    // Unattributed on purpose: no session accompanied the request.
+    expect(events.every((e) => e.session_id === null)).toBe(true)
+  })
+
+  const unverifiable: [string, () => Promise<string | undefined>][] = [
+    ['an unknown session_id', async () => '3f2504e0-4f89-11d3-9a0c-0305e82c3301'],
+    ['no session_id at all', async () => undefined],
+  ]
+
+  for (const [label, value] of unverifiable) {
+    it(`still sends the message with ${label}, stamping events null`, async () => {
+      const { token } = await setup()
+      const sessionId = await value()
+
+      const res = await request(app)
+        .post('/surface/messages')
+        .set('Authorization', `Bearer ${token}`)
+        .send(sessionId ? { body: 'hello', session_id: sessionId } : { body: 'hello' })
+        .expect(200)
+
+      expect(res.body.message.body).toBe('hello')
+      const events = await eventsFor(res.body.conversation_id)
+      expect(events.length).toBeGreaterThan(0)
+      expect(events.every((e) => e.session_id === null)).toBe(true)
+      const opened = events.find((e) => e.type === 'conversation_opened')
+      // An unknown entry point is recorded as unknown, never guessed from
+      // another session.
+      expect(opened!.payload).toEqual({ entry_point: null })
+    })
+  }
+
+  it("still sends the message with another player's session_id, stamping events null", async () => {
+    const { workspaceId, token } = await setup()
+    const otherPlayerId = await seedPlayer(workspaceId)
+    const foreignSessionId = await seedSession({ workspaceId, playerId: otherPlayerId })
+
+    const res = await request(app)
+      .post('/surface/messages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ body: 'hello', session_id: foreignSessionId })
+      .expect(200)
+
+    const events = await eventsFor(res.body.conversation_id)
+    expect(events.every((e) => e.session_id === null)).toBe(true)
+    const { rows } = await ownerPool.query<{ session_id: string | null }>(
+      `select session_id from conversation where id = $1`,
+      [res.body.conversation_id],
+    )
+    expect(rows[0]!.session_id).not.toBe(foreignSessionId)
+  })
+
+  it('stamps conversation_reopened with the reopening session while conversation.session_id is unchanged', async () => {
+    const { workspaceId, playerId, token } = await setup()
+    const originatingSessionId = await seedSession({ workspaceId, playerId })
+    const conversationId = await seedConversation({ workspaceId, playerId })
+    await ownerPool.query(`update conversation set status = 'resolved', session_id = $2 where id = $1`, [
+      conversationId,
+      originatingSessionId,
+    ])
+    const reopeningSessionId = await seedSession({ workspaceId, playerId })
+
+    await request(app)
+      .post('/surface/messages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ body: 'still here', session_id: reopeningSessionId })
+      .expect(200)
+
+    const events = await eventsFor(conversationId)
+    const reopened = events.find((e) => e.type === 'conversation_reopened')
+    expect(reopened!.session_id).toBe(reopeningSessionId)
+
+    // The row says where it began; the event says where this reopen happened.
+    const { rows } = await ownerPool.query<{ session_id: string | null }>(
+      `select session_id from conversation where id = $1`,
+      [conversationId],
+    )
+    expect(rows[0]!.session_id).toBe(originatingSessionId)
+  })
+
+  it('stamps conversation_player_replied with the request session', async () => {
+    const { workspaceId, playerId, token } = await setup()
+    const sessionId = await seedSession({ workspaceId, playerId })
+    const conversationId = await seedConversation({ workspaceId, playerId })
+    await ownerPool.query(`update conversation set status = 'awaiting_player' where id = $1`, [conversationId])
+
+    await request(app)
+      .post('/surface/messages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ body: 'here it is', session_id: sessionId })
+      .expect(200)
+
+    const events = await eventsFor(conversationId)
+    expect(events.find((e) => e.type === 'conversation_player_replied')!.session_id).toBe(sessionId)
+  })
+
+  it('leaves bot and system message_sent events unstamped', async () => {
+    const { workspaceId, playerId, token } = await setup()
+    const sessionId = await seedSession({ workspaceId, playerId })
+    await seedWorkspaceMember({ workspaceId, agentId: await seedAgent() })
+    await seedBotConfig({ workspaceId, isProvisioned: false })
+
+    const res = await request(app)
+      .post('/surface/messages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ body: 'hi', session_id: sessionId })
+      .expect(200)
+
+    const { rows } = await ownerPool.query<{ session_id: string | null; payload: { author_type: string } }>(
+      `select session_id, payload from event where conversation_id = $1 and type = 'message_sent' order by id`,
+      [res.body.conversation_id],
+    )
+    for (const row of rows) {
+      expect(row.session_id).toBe(row.payload.author_type === 'player' ? sessionId : null)
+    }
+    expect(rows.some((r) => r.payload.author_type !== 'player')).toBe(true)
+  })
+})
+
 describe('GET /surface/messages', () => {
   it('returns conversation_id: null and an empty list when no conversation exists yet', async () => {
     const { token, sessionId } = await setup()
@@ -255,13 +466,47 @@ describe('GET /surface/messages', () => {
     expect(res.body).toEqual({ conversation_id: null, messages: [] })
   })
 
-  it('404s for a session_id that is not the caller\'s own', async () => {
-    const { token } = await setup()
-    await request(app)
+  it("ignores a session_id that is not the caller's own and returns the caller's own thread", async () => {
+    const { workspaceId, playerId, token } = await setup()
+    const otherPlayerId = await seedPlayer(workspaceId)
+    const otherSessionId = await seedSession({ workspaceId, playerId: otherPlayerId })
+    const otherConversationId = await seedConversation({ workspaceId, playerId: otherPlayerId })
+    await ownerPool.query(
+      `insert into message (workspace_id, conversation_id, seq, author_type, body) values ($1, $2, 1, 'agent', 'not yours')`,
+      [workspaceId, otherConversationId],
+    )
+    const ownConversationId = await seedConversation({ workspaceId, playerId })
+
+    const res = await request(app)
+      .get('/surface/messages')
+      .query({ session_id: otherSessionId })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+
+    // Isolation is unchanged: the thread is resolved from the token's player
+    // under RLS, so a foreign session id cannot name a foreign conversation.
+    expect(res.body.conversation_id).toBe(ownConversationId)
+    expect(res.body.messages).toEqual([])
+  })
+
+  it('returns 200 and the full thread for a session_id with no row yet', async () => {
+    const { workspaceId, playerId, token } = await setup()
+    const conversationId = await seedConversation({ workspaceId, playerId })
+    await ownerPool.query(
+      `insert into message (workspace_id, conversation_id, seq, author_type, body) values ($1, $2, 1, 'player', 'hi')`,
+      [workspaceId, conversationId],
+    )
+
+    // The Outbox case: POST /sdk/sessions/start has not landed yet. History and
+    // the conversation_id that drives join_conversation must survive it.
+    const res = await request(app)
       .get('/surface/messages')
       .query({ session_id: '3f2504e0-4f89-11d3-9a0c-0305e82c3301' })
       .set('Authorization', `Bearer ${token}`)
-      .expect(404)
+      .expect(200)
+
+    expect(res.body.conversation_id).toBe(conversationId)
+    expect(res.body.messages).toHaveLength(1)
   })
 
   it('includes status and no internal-only fields', async () => {
