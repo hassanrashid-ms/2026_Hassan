@@ -3,23 +3,23 @@
 import type { PlayerMessageView } from '@support/types'
 
 /**
- * Both members are spec 4's to produce (a real decider never runs here). Declared
- * here because the outcome they feed — `applyBotTurn`'s `handoff` shape — is built
- * in this slice, so a type that grew in the slice that consumes it would make that
- * slice a control-flow change rather than a one-function swap.
+ * Model-chosen (`asked_for_person`, `no_article`, `sensitive` — passed directly
+ * to the `handoff` tool), code-derived from a model choice (`article_rejected`,
+ * from `confirm_resolution(false)`), or forced by a budget with no model call
+ * involved at all (`unsure`, `turn_cap`).
  */
-export type HandoffReason = 'model' | 'turn_cap'
+export type HandoffReason = 'asked_for_person' | 'article_rejected' | 'no_article' | 'sensitive' | 'unsure' | 'turn_cap'
 
 export type UnavailableReason =
   | 'not_provisioned' // admin has the bot switched off
-  | 'not_implemented' // no decider exists yet — removed once a real one lands
   | 'error' // a turn failed after its retries were exhausted
-  | 'timeout' // reserved for the tool-calling decider
-  | 'invalid_response' // reserved for the tool-calling decider
+  | 'timeout' // callModel exceeded its 15s budget
+  | 'invalid_response' // a refusal or an unparseable tool argument — not retried
 
 export type BotTurnDecision =
   | { kind: 'noop' }
-  | { kind: 'answer'; reply: string; subintentId: string }
+  | { kind: 'answer'; reply: string; subintentId: string | null; articleId?: string }
+  | { kind: 'resolve'; subintentId: string | null }
   | { kind: 'handoff'; reason: HandoffReason; subintentId: string | null }
   | { kind: 'unavailable'; reason: UnavailableReason }
 
@@ -27,21 +27,22 @@ export type BotTurnInput = {
   workspaceId: string
   conversationId: string
   subintentId: string | null
+  /** Guards whether confirm_resolution is offered to the model this turn. */
+  botPhase: 'none' | 'article_confirm'
+  /** Bot-authored messages so far, in this conversation. Drives MAX_BOT_MESSAGES. */
+  botMessageCount: number
+  /** Null if the player has never sent a message (should not happen once a turn runs). */
+  lastPlayerMessageAt: Date | null
   history: PlayerMessageView[]
 }
 
 export type BotDecider = (input: BotTurnInput) => Promise<BotTurnDecision>
 
 /**
- * The scaffolding decider. `'not_implemented'` exists so a real decider's arrival
- * is a type error at this exact reference, forcing its removal rather than leaving
- * it reachable in production by accident.
+ * The scaffolding decider, replaced by `toolLoopDecider` in Task 10. Kept here
+ * until that task so `botTurns.ts` still compiles between tasks.
  */
-export const stubDecider: BotDecider = async () => ({ kind: 'unavailable', reason: 'not_implemented' })
+export const stubDecider: BotDecider = async () => ({ kind: 'unavailable', reason: 'error' })
 
-/**
- * Two `unavailable` reasons are not incidents: an admin deliberately switched the
- * bot off, or no decider has been built yet. Every other reason gets an internal
- * note — see `applyBotTurn`.
- */
-export const SILENT_UNAVAILABLE_REASONS: ReadonlySet<UnavailableReason> = new Set(['not_provisioned', 'not_implemented'])
+/** Only an admin's deliberate choice is silent. Every other reason gets an internal note. */
+export const SILENT_UNAVAILABLE_REASONS: ReadonlySet<UnavailableReason> = new Set(['not_provisioned'])

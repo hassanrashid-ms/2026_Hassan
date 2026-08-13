@@ -128,7 +128,7 @@ describe('applyBotTurn', () => {
     await seedWorkspaceMember({ workspaceId, agentId: availableAgent })
 
     await withWorkspace(workspaceId, (tx) =>
-      applyBotTurn(tx, { workspaceId, conversationId }, { kind: 'handoff', reason: 'model', subintentId: null }),
+      applyBotTurn(tx, { workspaceId, conversationId }, { kind: 'handoff', reason: 'unsure', subintentId: null }),
     )
 
     const msgs = await messagesFor(conversationId)
@@ -142,7 +142,7 @@ describe('applyBotTurn', () => {
     // postMessage's own message_sent event precedes the bot-turn event.
     const events = await eventsFor(conversationId)
     expect(events.map((e) => e.type)).toEqual(['message_sent', 'bot_handoff'])
-    expect(events[1].payload).toEqual({ reason: 'model', assigned_agent_id: availableAgent })
+    expect(events[1].payload).toEqual({ reason: 'unsure', assigned_agent_id: availableAgent })
     // The event snapshots exactly who the conversation landed on.
     expect(events[1].payload.assigned_agent_id).toBe(row.assigned_agent_id)
   })
@@ -157,7 +157,7 @@ describe('applyBotTurn', () => {
     await seedWorkspaceMember({ workspaceId, agentId: deactivated, deactivatedAt: new Date() })
 
     await withWorkspace(workspaceId, (tx) =>
-      applyBotTurn(tx, { workspaceId, conversationId }, { kind: 'handoff', reason: 'model', subintentId: null }),
+      applyBotTurn(tx, { workspaceId, conversationId }, { kind: 'handoff', reason: 'unsure', subintentId: null }),
     )
 
     const row = await conversationRow(conversationId)
@@ -166,7 +166,7 @@ describe('applyBotTurn', () => {
 
     const events = await eventsFor(conversationId)
     expect(events.map((e) => e.type)).toEqual(['message_sent', 'bot_handoff'])
-    expect(events[1].payload).toEqual({ reason: 'model', assigned_agent_id: null })
+    expect(events[1].payload).toEqual({ reason: 'unsure', assigned_agent_id: null })
   })
 
   it('unavailable with a loud reason posts a public message and an internal note, appends bot_unavailable, no intent_set', async () => {
@@ -195,7 +195,7 @@ describe('applyBotTurn', () => {
     expect(events[2].payload).toEqual({ reason: 'error' })
   })
 
-  it.each(['not_provisioned', 'not_implemented'] as const)(
+  it.each(['not_provisioned'] as const)(
     'unavailable with silent reason %s posts no internal note but still appends bot_unavailable',
     async (reason) => {
       const workspaceId = await seedWorkspace()
@@ -241,7 +241,7 @@ describe('applyBotTurn', () => {
       withWorkspace(workspaceId, async (tx) => {
         await applyBotTurn(tx, { workspaceId, conversationId: '00000000-0000-0000-0000-000000000000' }, {
           kind: 'handoff',
-          reason: 'model',
+          reason: 'unsure',
           subintentId: null,
         })
       }),
