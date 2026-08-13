@@ -1,12 +1,6 @@
 import { and, desc, eq, lte, ne } from 'drizzle-orm'
 import type { z } from 'zod'
-import {
-  MarkPlayerReadBody,
-  SendMessageBody,
-  type ConfirmPhaseValue,
-  type ConversationStatusValue,
-  type PlayerMessageView,
-} from '@support/types'
+import { MarkPlayerReadBody, SendMessageBody, type PlayerMessageView, type PlayerMessagesResponse } from '@support/types'
 
 type SendMessageBodyType = z.infer<typeof SendMessageBody>
 type MarkPlayerReadBodyType = z.infer<typeof MarkPlayerReadBody>
@@ -232,24 +226,21 @@ export async function sendPlayerMessage(
 export async function getPlayerMessages(
   ctx: PlayerContext,
   _query: { session_id: string },
-): Promise<{
-  conversation_id: string | null
-  messages: PlayerMessageView[]
-  status?: ConversationStatusValue
-  confirm_phase: ConfirmPhaseValue
-}> {
+): Promise<PlayerMessagesResponse> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
     const [found] = await tx
-      .select({ id: conversation.id, status: conversation.status })
+      .select({ id: conversation.id, status: conversation.status, confirmPhase: conversation.confirmPhase })
       .from(conversation)
       .where(eq(conversation.playerId, ctx.playerId))
       .orderBy(desc(conversation.createdAt))
       .limit(1)
+    // No conversation means no question on screen — 'none', not undefined, so
+    // the banner has one thing to test and never a missing field.
     if (!found) return { conversation_id: null, messages: [], confirm_phase: 'none' }
 
     const rows = await tx.select().from(message).where(eq(message.conversationId, found.id)).orderBy(message.seq)
     const messages = rows.map(toPlayerView).filter((m): m is PlayerMessageView => m !== null)
-    return { conversation_id: found.id, messages, status: found.status, confirm_phase: 'none' }
+    return { conversation_id: found.id, messages, status: found.status, confirm_phase: found.confirmPhase }
   })
 }
 

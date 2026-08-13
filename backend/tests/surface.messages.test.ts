@@ -463,7 +463,7 @@ describe('GET /surface/messages', () => {
       .query({ session_id: sessionId })
       .set('Authorization', `Bearer ${token}`)
       .expect(200)
-    expect(res.body).toEqual({ conversation_id: null, messages: [] })
+    expect(res.body).toEqual({ conversation_id: null, messages: [], confirm_phase: 'none' })
   })
 
   it("ignores a session_id that is not the caller's own and returns the caller's own thread", async () => {
@@ -527,6 +527,33 @@ describe('GET /surface/messages', () => {
     expect(res.body.status).toBe('open')
     expect(res.body.messages[0]).not.toHaveProperty('visibility')
     expect(res.body.messages[0]).not.toHaveProperty('author_agent_id')
+  })
+
+  it('GET /messages reports confirm_phase', async () => {
+    const { workspaceId, playerId, token, sessionId } = await setup()
+    const conversationId = await seedConversation({ workspaceId, playerId })
+    await ownerPool.query(`update conversation set confirm_phase = 'agent_ask' where id = $1`, [conversationId])
+
+    const res = await request(app)
+      .get('/surface/messages')
+      .query({ session_id: sessionId })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+
+    expect(res.body.confirm_phase).toBe('agent_ask')
+  })
+
+  it('GET /messages reports none when the player has no conversation', async () => {
+    const { token, sessionId } = await setup()
+
+    const res = await request(app)
+      .get('/surface/messages')
+      .query({ session_id: sessionId })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+
+    expect(res.body.conversation_id).toBe(null)
+    expect(res.body.confirm_phase).toBe('none')
   })
 })
 

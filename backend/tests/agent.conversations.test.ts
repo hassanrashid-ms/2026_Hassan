@@ -75,6 +75,19 @@ describe('GET /agent/conversations', () => {
     expect(res.body.conversations).toHaveLength(1)
     expect(res.body.conversations[0].last_message_preview).toBe('help please')
   })
+
+  it('lists confirm_phase per conversation', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const conversationId = await seedConversation({ workspaceId, playerId })
+    const { agentId, token } = await setupAgent(workspaceId)
+    await ownerPool.query(`update conversation set assigned_agent_id = $2 where id = $1`, [conversationId, agentId])
+    await ownerPool.query(`update conversation set confirm_phase = 'agent_ask' where id = $1`, [conversationId])
+
+    const res = await request(app).get('/conversations').query({ status: 'mine' }).set('Authorization', `Bearer ${token}`).expect(200)
+
+    expect(res.body.conversations[0].confirm_phase).toBe('agent_ask')
+  })
 })
 
 describe('POST /agent/conversations/:id/claim', () => {

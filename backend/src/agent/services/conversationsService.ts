@@ -11,7 +11,7 @@ export type ConversationsFilter = 'unassigned' | 'mine'
 export async function listConversations(ctx: AgentContext, filter: ConversationsFilter): Promise<AgentConversationSummary[]> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
     const rows = await tx
-      .select({ id: conversation.id, status: conversation.status, externalPlayerId: player.externalId })
+      .select({ id: conversation.id, status: conversation.status, externalPlayerId: player.externalId, confirmPhase: conversation.confirmPhase })
       .from(conversation)
       .innerJoin(player, eq(player.id, conversation.playerId))
       .where(filter === 'unassigned' ? isNull(conversation.assignedAgentId) : eq(conversation.assignedAgentId, ctx.agentId))
@@ -33,7 +33,7 @@ export async function listConversations(ctx: AgentContext, filter: Conversations
         id: row.id,
         player: { external_player_id: row.externalPlayerId },
         status: row.status,
-        confirm_phase: 'none',
+        confirm_phase: row.confirmPhase,
         last_message_preview: last?.body ?? null,
         last_message_at: last?.createdAt.toISOString() ?? null,
       })

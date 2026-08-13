@@ -39,6 +39,7 @@ const UNASSIGNED_CONVERSATION = {
   id: 'conv-1',
   player: { external_player_id: 'player-42' },
   status: 'new' as const,
+  confirm_phase: 'none' as const,
   last_message_preview: 'Help, my purchase failed',
   last_message_at: '2026-08-10T12:00:00Z',
 }
