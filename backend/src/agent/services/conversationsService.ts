@@ -33,6 +33,7 @@ export async function listConversations(ctx: AgentContext, filter: Conversations
         id: row.id,
         player: { external_player_id: row.externalPlayerId },
         status: row.status,
+        confirm_phase: 'none',
         last_message_preview: last?.body ?? null,
         last_message_at: last?.createdAt.toISOString() ?? null,
       })

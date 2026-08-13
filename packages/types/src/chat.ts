@@ -60,6 +60,8 @@ export type PlayerMessagesResponse = {
   conversation_id: string | null
   messages: PlayerMessageView[]
   status?: ConversationStatusValue
+  /** 'none' when there is no conversation at all. */
+  confirm_phase: ConfirmPhaseValue
 }
 export type AgentMessagesResponse = { messages: AgentMessageView[] }
 export type ClaimResponse = { claimed: boolean }
@@ -68,6 +70,7 @@ export type AgentConversationSummary = {
   id: string
   player: { external_player_id: string }
   status: ConversationStatusValue
+  confirm_phase: ConfirmPhaseValue
   last_message_preview: string | null
   last_message_at: string | null
 }
@@ -86,4 +89,37 @@ export type MessageReadEvent = {
   up_to_seq: number
   reader_type: 'player' | 'agent'
   read_at: string
+}
+
+/**
+ * Which yes/no question, if any, is currently on the player's screen. Mirrors
+ * `conversation.confirm_phase` exactly. The player-facing banner renders
+ * whenever this is not 'none'; the value only tells the *server* what a tap
+ * means, which is why the webview never branches on it.
+ */
+export type ConfirmPhaseValue = 'none' | 'bot_article' | 'agent_ask'
+
+/**
+ * The banner's Yes/No. No conversation id: the thread is resolved from the
+ * player token under RLS, same as every other surface route. `session_id` is
+ * best-effort attribution only — verified server-side, degraded to null on any
+ * miss, and never a gate.
+ */
+export const ResolutionAnswerBody = z.object({
+  helped: z.boolean(),
+  session_id: z.uuid().optional(),
+})
+
+export type ResolutionAnswerResponse = {
+  confirm_phase: ConfirmPhaseValue
+  status: ConversationStatusValue
+}
+
+export type AskResolvedResponse = { asked: boolean }
+
+/** Emitted to both conversation rooms on every confirm_phase transition. A
+ *  decline posts no message, so this is the only signal either client gets. */
+export type ConversationPhaseChangedEvent = {
+  conversation_id: string
+  confirm_phase: ConfirmPhaseValue
 }
