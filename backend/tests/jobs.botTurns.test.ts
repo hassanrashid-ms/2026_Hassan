@@ -152,7 +152,7 @@ describe('bot-turns queue and worker', () => {
     expect(rows[0]!.status).toBe('open')
   })
 
-  it('the default worker uses stubDecider, producing bot_unavailable(not_implemented) with no internal note', async () => {
+  it('the default worker uses stubDecider, producing bot_unavailable(error) with an internal note', async () => {
     const workspaceId = await seedWorkspace({ slug: 'demo-game' })
     const playerId = await seedPlayer(workspaceId, 'UserId1')
     const conversationId = await seedConversation({ workspaceId, playerId })
@@ -166,10 +166,10 @@ describe('bot-turns queue and worker', () => {
     })
 
     const events = await withWorkspace(workspaceId, (tx) => tx.select().from(event).where(eq(event.type, 'bot_unavailable')))
-    expect(events[0]!.payload).toMatchObject({ reason: 'not_implemented' })
+    expect(events[0]!.payload).toMatchObject({ reason: 'error' })
 
     const rows = await withWorkspace(workspaceId, (tx) => tx.select().from(message).where(eq(message.conversationId, conversationId)))
-    expect(rows.filter((r) => r.visibility === 'internal')).toHaveLength(0)
+    expect(rows.filter((r) => r.visibility === 'internal')).toHaveLength(1)
     expect(rows.filter((r) => r.visibility === 'public')).toHaveLength(1)
   })
 
@@ -202,7 +202,7 @@ describe('bot-turns queue and worker', () => {
     try {
       // Proves registerBotTurnWorker() is actually wired in: with no decider
       // override, registerJobs()'s bot-turns worker runs the default
-      // stubDecider, which always resolves bot_unavailable(not_implemented).
+      // stubDecider, which always resolves bot_unavailable(error).
       await enqueueBotTurn({ workspaceId, conversationId, seq: 1 })
 
       await waitFor(async () => {
@@ -215,7 +215,7 @@ describe('bot-turns queue and worker', () => {
       const events = await withWorkspace(workspaceId, (tx) =>
         tx.select().from(event).where(eq(event.type, 'bot_unavailable')),
       )
-      expect(events[0]!.payload).toMatchObject({ reason: 'not_implemented' })
+      expect(events[0]!.payload).toMatchObject({ reason: 'error' })
     } finally {
       await jobs.close()
     }

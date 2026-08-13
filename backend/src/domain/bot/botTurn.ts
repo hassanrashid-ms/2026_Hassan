@@ -38,11 +38,5 @@ export type BotTurnInput = {
 
 export type BotDecider = (input: BotTurnInput) => Promise<BotTurnDecision>
 
-/**
- * The scaffolding decider, replaced by `toolLoopDecider` in Task 10. Kept here
- * until that task so `botTurns.ts` still compiles between tasks.
- */
-export const stubDecider: BotDecider = async () => ({ kind: 'unavailable', reason: 'error' })
-
 /** Only an admin's deliberate choice is silent. Every other reason gets an internal note. */
 export const SILENT_UNAVAILABLE_REASONS: ReadonlySet<UnavailableReason> = new Set(['not_provisioned'])

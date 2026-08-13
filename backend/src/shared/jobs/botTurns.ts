@@ -3,7 +3,8 @@ import IORedis from 'ioredis'
 import { getEnv } from '../../env.ts'
 import { logger } from '../logging/logger.ts'
 import { applyDecisionIfBotActive, runBotTurn } from '../../domain/bot/orchestrator.ts'
-import { stubDecider, type BotDecider } from '../../domain/bot/botTurn.ts'
+import { toolLoopDecider } from '../../domain/bot/toolLoop.ts'
+import type { BotDecider } from '../../domain/bot/botTurn.ts'
 
 const QUEUE_NAME = 'bot-turns'
 
@@ -49,10 +50,10 @@ export async function enqueueBotTurn(input: BotTurnJobData): Promise<void> {
 }
 
 /**
- * `decider` defaults to `stubDecider` for production use; tests inject their own
+ * `decider` defaults to `toolLoopDecider` for production use; tests inject their own
  * to exercise retry and fallback behaviour without a real model.
  */
-export function registerBotTurnWorker(decider: BotDecider = stubDecider): { close: () => Promise<void> } {
+export function registerBotTurnWorker(decider: BotDecider = toolLoopDecider): { close: () => Promise<void> } {
   const workerConnection = connection()
 
   const worker = new Worker<BotTurnJobData>(

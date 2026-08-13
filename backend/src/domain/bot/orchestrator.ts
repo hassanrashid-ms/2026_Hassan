@@ -15,11 +15,15 @@ export type { BotTurnInput }
 type GatherResult = {
   status: string
   subintentId: string | null
+  botPhase: 'none' | 'article_confirm'
 } | null
 
-async function gather(tx: Tx, conversationId: string): Promise<{ conv: GatherResult; history: PlayerMessageView[] }> {
+async function gather(
+  tx: Tx,
+  conversationId: string,
+): Promise<{ conv: GatherResult; history: PlayerMessageView[]; botMessageCount: number; lastPlayerMessageAt: Date | null }> {
   const [conv] = await tx
-    .select({ status: conversation.status, subintentId: conversation.subintentId })
+    .select({ status: conversation.status, subintentId: conversation.subintentId, botPhase: conversation.botPhase })
     .from(conversation)
     .where(eq(conversation.id, conversationId))
     .limit(1)
@@ -31,8 +35,10 @@ async function gather(tx: Tx, conversationId: string): Promise<{ conv: GatherRes
     .orderBy(asc(message.seq))
 
   const history = rows.map(toPlayerView).filter((m): m is PlayerMessageView => m !== null)
+  const botMessageCount = rows.filter((r) => r.authorType === 'bot').length
+  const lastPlayer = rows.filter((r) => r.authorType === 'player').at(-1)
 
-  return { conv: conv ?? null, history }
+  return { conv: conv ?? null, history, botMessageCount, lastPlayerMessageAt: lastPlayer?.createdAt ?? null }
 }
 
 /**
@@ -131,11 +137,19 @@ export async function applyDecisionIfBotActive(
  * authoritative guard.
  */
 export async function runBotTurn(workspaceId: string, conversationId: string, decider: BotDecider): Promise<void> {
-  const { conv, history } = await withWorkspace(workspaceId, (tx) => gather(tx, conversationId))
+  const { conv, history, botMessageCount, lastPlayerMessageAt } = await withWorkspace(workspaceId, (tx) => gather(tx, conversationId))
 
   if (!conv || conv.status !== 'bot_active') return
 
-  const decision = await decider({ workspaceId, conversationId, subintentId: conv.subintentId, history })
+  const decision = await decider({
+    workspaceId,
+    conversationId,
+    subintentId: conv.subintentId,
+    botPhase: conv.botPhase,
+    botMessageCount,
+    lastPlayerMessageAt,
+    history,
+  })
 
   await applyDecisionIfBotActive(workspaceId, conversationId, decision)
 }

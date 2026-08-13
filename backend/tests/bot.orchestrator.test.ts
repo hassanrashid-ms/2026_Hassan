@@ -55,6 +55,9 @@ describe('runBotTurn', () => {
     expect(seenInput!.workspaceId).toBe(workspaceId)
     expect(seenInput!.conversationId).toBe(conversationId)
     expect(seenInput!.subintentId).toBeNull()
+    expect(seenInput!.botPhase).toBe('none')
+    expect(seenInput!.botMessageCount).toBe(0)
+    expect(seenInput!.lastPlayerMessageAt).toBeNull()
     expect(seenInput!.history).toEqual([])
 
     const rows = await withWorkspace(workspaceId, (tx) =>
