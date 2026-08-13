@@ -108,7 +108,7 @@ export async function applyDecisionIfBotActive(
   })
 
   if (!result.applied) {
-    logger.info('bot.orchestrator', 'skipped fallback: conversation left bot_active before apply', {
+    logger.info('bot.orchestrator', 'skipped apply: conversation left bot_active before apply', {
       workspaceId,
       conversationId,
     })
