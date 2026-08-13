@@ -124,6 +124,22 @@ See `docs/specs/2026-08-11-bot-turn-seam-and-handoff-design.md` §7.
 
 ---
 
+### 17. Reopen's "previous resolution source" (spec §10)
+
+**Conflict:** Spec §10 says reopen should keep an agent-resolved conversation's previous owner but
+reassign a bot-resolved one — without saying how to tell the two apart, since no code path writes
+an agent-resolved or `closed` status yet.
+
+**Decision:** `conversation` gains a `resolution_source` column (`bot | agent`, nullable), written
+whenever a conversation becomes `resolved`/`closed`. This slice writes it only from the bot's
+`resolve` outcome (`'bot'`); a future agent-resolve action writes `'agent'`. Reopen reads it back
+to decide assignment, then clears it. Implemented in `backend/src/domain/bot/applyBotTurn.ts` and
+`backend/src/surface/services/messagesService.ts`, plan
+`docs/plans/2026-08-13-bot-tool-calling-decider-implementation.md`.
+See `docs/specs/2026-08-12-bot-tool-calling-decider-design.md` §10.
+
+---
+
 ## Contradictions still open (no decision yet)
 
 These have not been resolved. Do not silently pick a side — add a decision here when one is made.
