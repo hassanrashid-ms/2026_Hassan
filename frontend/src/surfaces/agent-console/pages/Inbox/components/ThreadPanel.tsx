@@ -1,8 +1,8 @@
 import { useEffect } from 'react'
-import type { AgentMessageView, ConversationStatusValue } from '@support/types'
+import type { AgentMessageView, ConfirmPhaseValue, ConversationStatusValue } from '@support/types'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, MessageSquare } from 'lucide-react'
-import { fetchConversationMessages, markAgentMessagesRead, sendAgentMessage } from '../../../api/agentApi.ts'
+import { askResolved, fetchConversationMessages, markAgentMessagesRead, sendAgentMessage } from '../../../api/agentApi.ts'
 import { createSocket } from '../../../../../features/chat/api/socket.ts'
 import { ChatThread } from '../../../../../features/chat/components/ChatThread.tsx'
 import { Composer } from '../../../../../features/chat/components/Composer.tsx'
@@ -28,12 +28,14 @@ export function ThreadPanel({
   conversationId,
   playerExternalId,
   status,
+  confirmPhase,
   onBack,
 }: {
   token: string
   conversationId: string | null
   playerExternalId?: string
   status?: ConversationStatusValue
+  confirmPhase?: ConfirmPhaseValue
   onBack?: () => void
 }) {
   const queryClient = useQueryClient()
@@ -52,6 +54,18 @@ export function ThreadPanel({
     },
   })
 
+  const ask = useMutation({
+    mutationFn: () => askResolved(token, conversationId!),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['conversation', conversationId, 'messages'] })
+      void queryClient.invalidateQueries({ queryKey: ['inbox', 'mine'] })
+      void queryClient.invalidateQueries({ queryKey: ['inbox', 'unassigned'] })
+    },
+  })
+
+  const askable = (status === 'open' || status === 'awaiting_player') && (confirmPhase ?? 'none') === 'none'
+  const waiting = confirmPhase === 'agent_ask'
+
   useEffect(() => {
     if (!conversationId) return
     const socket = createSocket(token, 'agent')
@@ -61,6 +75,11 @@ export function ThreadPanel({
     })
     socket.on('message:read', () => {
       void queryClient.invalidateQueries({ queryKey: ['conversation', conversationId, 'messages'] })
+    })
+    // Carries the decline, which posts no message and changes no status.
+    socket.on('conversation:phase_changed', () => {
+      void queryClient.invalidateQueries({ queryKey: ['inbox', 'mine'] })
+      void queryClient.invalidateQueries({ queryKey: ['inbox', 'unassigned'] })
     })
     return () => {
       socket.emit('leave_conversation', { conversation_id: conversationId })
@@ -96,6 +115,21 @@ export function ThreadPanel({
         )}
         <span className="text-sm font-medium">{playerExternalId}</span>
         {status && <Badge variant={STATUS_BADGE_VARIANT[status]}>{status}</Badge>}
+        {(askable || waiting) && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="ml-auto"
+            disabled={!askable || ask.isPending}
+            // A real tooltip primitive isn't in this surface yet; the native
+            // title is enough for a disabled-state explanation.
+            title={waiting ? 'Waiting on player' : undefined}
+            onClick={() => ask.mutate()}
+          >
+            Ask if resolved
+          </Button>
+        )}
       </div>
       <div className="min-h-0 flex-1">
         <ChatThread messages={chatMessages} currentAuthorType="agent" />

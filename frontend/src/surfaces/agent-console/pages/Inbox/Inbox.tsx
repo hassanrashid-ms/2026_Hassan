@@ -51,6 +51,7 @@ export function Inbox() {
           conversationId={selectedId}
           playerExternalId={selected?.player.external_player_id}
           status={selected?.status}
+          confirmPhase={selected?.confirm_phase}
           onBack={() => navigate('/inbox')}
         />
       </div>

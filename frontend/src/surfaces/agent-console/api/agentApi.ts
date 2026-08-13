@@ -3,6 +3,7 @@ import type {
   AgentConversationsResponse,
   AgentMessagesResponse,
   AgentArticlesResponse,
+  AskResolvedResponse,
   ClaimResponse,
   CreateIntentResponse,
   CreateSubintentResponse,
@@ -107,4 +108,8 @@ export function publishArticle(token: string, id: string): Promise<AgentArticleD
 
 export function archiveArticle(token: string, id: string): Promise<AgentArticleDetail> {
   return apiCall(`/agent/articles/${id}/archive`, token, { method: 'POST' })
+}
+
+export function askResolved(token: string, conversationId: string): Promise<AskResolvedResponse> {
+  return apiCall(`/agent/conversations/${conversationId}/ask-resolved`, token, { method: 'POST' })
 }
