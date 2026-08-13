@@ -6,7 +6,7 @@ import { ChatBubbles } from '@/surfaces/webview/components/chat/ChatBubbles'
 import { ChatComposer } from '@/surfaces/webview/components/chat/ChatComposer'
 import { SupportButton } from '@/surfaces/webview/components/SupportButton'
 import { useSupport } from '@/surfaces/webview/components/SupportContext'
-import { fetchPlayerMessages, markPlayerMessagesRead, sendPlayerMessage } from '@/features/chat/api/playerChatApi'
+import { answerResolution, fetchPlayerMessages, markPlayerMessagesRead, sendPlayerMessage } from '@/features/chat/api/playerChatApi'
 import { createSocket } from '@/features/chat/api/socket'
 import { reconcilePending, type PendingMessage } from '@/features/chat/hooks/chatReconcile'
 import type { ChatMessage } from '@/features/chat/components/types'
@@ -77,6 +77,13 @@ export function SupportChat() {
     },
   })
 
+  const answer = useMutation({
+    mutationFn: (helped: boolean) => answerResolution(boot!.token, helped, boot!.sessionId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['playerMessages', boot?.sessionId] })
+    },
+  })
+
   const onRetry = (failed: ChatMessage) => {
     setPending((current) => current.filter((p) => p.id !== failed.id))
     send.mutate(failed.body)
@@ -90,6 +97,11 @@ export function SupportChat() {
       if (conversationId) socket.emit('join_conversation', { conversation_id: conversationId })
     })
     socket.on('message:new', () => {
+      void queryClient.invalidateQueries({ queryKey: ['playerMessages', boot.sessionId] })
+    })
+    // The only signal for a decline: it posts no message and changes no status,
+    // so nothing else would tell this screen to drop the banner.
+    socket.on('conversation:phase_changed', () => {
       void queryClient.invalidateQueries({ queryKey: ['playerMessages', boot.sessionId] })
     })
     // The payload's up_to_seq/read_at are deliberately unused. Refetching keeps
@@ -113,6 +125,7 @@ export function SupportChat() {
   const chatMessages = reconcilePending(serverMessages, pending)
 
   const settled = messagesQuery.data?.status === 'resolved' || messagesQuery.data?.status === 'closed'
+  const confirmPending = (messagesQuery.data?.confirm_phase ?? 'none') !== 'none'
 
   return (
     <>
@@ -130,6 +143,30 @@ export function SupportChat() {
           <ChatBubbles messages={chatMessages} onRetry={onRetry} />
         )}
       </div>
+
+      {confirmPending && (
+        <div className="shrink-0 border-t border-muted/15 bg-surface px-4 py-3">
+          <p className="text-base font-semibold text-text">Did this solve it?</p>
+          <div className="mt-2 flex items-center gap-3">
+            <SupportButton
+              variant="soft"
+              className="min-h-9 px-4 py-2 text-sm"
+              disabled={answer.isPending}
+              onClick={() => answer.mutate(true)}
+            >
+              Yes
+            </SupportButton>
+            <SupportButton
+              variant="soft"
+              className="min-h-9 px-4 py-2 text-sm"
+              disabled={answer.isPending}
+              onClick={() => answer.mutate(false)}
+            >
+              No
+            </SupportButton>
+          </div>
+        </div>
+      )}
 
       {settled && (
         <div className="shrink-0 border-t border-muted/15 bg-surface px-4 py-3">
