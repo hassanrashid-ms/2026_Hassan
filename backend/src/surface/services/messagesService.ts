@@ -4,10 +4,10 @@ import { MarkPlayerReadBody, SendMessageBody, type ConversationStatusValue, type
 
 type SendMessageBodyType = z.infer<typeof SendMessageBody>
 type MarkPlayerReadBodyType = z.infer<typeof MarkPlayerReadBody>
-import { postMessage, toAgentView, toPlayerView } from '../../domain/conversations/index.ts'
-import { applyBotTurn, resolveBotConfig } from '../../domain/bot/index.ts'
+import { postMessage, toAgentView, toPlayerView, type PostedMessageRow } from '../../domain/conversations/index.ts'
+import { applyBotTurn, assignOnHandoff, HANDOFF_PLAYER_MESSAGE, resolveBotConfig } from '../../domain/bot/index.ts'
 import { appendEvent } from '../../shared/events/appendEvent.ts'
-import { conversation, message, session } from '../../shared/db/schema/index.ts'
+import { agent, conversation, message, session } from '../../shared/db/schema/index.ts'
 import { withWorkspace } from '../../shared/db/withWorkspace.ts'
 import { emitInboxChanged, emitMessageToRooms, emitReadReceipt } from '../../shared/realtime/emit.ts'
 import { getIo } from '../../shared/realtime/socketServer.ts'
@@ -48,6 +48,9 @@ export async function sendPlayerMessage(
     // just took one out of Awaiting Player. Claiming (Task 7) is the fourth
     // trigger for the same event, from a different path.
     let inboxStatus: string | null = null
+    // Only the reopen branch sets this: the reopen's system message needs its
+    // own socket emit, separate from the player's own message emitted below.
+    let reopenPosted: PostedMessageRow | undefined
 
     if (!existing) {
       // The originating session, so a future agent Game View reaches the
@@ -102,7 +105,38 @@ export async function sendPlayerMessage(
     } else {
       conversationId = existing.id
       if (REOPENABLE_STATUSES.has(existing.status)) {
-        await tx.update(conversation).set({ status: 'open', assignedAgentId: null }).where(eq(conversation.id, conversationId))
+        const [prior] = await tx
+          .select({ assignedAgentId: conversation.assignedAgentId, resolutionSource: conversation.resolutionSource })
+          .from(conversation)
+          .where(eq(conversation.id, conversationId))
+          .limit(1)
+
+        let nextAssignedAgentId: string | null = null
+        if (prior?.resolutionSource === 'agent' && prior.assignedAgentId) {
+          const [previousOwner] = await tx.select({ status: agent.status }).from(agent).where(eq(agent.id, prior.assignedAgentId)).limit(1)
+          nextAssignedAgentId = previousOwner?.status === 'active' ? prior.assignedAgentId : await assignOnHandoff(tx, ctx.workspaceId)
+        } else {
+          // Bot-resolved (never assigned to anyone), or no resolution_source
+          // recorded at all (a `closed` conversation with no bot/agent
+          // resolve event behind it — defensive, not expected once this
+          // slice ships) — both take the same path.
+          nextAssignedAgentId = await assignOnHandoff(tx, ctx.workspaceId)
+        }
+
+        await tx
+          .update(conversation)
+          .set({ status: 'open', assignedAgentId: nextAssignedAgentId, resolutionSource: null })
+          .where(eq(conversation.id, conversationId))
+
+        reopenPosted = await postMessage(tx, {
+          workspaceId: ctx.workspaceId,
+          conversationId,
+          authorType: 'system',
+          actorId: null,
+          body: HANDOFF_PLAYER_MESSAGE,
+          visibility: 'public',
+        })
+
         await appendEvent(tx, {
           workspaceId: ctx.workspaceId,
           type: 'conversation_reopened',
@@ -112,6 +146,7 @@ export async function sendPlayerMessage(
           sessionId,
           actorId: ctx.playerId,
           actorType: 'player',
+          payload: { previous_resolution_source: prior?.resolutionSource ?? null },
         })
         inboxStatus = 'open'
       } else if (existing.status === 'awaiting_player') {
@@ -160,12 +195,15 @@ export async function sendPlayerMessage(
       }
     }
 
-    return { conversationId, posted, inboxStatus, shouldEnqueue }
+    return { conversationId, posted, reopenPosted, inboxStatus, shouldEnqueue }
   })
 
   const playerView = toPlayerView(result.posted)
   const agentView = toAgentView(result.posted)
   emitMessageToRooms(getIo(), result.conversationId, playerView, agentView)
+  if (result.reopenPosted) {
+    emitMessageToRooms(getIo(), result.conversationId, toPlayerView(result.reopenPosted), toAgentView(result.reopenPosted))
+  }
   if (result.inboxStatus) {
     emitInboxChanged(getIo(), ctx.workspaceId, result.conversationId, result.inboxStatus)
   }
