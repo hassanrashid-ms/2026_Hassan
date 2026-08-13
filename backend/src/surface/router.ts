@@ -5,6 +5,7 @@ import { articlesRouter } from './routers/articlesRouter.ts'
 import { bootstrapRouter } from './routers/bootstrapRouter.ts'
 import { intentsRouter } from './routers/intentsRouter.ts'
 import { messagesRouter } from './routers/messagesRouter.ts'
+import { resolutionRouter } from './routers/resolutionRouter.ts'
 
 export const surfaceRouter = Router()
 
@@ -17,3 +18,4 @@ surfaceRouter.use(articleReadRouter)
 surfaceRouter.use(articlesRouter)
 surfaceRouter.use(intentsRouter)
 surfaceRouter.use(messagesRouter)
+surfaceRouter.use(resolutionRouter)
