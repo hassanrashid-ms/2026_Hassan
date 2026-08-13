@@ -6,7 +6,7 @@ import { assignOnHandoff } from './assignOnHandoff.ts'
 import { postMessage, type PostedMessageRow } from '../conversations/postMessage.ts'
 import { appendEvent } from '../../shared/events/appendEvent.ts'
 import type { Tx } from '../../shared/db/withWorkspace.ts'
-import { conversation, intent, subintent } from '../../shared/db/schema/index.ts'
+import { article, conversation, intent, subintent } from '../../shared/db/schema/index.ts'
 
 export type ApplyBotTurnContext = {
   workspaceId: string
@@ -38,8 +38,40 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
         body: decision.reply,
         visibility: 'public',
       })
-      await classifyIfUnset(tx, ctx, decision.subintentId)
+      if (decision.subintentId) await classifyIfUnset(tx, ctx, decision.subintentId)
+      if (decision.articleId) {
+        await tx
+          .update(conversation)
+          .set({ botPhase: 'article_confirm' })
+          .where(eq(conversation.id, ctx.conversationId))
+        const [row] = await tx.select({ title: article.title }).from(article).where(eq(article.id, decision.articleId)).limit(1)
+        await appendEvent(tx, {
+          workspaceId: ctx.workspaceId,
+          type: 'bot_article_offered',
+          conversationId: ctx.conversationId,
+          actorId: null,
+          actorType: 'bot',
+          payload: { article_id: decision.articleId, article_title: row?.title ?? null },
+        })
+      }
       return { posted: [posted], statusChanged: false }
+    }
+
+    case 'resolve': {
+      if (decision.subintentId) await classifyIfUnset(tx, ctx, decision.subintentId)
+      await tx
+        .update(conversation)
+        .set({ status: 'resolved', botPhase: 'none', resolutionSource: 'bot' })
+        .where(eq(conversation.id, ctx.conversationId))
+      await appendEvent(tx, {
+        workspaceId: ctx.workspaceId,
+        type: 'conversation_resolved',
+        conversationId: ctx.conversationId,
+        actorId: null,
+        actorType: 'bot',
+        payload: { source: 'bot', confirmed_by: 'player' },
+      })
+      return { posted: [], statusChanged: true }
     }
 
     case 'handoff': {
@@ -55,8 +87,18 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
       const assignedAgentId = await assignOnHandoff(tx, ctx.workspaceId)
       await tx
         .update(conversation)
-        .set({ status: 'open', assignedAgentId })
+        .set({ status: 'open', botPhase: 'none', assignedAgentId })
         .where(eq(conversation.id, ctx.conversationId))
+      if (decision.reason === 'article_rejected') {
+        await appendEvent(tx, {
+          workspaceId: ctx.workspaceId,
+          type: 'bot_article_rejected',
+          conversationId: ctx.conversationId,
+          actorId: null,
+          actorType: 'bot',
+          payload: {},
+        })
+      }
       await appendEvent(tx, {
         workspaceId: ctx.workspaceId,
         type: 'bot_handoff',
@@ -96,7 +138,7 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
       const assignedAgentId = await assignOnHandoff(tx, ctx.workspaceId)
       await tx
         .update(conversation)
-        .set({ status: 'open', assignedAgentId })
+        .set({ status: 'open', botPhase: 'none', assignedAgentId })
         .where(eq(conversation.id, ctx.conversationId))
       await appendEvent(tx, {
         workspaceId: ctx.workspaceId,

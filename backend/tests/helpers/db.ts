@@ -173,6 +173,20 @@ export async function seedSubintent(args: {
   return id
 }
 
+export async function seedArticle(args: {
+  workspaceId: string
+  createdBy: string
+  title?: string
+  body?: string
+}): Promise<string> {
+  const id = randomUUID()
+  await ownerPool.query(
+    `insert into article (id, workspace_id, title, body, created_by) values ($1, $2, $3, $4, $5)`,
+    [id, args.workspaceId, args.title ?? `Article ${randomUUID().slice(0, 8)}`, args.body ?? 'body', args.createdBy],
+  )
+  return id
+}
+
 export async function seedBotConfig(args: {
   workspaceId: string
   isProvisioned?: boolean

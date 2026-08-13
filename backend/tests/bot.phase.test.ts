@@ -1,0 +1,106 @@
+import { afterAll, beforeEach, describe, expect, it } from 'vitest'
+import { applyBotTurn } from '../src/domain/bot/applyBotTurn.ts'
+import { withWorkspace } from '../src/shared/db/withWorkspace.ts'
+import { closeDb } from '../src/shared/db/client.ts'
+import {
+  closeOwnerPool,
+  ownerPool,
+  seedAgent,
+  seedArticle,
+  seedConversation,
+  seedPlayer,
+  seedWorkspace,
+  truncateAll,
+} from './helpers/db.ts'
+
+beforeEach(truncateAll)
+afterAll(async () => {
+  await closeDb()
+  await closeOwnerPool()
+})
+
+async function conversationRow(id: string) {
+  const { rows } = await ownerPool.query(
+    `select status, bot_phase, resolution_source from conversation where id = $1`,
+    [id],
+  )
+  return rows[0]
+}
+
+async function messagesFor(conversationId: string) {
+  const { rows } = await ownerPool.query(`select author_type, visibility, body from message where conversation_id = $1 order by seq`, [
+    conversationId,
+  ])
+  return rows
+}
+
+async function eventsFor(conversationId: string) {
+  const { rows } = await ownerPool.query(`select type, payload from event where conversation_id = $1 order by id`, [
+    conversationId,
+  ])
+  return rows
+}
+
+async function setBotPhase(conversationId: string, phase: 'none' | 'article_confirm') {
+  await ownerPool.query(`update conversation set bot_phase = $2 where id = $1`, [conversationId, phase])
+}
+
+describe('applyBotTurn — resolve and article lifecycle', () => {
+  it('answer with articleId sets bot_phase to article_confirm and writes bot_article_offered', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const conversationId = await seedConversation({ workspaceId, playerId })
+    const agentId = await seedAgent()
+    const articleId = await seedArticle({ workspaceId, createdBy: agentId, title: 'How refunds work' })
+
+    await withWorkspace(workspaceId, (tx) =>
+      applyBotTurn(tx, { workspaceId, conversationId }, { kind: 'answer', reply: 'try this', subintentId: null, articleId }),
+    )
+
+    const row = await conversationRow(conversationId)
+    expect(row.bot_phase).toBe('article_confirm')
+
+    const events = await eventsFor(conversationId)
+    expect(events.map((e) => e.type)).toEqual(['message_sent', 'bot_article_offered'])
+    expect(events[1].payload).toEqual({ article_id: articleId, article_title: 'How refunds work' })
+  })
+
+  it('confirm_resolution(true) resolves the conversation, writes conversation_resolved with source bot, sets bot_phase none', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const conversationId = await seedConversation({ workspaceId, playerId })
+    await setBotPhase(conversationId, 'article_confirm')
+
+    await withWorkspace(workspaceId, (tx) => applyBotTurn(tx, { workspaceId, conversationId }, { kind: 'resolve', subintentId: null }))
+
+    const row = await conversationRow(conversationId)
+    expect(row.status).toBe('resolved')
+    expect(row.bot_phase).toBe('none')
+    expect(row.resolution_source).toBe('bot')
+
+    expect(await messagesFor(conversationId)).toEqual([])
+
+    const events = await eventsFor(conversationId)
+    expect(events.map((e) => e.type)).toEqual(['conversation_resolved'])
+    expect(events[0].payload).toEqual({ source: 'bot', confirmed_by: 'player' })
+  })
+
+  it('confirm_resolution(false) [i.e. handoff(article_rejected)] writes bot_article_rejected', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const conversationId = await seedConversation({ workspaceId, playerId })
+    await setBotPhase(conversationId, 'article_confirm')
+
+    await withWorkspace(workspaceId, (tx) =>
+      applyBotTurn(tx, { workspaceId, conversationId }, { kind: 'handoff', reason: 'article_rejected', subintentId: null }),
+    )
+
+    const row = await conversationRow(conversationId)
+    expect(row.status).toBe('open')
+    expect(row.bot_phase).toBe('none')
+
+    const events = await eventsFor(conversationId)
+    expect(events.map((e) => e.type)).toEqual(['message_sent', 'bot_article_rejected', 'bot_handoff'])
+    expect(events[1].payload).toEqual({})
+  })
+})
