@@ -35,10 +35,6 @@ Classify the player's problem into one of these categories:
 Use only these help articles as your source of truth:
 {{articles}}
 
-Context about this player:
-- Progress: {{player_level}}
-- Spending tier: {{spend_tier}}
-
 When you hand off, say plainly that you are passing this to the support team, and stop. Do not keep asking questions to fill the gap.`
 
 /**

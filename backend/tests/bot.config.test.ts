@@ -13,10 +13,15 @@ import { EmptyBotPrompt, resolveBotConfig, saveBotConfig } from '../src/domain/b
 import { closeOwnerPool, ownerPool, seedAgent, seedBotConfig, seedWorkspace, truncateAll } from './helpers/db.ts'
 
 describe('DEFAULT_BOT_PROMPT', () => {
-  it('carries every placeholder the orchestrator substitutes', () => {
-    for (const placeholder of BOT_PROMPT_PLACEHOLDERS) {
-      expect(DEFAULT_BOT_PROMPT, `missing ${placeholder}`).toContain(placeholder)
-    }
+  it('contains {{subintents}} and {{articles}}, not {{player_level}} or {{spend_tier}}', () => {
+    expect(DEFAULT_BOT_PROMPT).toContain('{{subintents}}')
+    expect(DEFAULT_BOT_PROMPT).toContain('{{articles}}')
+    expect(DEFAULT_BOT_PROMPT).not.toContain('{{player_level}}')
+    expect(DEFAULT_BOT_PROMPT).not.toContain('{{spend_tier}}')
+  })
+
+  it('BOT_PROMPT_PLACEHOLDERS still lists all four', () => {
+    expect(BOT_PROMPT_PLACEHOLDERS).toEqual(['{{subintents}}', '{{articles}}', '{{player_level}}', '{{spend_tier}}'])
   })
 
   it('names no real subintent, intent or article — it ships to every workspace', () => {
@@ -74,9 +79,8 @@ describe('buildSystemPrompt', () => {
 
   it('keeps the placeholders intact — the orchestrator substitutes after the join', () => {
     const built = buildSystemPrompt(DEFAULT_BOT_PROMPT, DEFAULT_BOT_RULES)
-    for (const placeholder of BOT_PROMPT_PLACEHOLDERS) {
-      expect(built, `missing ${placeholder}`).toContain(placeholder)
-    }
+    expect(built).toContain('{{subintents}}')
+    expect(built).toContain('{{articles}}')
   })
 })
 
