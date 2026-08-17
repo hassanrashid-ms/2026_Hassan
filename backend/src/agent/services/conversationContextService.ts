@@ -1,7 +1,16 @@
-import { eq } from 'drizzle-orm'
-import type { AgentConversationDetail } from '@support/types'
-import { agent, conversation, intent, player, subintent } from '../../shared/db/schema/index.ts'
+import { and, asc, eq } from 'drizzle-orm'
+import type { AgentConversationDetail, AgentPlayerStateView } from '@support/types'
+import {
+  agent,
+  conversation,
+  declaredField,
+  intent,
+  player,
+  playerStateSnapshot,
+  subintent,
+} from '../../shared/db/schema/index.ts'
 import { withWorkspace } from '../../shared/db/withWorkspace.ts'
+import type { Tx } from '../../shared/db/withWorkspace.ts'
 import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts'
 
 /**
@@ -58,4 +67,71 @@ export async function getConversationDetail(
       created_at: row.createdAt.toISOString(),
     }
   })
+}
+
+/**
+ * The rail's player-state panel, as a tagged union rather than one nullable
+ * object. Four cases, all 200: missing player state is a state, not an error.
+ *
+ * No fallback to a later snapshot. When this conversation's session captured
+ * nothing, the response says so and carries nothing else — synthesising state
+ * from a different session would manufacture exactly the misleading
+ * current-level number the product spec rejects, and a label under a number
+ * does not stop anyone reading the number.
+ *
+ * Takes an open tx so the context endpoint reads everything in one transaction.
+ */
+export async function getPlayerStateView(
+  tx: Tx,
+  workspaceId: string,
+  sessionId: string | null,
+): Promise<AgentPlayerStateView> {
+  if (!sessionId) return { status: 'no_session' }
+
+  const [snapshot] = await tx
+    .select({
+      declared: playerStateSnapshot.declared,
+      raw: playerStateSnapshot.raw,
+      isMissing: playerStateSnapshot.isMissing,
+      degradedReason: playerStateSnapshot.degradedReason,
+      capturedAt: playerStateSnapshot.capturedAt,
+    })
+    .from(playerStateSnapshot)
+    .where(eq(playerStateSnapshot.sessionId, sessionId))
+    .limit(1)
+
+  if (!snapshot) return { status: 'not_captured' }
+  if (snapshot.isMissing) return { status: 'missing' }
+
+  // Ordered by when the field was declared, so the seed order the game sees in
+  // its own config is the order the agent reads down the panel.
+  const fields = await tx
+    .select({ key: declaredField.key, label: declaredField.label, type: declaredField.type })
+    .from(declaredField)
+    .where(eq(declaredField.workspaceId, workspaceId))
+    .orderBy(asc(declaredField.declaredAt), asc(declaredField.key))
+
+  const blob = snapshot.declared
+  const declared: { key: string; label: string; type: (typeof fields)[number]['type']; value: unknown }[] = []
+  const seen = new Set<string>()
+  for (const field of fields) {
+    if (!(field.key in blob)) continue
+    seen.add(field.key)
+    declared.push({ key: field.key, label: field.label, type: field.type, value: blob[field.key] })
+  }
+  // A key in the blob with no declared_field row cannot normally occur —
+  // nothing is ever deleted — but appending beats dropping: a value the agent
+  // can see is worth more than a tidy list.
+  for (const key of Object.keys(blob)) {
+    if (seen.has(key)) continue
+    declared.push({ key, label: key, type: 'string', value: blob[key] })
+  }
+
+  return {
+    status: 'captured',
+    declared,
+    raw: snapshot.raw,
+    degraded_reason: snapshot.degradedReason,
+    captured_at: snapshot.capturedAt.toISOString(),
+  }
 }
