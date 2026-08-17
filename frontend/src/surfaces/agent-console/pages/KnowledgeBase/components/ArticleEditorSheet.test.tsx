@@ -23,6 +23,33 @@ const EXISTING_ARTICLE = {
   created_at: '2026-08-01T00:00:00Z',
 }
 
+describe('ArticleEditorSheet loading', () => {
+  it('shows a skeleton until the article loads, then renders its body in the editor', async () => {
+    let resolveArticle: (a: typeof EXISTING_ARTICLE) => void = () => {}
+    vi.spyOn(agentApi, 'fetchArticle').mockReturnValue(
+      new Promise((resolve) => {
+        resolveArticle = resolve
+      }),
+    )
+    vi.spyOn(agentApi, 'fetchIntents').mockResolvedValue({ intents: [] })
+
+    renderWithClient(
+      <ArticleEditorSheet token="tok" articleId="art-1" open onOpenChange={() => {}} onCreated={() => {}} />,
+    )
+
+    // Nothing half-populated is on screen while the fetch is in flight.
+    expect(screen.getByTestId('article-editor-skeleton')).toBeTruthy()
+    expect(screen.queryByPlaceholderText('Article title')).toBeNull()
+
+    resolveArticle(EXISTING_ARTICLE)
+
+    // The body reaches the editor on its first render — no blank editor to recover from.
+    await screen.findByDisplayValue('Refunds')
+    await waitFor(() => expect(screen.getByText('Refund policy')).toBeTruthy())
+    expect(screen.queryByTestId('article-editor-skeleton')).toBeNull()
+  })
+})
+
 describe('ArticleEditorSheet MDXEditor round-trip', () => {
   it('writes markdown in and saves the same markdown back out', async () => {
     vi.spyOn(agentApi, 'fetchArticle').mockResolvedValue(EXISTING_ARTICLE)
