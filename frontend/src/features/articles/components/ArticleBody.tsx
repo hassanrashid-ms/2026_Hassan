@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import Markdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { post } from '@/services/bridgeService'
 
 /*
  * Agents author bodies in a WYSIWYG markdown editor. Players used to get the raw
@@ -75,6 +76,30 @@ const components: Components = {
     <th className="border-b border-accent-soft px-2 py-1.5 text-left font-semibold whitespace-nowrap">{children}</th>
   ),
   td: ({ children }) => <td className="border-b border-accent-soft px-2 py-1.5 align-top">{children}</td>,
+  /*
+   * The bridge is checked at click time, not at render time: the SDK injects it
+   * asynchronously on page load, so a render-time check can read `undefined` on a
+   * platform that does in fact have a bridge a moment later.
+   *
+   * With no bridge — a plain desktop browser, which is a supported development
+   * mode — nothing is prevented and the anchor opens a new tab as normal. That is
+   * why target/rel are always present rather than conditional.
+   */
+  a: ({ href, children }) => (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-accent underline underline-offset-2"
+      onClick={(event) => {
+        if (!href || !window.SupportBridge) return
+        event.preventDefault()
+        post({ type: 'open_url', url: href })
+      }}
+    >
+      {children}
+    </a>
+  ),
 }
 
 export function ArticleBody({ markdown }: { markdown: string }) {

@@ -3,6 +3,20 @@ export type BridgeMessage =
   | { type: 'article_read'; id: string }
   | { type: 'close' }
   /**
+   * "Open this somewhere that is not me."
+   *
+   * A link tapped inside the webview would otherwise navigate in place, replacing
+   * the entire support surface with the target page — no back button, no way home.
+   * The SDK opens it in the system browser instead, leaving both the game and this
+   * surface intact.
+   *
+   * An SDK build predating the handler ignores this (unknown types are always
+   * ignored, never errored) and the tap does nothing. A dead tap is strictly
+   * better than a stranded player, and `post` is fire-and-forget so the page
+   * cannot feature-detect the difference.
+   */
+  | { type: 'open_url'; url: string }
+  /**
    * "I have painted; you can show me now."
    *
    * The SDK keeps the native webview hidden until this arrives. Its own page-load

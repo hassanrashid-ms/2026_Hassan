@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { ArticleBody } from './ArticleBody.tsx'
 
@@ -80,5 +80,42 @@ describe('ArticleBody images', () => {
     fireEvent.error(container.querySelector('img')!)
 
     expect(container.querySelector('img')).toBeNull()
+  })
+})
+
+/** Stands in for the bridge the SDK injects, recording what the page posts. */
+function installBridge(): unknown[] {
+  const posted: unknown[] = []
+  ;(window as { SupportBridge?: unknown }).SupportBridge = {
+    post: (message: unknown) => posted.push(message),
+  }
+  return posted
+}
+
+describe('ArticleBody links', () => {
+  beforeEach(() => {
+    delete (window as { SupportBridge?: unknown }).SupportBridge
+  })
+
+  it('posts open_url and suppresses navigation when the bridge is present', () => {
+    const posted = installBridge()
+    render(<ArticleBody markdown={'See [our terms](https://example.com/terms).'} />)
+
+    // fireEvent.click returns false when the handler called preventDefault —
+    // which is what stops the webview navigating away from the support surface.
+    const notCancelled = fireEvent.click(screen.getByRole('link', { name: 'our terms' }))
+
+    expect(posted).toEqual([{ type: 'open_url', url: 'https://example.com/terms' }])
+    expect(notCancelled).toBe(false)
+  })
+
+  it('behaves as a normal new-tab link with no bridge, for desktop development', () => {
+    render(<ArticleBody markdown={'See [our terms](https://example.com/terms).'} />)
+
+    const link = screen.getByRole('link', { name: 'our terms' })
+    expect(link.getAttribute('href')).toBe('https://example.com/terms')
+    expect(link.getAttribute('target')).toBe('_blank')
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer')
+    expect(fireEvent.click(link)).toBe(true)
   })
 })
