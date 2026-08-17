@@ -1,0 +1,106 @@
+import { z } from 'zod'
+
+/**
+ * NOT part of the frozen SDK contract in the sdk-wire sense, but the type union
+ * IS frozen once for the same reason: a shipped client parses it. `attachment`
+ * is declared now and inert until the `attachment` table exists — the submission
+ * service rejects it as unsupported, and the form-builder must not offer it.
+ * `time` is likewise declared and unused: no seeded form uses it, and removing a
+ * value from a shipped pg enum is a migration for no gain.
+ *
+ * This array is the canonical list. `schema/enums.ts`'s `form_field_type` mirrors
+ * it in the same order, and `tests/schema.test.ts` asserts the two match, so they
+ * cannot drift.
+ */
+export const FORM_FIELD_TYPES = [
+  'short_text',
+  'long_text',
+  'number',
+  'date',
+  'time',
+  'choice',
+  'attachment',
+] as const
+export type FormFieldType = (typeof FORM_FIELD_TYPES)[number]
+
+/**
+ * One question. `key` is a stable string that survives reordering and
+ * relabelling without touching a single answer row — which is the whole reason
+ * fields are jsonb here rather than a `form_field` table (spec-contradictions
+ * §14). `position` is the render order and is snapshotted into events later, so
+ * it must be present and unique.
+ *
+ * `isRequired` is SOFT everywhere. Nothing about a form may block a player
+ * reaching a human, so a required field left blank still lands.
+ */
+export const formFieldSchema = z.object({
+  key: z
+    .string()
+    .min(1)
+    .max(64)
+    .regex(/^[a-z0-9_]+$/, 'A field key is lower-case letters, digits and underscores only.'),
+  label: z.string().min(1).max(200),
+  type: z.enum(FORM_FIELD_TYPES),
+  isRequired: z.boolean(),
+  position: z.number().int().nonnegative(),
+  options: z.array(z.string().min(1)).min(2).optional(),
+})
+export type FormField = z.infer<typeof formFieldSchema>
+
+/**
+ * The cross-field rules a single field cannot express.
+ * An EMPTY array is accepted here: `form_version.fields` defaults to `[]` and a
+ * draft legitimately has no questions yet.
+ */
+export const formFieldsSchema = z.array(formFieldSchema).superRefine((fields, ctx) => {
+  const seenKeys = new Set<string>()
+  const seenPositions = new Set<number>()
+  fields.forEach((field, i) => {
+    if (seenKeys.has(field.key)) {
+      ctx.addIssue({ code: 'custom', path: [i, 'key'], message: `Duplicate field key "${field.key}".` })
+    }
+    seenKeys.add(field.key)
+
+    if (seenPositions.has(field.position)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: [i, 'position'],
+        message: `Duplicate field position ${field.position}.`,
+      })
+    }
+    seenPositions.add(field.position)
+
+    if (field.type === 'choice' && field.options === undefined) {
+      ctx.addIssue({ code: 'custom', path: [i, 'options'], message: 'A choice field needs options.' })
+    }
+    if (field.type !== 'choice' && field.options !== undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: [i, 'options'],
+        message: `A ${field.type} field must not carry options.`,
+      })
+    }
+  })
+})
+
+/** The publish-time rule: a version with no questions asks nothing. */
+export const publishedFormFieldsSchema = formFieldsSchema.refine((fields) => fields.length > 0, {
+  message: 'A published form version must have at least one field.',
+})
+
+/**
+ * The `form_answer.value` jsonb shape, keyed by the field's declared type.
+ *
+ * `choice` membership cannot be expressed standalone — it depends on that
+ * field's `options` — so it is checked in the same guard that resolves the
+ * field, never here.
+ */
+export const formAnswerValueSchemas = {
+  short_text: z.string().min(1).max(500),
+  long_text: z.string().min(1).max(5000),
+  number: z.number().finite(),
+  date: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/),
+  time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+  choice: z.string().min(1),
+  attachment: z.object({ attachmentId: z.string().regex(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/) }),
+} satisfies Record<FormFieldType, z.ZodType>
