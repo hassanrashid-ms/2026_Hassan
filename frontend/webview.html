@@ -45,6 +45,56 @@
         </div>
       </div>
     </div>
+    <!--
+      Hands off from the SDK's loader as soon as the frame above is on screen.
+
+      The reveal handshake was designed when this document was an empty <div> and
+      the first thing worth looking at was React's first paint — so signalling was
+      left to WebviewShell, which cannot run until the whole bundle has loaded.
+      That made the SDK's ready-signal watchdog (3s, its field default) win every
+      time, and the player sat behind a spinner for 3 seconds with a perfectly good
+      skeleton already painted underneath it.
+
+      The skeleton above is that "something worth looking at", so this signals
+      here instead. WebviewShell still signals on mount; Reveal() is idempotent on
+      the SDK side, so the later one is a harmless no-op safety net for the case
+      where this script somehow does not run.
+
+      Two nested frames, not one: when this executes the browser has scheduled a
+      paint, not made one, and a rAF callback still runs before the paint it
+      belongs to. The inner call is the first moment the frame is actually with the
+      compositor — signalling from the outer one reveals exactly one frame early,
+      which is the flash the handshake exists to remove.
+    -->
+    <script>
+      (function () {
+        var send = function () {
+          requestAnimationFrame(function () {
+            requestAnimationFrame(function () {
+              try {
+                window.SupportBridge.post({ type: 'surface_ready' })
+              } catch (e) {
+                /* No bridge: a plain browser. Nothing to reveal, nothing to do. */
+              }
+            })
+          })
+        }
+        // The SDK injects the bridge on page load, which may land before or after
+        // this script — hence both the check and the event. Listened for on window
+        // and document because the SDK dispatches on both and neither bubbles.
+        if (window.SupportBridge) {
+          send()
+        } else {
+          var once = function () {
+            window.removeEventListener('supportbridgeready', once)
+            document.removeEventListener('supportbridgeready', once)
+            send()
+          }
+          window.addEventListener('supportbridgeready', once)
+          document.addEventListener('supportbridgeready', once)
+        }
+      })()
+    </script>
     <script type="module" src="/src/surfaces/webview/main.tsx"></script>
   </body>
 </html>

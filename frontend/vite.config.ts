@@ -73,6 +73,7 @@ export default defineConfig({
     },
   },
   server: { port: 5173, strictPort: true, allowedHosts: true },
+  preview: { port: 5173, strictPort: true, allowedHosts: true },
   // jsdom for the whole suite: the pure-function tests (boot, chatReconcile,
   // articleSearch) are environment-agnostic and pass unchanged under it, and
   // component tests need a DOM. One environment beats per-file pragmas.
