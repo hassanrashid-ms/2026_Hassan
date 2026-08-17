@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import Markdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
@@ -15,6 +16,34 @@ import remarkGfm from 'remark-gfm'
  * is not installed and must not be: it ships absolute font sizes that would fight
  * the clamp() on `html` that the entire rem-based scale rides on.
  */
+/*
+ * THIS IS THE SEAM. Article media is a separate project: when it ships, this
+ * component learns to recognise an attachment handle and resolve it to a signed
+ * URL, and nothing else in the app changes — not the components map, not
+ * ArticleBody's props, not the call site.
+ *
+ * Today an agent can type a third-party URL into the editor and it renders. Those
+ * hosts rot, so a failed load degrades to the alt text as a caption rather than
+ * leaving a broken-image glyph in the middle of a help article.
+ */
+function ArticleImage({ src, alt }: { src?: string; alt?: string }) {
+  const [failed, setFailed] = useState(false)
+
+  if (failed) {
+    return alt ? <span className="mb-3 block text-sm text-muted italic">{alt}</span> : null
+  }
+
+  return (
+    <img
+      src={src}
+      alt={alt ?? ''}
+      loading="lazy"
+      onError={() => setFailed(true)}
+      className="mb-3 h-auto max-w-full rounded-card"
+    />
+  )
+}
+
 const components: Components = {
   h1: ({ children }) => <h1 className="mt-6 mb-2 text-2xl leading-snug font-semibold text-text first:mt-0">{children}</h1>,
   h2: ({ children }) => <h2 className="mt-6 mb-2 text-xl leading-snug font-semibold text-text first:mt-0">{children}</h2>,
@@ -35,6 +64,17 @@ const components: Components = {
   // A fenced block is a <pre> wrapping the <code> above; the block scrolls
   // within itself rather than making the drawer scroll sideways.
   pre: ({ children }) => <pre className="mb-3 overflow-x-auto rounded-card bg-surface p-3 text-sm">{children}</pre>,
+  img: ({ src, alt }) => <ArticleImage src={typeof src === 'string' ? src : undefined} alt={alt} />,
+  // The wrapper, not the table, is what scrolls.
+  table: ({ children }) => (
+    <div className="mb-3 overflow-x-auto">
+      <table className="w-full border-collapse text-sm text-text">{children}</table>
+    </div>
+  ),
+  th: ({ children }) => (
+    <th className="border-b border-accent-soft px-2 py-1.5 text-left font-semibold whitespace-nowrap">{children}</th>
+  ),
+  td: ({ children }) => <td className="border-b border-accent-soft px-2 py-1.5 align-top">{children}</td>,
 }
 
 export function ArticleBody({ markdown }: { markdown: string }) {
