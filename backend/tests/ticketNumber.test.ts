@@ -1,9 +1,22 @@
 import { readFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
-import { afterAll, beforeEach, describe, expect, it } from 'vitest'
-import { closeOwnerPool, ownerPool, seedPlayer, seedWorkspace, truncateAll } from './helpers/db.ts'
+import { createServer } from 'node:http'
+import { afterAll, beforeEach, describe, expect, it, vi, beforeAll } from 'vitest'
+import { closeOwnerPool, ownerPool, seedBotConfig, seedPlayer, seedSession, seedWorkspace, truncateAll } from './helpers/db.ts'
+import { req as request } from './helpers/http.ts'
+import { app, mintToken } from './helpers/app.ts'
+import { closeDb } from '../src/shared/db/client.ts'
+import { closeSocketServer, createSocketServer } from '../src/shared/realtime/socketServer.ts'
+
+vi.mock('../src/shared/jobs/botTurns.ts', () => ({ enqueueBotTurn: vi.fn().mockResolvedValue(undefined) }))
+
+beforeAll(() => {
+  createSocketServer(createServer())
+})
 
 afterAll(async () => {
+  await closeSocketServer()
+  await closeDb()
   await closeOwnerPool()
 })
 
@@ -132,5 +145,77 @@ describe('ticket number backfill', () => {
         `create unique index conversation_workspace_number_uk on conversation using btree (workspace_id, number)`,
       )
     }
+  })
+})
+
+describe('ticket number allocation', () => {
+  async function setupPlayer() {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    await seedSession({ workspaceId, playerId })
+    await seedBotConfig({ workspaceId, isProvisioned: false })
+    const token = await mintToken({ workspace_id: workspaceId, player_id: playerId, external_player_id: 'p1' })
+    return { workspaceId, playerId, token }
+  }
+
+  async function numberOf(conversationId: string): Promise<number> {
+    const { rows } = await ownerPool.query<{ number: number }>(`select number from conversation where id = $1`, [
+      conversationId,
+    ])
+    return rows[0]!.number
+  }
+
+  it('numbers the auto-created conversation from the first message', async () => {
+    const { token } = await setupPlayer()
+    const res = await request(app)
+      .post('/surface/messages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ body: 'hello' })
+      .expect(200)
+    expect(await numberOf(res.body.conversation_id)).toBe(1)
+  })
+
+  it('numbers a new ticket, continuing the same workspace sequence', async () => {
+    const { workspaceId, token } = await setupPlayer()
+    const first = await request(app)
+      .post('/surface/messages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ body: 'hello' })
+      .expect(200)
+
+    await ownerPool.query(`update conversation set status = 'resolved' where id = $1`, [first.body.conversation_id])
+
+    const second = await request(app)
+      .post('/surface/new-ticket')
+      .set('Authorization', `Bearer ${token}`)
+      .send({})
+      .expect(201)
+
+    expect(await numberOf(second.body.conversation_id)).toBe(2)
+
+    const { rows } = await ownerPool.query<{ ticket_seq: number }>(
+      `select ticket_seq from workspace where id = $1`,
+      [workspaceId],
+    )
+    expect(rows[0]!.ticket_seq).toBe(2)
+  })
+
+  it('numbers two workspaces independently from 1', async () => {
+    const a = await setupPlayer()
+    const b = await setupPlayer()
+
+    const resA = await request(app)
+      .post('/surface/messages')
+      .set('Authorization', `Bearer ${a.token}`)
+      .send({ body: 'from a' })
+      .expect(200)
+    const resB = await request(app)
+      .post('/surface/messages')
+      .set('Authorization', `Bearer ${b.token}`)
+      .send({ body: 'from b' })
+      .expect(200)
+
+    expect(await numberOf(resA.body.conversation_id)).toBe(1)
+    expect(await numberOf(resB.body.conversation_id)).toBe(1)
   })
 })

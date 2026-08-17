@@ -1,3 +1,4 @@
+export { allocateTicketNumber } from './allocateTicketNumber.ts'
 export * from './postMessage.ts'
 export * from './resolutionAnswer.ts'
 export * from './resolutionMessages.ts'

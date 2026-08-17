@@ -4,7 +4,7 @@ import { MarkPlayerReadBody, SendMessageBody, type PlayerMessageView, type Playe
 
 type SendMessageBodyType = z.infer<typeof SendMessageBody>
 type MarkPlayerReadBodyType = z.infer<typeof MarkPlayerReadBody>
-import { postMessage, toAgentView, toPlayerView, type PostedMessageRow } from '../../domain/conversations/index.ts'
+import { allocateTicketNumber, postMessage, toAgentView, toPlayerView, type PostedMessageRow } from '../../domain/conversations/index.ts'
 import { applyBotTurn, assignOnHandoff, pickHandoffMessage, resolveBotConfig } from '../../domain/bot/index.ts'
 import { appendEvent } from '../../shared/events/appendEvent.ts'
 import { agent, conversation, message, session } from '../../shared/db/schema/index.ts'
@@ -74,9 +74,10 @@ export async function sendPlayerMessage(
         originatingSessionId = latestSession?.id ?? null
       }
 
+      const number = await allocateTicketNumber(tx, ctx.workspaceId)
       const [created] = await tx
         .insert(conversation)
-        .values({ workspaceId: ctx.workspaceId, playerId: ctx.playerId, sessionId: originatingSessionId })
+        .values({ workspaceId: ctx.workspaceId, playerId: ctx.playerId, sessionId: originatingSessionId, number })
         .returning({ id: conversation.id })
       if (!created) throw new Error('conversation insert returned nothing')
       conversationId = created.id

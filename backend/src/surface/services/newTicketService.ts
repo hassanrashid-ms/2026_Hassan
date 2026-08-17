@@ -2,6 +2,7 @@ import { and, desc, eq } from 'drizzle-orm'
 import type { z } from 'zod'
 import type { ConversationStatusValue, NewTicketBody } from '@support/types'
 import { appendEvent } from '../../shared/events/appendEvent.ts'
+import { allocateTicketNumber } from '../../domain/conversations/index.ts'
 import { conversation, player, session } from '../../shared/db/schema/index.ts'
 import { withWorkspace } from '../../shared/db/withWorkspace.ts'
 import { emitInboxChanged } from '../../shared/realtime/emit.ts'
@@ -79,9 +80,10 @@ export async function openNewTicket(ctx: PlayerContext, body: Body): Promise<Ope
       payload: { previous_status: latest.status, reason: 'new_ticket' },
     })
 
+    const number = await allocateTicketNumber(tx, ctx.workspaceId)
     const [created] = await tx
       .insert(conversation)
-      .values({ workspaceId: ctx.workspaceId, playerId: ctx.playerId, sessionId })
+      .values({ workspaceId: ctx.workspaceId, playerId: ctx.playerId, sessionId, number })
       .returning({ id: conversation.id, status: conversation.status })
     if (!created) throw new Error('openNewTicket: conversation insert returned nothing')
 
