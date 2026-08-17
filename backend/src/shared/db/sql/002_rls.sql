@@ -38,12 +38,14 @@ REVOKE UPDATE, DELETE ON event FROM PUBLIC;
 -- bot_config deliberately KEEPS UPDATE: its only writer is an
 -- INSERT ... ON CONFLICT (workspace_id) DO UPDATE, so revoking here would break
 -- the second save on every workspace. Do not "tidy" these two into symmetry.
---
--- form_answer gets the same REVOKE UPDATE treatment when that table lands. It
--- cannot be listed here yet: this file re-runs on every db:setup, and naming a
--- table that does not exist aborts setup for everyone.
 REVOKE UPDATE, DELETE ON change_log FROM support_app;
 REVOKE UPDATE, DELETE ON change_log FROM PUBLIC;
+
+-- 2c - form_answer is append-only: a correction is a NEW row for the same
+-- field_key and the newest created_at wins on read.
+-- DELETE is already granted nowhere, but revoked here too.
+REVOKE UPDATE, DELETE ON form_answer FROM support_app;
+REVOKE UPDATE, DELETE ON form_answer FROM PUBLIC;
 
 -- 2b - workspace and agent are the two unscoped tables, but they are NOT
 -- treated identically, and that asymmetry is intentional — do not "tidy" it

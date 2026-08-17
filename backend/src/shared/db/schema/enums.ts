@@ -32,3 +32,25 @@ export const articleState = pgEnum('article_state', ['draft', 'published', 'arch
 // thing to the player: a yes/no question is on screen.
 export const confirmPhase = pgEnum('confirm_phase', ['none', 'bot_article', 'agent_ask'])
 export const resolutionSource = pgEnum('resolution_source', ['bot', 'agent'])
+
+/**
+ * Seven declared, six usable. `time` is declared and unused, must not be offered by the form-builder.
+ * `attachment` is declared-but-inert until the `attachment` table exists.
+ * The order mirrors FORM_FIELD_TYPES in @support/types exactly.
+ */
+export const formFieldType = pgEnum('form_field_type', [
+  'short_text',
+  'long_text',
+  'number',
+  'date',
+  'time',
+  'choice',
+  'attachment',
+])
+
+/**
+ * `in_progress` is the only status with a null `submitted_at`.
+ * The other three are TERMINAL: `completed` = every field answered, `partial` = some,
+ * `skipped` = zero answers. Derived from answer rows at terminate time (slice 2).
+ */
+export const formStatus = pgEnum('form_status', ['in_progress', 'completed', 'partial', 'skipped'])

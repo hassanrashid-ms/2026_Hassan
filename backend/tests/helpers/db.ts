@@ -1,6 +1,12 @@
 import { randomUUID } from 'node:crypto'
-import { Pool } from 'pg'
+import pg, { Pool } from 'pg'
 import { getEnv } from '../../src/env.ts'
+
+// pg_enum.enumlabel is type `name`, so array_agg over it returns `name[]` (OID 1003).
+// The pg driver ships `noParse` for this OID, returning a raw postgres array string.
+// Register a proper array parser so query results come back as JS string[].
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+;(pg.types as any).setTypeParser(1003, (v: string) => (pg.types as any).arrayParser.create(v, (s: string) => s).parse())
 
 /**
  * Tests connect as the owner for setup and teardown: TRUNCATE is an owner-only
@@ -9,6 +15,10 @@ import { getEnv } from '../../src/env.ts'
 export const ownerPool = new Pool({ connectionString: getEnv().MIGRATION_DATABASE_URL, max: 4 })
 
 const SCOPED_TABLES = [
+  'form_answer',
+  'form_submission',
+  'form_version',
+  'form',
   'change_log',
   'bot_config',
   'event',
@@ -206,4 +216,90 @@ export async function seedBotConfig(args: {
     `insert into bot_config (workspace_id, is_provisioned, prompt, rules) values ($1, $2, $3, $4)`,
     [args.workspaceId, args.isProvisioned ?? false, args.prompt ?? null, args.rules ?? null],
   )
+}
+
+export async function seedForm(args: {
+  workspaceId: string
+  name?: string
+  archivedAt?: Date | null
+}): Promise<string> {
+  const id = randomUUID()
+  await ownerPool.query(
+    `insert into form (id, workspace_id, name, archived_at) values ($1, $2, $3, $4)`,
+    [id, args.workspaceId, args.name ?? `Form ${randomUUID().slice(0, 8)}`, args.archivedAt ?? null],
+  )
+  return id
+}
+
+export async function seedFormVersion(args: {
+  workspaceId: string
+  formId: string
+  version?: number
+  fields?: unknown[]
+  publishedAt?: Date | null
+}): Promise<string> {
+  const id = randomUUID()
+  await ownerPool.query(
+    `insert into form_version (id, workspace_id, form_id, version, fields, published_at)
+     values ($1, $2, $3, $4, $5::jsonb, $6)`,
+    [
+      id,
+      args.workspaceId,
+      args.formId,
+      args.version ?? 1,
+      JSON.stringify(args.fields ?? []),
+      args.publishedAt ?? null,
+    ],
+  )
+  return id
+}
+
+export async function seedFormSubmission(args: {
+  workspaceId: string
+  conversationId: string
+  formId: string
+  formVersion?: number
+  status?: 'in_progress' | 'completed' | 'partial' | 'skipped'
+  startedAt?: Date
+}): Promise<string> {
+  const id = randomUUID()
+  await ownerPool.query(
+    `insert into form_submission (id, workspace_id, conversation_id, form_id, form_version, status, started_at)
+     values ($1, $2, $3, $4, $5, $6, coalesce($7, now()))`,
+    [
+      id,
+      args.workspaceId,
+      args.conversationId,
+      args.formId,
+      args.formVersion ?? 1,
+      args.status ?? 'in_progress',
+      args.startedAt ?? null,
+    ],
+  )
+  return id
+}
+
+export async function seedFormAnswer(args: {
+  workspaceId: string
+  formSubmissionId: string
+  fieldKey: string
+  fieldType?: string
+  value?: unknown
+  createdAt?: Date
+}): Promise<string> {
+  const id = randomUUID()
+  await ownerPool.query(
+    `insert into form_answer (id, workspace_id, form_submission_id, field_key, field_type, value, created_at)
+     values ($1, $2, $3, $4, $5, $6::jsonb, coalesce($7, now()))`,
+    [
+      id,
+      args.workspaceId,
+      args.formSubmissionId,
+      args.fieldKey,
+      args.fieldType ?? 'short_text',
+      JSON.stringify(args.value ?? 'answer'),
+      args.createdAt ?? null,
+    ],
+  )
+  return id
 }

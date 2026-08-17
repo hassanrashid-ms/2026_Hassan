@@ -1,4 +1,5 @@
 import { afterAll, describe, expect, it } from 'vitest'
+import { FORM_FIELD_TYPES } from '@support/types'
 import { ownerPool, closeOwnerPool, seedWorkspace, seedPlayer } from './helpers/db.ts'
 
 const EXPECTED_TABLES = [
@@ -10,6 +11,10 @@ const EXPECTED_TABLES = [
   'conversation',
   'declared_field',
   'event',
+  'form',
+  'form_answer',
+  'form_submission',
+  'form_version',
   'intent',
   'message',
   'player',
@@ -43,7 +48,7 @@ async function columns(table: string): Promise<Map<string, { type: string; nulla
 describe('schema', () => {
   afterAll(closeOwnerPool)
 
-  it('creates exactly the sixteen tables of the SDK-path + articles-KB + bot-config subset', async () => {
+  it('creates exactly the twenty tables of the SDK-path + articles-KB + bot-config + forms subset', async () => {
     const { rows } = await ownerPool.query<{ table_name: string }>(
       `select table_name from information_schema.tables
         where table_schema = 'public' and table_type = 'BASE TABLE'
@@ -234,5 +239,110 @@ describe('schema', () => {
   it('adds a nullable conversation.resolution_source column', async () => {
     const cols = await columns('conversation')
     expect(cols.get('resolution_source')?.nullable).toBe(true)
+  })
+
+  it('declares form_field_type in the same order as FORM_FIELD_TYPES, and form_status with four values', async () => {
+    const { rows } = await ownerPool.query<{ typname: string; labels: string[] }>(
+      `select t.typname, array_agg(e.enumlabel order by e.enumsortorder) as labels
+         from pg_type t join pg_enum e on e.enumtypid = t.oid
+        where t.typname in ('form_field_type', 'form_status')
+        group by t.typname`,
+    )
+    const byName = new Map(rows.map((r) => [r.typname, r.labels]))
+    expect(byName.get('form_field_type')).toEqual([...FORM_FIELD_TYPES])
+    expect(byName.get('form_status')).toEqual(['in_progress', 'completed', 'partial', 'skipped'])
+  })
+
+  it('gives form a nullable created_by and archived_at, and both of its unique keys', async () => {
+    const cols = await columns('form')
+    expect(cols.get('name')?.nullable).toBe(false)
+    expect(cols.get('created_by')?.nullable).toBe(true)
+    expect(cols.get('archived_at')?.nullable).toBe(true)
+    expect(cols.get('created_at')?.nullable).toBe(false)
+
+    const { rows } = await ownerPool.query<{ indexdef: string }>(
+      `select indexdef from pg_indexes where tablename = 'form'`,
+    )
+    const defs = rows.map((r) => r.indexdef).join('\n')
+    expect(defs).toMatch(/UNIQUE.*\(workspace_id, name\)/)
+    expect(defs).toMatch(/UNIQUE.*\(workspace_id, id\)/)
+  })
+
+  it('stores form_version fields as jsonb defaulting to an empty array, with a nullable published_at', async () => {
+    const cols = await columns('form_version')
+    expect(cols.get('fields')?.type).toBe('jsonb')
+    expect(cols.get('fields')?.nullable).toBe(false)
+    expect(cols.get('fields')?.hasDefault).toBe(true)
+    expect(cols.get('version')?.nullable).toBe(false)
+    expect(cols.get('published_at')?.nullable).toBe(true)
+    expect(cols.get('published_by')?.nullable).toBe(true)
+
+    const { rows } = await ownerPool.query<{ indexdef: string }>(
+      `select indexdef from pg_indexes where tablename = 'form_version'`,
+    )
+    expect(rows.map((r) => r.indexdef).join('\n')).toMatch(/UNIQUE.*\(form_id, version\)/)
+  })
+
+  it('snapshots form_version as a plain int on form_submission and offers a form once per conversation', async () => {
+    const cols = await columns('form_submission')
+    expect(cols.get('form_version')?.type).toBe('integer')
+    expect(cols.get('form_version')?.nullable).toBe(false)
+    expect(cols.get('status')?.nullable).toBe(false)
+    expect(cols.get('status')?.hasDefault).toBe(true)
+    expect(cols.get('started_at')?.nullable).toBe(false)
+    expect(cols.get('submitted_at')?.nullable).toBe(true)
+
+    const { rows } = await ownerPool.query<{ indexdef: string }>(
+      `select indexdef from pg_indexes where tablename = 'form_submission'`,
+    )
+    const defs = rows.map((r) => r.indexdef).join('\n')
+    expect(defs).toMatch(/UNIQUE.*\(conversation_id, form_id\)/)
+    expect(defs).toMatch(/UNIQUE.*\(workspace_id, id\)/)
+  })
+
+  it('gives form_answer a NOT NULL value, a snapshotted field_type, and the newest-wins read index', async () => {
+    const cols = await columns('form_answer')
+    expect(cols.get('field_key')?.nullable).toBe(false)
+    expect(cols.get('field_type')?.nullable).toBe(false)
+    expect(cols.get('value')?.type).toBe('jsonb')
+    expect(cols.get('value')?.nullable).toBe(false)
+
+    const { rows } = await ownerPool.query<{ indexdef: string }>(
+      `select indexdef from pg_indexes where tablename = 'form_answer'`,
+    )
+    const defs = rows.map((r) => r.indexdef).join('\n')
+    expect(defs).toMatch(/\(form_submission_id, field_key, created_at\)/)
+    expect(defs).not.toMatch(/UNIQUE.*\(form_submission_id, field_key\)/)
+  })
+
+  it('carries a composite tenancy FK on every new scoped-to-scoped edge, all ON DELETE RESTRICT', async () => {
+    const { rows } = await ownerPool.query<{ conname: string; def: string }>(
+      `select c.conname, pg_get_constraintdef(c.oid) as def
+         from pg_constraint c
+         join pg_class t on t.oid = c.conrelid
+        where c.contype = 'f'
+          and (t.relname in ('form', 'form_version', 'form_submission', 'form_answer')
+               or c.conname = 'subintent_form_fk')`,
+    )
+    const byName = new Map(rows.map((r) => [r.conname, r.def]))
+    for (const [name, def] of byName) expect(def, name).toMatch(/ON DELETE RESTRICT/)
+
+    const composite = (def: string | undefined) => def !== undefined && /FOREIGN KEY \([^)]*workspace_id/.test(def)
+    expect(composite(byName.get('form_version_form_fk'))).toBe(true)
+    expect(composite(byName.get('form_submission_conversation_fk'))).toBe(true)
+    expect(composite(byName.get('form_submission_form_fk'))).toBe(true)
+    expect(composite(byName.get('form_answer_submission_fk'))).toBe(true)
+    expect(composite(byName.get('subintent_form_fk'))).toBe(true)
+
+    const versionFk = byName.get('form_submission_version_fk')
+    expect(versionFk).toMatch(/FOREIGN KEY \(form_id, form_version\)/)
+    expect(versionFk).toMatch(/REFERENCES form_version\(form_id, "?version"?\)/)
+  })
+
+  it('gives conversation the composite-FK parent key form_submission needs', async () => {
+    const { rows } = await ownerPool.query<{ indexdef: string }>(
+      `select indexdef from pg_indexes where tablename = 'conversation'`,
+    )
+    expect(rows.map((r) => r.indexdef).join('\n')).toMatch(/UNIQUE.*\(workspace_id, id\)/)
   })
 })

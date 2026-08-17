@@ -1,4 +1,4 @@
-import { foreignKey, index, integer, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
+import { foreignKey, index, integer, pgTable, text, timestamp, unique, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
 import {
   classificationSource,
   conversationPriority,
@@ -71,6 +71,9 @@ export const conversation = pgTable(
       columns: [t.workspaceId, t.subintentId],
       foreignColumns: [subintent.workspaceId, subintent.id],
     }).onDelete('restrict'),
+    // Composite-FK parent key: form_submission references (workspace_id, id) together,
+    // so a submission can never name another workspace's conversation.
+    unique('conversation_workspace_id_uk').on(t.workspaceId, t.id),
   ],
 )
 
