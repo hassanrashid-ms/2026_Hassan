@@ -22,6 +22,33 @@
   </head>
   <body>
     <div id="root"></div>
+    <!--
+      Paints the player surface's frame during HTML parse — before the entry
+      bundle is even requested, let alone downloaded, parsed and mounted. Without
+      it the first paint waits on ~79KB of gzipped JS plus a chunk round trip,
+      which on a phone or a tunnelled dev server is seconds of blank white page.
+
+      React's createRoot().render() replaces these children on mount, and the
+      Suspense fallback it renders first (SurfaceBootFrame) is deliberately the
+      same frame, so the handover is invisible.
+
+      Gated on the path because index.html is shared with the agent console, which
+      must not flash a player-styled purple skeleton on its way to /login.
+      Inline and synchronous on purpose: a deferred or external script would paint
+      no sooner than the bundle this exists to front-run.
+    -->
+    <script>
+      if (location.pathname.indexOf('/embed/support') === 0) {
+        document.getElementById('root').innerHTML =
+          '<div aria-hidden style="display:flex;flex-direction:column;height:100dvh;width:100%;overflow:hidden;background:#ffffff">' +
+          '<div style="height:38%;min-height:11rem;background:linear-gradient(to bottom right,#7c3aed,#5b21b6)"></div>' +
+          '<div style="display:flex;flex-direction:column;gap:0.75rem;padding:1.25rem 1rem">' +
+          '<div style="height:3.5rem;border-radius:1rem;background:#f5f3fd"></div>' +
+          '<div style="height:3.5rem;border-radius:1rem;background:#f5f3fd"></div>' +
+          '<div style="height:3.5rem;width:80%;border-radius:1rem;background:#f5f3fd"></div>' +
+          '</div></div>'
+      }
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

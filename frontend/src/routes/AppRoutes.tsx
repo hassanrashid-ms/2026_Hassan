@@ -1,6 +1,15 @@
 import { Suspense, lazy } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
-import { AgentLogin } from '../surfaces/agent-console/pages/AgentLogin.tsx'
+import { SurfaceBootFrame } from './SurfaceBootFrame.tsx'
+
+/*
+ * Lazy, because this is agent-console code and a static import puts it in the
+ * entry chunk — the one chunk every player waits on before anything can paint.
+ * A player never reaches /login.
+ */
+const AgentLogin = lazy(async () => ({
+  default: (await import('../surfaces/agent-console/pages/AgentLogin.tsx')).AgentLogin,
+}))
 
 /*
  * agent-console.css is scoped the same way webview.css is: lazily imported by
@@ -27,8 +36,23 @@ const KnowledgeBase = lazy(async () => ({
  * /embed/support route actually renders. Verified by there being two .css files
  * in dist/assets, not one.
  */
-const WebviewShell = lazy(async () => ({ default: (await import('../surfaces/webview/components/WebviewShell.tsx')).WebviewShell }))
-const SupportHome = lazy(async () => ({ default: (await import('../surfaces/webview/pages/SupportHome.tsx')).SupportHome }))
+const importSupportHome = () => import('../surfaces/webview/pages/SupportHome.tsx')
+
+const WebviewShell = lazy(async () => {
+  /*
+   * Start the index route's chunk NOW, in parallel, rather than waiting for the
+   * shell to render and request it.
+   *
+   * React.lazy only begins fetching when a component first renders, so shell and
+   * home used to download one after the other: entry chunk → shell → home, three
+   * serial round trips before a single pixel. On a phone or a tunnelled dev server
+   * that is seconds of white screen. Home is what every /embed/support visit
+   * renders next, so there is nothing speculative about fetching it alongside.
+   */
+  void importSupportHome()
+  return { default: (await import('../surfaces/webview/components/WebviewShell.tsx')).WebviewShell }
+})
+const SupportHome = lazy(async () => ({ default: (await importSupportHome()).SupportHome }))
 const SupportSearch = lazy(async () => ({ default: (await import('../surfaces/webview/pages/SupportSearch.tsx')).SupportSearch }))
 const SupportChat = lazy(async () => ({ default: (await import('../surfaces/webview/pages/SupportChat.tsx')).SupportChat }))
 
@@ -48,10 +72,7 @@ export function AppRoutes() {
       <Route
         path="/embed/support"
         element={
-          // The fallback is blank on purpose: the chunk is local and resolves in
-          // a frame or two, and a spinner that flashes for 30ms over a paused
-          // game is worse than nothing.
-          <Suspense fallback={null}>
+          <Suspense fallback={<SurfaceBootFrame />}>
             <WebviewShell />
           </Suspense>
         }
@@ -67,7 +88,16 @@ export function AppRoutes() {
 
       {/* agent-console routes */}
       <Route path="/" element={<Navigate to="/login" replace />} />
-      <Route path="/login" element={<AgentLogin />} />
+      <Route
+        path="/login"
+        element={
+          // Blank is right here and wrong for the webview: this is a desktop
+          // console on a warm connection, not a phone waiting on a paused game.
+          <Suspense fallback={null}>
+            <AgentLogin />
+          </Suspense>
+        }
+      />
       <Route
         path="/"
         element={
