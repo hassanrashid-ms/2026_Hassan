@@ -429,6 +429,41 @@ registry.registerPath({
   },
 })
 
+const AgentSubintentSchema = z
+  .object({ intent_name: z.string(), subintent_name: z.string() })
+  .nullable()
+
+const AgentConversationDetailSchema = z.object({
+  id: z.uuid(),
+  number: z.number().int(),
+  player: z.object({ id: z.uuid(), external_player_id: z.string() }),
+  status: z.enum(['new', 'bot_active', 'open', 'awaiting_player', 'escalated', 'resolved', 'closed']),
+  subintent: AgentSubintentSchema,
+  assigned_agent: z.object({ id: z.uuid(), display_name: z.string() }).nullable(),
+  resolution_source: z.enum(['bot', 'agent']).nullable(),
+  resolved_by_agent_name: z.string().nullable(),
+  created_at: z.string(),
+})
+
+registry.registerPath({
+  method: 'get',
+  path: '/agent/conversations/{id}',
+  summary: 'Agent Get Conversation',
+  description:
+    'One conversation header row by id. Serves tickets that are in neither the unassigned nor the mine list — resolved, or owned by another agent — which the inbox lists can never supply.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: {
+    params: z.object({ id: z.uuid() }),
+  },
+  responses: {
+    200: {
+      description: 'Conversation header',
+      content: { 'application/json': { schema: AgentConversationDetailSchema } },
+    },
+    404: { description: 'Not found, or not in this workspace' },
+  },
+})
+
 registry.registerPath({
   method: 'post',
   path: '/agent/conversations/{id}/claim',

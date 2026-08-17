@@ -6,6 +6,7 @@ import { emitInboxChanged, emitMessageToRooms, emitPhaseChanged } from '../../sh
 import { toAgentView, toPlayerView } from '../../domain/conversations/index.ts'
 import { claimConversation, getAgentConversationMessages, listConversations } from '../services/conversationsService.ts'
 import { askResolved } from '../services/resolutionService.ts'
+import { getConversationDetail } from '../services/conversationContextService.ts'
 
 const ConversationsQuery = z.object({ status: z.enum(['unassigned', 'mine']) })
 const ConversationIdParams = z.object({ id: z.uuid() })
@@ -79,4 +80,19 @@ export const askResolvedHandler: RequestHandler = async (req, res) => {
   emitPhaseChanged(getIo(), params.data.id, { conversation_id: params.data.id, confirm_phase: 'agent_ask' })
 
   res.status(200).json({ asked: true })
+}
+
+export const getConversationDetailHandler: RequestHandler = async (req, res) => {
+  const ctx = req.agent!
+  const params = ConversationIdParams.safeParse(req.params)
+  if (!params.success) {
+    sendError(res, 422, 'invalid_request', 'id must be a uuid.')
+    return
+  }
+  const detail = await getConversationDetail(ctx, params.data.id)
+  if (!detail) {
+    sendError(res, 404, 'not_found', 'Conversation not found.')
+    return
+  }
+  res.status(200).json(detail)
 }
