@@ -1,5 +1,10 @@
 import { and, asc, count, desc, eq, ne, sql } from 'drizzle-orm'
-import type { AgentConversationDetail, AgentPlayerStateView, AgentTicketSummary } from '@support/types'
+import type {
+  AgentConversationContextResponse,
+  AgentConversationDetail,
+  AgentPlayerStateView,
+  AgentTicketSummary,
+} from '@support/types'
 import {
   agent,
   conversation,
@@ -217,4 +222,48 @@ export async function getTicketHistory(
   }))
 
   return { tickets, totalTickets: rows[0]?.totalCount ?? 0, totalReopened }
+}
+
+/**
+ * The whole rail in one payload. One endpoint rather than two, because the rail
+ * is one thing, always fetched together, and its two halves have the same cache
+ * lifetime.
+ *
+ * `null` is not found or not this workspace — RLS makes those indistinguishable
+ * and the controller returns 404 for both.
+ */
+export async function getConversationContext(
+  ctx: AgentContext,
+  conversationId: string,
+): Promise<AgentConversationContextResponse | null> {
+  return withWorkspace(ctx.workspaceId, async (tx) => {
+    const [current] = await tx
+      .select({
+        sessionId: conversation.sessionId,
+        playerId: player.id,
+        firstSeenAt: player.firstSeenAt,
+      })
+      .from(conversation)
+      .innerJoin(player, eq(player.id, conversation.playerId))
+      .where(eq(conversation.id, conversationId))
+      .limit(1)
+
+    if (!current) return null
+
+    const playerState = await getPlayerStateView(tx, ctx.workspaceId, current.sessionId)
+    const history = await getTicketHistory(tx, {
+      playerId: current.playerId,
+      excludeConversationId: conversationId,
+    })
+
+    return {
+      player_state: playerState,
+      tickets: history.tickets,
+      summary: {
+        total_tickets: history.totalTickets,
+        total_reopened: history.totalReopened,
+        first_contact_at: current.firstSeenAt.toISOString(),
+      },
+    }
+  })
 }

@@ -1,8 +1,16 @@
 import { randomUUID } from 'node:crypto'
-import { afterAll, beforeEach, describe, expect, it } from 'vitest'
+import { createServer } from 'node:http'
+import express from 'express'
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { req as request } from './helpers/http.ts'
 import { closeDb } from '../src/shared/db/client.ts'
 import { withWorkspace } from '../src/shared/db/withWorkspace.ts'
 import { getPlayerStateView, getTicketHistory } from '../src/agent/services/conversationContextService.ts'
+import { requireAgentSession } from '../src/shared/middleware/requireAgentSession.ts'
+import { errorMiddleware } from '../src/errors.ts'
+import { signAgentSession } from '../src/shared/auth/agentSession.ts'
+import { closeSocketServer, createSocketServer } from '../src/shared/realtime/socketServer.ts'
+import { conversationsRouter } from '../src/agent/routers/conversationsRouter.ts'
 import {
   closeOwnerPool,
   ownerPool,
@@ -16,10 +24,34 @@ import {
   truncateAll,
 } from './helpers/db.ts'
 
+const app = express()
+app.use(express.json())
+app.use(requireAgentSession, conversationsRouter)
+app.use(errorMiddleware)
+
+beforeAll(() => {
+  createSocketServer(createServer())
+})
+
 afterAll(async () => {
+  await closeSocketServer()
   await closeDb()
   await closeOwnerPool()
 })
+
+async function setupAgent(workspaceId: string) {
+  const { rows } = await ownerPool.query<{ id: string }>(
+    `insert into agent (email, display_name) values ($1, 'Agent One') returning id`,
+    [`a-${workspaceId.slice(0, 8)}@example.test`],
+  )
+  const agentId = rows[0]!.id
+  await ownerPool.query(`insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`, [
+    workspaceId,
+    agentId,
+  ])
+  const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId })
+  return { agentId, token }
+}
 
 beforeEach(truncateAll)
 
@@ -256,5 +288,111 @@ describe('getTicketHistory', () => {
 
     expect(result.tickets).toEqual([])
     expect(result.totalTickets).toBe(0)
+  })
+})
+
+describe('GET /agent/conversations/:id/context', () => {
+  it('returns player state, tickets and summary in one payload', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    await ownerPool.query(`update player set first_seen_at = $1 where id = $2`, [
+      new Date('2025-11-02T08:30:00Z'),
+      playerId,
+    ])
+    const sessionId = await seedSession({ workspaceId, playerId })
+    await seedDeclaredFields(workspaceId, ['player_level'])
+    await seedSnapshot({ workspaceId, sessionId, declared: { player_level: 42 }, raw: { fps: 58 } })
+
+    const past = await seedConversation({ workspaceId, playerId, createdAt: new Date('2026-01-01T00:00:00Z') })
+    await seedReopen(workspaceId, past, 2)
+    const current = await seedConversation({
+      workspaceId,
+      playerId,
+      sessionId,
+      createdAt: new Date('2026-02-01T00:00:00Z'),
+    })
+    const { token } = await setupAgent(workspaceId)
+
+    const res = await request(app)
+      .get(`/conversations/${current}/context`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+
+    expect(res.body.player_state.status).toBe('captured')
+    expect(res.body.player_state.declared[0]).toMatchObject({ key: 'player_level', value: 42 })
+    expect(res.body.player_state.raw).toEqual({ fps: 58 })
+    expect(res.body.tickets).toHaveLength(1)
+    expect(res.body.tickets[0]).toMatchObject({ id: past, reopen_count: 2 })
+    expect(res.body.summary).toEqual({
+      total_tickets: 1,
+      total_reopened: 2,
+      first_contact_at: '2025-11-02T08:30:00.000Z',
+    })
+  })
+
+  it('returns 200 with no_session when the conversation has no session', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const current = await seedConversation({ workspaceId, playerId })
+    const { token } = await setupAgent(workspaceId)
+
+    const res = await request(app)
+      .get(`/conversations/${current}/context`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+
+    expect(res.body.player_state).toEqual({ status: 'no_session' })
+    expect(res.body.tickets).toEqual([])
+    expect(res.body.summary.total_tickets).toBe(0)
+  })
+
+  it('returns 200 with missing when the provider returned nothing usable', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const sessionId = await seedSession({ workspaceId, playerId })
+    await seedSnapshot({ workspaceId, sessionId, isMissing: true })
+    const current = await seedConversation({ workspaceId, playerId, sessionId })
+    const { token } = await setupAgent(workspaceId)
+
+    const res = await request(app)
+      .get(`/conversations/${current}/context`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+
+    expect(res.body.player_state).toEqual({ status: 'missing' })
+  })
+
+  it('returns 200 with not_captured when the session wrote no snapshot', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const sessionId = await seedSession({ workspaceId, playerId })
+    const current = await seedConversation({ workspaceId, playerId, sessionId })
+    const { token } = await setupAgent(workspaceId)
+
+    const res = await request(app)
+      .get(`/conversations/${current}/context`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+
+    expect(res.body.player_state).toEqual({ status: 'not_captured' })
+  })
+
+  it('returns 404 for a conversation in another workspace', async () => {
+    const mine = await seedWorkspace()
+    const theirs = await seedWorkspace()
+    const theirPlayer = await seedPlayer(theirs)
+    const theirConversation = await seedConversation({ workspaceId: theirs, playerId: theirPlayer })
+    const { token } = await setupAgent(mine)
+
+    await request(app)
+      .get(`/conversations/${theirConversation}/context`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(404)
+  })
+
+  it('returns 422 for an id that is not a uuid', async () => {
+    const workspaceId = await seedWorkspace()
+    const { token } = await setupAgent(workspaceId)
+    await request(app).get('/conversations/not-a-uuid/context').set('Authorization', `Bearer ${token}`).expect(422)
   })
 })

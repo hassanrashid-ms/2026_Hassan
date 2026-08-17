@@ -464,6 +464,68 @@ registry.registerPath({
   },
 })
 
+const AgentPlayerStateSchema = z.union([
+  z.object({ status: z.literal('no_session') }),
+  z.object({ status: z.literal('not_captured') }),
+  z.object({ status: z.literal('missing') }),
+  z.object({
+    status: z.literal('captured'),
+    declared: z.array(
+      z.object({
+        key: z.string(),
+        label: z.string(),
+        type: z.enum(['string', 'number', 'boolean', 'timestamp']),
+        value: z.unknown(),
+      }),
+    ),
+    raw: z.record(z.string(), z.unknown()),
+    degraded_reason: z.string().nullable(),
+    captured_at: z.string(),
+  }),
+])
+
+const AgentTicketSummarySchema = z.object({
+  id: z.uuid(),
+  number: z.number().int(),
+  created_at: z.string(),
+  status: z.enum(['new', 'bot_active', 'open', 'awaiting_player', 'escalated', 'resolved', 'closed']),
+  subintent: AgentSubintentSchema,
+  resolution_source: z.enum(['bot', 'agent']).nullable(),
+  resolved_by_agent_name: z.string().nullable(),
+  reopen_count: z.number().int(),
+})
+
+registry.registerPath({
+  method: 'get',
+  path: '/agent/conversations/{id}/context',
+  summary: 'Agent Conversation Context',
+  description:
+    "The context rail in one payload: the player-state snapshot captured when this ticket was raised, the player's other tickets in this workspace (newest first, capped at 20), and totals. All four player_state cases return 200 — missing player state is a state, not an error. `raw` is PII and is returned in full, uncollapsed by the API.",
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: {
+    params: z.object({ id: z.uuid() }),
+  },
+  responses: {
+    200: {
+      description: 'Context rail payload',
+      content: {
+        'application/json': {
+          schema: z.object({
+            player_state: AgentPlayerStateSchema,
+            tickets: z.array(AgentTicketSummarySchema),
+            summary: z.object({
+              total_tickets: z.number().int(),
+              total_reopened: z.number().int(),
+              first_contact_at: z.string(),
+            }),
+          }),
+        },
+      },
+    },
+    404: { description: 'Not found, or not in this workspace' },
+  },
+})
+
 registry.registerPath({
   method: 'post',
   path: '/agent/conversations/{id}/claim',
