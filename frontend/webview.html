@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <meta charset="utf-8" />
+    <!--
+      viewport-fit=cover lets the page draw under the notch and home indicator,
+      which is also what makes env(safe-area-inset-*) resolve to anything other
+      than 0. WebviewShell's safe-area padding is inert without it.
+    -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <title>Support</title>
+    <style>
+      html,
+      body,
+      #root {
+        background: transparent !important;
+      }
+    </style>
+  </head>
+  <body>
+    <!--
+      The player surface's own entry document, served for every /embed/support
+      path. Separate from index.html so the shell and home screen can be STATIC
+      imports of this entry: that is what lets Vite emit modulepreload links for
+      them here, so they download in parallel with the entry bundle instead of
+      being discovered only after it executes. It is also what makes the
+      console/webview split structural — no agent-console module is reachable
+      from this document at all, so Tailwind's preflight cannot cross over.
+    -->
+    <div id="root">
+      <!--
+        Painted during HTML parse, before a single byte of JS is requested. React
+        replaces it on mount. No path gate is needed any more: this document is
+        only ever served for the player surface.
+      -->
+      <div aria-hidden style="display:flex;flex-direction:column;height:100dvh;width:100%;overflow:hidden;background:#ffffff">
+        <div style="height:38%;min-height:11rem;background:linear-gradient(to bottom right,#7c3aed,#5b21b6)"></div>
+        <div style="display:flex;flex-direction:column;gap:0.75rem;padding:1.25rem 1rem">
+          <div style="height:3.5rem;border-radius:1rem;background:#f5f3fd"></div>
+          <div style="height:3.5rem;border-radius:1rem;background:#f5f3fd"></div>
+          <div style="height:3.5rem;width:80%;border-radius:1rem;background:#f5f3fd"></div>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/surfaces/webview/main.tsx"></script>
+  </body>
+</html>
