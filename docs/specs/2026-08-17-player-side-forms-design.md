@@ -58,8 +58,16 @@ written**:
 - `packages/types/src/forms.ts` — `formFieldSchema`, `formFieldsSchema`, `formAnswerValueSchemas`
 
 Every column, constraint, composite FK and design rationale in that document stands. Its migration
-ordering (§Migration steps 1–5, 8) stands. Its verification sections
+**ordering** (§Migration steps 1–5, 8) stands. Its verification sections
 (`tests/forms.dataModel.test.ts`, `tests/forms.types.test.ts`) stand.
+
+**One line of it is stale.** It says *"`drizzle-kit` push via `pnpm db:setup`"*. That is no longer
+how this repo migrates: `backend/src/shared/db/setup.ts:22` records that push was deliberately
+removed, and `setup.ts:35` applies committed migrations through drizzle-orm's `migrate()`. Slice 1
+uses `pnpm db:generate` and commits a hand-ordered `0004_forms.sql`, following the `0002`/`0003`
+precedent. The ordering constraint is unchanged and matters more under a committed migration than it
+did under push — the statements run in file order, so the file must be reordered by hand after
+generation.
 
 Three amendments follow. Nothing else in that spec changes.
 
