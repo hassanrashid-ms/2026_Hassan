@@ -101,11 +101,20 @@ export async function seedConversation(args: {
   workspaceId: string
   playerId: string
   sessionId?: string | null
+  createdAt?: Date
 }): Promise<string> {
   const id = randomUUID()
+  // Bumped the same way the request path bumps it, so a test that seeds three
+  // conversations sees #1, #2, #3 rather than three rows fighting over one number.
+  const { rows } = await ownerPool.query<{ ticket_seq: number }>(
+    `update workspace set ticket_seq = ticket_seq + 1 where id = $1 returning ticket_seq`,
+    [args.workspaceId],
+  )
+  const number = rows[0]!.ticket_seq
   await ownerPool.query(
-    `insert into conversation (id, workspace_id, player_id, session_id) values ($1, $2, $3, $4)`,
-    [id, args.workspaceId, args.playerId, args.sessionId ?? null],
+    `insert into conversation (id, workspace_id, player_id, session_id, number, created_at)
+     values ($1, $2, $3, $4, $5, coalesce($6, now()))`,
+    [id, args.workspaceId, args.playerId, args.sessionId ?? null, number, args.createdAt ?? null],
   )
   return id
 }

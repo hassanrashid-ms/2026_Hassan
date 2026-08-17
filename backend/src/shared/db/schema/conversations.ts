@@ -53,11 +53,19 @@ export const conversation = pgTable(
      *  assignment per spec §10, then cleared. */
     resolutionSource: resolutionSource('resolution_source'),
     messageSeq: integer('message_seq').notNull().default(0),
+    /**
+     * The per-workspace ticket number the agent console displays as #1042.
+     * No default: it is allocated by allocateTicketNumber() in the same
+     * transaction as this insert, and a default would hide a creation path
+     * that forgot to.
+     */
+    number: integer('number').notNull(),
     createdAt: timestamp('created_at', tz).notNull().defaultNow(),
   },
   (t) => [
     index('conversation_workspace_player_idx').on(t.workspaceId, t.playerId),
     index('conversation_workspace_subintent_idx').on(t.workspaceId, t.subintentId),
+    uniqueIndex('conversation_workspace_number_uk').on(t.workspaceId, t.number),
     foreignKey({
       name: 'conversation_subintent_fk',
       columns: [t.workspaceId, t.subintentId],

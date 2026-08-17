@@ -62,6 +62,14 @@ REVOKE UPDATE, DELETE ON change_log FROM PUBLIC;
 --   column-scoped grants is future work once the console ships, not now.
 REVOKE INSERT, UPDATE ON workspace FROM support_app;
 
+-- ...with one column-scoped exception. conversation.number is allocated on the
+-- request path (allocateTicketNumber), which needs to bump this counter and
+-- nothing else on the row. Granting the column rather than the table keeps
+-- secret_hash unwritable by support_app, which is the whole point of the
+-- REVOKE above. This is the same narrowing named as future work for `agent`,
+-- applied one table over.
+GRANT UPDATE (ticket_seq) ON workspace TO support_app;
+
 -- 3 - One identical policy per scoped table. "Scoped" is defined structurally
 -- — any base table in public with a workspace_id column — rather than as a
 -- hand-maintained literal list, so a future table can never be born without

@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm'
-import { customType, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
+import { customType, integer, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
 import { agentStatus, workspaceRole } from './enums.ts'
 
 /** Case-insensitive email, per the schema spec. Requires the citext extension. */
@@ -14,6 +14,14 @@ export const workspace = pgTable('workspace', {
   slug: text('slug').notNull().unique(),
   /** sha256 of the random half of the workspace secret. See auth/workspaceSecret.ts. */
   secretHash: text('secret_hash').notNull(),
+  /**
+   * The per-workspace ticket counter. Bumped inside the conversation-insert
+   * transaction by allocateTicketNumber(), exactly as message_seq is bumped by
+   * postMessage(). Not a bigserial: a global sequence would make #1042 a count
+   * of every ticket across every tenant, so each workspace would see a sparse
+   * sequence and could infer its neighbours' volume from the gaps.
+   */
+  ticketSeq: integer('ticket_seq').notNull().default(0),
   /** Set to refuse token minting without deleting anything. */
   disabledAt: timestamp('disabled_at', tz),
   createdAt: timestamp('created_at', tz).notNull().defaultNow(),

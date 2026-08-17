@@ -272,7 +272,7 @@ describe('WITH CHECK on every scoped table', () => {
       [SESSION_A, WS_A, PLAYER_A],
     )
     const { rows } = await ownerPool.query<{ id: string }>(
-      `insert into conversation (workspace_id, player_id, session_id) values ($1, $2, $3) returning id`,
+      `insert into conversation (workspace_id, player_id, session_id, number) values ($1, $2, $3, 1) returning id`,
       [WS_A, PLAYER_A, SESSION_A],
     )
     conversationAId = rows[0]!.id
@@ -293,7 +293,7 @@ describe('WITH CHECK on every scoped table', () => {
       },
       {
         table: 'conversation',
-        sql: `insert into conversation (workspace_id, player_id) values ($1, $2)`,
+        sql: `insert into conversation (workspace_id, player_id, number) values ($1, $2, 1)`,
         params: [WS_B, PLAYER_A],
       },
       {
