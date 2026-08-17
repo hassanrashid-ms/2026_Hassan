@@ -25,14 +25,16 @@ vi.mock('@/surfaces/webview/hooks/useArticleDetail', () => ({
 }))
 
 describe('ArticleSheet body', () => {
-  it('renders the body as formatted markdown, not as raw syntax', () => {
+  // ArticleBody is lazy — it must not sit on the home screen's critical path —
+  // so the assertions wait for the chunk rather than reading the first frame.
+  it('renders the body as formatted markdown, not as raw syntax', async () => {
     render(
       <SupportContextProvider value={{ boot: null, data: null, error: null, retry: vi.fn() }}>
         <ArticleSheet articleId="art-1" onClose={vi.fn()} />
       </SupportContextProvider>,
     )
 
-    expect(screen.getByRole('heading', { name: 'When we refund' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'When we refund' })).toBeInTheDocument()
     expect(screen.getByText('30 days').tagName).toBe('STRONG')
     // The bug this closes: players used to see the literal markers.
     expect(screen.queryByText(/\*\*/)).not.toBeInTheDocument()
