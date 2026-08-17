@@ -1,9 +1,10 @@
-import { and, asc, eq } from 'drizzle-orm'
-import type { AgentConversationDetail, AgentPlayerStateView } from '@support/types'
+import { and, asc, count, desc, eq, ne, sql } from 'drizzle-orm'
+import type { AgentConversationDetail, AgentPlayerStateView, AgentTicketSummary } from '@support/types'
 import {
   agent,
   conversation,
   declaredField,
+  event,
   intent,
   player,
   playerStateSnapshot,
@@ -134,4 +135,86 @@ export async function getPlayerStateView(
     degraded_reason: snapshot.degradedReason,
     captured_at: snapshot.capturedAt.toISOString(),
   }
+}
+
+const TICKET_CAP = 20
+
+export type TicketHistory = {
+  tickets: AgentTicketSummary[]
+  totalTickets: number
+  totalReopened: number
+}
+
+/**
+ * This player's other conversations in this workspace, newest first, capped at
+ * 20 with the true count alongside.
+ *
+ * Two queries regardless of ticket count. listConversations() runs one preview
+ * query per row and says so in a comment; this does not repeat that. The total
+ * rides along on the first query as a window count — Postgres computes window
+ * functions before LIMIT, so it counts the whole population, not the page.
+ *
+ * The message table is never touched, so there is no path by which an internal
+ * note reaches this response. toAgentView is not involved.
+ */
+export async function getTicketHistory(
+  tx: Tx,
+  args: { playerId: string; excludeConversationId: string },
+): Promise<TicketHistory> {
+  const rows = await tx
+    .select({
+      id: conversation.id,
+      number: conversation.number,
+      createdAt: conversation.createdAt,
+      status: conversation.status,
+      resolutionSource: conversation.resolutionSource,
+      intentName: intent.name,
+      subintentName: subintent.name,
+      assignedAgentName: agent.displayName,
+      totalCount: sql<number>`count(*) over ()`.mapWith(Number),
+    })
+    .from(conversation)
+    .leftJoin(subintent, eq(subintent.id, conversation.subintentId))
+    .leftJoin(intent, eq(intent.id, subintent.intentId))
+    .leftJoin(agent, eq(agent.id, conversation.assignedAgentId))
+    .where(and(eq(conversation.playerId, args.playerId), ne(conversation.id, args.excludeConversationId)))
+    .orderBy(desc(conversation.createdAt))
+    .limit(TICKET_CAP)
+
+  const reopens = await tx
+    .select({ conversationId: event.conversationId, reopens: count() })
+    .from(event)
+    .innerJoin(conversation, eq(conversation.id, event.conversationId))
+    .where(
+      and(
+        eq(event.type, 'conversation_reopened'),
+        eq(conversation.playerId, args.playerId),
+        ne(conversation.id, args.excludeConversationId),
+      ),
+    )
+    .groupBy(event.conversationId)
+
+  const reopenById = new Map<string, number>()
+  let totalReopened = 0
+  for (const row of reopens) {
+    if (!row.conversationId) continue
+    reopenById.set(row.conversationId, row.reopens)
+    totalReopened += row.reopens
+  }
+
+  const tickets: AgentTicketSummary[] = rows.map((row) => ({
+    id: row.id,
+    number: row.number,
+    created_at: row.createdAt.toISOString(),
+    status: row.status,
+    subintent:
+      row.subintentName && row.intentName
+        ? { intent_name: row.intentName, subintent_name: row.subintentName }
+        : null,
+    resolution_source: row.resolutionSource,
+    resolved_by_agent_name: row.resolutionSource === 'agent' ? row.assignedAgentName : null,
+    reopen_count: reopenById.get(row.id) ?? 0,
+  }))
+
+  return { tickets, totalTickets: rows[0]?.totalCount ?? 0, totalReopened }
 }

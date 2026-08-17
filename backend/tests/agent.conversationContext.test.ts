@@ -2,13 +2,16 @@ import { randomUUID } from 'node:crypto'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { closeDb } from '../src/shared/db/client.ts'
 import { withWorkspace } from '../src/shared/db/withWorkspace.ts'
-import { getPlayerStateView } from '../src/agent/services/conversationContextService.ts'
+import { getPlayerStateView, getTicketHistory } from '../src/agent/services/conversationContextService.ts'
 import {
   closeOwnerPool,
   ownerPool,
+  seedConversation,
   seedDeclaredFields,
+  seedIntent,
   seedPlayer,
   seedSession,
+  seedSubintent,
   seedWorkspace,
   truncateAll,
 } from './helpers/db.ts'
@@ -125,5 +128,133 @@ describe('getPlayerStateView', () => {
 
     const view = await withWorkspace(workspaceId, (tx) => getPlayerStateView(tx, workspaceId, thisSession))
     expect(view).toEqual({ status: 'not_captured' })
+  })
+})
+
+async function seedReopen(workspaceId: string, conversationId: string, times: number): Promise<void> {
+  for (let i = 0; i < times; i++) {
+    await ownerPool.query(
+      `insert into event (workspace_id, type, conversation_id, actor_type) values ($1, 'conversation_reopened', $2, 'player')`,
+      [workspaceId, conversationId],
+    )
+  }
+}
+
+describe('getTicketHistory', () => {
+  it('excludes the current conversation and orders newest first', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const older = await seedConversation({ workspaceId, playerId, createdAt: new Date('2026-01-01T00:00:00Z') })
+    const newer = await seedConversation({ workspaceId, playerId, createdAt: new Date('2026-02-01T00:00:00Z') })
+    const current = await seedConversation({ workspaceId, playerId, createdAt: new Date('2026-03-01T00:00:00Z') })
+
+    const result = await withWorkspace(workspaceId, (tx) =>
+      getTicketHistory(tx, { playerId, excludeConversationId: current }),
+    )
+
+    expect(result.tickets.map((t) => t.id)).toEqual([newer, older])
+    expect(result.totalTickets).toBe(2)
+  })
+
+  it('numbers each ticket and carries its status', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const first = await seedConversation({ workspaceId, playerId, createdAt: new Date('2026-01-01T00:00:00Z') })
+    const current = await seedConversation({ workspaceId, playerId, createdAt: new Date('2026-02-01T00:00:00Z') })
+    await ownerPool.query(`update conversation set status = 'closed' where id = $1`, [first])
+
+    const result = await withWorkspace(workspaceId, (tx) =>
+      getTicketHistory(tx, { playerId, excludeConversationId: current }),
+    )
+
+    expect(result.tickets[0]).toMatchObject({ id: first, number: 1, status: 'closed' })
+    expect(typeof result.tickets[0]!.created_at).toBe('string')
+  })
+
+  it('counts reopen events per ticket and totals them', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const a = await seedConversation({ workspaceId, playerId, createdAt: new Date('2026-01-01T00:00:00Z') })
+    const b = await seedConversation({ workspaceId, playerId, createdAt: new Date('2026-02-01T00:00:00Z') })
+    const current = await seedConversation({ workspaceId, playerId, createdAt: new Date('2026-03-01T00:00:00Z') })
+    await seedReopen(workspaceId, a, 2)
+    await seedReopen(workspaceId, b, 1)
+    await seedReopen(workspaceId, current, 5) // the current one never counts
+
+    const result = await withWorkspace(workspaceId, (tx) =>
+      getTicketHistory(tx, { playerId, excludeConversationId: current }),
+    )
+
+    const byId = new Map(result.tickets.map((t) => [t.id, t.reopen_count]))
+    expect(byId.get(a)).toBe(2)
+    expect(byId.get(b)).toBe(1)
+    expect(result.totalReopened).toBe(3)
+  })
+
+  it('reports zero reopens for a ticket with no events', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const a = await seedConversation({ workspaceId, playerId, createdAt: new Date('2026-01-01T00:00:00Z') })
+    const current = await seedConversation({ workspaceId, playerId, createdAt: new Date('2026-02-01T00:00:00Z') })
+
+    const result = await withWorkspace(workspaceId, (tx) =>
+      getTicketHistory(tx, { playerId, excludeConversationId: current }),
+    )
+
+    expect(result.tickets.find((t) => t.id === a)!.reopen_count).toBe(0)
+    expect(result.totalReopened).toBe(0)
+  })
+
+  it('caps the list at 20 while total_tickets holds the true count', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    for (let i = 0; i < 25; i++) {
+      await seedConversation({
+        workspaceId,
+        playerId,
+        createdAt: new Date(Date.UTC(2026, 0, i + 1)),
+      })
+    }
+    const current = await seedConversation({ workspaceId, playerId, createdAt: new Date('2026-06-01T00:00:00Z') })
+
+    const result = await withWorkspace(workspaceId, (tx) =>
+      getTicketHistory(tx, { playerId, excludeConversationId: current }),
+    )
+
+    expect(result.tickets).toHaveLength(20)
+    expect(result.totalTickets).toBe(25)
+    expect(result.tickets[0]!.number).toBe(25)
+  })
+
+  it('names the intent and subintent when a past ticket was classified', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const intentId = await seedIntent(workspaceId, 'Account')
+    const subintentId = await seedSubintent({ workspaceId, intentId, name: 'Lost progress' })
+    const past = await seedConversation({ workspaceId, playerId, createdAt: new Date('2026-01-01T00:00:00Z') })
+    const current = await seedConversation({ workspaceId, playerId, createdAt: new Date('2026-02-01T00:00:00Z') })
+    await ownerPool.query(`update conversation set subintent_id = $1 where id = $2`, [subintentId, past])
+
+    const result = await withWorkspace(workspaceId, (tx) =>
+      getTicketHistory(tx, { playerId, excludeConversationId: current }),
+    )
+
+    expect(result.tickets[0]!.subintent).toEqual({ intent_name: 'Account', subintent_name: 'Lost progress' })
+  })
+
+  it('does not reach across workspaces', async () => {
+    const wsA = await seedWorkspace()
+    const wsB = await seedWorkspace()
+    const playerA = await seedPlayer(wsA, 'shared-external-id')
+    const playerB = await seedPlayer(wsB, 'shared-external-id')
+    await seedConversation({ workspaceId: wsB, playerId: playerB, createdAt: new Date('2026-01-01T00:00:00Z') })
+    const current = await seedConversation({ workspaceId: wsA, playerId: playerA })
+
+    const result = await withWorkspace(wsA, (tx) =>
+      getTicketHistory(tx, { playerId: playerA, excludeConversationId: current }),
+    )
+
+    expect(result.tickets).toEqual([])
+    expect(result.totalTickets).toBe(0)
   })
 })
