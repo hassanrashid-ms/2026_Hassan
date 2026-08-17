@@ -422,7 +422,7 @@ transcript
   -- connecting you to support --
 
 pinned card
-  2 of 4
+  < Back            2 of 4
   When did this happen?
   [ 2026-08-16 ]          Next >
   Skip and talk to an agent
@@ -432,6 +432,19 @@ composer
 ```
 
 - **One field at a time**, with a `2 of 4` counter.
+- **Back**, on every question but the first. It returns to the previous question with that field's
+  current answer prefilled, read from the answers the card already holds. Changing it and pressing
+  **Next** writes a *second* `form_answer` row — never an update, per
+  `REVOKE UPDATE ON form_answer` — and the newest `created_at` wins on read. That second write is
+  what sets `is_correction: true` on its `form_field_answered` event.
+
+  Back is not optional politeness. A player who mistypes a receipt ID on a four-question form has no
+  other recovery: they would have to finish, reach the agent, and be asked for it again — the exact
+  round trip the form exists to remove.
+
+  Pressing **Next** without changing a prefilled answer writes nothing. Re-submitting an identical
+  value would inflate the correction rate with events that record no correction, and the append-only
+  table would grow rows that differ only by timestamp.
 - **"Skip and talk to an agent"** — the product spec's own button label (page 23, note 3). Present on
   every question. *"The skip option cannot be removed — a form must never block reaching support."*
 - **The composer is disabled while the card is showing.** Same treatment the resolution banner
@@ -530,6 +543,12 @@ follow-up.
 - A reconnect mid-form resumes at the correct question with earlier answers present.
 - Skip is present on every question, including the first and the last.
 - `choice` renders as buttons; a required field does not block **Next**.
+- **Back** is absent on question one and present on every other, and returns with the current answer
+  prefilled.
+- Changing a prefilled answer and pressing **Next** posts a new answer; pressing **Next** on an
+  unchanged prefilled answer posts nothing.
+- Going back and forward does not advance the counter past the furthest question reached, and does
+  not re-ask a question already answered on the way forward.
 
 ---
 
