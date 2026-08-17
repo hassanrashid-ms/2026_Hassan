@@ -67,6 +67,11 @@ export type AgentTicketSummary = {
  */
 export type AgentConversationContextResponse = {
   player_state: AgentPlayerStateView
+  /**
+   * Includes the current conversation, so the rail can highlight the row the
+   * agent just clicked instead of dropping it. Newest first, capped at 20 rows
+   * counting that one. `summary.total_tickets` still excludes it.
+   */
   tickets: AgentTicketSummary[]
   summary: {
     /** Excludes the current conversation. */

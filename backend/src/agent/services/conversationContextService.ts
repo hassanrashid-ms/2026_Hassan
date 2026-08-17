@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, ne, sql } from 'drizzle-orm'
+import { and, asc, count, desc, eq, sql } from 'drizzle-orm'
 import type {
   AgentConversationContextResponse,
   AgentConversationDetail,
@@ -151,8 +151,10 @@ export type TicketHistory = {
 }
 
 /**
- * This player's other conversations in this workspace, newest first, capped at
- * 20 with the true count alongside.
+ * This player's conversations in this workspace, newest first, including the
+ * current one — the rail highlights it in place rather than dropping the row
+ * the agent just clicked. Capped at 20 rows total, which now includes the
+ * current row, with the earlier-ticket count alongside.
  *
  * Two queries regardless of ticket count. listConversations() runs one preview
  * query per row and says so in a comment; this does not repeat that. The total
@@ -164,7 +166,7 @@ export type TicketHistory = {
  */
 export async function getTicketHistory(
   tx: Tx,
-  args: { playerId: string; excludeConversationId: string },
+  args: { playerId: string; currentConversationId: string },
 ): Promise<TicketHistory> {
   const rows = await tx
     .select({
@@ -182,7 +184,7 @@ export async function getTicketHistory(
     .leftJoin(subintent, eq(subintent.id, conversation.subintentId))
     .leftJoin(intent, eq(intent.id, subintent.intentId))
     .leftJoin(agent, eq(agent.id, conversation.assignedAgentId))
-    .where(and(eq(conversation.playerId, args.playerId), ne(conversation.id, args.excludeConversationId)))
+    .where(eq(conversation.playerId, args.playerId))
     .orderBy(desc(conversation.createdAt))
     .limit(TICKET_CAP)
 
@@ -190,13 +192,7 @@ export async function getTicketHistory(
     .select({ conversationId: event.conversationId, reopens: count() })
     .from(event)
     .innerJoin(conversation, eq(conversation.id, event.conversationId))
-    .where(
-      and(
-        eq(event.type, 'conversation_reopened'),
-        eq(conversation.playerId, args.playerId),
-        ne(conversation.id, args.excludeConversationId),
-      ),
-    )
+    .where(and(eq(event.type, 'conversation_reopened'), eq(conversation.playerId, args.playerId)))
     .groupBy(event.conversationId)
 
   const reopenById = new Map<string, number>()
@@ -204,7 +200,9 @@ export async function getTicketHistory(
   for (const row of reopens) {
     if (!row.conversationId) continue
     reopenById.set(row.conversationId, row.reopens)
-    totalReopened += row.reopens
+    // Per-row counts cover the current ticket too, so its own reopens show; the
+    // summary total stays on the earlier tickets only, matching total_tickets.
+    if (row.conversationId !== args.currentConversationId) totalReopened += row.reopens
   }
 
   const tickets: AgentTicketSummary[] = rows.map((row) => ({
@@ -221,7 +219,11 @@ export async function getTicketHistory(
     reopen_count: reopenById.get(row.id) ?? 0,
   }))
 
-  return { tickets, totalTickets: rows[0]?.totalCount ?? 0, totalReopened }
+  // total_tickets still means "earlier tickets": the current one is always in
+  // the window count now, so subtract it.
+  const totalTickets = Math.max(0, (rows[0]?.totalCount ?? 0) - 1)
+
+  return { tickets, totalTickets, totalReopened }
 }
 
 /**
@@ -253,7 +255,7 @@ export async function getConversationContext(
     const playerState = await getPlayerStateView(tx, ctx.workspaceId, current.sessionId)
     const history = await getTicketHistory(tx, {
       playerId: current.playerId,
-      excludeConversationId: conversationId,
+      currentConversationId: conversationId,
     })
 
     return {

@@ -45,11 +45,20 @@ function SheetContent({
   className,
   children,
   side = 'right',
+  showOverlay = true,
   ...props
-}: React.ComponentProps<typeof SheetPrimitive.Content> & VariantProps<typeof sheetVariants>) {
+}: React.ComponentProps<typeof SheetPrimitive.Content> &
+  VariantProps<typeof sheetVariants> & {
+    /**
+     * A non-modal sheet — one meant to sit beside live content the user can
+     * still read and click — needs no scrim. Defaults to `true`, so every
+     * existing caller keeps today's behaviour.
+     */
+    showOverlay?: boolean
+  }) {
   return (
     <SheetPrimitive.Portal>
-      <SheetOverlay />
+      {showOverlay && <SheetOverlay />}
       <SheetPrimitive.Content className={cn(sheetVariants({ side }), className)} {...props}>
         {children}
         <SheetPrimitive.Close className="absolute top-4 right-4 rounded-xs opacity-70 outline-none hover:opacity-100">

@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react'
-import type { AgentMessageView, ConfirmPhaseValue, ConversationStatusValue } from '@support/types'
+import type {
+  AgentMessageView,
+  ConfirmPhaseValue,
+  ConversationStatusValue,
+  ResolutionSourceValue,
+} from '@support/types'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Clock, MessageSquare } from 'lucide-react'
+import { ArrowLeft, Archive, Clock, MessageSquare, PanelRight } from 'lucide-react'
 import { askResolved, fetchConversationMessages, markAgentMessagesRead, sendAgentMessage } from '../../../api/agentApi.ts'
 import { createSocket } from '../../../../../features/chat/api/socket.ts'
 import { ChatThread } from '../../../../../features/chat/components/ChatThread.tsx'
@@ -24,12 +29,30 @@ function toChatMessage(m: AgentMessageView): ChatMessage {
   }
 }
 
+function formatTicketDate(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+/** "Resolved by Sam" / "Resolved by the bot" / "Closed" when no source is known. */
+function resolverLabel(source: ResolutionSourceValue | null | undefined, agentName: string | null | undefined): string {
+  if (source === 'agent') return `Resolved by ${agentName ?? 'an agent'}`
+  if (source === 'bot') return 'Resolved by the bot'
+  return 'Closed'
+}
+
 export function ThreadPanel({
   token,
   conversationId,
   playerExternalId,
   status,
   confirmPhase,
+  readOnly = false,
+  ticketNumber,
+  resolutionSource,
+  resolvedByAgentName,
+  openedAt,
+  railOpen = false,
+  onToggleRail,
   onBack,
 }: {
   token: string
@@ -37,6 +60,13 @@ export function ThreadPanel({
   playerExternalId?: string
   status?: ConversationStatusValue
   confirmPhase?: ConfirmPhaseValue
+  readOnly?: boolean
+  ticketNumber?: number
+  resolutionSource?: ResolutionSourceValue | null
+  resolvedByAgentName?: string | null
+  openedAt?: string
+  railOpen?: boolean
+  onToggleRail?: () => void
   onBack?: () => void
 }) {
   const queryClient = useQueryClient()
@@ -101,7 +131,8 @@ export function ThreadPanel({
     },
   })
 
-  const askable = (status === 'open' || status === 'awaiting_player') && (confirmPhase ?? 'none') === 'none'
+  const askable =
+    !readOnly && (status === 'open' || status === 'awaiting_player') && (confirmPhase ?? 'none') === 'none'
   const waiting = confirmPhase === 'agent_ask'
 
   // An optimistic bubble belongs to the thread it was typed in. Switching
@@ -141,11 +172,15 @@ export function ThreadPanel({
   }, [token, conversationId, queryClient])
 
   useEffect(() => {
+    // read_at is set once and never rewritten, so glancing at a June ticket for
+    // context would permanently stamp receipts the player is shown. Reading
+    // history must not write history.
+    if (readOnly) return
     const messages = messagesQuery.data?.messages
     if (!conversationId || !messages || messages.length === 0) return
     const lastSeq = Math.max(...messages.map((m) => m.seq))
     void markAgentMessagesRead(token, conversationId, lastSeq)
-  }, [token, conversationId, messagesQuery.data])
+  }, [token, conversationId, messagesQuery.data, readOnly])
 
   if (!conversationId) {
     return (
@@ -169,22 +204,52 @@ export function ThreadPanel({
         )}
         <span className="text-sm font-medium">{playerExternalId}</span>
         {status && <Badge variant={STATUS_BADGE_VARIANT[status]}>{status}</Badge>}
-        {(askable || waiting) && (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="ml-auto"
-            disabled={!askable || ask.isPending}
-            // A real tooltip primitive isn't in this surface yet; the native
-            // title is enough for a disabled-state explanation.
-            title={waiting ? 'Waiting on player' : undefined}
-            onClick={() => ask.mutate()}
-          >
-            Ask if resolved
-          </Button>
-        )}
+        <div className="ml-auto flex items-center gap-2">
+          {/* Hidden outright when read-only: a disabled control here explains nothing. */}
+          {!readOnly && (askable || waiting) && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={!askable || ask.isPending}
+              // A real tooltip primitive isn't in this surface yet; the native
+              // title is enough for a disabled-state explanation.
+              title={waiting ? 'Waiting on player' : undefined}
+              onClick={() => ask.mutate()}
+            >
+              Ask if resolved
+            </Button>
+          )}
+          {onToggleRail && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label="Player context"
+              aria-pressed={railOpen}
+              onClick={onToggleRail}
+            >
+              <PanelRight className="size-4" />
+            </Button>
+          )}
+        </div>
       </div>
+      {/* Without this an agent lands on June's transcript and reasonably
+          concludes the live ticket changed under them. */}
+      {readOnly && (
+        <div
+          role="status"
+          className="flex shrink-0 items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-900"
+        >
+          <Archive className="size-3.5 shrink-0" />
+          Viewing an earlier ticket
+          {ticketNumber != null && ` · #${ticketNumber}`}
+          {/* "opened", not "resolved": the only date the API carries is
+              created_at, and labelling it with the ticket's status would put a
+              date in front of the agent that is not the date of that status. */}
+          {openedAt && ` · ${status ?? 'resolved'} · opened ${formatTicketDate(openedAt)}`}
+        </div>
+      )}
       <div className="min-h-0 flex-1">
         {/* Keyed on the conversation so switching threads remounts the list at
             the bottom instead of holding the previous thread's scroll offset.
@@ -219,7 +284,12 @@ export function ThreadPanel({
           feedback now, and greying the composer for the length of a round trip
           was the most visible part of the lag it was meant to explain. Each
           send is independent, so a second one need not wait on the first. */}
-      <Composer onSend={(body, visibility) => send.mutate({ body, visibility })} allowVisibilityToggle />
+      <Composer
+        onSend={(body, visibility) => send.mutate({ body, visibility })}
+        allowVisibilityToggle
+        disabled={readOnly}
+        placeholder={readOnly ? resolverLabel(resolutionSource, resolvedByAgentName) : undefined}
+      />
     </div>
   )
 }

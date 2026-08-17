@@ -1,6 +1,6 @@
 # Agent player context rail — frontend design
 
-Status: approved, not implemented
+Status: implemented
 Companion: `2026-08-17-agent-player-context-backend-design.md`
 
 ## What this is

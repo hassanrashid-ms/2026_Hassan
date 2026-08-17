@@ -1,15 +1,17 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { fetchInbox } from '../../api/agentApi.ts'
-import { loadAgentSession } from '../../lib/agentSession.ts'
+import { fetchConversation, fetchInbox } from '../../api/agentApi.ts'
+import { loadAgentSession, loadContextRailOpen, saveContextRailOpen } from '../../lib/agentSession.ts'
 import { ConversationList } from './components/ConversationList.tsx'
+import { ContextRail } from './components/ContextRail.tsx'
 import { ThreadPanel } from './components/ThreadPanel.tsx'
 
 export function Inbox() {
   const { conversationId } = useParams<{ conversationId?: string }>()
   const navigate = useNavigate()
   const session = loadAgentSession()
+  const [railOpen, setRailOpen] = useState(loadContextRailOpen)
 
   // Both queries are already cached by ConversationList under the same keys;
   // this lookup is just to find the selected row's player id + status for
@@ -33,9 +35,32 @@ export function Inbox() {
     )
   }, [conversationId, unassigned.data, mine.data])
 
+  // Required, not an optimisation: an older ticket — resolved, owned by another
+  // agent — is in neither list above and never will be, so opening one by URL
+  // otherwise yields no header data at all.
+  const detail = useQuery({
+    queryKey: ['conversation', conversationId, 'detail'],
+    queryFn: () => fetchConversation(session!.token, conversationId!),
+    enabled: session !== null && conversationId != null,
+  })
+
   if (!session) return null
 
   const selectedId = conversationId ?? null
+  const status = selected?.status ?? detail.data?.status
+  const readOnly = status === 'resolved' || status === 'closed'
+
+  const toggleRail = () => {
+    setRailOpen((open) => {
+      saveContextRailOpen(!open)
+      return !open
+    })
+  }
+
+  const openRail = (open: boolean) => {
+    saveContextRailOpen(open)
+    setRailOpen(open)
+  }
 
   return (
     <div className="flex h-full min-h-0">
@@ -49,12 +74,24 @@ export function Inbox() {
         <ThreadPanel
           token={session.token}
           conversationId={selectedId}
-          playerExternalId={selected?.player.external_player_id}
-          status={selected?.status}
+          playerExternalId={selected?.player.external_player_id ?? detail.data?.player.external_player_id}
+          status={status}
           confirmPhase={selected?.confirm_phase}
+          readOnly={readOnly}
+          ticketNumber={detail.data?.number}
+          resolutionSource={detail.data?.resolution_source}
+          resolvedByAgentName={detail.data?.resolved_by_agent_name}
+          // There is no resolved_at column; created_at is what the detail carries.
+          openedAt={detail.data?.created_at}
+          railOpen={railOpen}
+          onToggleRail={toggleRail}
           onBack={() => navigate('/inbox')}
         />
       </div>
+      {/* Slides in over the content — the layout above is untouched. */}
+      {selectedId && (
+        <ContextRail token={session.token} conversationId={selectedId} open={railOpen} onOpenChange={openRail} />
+      )}
     </div>
   )
 }

@@ -173,7 +173,7 @@ async function seedReopen(workspaceId: string, conversationId: string, times: nu
 }
 
 describe('getTicketHistory', () => {
-  it('excludes the current conversation and orders newest first', async () => {
+  it('includes the current conversation and orders newest first', async () => {
     const workspaceId = await seedWorkspace()
     const playerId = await seedPlayer(workspaceId)
     const older = await seedConversation({ workspaceId, playerId, createdAt: new Date('2026-01-01T00:00:00Z') })
@@ -181,11 +181,24 @@ describe('getTicketHistory', () => {
     const current = await seedConversation({ workspaceId, playerId, createdAt: new Date('2026-03-01T00:00:00Z') })
 
     const result = await withWorkspace(workspaceId, (tx) =>
-      getTicketHistory(tx, { playerId, excludeConversationId: current }),
+      getTicketHistory(tx, { playerId, currentConversationId: current }),
     )
 
-    expect(result.tickets.map((t) => t.id)).toEqual([newer, older])
+    expect(result.tickets.map((t) => t.id)).toEqual([current, newer, older])
     expect(result.totalTickets).toBe(2)
+  })
+
+  it('returns the current conversation alone when it is the only ticket', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const current = await seedConversation({ workspaceId, playerId, createdAt: new Date('2026-03-01T00:00:00Z') })
+
+    const result = await withWorkspace(workspaceId, (tx) =>
+      getTicketHistory(tx, { playerId, currentConversationId: current }),
+    )
+
+    expect(result.tickets.map((t) => t.id)).toEqual([current])
+    expect(result.totalTickets).toBe(0)
   })
 
   it('numbers each ticket and carries its status', async () => {
@@ -196,11 +209,11 @@ describe('getTicketHistory', () => {
     await ownerPool.query(`update conversation set status = 'closed' where id = $1`, [first])
 
     const result = await withWorkspace(workspaceId, (tx) =>
-      getTicketHistory(tx, { playerId, excludeConversationId: current }),
+      getTicketHistory(tx, { playerId, currentConversationId: current }),
     )
 
-    expect(result.tickets[0]).toMatchObject({ id: first, number: 1, status: 'closed' })
-    expect(typeof result.tickets[0]!.created_at).toBe('string')
+    expect(result.tickets[1]).toMatchObject({ id: first, number: 1, status: 'closed' })
+    expect(typeof result.tickets[1]!.created_at).toBe('string')
   })
 
   it('counts reopen events per ticket and totals them', async () => {
@@ -211,15 +224,16 @@ describe('getTicketHistory', () => {
     const current = await seedConversation({ workspaceId, playerId, createdAt: new Date('2026-03-01T00:00:00Z') })
     await seedReopen(workspaceId, a, 2)
     await seedReopen(workspaceId, b, 1)
-    await seedReopen(workspaceId, current, 5) // the current one never counts
+    await seedReopen(workspaceId, current, 5) // shown on its own row, never in the total
 
     const result = await withWorkspace(workspaceId, (tx) =>
-      getTicketHistory(tx, { playerId, excludeConversationId: current }),
+      getTicketHistory(tx, { playerId, currentConversationId: current }),
     )
 
     const byId = new Map(result.tickets.map((t) => [t.id, t.reopen_count]))
     expect(byId.get(a)).toBe(2)
     expect(byId.get(b)).toBe(1)
+    expect(byId.get(current)).toBe(5)
     expect(result.totalReopened).toBe(3)
   })
 
@@ -230,14 +244,14 @@ describe('getTicketHistory', () => {
     const current = await seedConversation({ workspaceId, playerId, createdAt: new Date('2026-02-01T00:00:00Z') })
 
     const result = await withWorkspace(workspaceId, (tx) =>
-      getTicketHistory(tx, { playerId, excludeConversationId: current }),
+      getTicketHistory(tx, { playerId, currentConversationId: current }),
     )
 
     expect(result.tickets.find((t) => t.id === a)!.reopen_count).toBe(0)
     expect(result.totalReopened).toBe(0)
   })
 
-  it('caps the list at 20 while total_tickets holds the true count', async () => {
+  it('caps the list at 20 rows including the current one, while total_tickets holds the true count', async () => {
     const workspaceId = await seedWorkspace()
     const playerId = await seedPlayer(workspaceId)
     for (let i = 0; i < 25; i++) {
@@ -250,12 +264,14 @@ describe('getTicketHistory', () => {
     const current = await seedConversation({ workspaceId, playerId, createdAt: new Date('2026-06-01T00:00:00Z') })
 
     const result = await withWorkspace(workspaceId, (tx) =>
-      getTicketHistory(tx, { playerId, excludeConversationId: current }),
+      getTicketHistory(tx, { playerId, currentConversationId: current }),
     )
 
     expect(result.tickets).toHaveLength(20)
     expect(result.totalTickets).toBe(25)
-    expect(result.tickets[0]!.number).toBe(25)
+    expect(result.tickets[0]!.id).toBe(current)
+    expect(result.tickets[0]!.number).toBe(26)
+    expect(result.tickets[1]!.number).toBe(25)
   })
 
   it('names the intent and subintent when a past ticket was classified', async () => {
@@ -268,10 +284,10 @@ describe('getTicketHistory', () => {
     await ownerPool.query(`update conversation set subintent_id = $1 where id = $2`, [subintentId, past])
 
     const result = await withWorkspace(workspaceId, (tx) =>
-      getTicketHistory(tx, { playerId, excludeConversationId: current }),
+      getTicketHistory(tx, { playerId, currentConversationId: current }),
     )
 
-    expect(result.tickets[0]!.subintent).toEqual({ intent_name: 'Account', subintent_name: 'Lost progress' })
+    expect(result.tickets[1]!.subintent).toEqual({ intent_name: 'Account', subintent_name: 'Lost progress' })
   })
 
   it('does not reach across workspaces', async () => {
@@ -283,10 +299,10 @@ describe('getTicketHistory', () => {
     const current = await seedConversation({ workspaceId: wsA, playerId: playerA })
 
     const result = await withWorkspace(wsA, (tx) =>
-      getTicketHistory(tx, { playerId: playerA, excludeConversationId: current }),
+      getTicketHistory(tx, { playerId: playerA, currentConversationId: current }),
     )
 
-    expect(result.tickets).toEqual([])
+    expect(result.tickets.map((t) => t.id)).toEqual([current])
     expect(result.totalTickets).toBe(0)
   })
 })
@@ -321,8 +337,9 @@ describe('GET /agent/conversations/:id/context', () => {
     expect(res.body.player_state.status).toBe('captured')
     expect(res.body.player_state.declared[0]).toMatchObject({ key: 'player_level', value: 42 })
     expect(res.body.player_state.raw).toEqual({ fps: 58 })
-    expect(res.body.tickets).toHaveLength(1)
-    expect(res.body.tickets[0]).toMatchObject({ id: past, reopen_count: 2 })
+    expect(res.body.tickets).toHaveLength(2)
+    expect(res.body.tickets[0]).toMatchObject({ id: current })
+    expect(res.body.tickets[1]).toMatchObject({ id: past, reopen_count: 2 })
     expect(res.body.summary).toEqual({
       total_tickets: 1,
       total_reopened: 2,
@@ -342,7 +359,7 @@ describe('GET /agent/conversations/:id/context', () => {
       .expect(200)
 
     expect(res.body.player_state).toEqual({ status: 'no_session' })
-    expect(res.body.tickets).toEqual([])
+    expect(res.body.tickets.map((t: { id: string }) => t.id)).toEqual([current])
     expect(res.body.summary.total_tickets).toBe(0)
   })
 

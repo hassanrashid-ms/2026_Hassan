@@ -1,3 +1,4 @@
+import type { ComponentProps } from 'react'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -60,16 +61,29 @@ function fakeSocket() {
   return handlers
 }
 
-function renderPanel() {
+type PanelProps = Partial<ComponentProps<typeof ThreadPanel>>
+
+function renderPanel(overrides: PanelProps = {}) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={queryClient}>
-      <ThreadPanel token="t" conversationId="c1" playerExternalId="p-1" status="open" confirmPhase="none" />
+      <ThreadPanel token="t" conversationId="c1" playerExternalId="p-1" status="open" confirmPhase="none" {...overrides} />
     </QueryClientProvider>,
   )
 }
 
+/** The read-only case: an older ticket resolved by a named agent. */
+const RESOLVED: PanelProps = {
+  status: 'resolved',
+  readOnly: true,
+  ticketNumber: 1039,
+  resolutionSource: 'agent',
+  resolvedByAgentName: 'Sam',
+  openedAt: '2026-06-02T09:00:00.000Z',
+}
+
 beforeEach(() => {
+  vi.clearAllMocks()
   vi.mocked(markAgentMessagesRead).mockResolvedValue({ ok: true } as never)
 })
 
@@ -153,6 +167,96 @@ describe('ThreadPanel optimistic sends', () => {
     // the real message.
     await waitFor(() => expect(screen.queryByText('Sending…')).not.toBeInTheDocument())
     expect(screen.getAllByText('landed')).toHaveLength(1)
+  })
+})
+
+describe('ThreadPanel read-only tickets', () => {
+  it('disables the composer and names the resolver in its placeholder', async () => {
+    fakeSocket()
+    vi.mocked(fetchConversationMessages).mockResolvedValue({ messages: [agentMessage()] } as never)
+
+    renderPanel(RESOLVED)
+
+    const input = await screen.findByLabelText('Message')
+    expect(input).toBeDisabled()
+    expect(input).toHaveAttribute('placeholder', 'Resolved by Sam')
+  })
+
+  it('says the bot resolved it when there is no agent name', async () => {
+    fakeSocket()
+    vi.mocked(fetchConversationMessages).mockResolvedValue({ messages: [agentMessage()] } as never)
+
+    renderPanel({ ...RESOLVED, resolutionSource: 'bot', resolvedByAgentName: null })
+
+    expect(await screen.findByLabelText('Message')).toHaveAttribute('placeholder', 'Resolved by the bot')
+  })
+
+  it('falls back to Closed when no resolution source is recorded', async () => {
+    fakeSocket()
+    vi.mocked(fetchConversationMessages).mockResolvedValue({ messages: [agentMessage()] } as never)
+
+    renderPanel({ ...RESOLVED, status: 'closed', resolutionSource: null, resolvedByAgentName: null })
+
+    expect(await screen.findByLabelText('Message')).toHaveAttribute('placeholder', 'Closed')
+  })
+
+  it('hides "Ask if resolved" entirely rather than disabling it', async () => {
+    fakeSocket()
+    vi.mocked(fetchConversationMessages).mockResolvedValue({ messages: [agentMessage()] } as never)
+
+    renderPanel(RESOLVED)
+    await screen.findByLabelText('Message')
+
+    expect(screen.queryByRole('button', { name: 'Ask if resolved' })).not.toBeInTheDocument()
+  })
+
+  it('banners which ticket is on screen, so the transcript is not mistaken for the live one', async () => {
+    fakeSocket()
+    vi.mocked(fetchConversationMessages).mockResolvedValue({ messages: [agentMessage()] } as never)
+
+    renderPanel(RESOLVED)
+
+    const banner = await screen.findByRole('status')
+    expect(banner).toHaveTextContent('Viewing an earlier ticket')
+    expect(banner).toHaveTextContent('#1039')
+    expect(banner).toHaveTextContent('resolved')
+  })
+
+  // The one that matters: read_at is set once and never rewritten, so a glance
+  // at an old ticket must not stamp receipts the player is shown.
+  it('does not call markAgentMessagesRead', async () => {
+    fakeSocket()
+    vi.mocked(fetchConversationMessages).mockResolvedValue({ messages: [agentMessage()] } as never)
+
+    renderPanel(RESOLVED)
+    await screen.findByText('Sent')
+
+    expect(markAgentMessagesRead).not.toHaveBeenCalled()
+  })
+
+  it('still marks read on a live ticket', async () => {
+    fakeSocket()
+    vi.mocked(fetchConversationMessages).mockResolvedValue({ messages: [agentMessage()] } as never)
+
+    renderPanel()
+    await screen.findByText('Sent')
+
+    await waitFor(() => expect(markAgentMessagesRead).toHaveBeenCalledWith('t', 'c1', 1))
+  })
+})
+
+describe('ThreadPanel rail toggle', () => {
+  it('exposes a labelled toggle whose pressed state tracks the rail', async () => {
+    fakeSocket()
+    vi.mocked(fetchConversationMessages).mockResolvedValue({ messages: [agentMessage()] } as never)
+    const onToggleRail = vi.fn()
+
+    renderPanel({ onToggleRail, railOpen: false })
+
+    const toggle = await screen.findByRole('button', { name: 'Player context' })
+    expect(toggle).toHaveAttribute('aria-pressed', 'false')
+    await userEvent.click(toggle)
+    expect(onToggleRail).toHaveBeenCalled()
   })
 })
 

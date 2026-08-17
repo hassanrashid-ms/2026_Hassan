@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull } from 'drizzle-orm'
+import { and, desc, eq, isNull, notInArray } from 'drizzle-orm'
 import type { AgentConversationSummary, AgentMessageView } from '@support/types'
 import { toAgentView } from '../../domain/conversations/index.ts'
 import { appendEvent } from '../../shared/events/appendEvent.ts'
@@ -8,13 +8,23 @@ import type { AgentContext } from '../../shared/middleware/requireAgentSession.t
 
 export type ConversationsFilter = 'unassigned' | 'mine'
 
+// The inbox is a work queue, not an archive — a finished ticket is noise there,
+// and its history stays reachable through the context rail. A reopen flips the
+// status back to `open`, so it returns to the queue on its own.
+const FINISHED_STATUSES: (typeof conversation.status.enumValues)[number][] = ['resolved', 'closed']
+
 export async function listConversations(ctx: AgentContext, filter: ConversationsFilter): Promise<AgentConversationSummary[]> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
     const rows = await tx
       .select({ id: conversation.id, status: conversation.status, externalPlayerId: player.externalId, confirmPhase: conversation.confirmPhase })
       .from(conversation)
       .innerJoin(player, eq(player.id, conversation.playerId))
-      .where(filter === 'unassigned' ? isNull(conversation.assignedAgentId) : eq(conversation.assignedAgentId, ctx.agentId))
+      .where(
+        and(
+          filter === 'unassigned' ? isNull(conversation.assignedAgentId) : eq(conversation.assignedAgentId, ctx.agentId),
+          notInArray(conversation.status, FINISHED_STATUSES),
+        ),
+      )
       .orderBy(desc(conversation.createdAt))
 
     // One extra query per row for the last-message preview. Fine at this
@@ -49,7 +59,9 @@ export async function claimConversation(ctx: AgentContext, conversationId: strin
     const claimed = await tx
       .update(conversation)
       .set({ assignedAgentId: ctx.agentId })
-      .where(and(eq(conversation.id, conversationId), isNull(conversation.assignedAgentId)))
+      // Status guard lives in the UPDATE's where, not a pre-check: a separate
+      // read could be resolved out from under the write.
+      .where(and(eq(conversation.id, conversationId), isNull(conversation.assignedAgentId), notInArray(conversation.status, FINISHED_STATUSES)))
       .returning({ id: conversation.id, status: conversation.status })
     const [row] = claimed
     if (!row) return { claimed: false, status: null }

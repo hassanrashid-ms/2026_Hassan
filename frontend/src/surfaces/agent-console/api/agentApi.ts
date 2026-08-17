@@ -4,6 +4,8 @@ import type {
   AgentMessagesResponse,
   AgentMessageView,
   AgentArticlesResponse,
+  AgentConversationContextResponse,
+  AgentConversationDetail,
   AskResolvedResponse,
   ClaimResponse,
   CreateIntentResponse,
@@ -43,6 +45,22 @@ export function fetchInbox(token: string, status: 'unassigned' | 'mine'): Promis
 
 export function claimConversation(token: string, conversationId: string): Promise<ClaimResponse> {
   return apiCall(`/agent/conversations/${conversationId}/claim`, token, { method: 'POST' })
+}
+
+/**
+ * The header row for one conversation. Required, not an optimisation: an older
+ * ticket is in neither the `unassigned` nor the `mine` list and never will be,
+ * so opening one by URL yields no header data at all.
+ */
+export function fetchConversation(token: string, conversationId: string): Promise<AgentConversationDetail> {
+  return apiCall(`/agent/conversations/${conversationId}`, token)
+}
+
+export function fetchConversationContext(
+  token: string,
+  conversationId: string,
+): Promise<AgentConversationContextResponse> {
+  return apiCall(`/agent/conversations/${conversationId}/context`, token)
 }
 
 export function fetchConversationMessages(token: string, conversationId: string): Promise<AgentMessagesResponse> {
