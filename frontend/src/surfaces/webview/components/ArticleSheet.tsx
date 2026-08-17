@@ -8,6 +8,7 @@ import { hasReadArticle, markArticleRead } from '@/surfaces/webview/hooks/useRea
 import { useArticleDetail } from '@/surfaces/webview/hooks/useArticleDetail'
 import { reportArticleRead } from '@/surfaces/webview/api/surfaceApi'
 import { post } from '@/services/bridgeService'
+import { ArticleBody } from '@/features/articles/components/ArticleBody'
 
 type ArticleSheetProps = {
   /** null closes the sheet. Driven by the route so Android back closes it. */
@@ -64,7 +65,7 @@ export function ArticleSheet({ articleId, onClose }: ArticleSheetProps) {
         <ScrollArea className="min-h-0 flex-1">
           <div className="px-4 pb-10">
             {article.data ? (
-              <p className="text-base leading-relaxed whitespace-pre-wrap text-text">{article.data.body}</p>
+              <ArticleBody markdown={article.data.body} />
             ) : article.isError ? (
               <p className="text-base text-muted">This article could not be loaded. Close and try another.</p>
             ) : (
