@@ -110,17 +110,22 @@ player something broken regardless of what is in the column. A wide table render
 `overflow-x-auto` container, so it scrolls within itself rather than making the drawer scroll
 sideways.
 
-### D5. Styling via the `components` map, not `@tailwindcss/typography`
+### D5. Styling is Tailwind utilities on the `components` map — no CSS, no `@tailwindcss/typography`
 
-The typography plugin **is not installed** — there is no `@plugin` directive in any stylesheet and
-no dependency in `package.json`. (Consequence worth knowing: the `prose prose-sm` classes on
-MDXEditor in `ArticleEditorSheet` are silently inert today. Out of scope to fix here.)
+**No stylesheet, CSS module, or CSS-in-JS is added by this work.** Every element in the `components`
+map is styled with Tailwind utility classes on the existing theme tokens (`text-text`, `text-muted`,
+`rounded-card`), consistent with the rest of the codebase.
 
-Installing it would be the wrong move regardless: `webview.css` drives the entire type scale from a
-single `clamp()` on `html`, and the plugin ships absolute font sizes that would fight it.
+The typography plugin **is not installed** — there is no `@plugin` directive and no dependency in
+`package.json`. (Consequence worth knowing: the `prose prose-sm` classes on MDXEditor in
+`ArticleEditorSheet` are silently inert today. Out of scope to fix here.)
 
-Block elements get explicit Tailwind classes using existing theme tokens (`text-text`, `text-muted`,
-`rounded-card`), so the body inherits the viewport-scaled ramp.
+Installing it would be the wrong move regardless. `webview.css` is the Tailwind v4 entry point and
+theme config — `@import "tailwindcss"`, the `@theme` block defining the tokens above, two `@utility`
+declarations, and a `clamp()` on `html` that the entire rem-based type scale rides on.
+`@tailwindcss/typography` ships absolute font sizes that would fight that `clamp()`. Utilities on
+our own tokens are both the more Tailwind-native option and the one that inherits the
+viewport-scaled ramp for free.
 
 ---
 
