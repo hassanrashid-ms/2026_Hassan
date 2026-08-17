@@ -22,32 +22,30 @@ export function useSurfaceReadySignal(resolved: boolean): void {
   useEffect(() => {
     if (!resolved) return
 
-    let outer = 0
-    let inner = 0
-    let unsubscribe = () => {}
-
-    // Two frames, not one. When this effect runs React has *scheduled* a paint,
-    // not made one, and a requestAnimationFrame callback still runs before the
-    // paint it belongs to. The nested call is the first moment the frame has
-    // actually been handed to the compositor — signalling from the outer one
-    // reveals the surface exactly one frame too early, which is the flash this
-    // whole mechanism exists to remove.
-    outer = requestAnimationFrame(() => {
-      inner = requestAnimationFrame(() => {
-        // The guard lives here rather than at the top of the effect so React's
-        // StrictMode double-invoke — which mounts, cleans up, then mounts again —
-        // cannot consume the one signal we are allowed to send and leave the
-        // surface permanently hidden in development.
-        if (sentRef.current) return
-        sentRef.current = true
-        unsubscribe = onBridgeReady(() => post({ type: 'surface_ready' }))
-      })
+    // Signalled directly, with NO requestAnimationFrame.
+    //
+    // This used to wait two nested frames so the paint had reached the compositor
+    // before revealing. That reasoning was self-defeating: the SDK holds the
+    // native view hidden until this very message arrives, and a hidden webview
+    // does not composite, so the rAF callbacks were throttled or never delivered.
+    // The signal waited for a frame that could not arrive until the signal was
+    // sent, and every open fell through to the SDK's ready-signal watchdog
+    // instead — the exact 3s spinner-over-a-ready-page this hook exists to avoid.
+    //
+    // An effect already runs after React has committed to the DOM, so the content
+    // is there to be shown the moment the view becomes visible.
+    // The guard sits inside the callback, not at the top of the effect. React's
+    // StrictMode double-invoke mounts, cleans up, then mounts again — so a guard
+    // that short-circuited the second invocation would skip re-subscribing after
+    // the first one's cleanup unsubscribed, and the surface would stay hidden
+    // forever in development. Subscribing is idempotent; sending is what must
+    // happen at most once.
+    const unsubscribe = onBridgeReady(() => {
+      if (sentRef.current) return
+      sentRef.current = true
+      post({ type: 'surface_ready' })
     })
 
-    return () => {
-      cancelAnimationFrame(outer)
-      cancelAnimationFrame(inner)
-      unsubscribe()
-    }
+    return unsubscribe
   }, [resolved])
 }

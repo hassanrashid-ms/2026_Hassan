@@ -60,24 +60,24 @@
       the SDK side, so the later one is a harmless no-op safety net for the case
       where this script somehow does not run.
 
-      Two nested frames, not one: when this executes the browser has scheduled a
-      paint, not made one, and a rAF callback still runs before the paint it
-      belongs to. The inner call is the first moment the frame is actually with the
-      compositor — signalling from the outer one reveals exactly one frame early,
-      which is the flash the handshake exists to remove.
+      Posted directly, with NO requestAnimationFrame. That is deliberate and it is
+      the whole reason this works: the SDK keeps the native view hidden until it
+      receives this message, and a hidden webview does not composite, so rAF
+      callbacks are throttled or never delivered. Waiting for a frame before
+      signalling is waiting for a frame that cannot arrive until the signal is
+      sent — a deadlock that resolves only when the SDK's watchdog gives up.
+      There is no flash risk to guard against either: the skeleton above is static
+      markup already parsed into the DOM by the time this runs, so whatever the
+      native view shows on reveal already includes it.
     -->
     <script>
       (function () {
         var send = function () {
-          requestAnimationFrame(function () {
-            requestAnimationFrame(function () {
-              try {
-                window.SupportBridge.post({ type: 'surface_ready' })
-              } catch (e) {
-                /* No bridge: a plain browser. Nothing to reveal, nothing to do. */
-              }
-            })
-          })
+          try {
+            window.SupportBridge.post({ type: 'surface_ready' })
+          } catch (e) {
+            /* No bridge: a plain browser. Nothing to reveal, nothing to do. */
+          }
         }
         // The SDK injects the bridge on page load, which may land before or after
         // this script — hence both the check and the event. Listened for on window
