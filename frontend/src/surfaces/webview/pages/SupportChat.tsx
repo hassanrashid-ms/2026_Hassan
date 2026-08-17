@@ -5,6 +5,7 @@ import { DebugDialog } from '@/surfaces/webview/components/DebugDialog'
 import { ChatBubbles } from '@/surfaces/webview/components/chat/ChatBubbles'
 import { ChatComposer } from '@/surfaces/webview/components/chat/ChatComposer'
 import { SupportButton } from '@/surfaces/webview/components/SupportButton'
+import { BootstrapFailedScreen } from '@/surfaces/webview/components/StateScreens'
 import { useSupport } from '@/surfaces/webview/components/SupportContext'
 import {
   answerResolution,
@@ -54,12 +55,16 @@ const BANNER_CLASS = [
  * handling, the same read-receipt effect. What was `chatOpen` state is now the
  * fact that this route is mounted.
  *
- * This screen deliberately does not depend on bootstrap having succeeded. It
- * needs boot.token and boot.sessionId, which exist the moment the URL parsed —
- * "no dead ends" outranks having complete data.
+ * This screen does not depend on bootstrap having *completed* — it needs only
+ * boot.token and boot.sessionId, which exist the moment the URL parsed. It does
+ * depend on the API being reachable, which is a different thing: without it
+ * there is no thread to load and no way to deliver what the player types. When
+ * the backend is down this renders the same failure screen every other screen
+ * renders, rather than an empty thread above a composer that silently fails on
+ * send.
  */
 export function SupportChat() {
-  const { boot } = useSupport()
+  const { boot, error, retry } = useSupport()
   const queryClient = useQueryClient()
   const [pending, setPending] = useState<PendingMessage[]>([])
   const [debugOpen, setDebugOpen] = useState(false)
@@ -162,6 +167,47 @@ export function SupportChat() {
   const settled = messagesQuery.data?.status === 'resolved' || messagesQuery.data?.status === 'closed'
   const confirmPending = (messagesQuery.data?.confirm_phase ?? 'none') !== 'none'
 
+  /**
+   * Two independent signals for the same condition, because either can be the
+   * one that fires: the shell's `error` means bootstrap gave up after 15
+   * attempts (the backend was already down when support opened), and
+   * `messagesQuery.isError` means this screen's own fetch failed (it went down
+   * after, or chat was opened directly). Reporting the shell's message when it
+   * has one keeps the wording identical to what Home shows for the same outage.
+   */
+  // `data === undefined` qualifies the query half deliberately: once a thread
+  // has loaded, a later refetch failing must not replace it with an error
+  // screen. The player can still read what was said, and a send that cannot
+  // reach the server already surfaces per-message as "Not sent. Retry" rather
+  // than silently — so tearing the whole screen down would lose real content to
+  // report a failure that is already reported.
+  const unreachable = error !== null || (messagesQuery.isError && messagesQuery.data === undefined)
+  const unreachableMessage =
+    error ?? (messagesQuery.error instanceof Error ? messagesQuery.error.message : 'Could not reach support. Check your connection and try again.')
+
+  const isTyping = messagesQuery.data?.status === 'bot_active' && chatMessages[chatMessages.length - 1]?.authorType === 'player' && !settled && !confirmPending
+
+  const onRetryConnection = () => {
+    // Both, for the same reason both are checked above: whichever failed needs
+    // re-arming, and retrying the one that did not is harmless.
+    retry()
+    void messagesQuery.refetch()
+  }
+
+  if (unreachable) {
+    return (
+      <>
+        {/* The bar stays: closing the webview is the player's other way out of
+            this, and it is the one action that still works with no backend. */}
+        <TopBar variant="chat" onOpenDebug={() => setDebugOpen(true)} />
+        <div className="flex min-h-0 flex-1 flex-col">
+          <BootstrapFailedScreen message={unreachableMessage} onRetry={onRetryConnection} />
+        </div>
+        <DebugDialog open={debugOpen} onOpenChange={setDebugOpen} />
+      </>
+    )
+  }
+
   return (
     <>
       <TopBar variant="chat" onOpenDebug={() => setDebugOpen(true)} />
@@ -175,16 +221,11 @@ export function SupportChat() {
             <p className="text-base text-muted">Tell us what happened and we'll pick it up from here.</p>
           </div>
         ) : (
-          <ChatBubbles messages={chatMessages} onRetry={onRetry} />
+          <ChatBubbles messages={chatMessages} isTyping={isTyping} onRetry={onRetry} />
         )}
       </div>
 
-      {/* The scrim is `fixed`, not absolute: no ancestor here is positioned, and
-          the thing being dimmed is the whole screen — thread, top bar and the
-          now-disabled composer alike. The banner opts back out by sitting one
-          layer above it, which is what makes it read as the only live control
-          rather than one more row stacked at the bottom. */}
-      {(confirmPending || settled) && <div className="fixed inset-0 z-10 bg-black/55" aria-hidden="true" />}
+
 
       {confirmPending && (
         <div role="dialog" aria-modal="true" aria-label="Is your issue resolved?" className={BANNER_CLASS}>

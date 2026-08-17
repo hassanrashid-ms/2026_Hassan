@@ -12,7 +12,7 @@ export type AskResolvedOutcome =
   | { ok: false; reason: 'not_found' | 'wrong_status' | 'not_owner' | 'already_pending' }
 
 /**
- * The agent-side twin of the bot's offer_article: it puts the conversation into
+ * The agent-side twin of the bot's answer_from_article: it puts the conversation into
  * a pending yes/no and nothing more. It never resolves anything — there is no
  * agent-side "mark resolved" in this product, by design. Only the player's
  * answer moves the status.

@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react'
-import { MessageCircle, PlugZap, RotateCw, SearchX } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { PlugZap, RotateCw, SearchX } from 'lucide-react'
 import { Skeleton } from '@/surfaces/webview/components/ui/skeleton'
 import { SupportButton } from '@/surfaces/webview/components/SupportButton'
 import { cn } from '@/surfaces/webview/lib/cn'
@@ -32,29 +31,27 @@ export function NoSessionScreen({ message }: { message: string }) {
 }
 
 /**
- * Bootstrap exhausted its 15 attempts. New behaviour: today the poll simply stops
- * and leaves the player on whatever was on screen with no way back. Chat is still
- * offered here — "no dead ends" outranks having complete data, and the token we
- * need to open a conversation is already in hand.
+ * The backend could not be reached — bootstrap exhausted its 15 attempts, or a
+ * screen's own request failed. Rendered by every screen that needs the API,
+ * chat included, so the player sees one explanation rather than a different
+ * dead end per route.
+ *
+ * It used to offer "Talk us anyway", on the reasoning that chat only needs the
+ * token and "no dead ends" outranks having complete data. That was true while
+ * chat could still function without bootstrap; it is not true when the API
+ * itself is unreachable, because the chat screen cannot load a thread or
+ * deliver a message either. The button would have sent the player to a screen
+ * showing this same error — a loop, which is a worse dead end than none.
+ * Retry is the only honest action left, so it is the only one offered.
  */
 export function BootstrapFailedScreen({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
-    <CentredMessage
-      icon={<PlugZap className="size-8" />}
-      title="Could not load support"
-      body={message}
-    >
+    <CentredMessage icon={<PlugZap className="size-8" />} title="Could not load support" body={message}>
       <div className="mt-2 flex flex-col items-stretch gap-3">
         <SupportButton onClick={onRetry}>
           <RotateCw className="size-5" />
           Try again
         </SupportButton>
-        <Link to="/embed/support/chat" className="contents">
-          <SupportButton variant="soft" className="w-full">
-            <MessageCircle className="size-5" />
-            Talk to us anyway
-          </SupportButton>
-        </Link>
       </div>
     </CentredMessage>
   )

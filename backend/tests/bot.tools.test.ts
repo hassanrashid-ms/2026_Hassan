@@ -5,7 +5,7 @@ describe('toolsForPhase', () => {
   it('omits confirm_resolution when phase is none', () => {
     const names = toolsForPhase('none').map((t: any) => t.function.name)
     expect(names).not.toContain(CONFIRM_RESOLUTION_TOOL_NAME)
-    expect(names).toEqual(expect.arrayContaining(['search_articles', 'classify', 'offer_article', 'handoff']))
+    expect(names).toEqual(expect.arrayContaining(['search_articles', 'classify', 'answer_from_article', 'handoff']))
   })
 
   it('includes confirm_resolution when phase is bot_article', () => {

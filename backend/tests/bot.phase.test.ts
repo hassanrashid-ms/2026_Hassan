@@ -104,3 +104,72 @@ describe('applyBotTurn — resolve and article lifecycle', () => {
     expect(events[1].payload).toEqual({})
   })
 })
+
+describe('applyBotTurn — bot_search retrieval telemetry', () => {
+  it('writes one bot_search per search, before the outcome events, with snapshotted titles', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const conversationId = await seedConversation({ workspaceId, playerId })
+    const agentId = await seedAgent()
+    const articleId = await seedArticle({ workspaceId, createdBy: agentId, title: 'How refunds work' })
+
+    await withWorkspace(workspaceId, (tx) =>
+      applyBotTurn(
+        tx,
+        { workspaceId, conversationId },
+        {
+          kind: 'answer',
+          reply: 'try this',
+          subintentId: null,
+          articleId,
+          searches: [
+            { query: 'refund policy', results: [{ id: articleId, title: 'How refunds work' }] },
+            { query: 'chargeback', results: [] },
+          ],
+        },
+      ),
+    )
+
+    const events = await eventsFor(conversationId)
+    // Searches come first: the timeline must read as what the bot looked for,
+    // then what it did about it.
+    expect(events.map((e) => e.type)).toEqual(['bot_search', 'bot_search', 'message_sent', 'bot_article_offered'])
+    expect(events[0].payload).toEqual({
+      query: 'refund policy',
+      result_count: 1,
+      articles: [{ article_id: articleId, article_title: 'How refunds work' }],
+    })
+    expect(events[1].payload).toEqual({ query: 'chargeback', result_count: 0, articles: [] })
+  })
+
+  it('records a search on a handoff, so "searched and found nothing" is distinguishable from "never searched"', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const conversationId = await seedConversation({ workspaceId, playerId })
+
+    await withWorkspace(workspaceId, (tx) =>
+      applyBotTurn(
+        tx,
+        { workspaceId, conversationId },
+        { kind: 'handoff', reason: 'no_article', subintentId: null, searches: [{ query: 'item not received', results: [] }] },
+      ),
+    )
+
+    const events = await eventsFor(conversationId)
+    expect(events.map((e) => e.type)).toEqual(['bot_search', 'message_sent', 'bot_handoff'])
+    expect(events[0].payload).toEqual({ query: 'item not received', result_count: 0, articles: [] })
+  })
+
+  it('writes no bot_search when the decision carries none — an absent event means retrieval never ran', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const conversationId = await seedConversation({ workspaceId, playerId })
+
+    await withWorkspace(workspaceId, (tx) =>
+      applyBotTurn(tx, { workspaceId, conversationId }, { kind: 'handoff', reason: 'no_article', subintentId: null }),
+    )
+
+    const events = await eventsFor(conversationId)
+    expect(events.map((e) => e.type)).not.toContain('bot_search')
+  })
+})

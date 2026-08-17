@@ -52,6 +52,19 @@ export type PostedMessageRow = {
  * pushed to a client that thinks it succeeded.
  */
 export async function postMessage(tx: Tx, input: PostMessageInput): Promise<PostedMessageRow> {
+  // A message with no body is always a bug, never a legitimate send: the player
+  // and agent routes both reject it at their Zod schemas, so anything empty
+  // arriving here came from server-side code that had nothing to say and posted
+  // anyway. The bot did exactly that when the model returned neither a tool call
+  // nor any text. Refused at the one choke point every message goes through,
+  // rather than at each caller, so no future path can persist an empty bubble.
+  // Throwing is right for the bot: its caller is a retried background job that
+  // degrades to a handoff, which is a far better outcome than a blank bubble
+  // that the player cannot act on and nothing records as a failure.
+  if (input.body.trim() === '') {
+    throw new Error(`postMessage: refusing to post an empty ${input.authorType} message`)
+  }
+
   const [bumped] = await tx
     .update(conversation)
     .set({ messageSeq: sql`${conversation.messageSeq} + 1` })

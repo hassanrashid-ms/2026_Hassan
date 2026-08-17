@@ -3,11 +3,27 @@ import { eq } from 'drizzle-orm'
 import type { Tx } from '../../shared/db/withWorkspace.ts'
 import { article } from '../../shared/db/schema/index.ts'
 import { searchArticleIds } from '../../shared/weaviate/articlesIndex.ts'
+import { logger } from '../../shared/logging/logger.ts'
 import type { SubintentOption } from './contextAssembly.ts'
 
 export type ToolPhase = 'none' | 'bot_article' | 'agent_ask'
 
 export const CONFIRM_RESOLUTION_TOOL_NAME = 'confirm_resolution'
+
+/**
+ * Renamed from `offer_article` when the tool stopped shipping an article and
+ * started shipping an answer drawn from one. The model reads this name as part
+ * of its instructions, and the old one asked for the exact behaviour that was
+ * the bug: "offer" invites "Here's an article that might help", which is a
+ * pointer, and the player had nothing to point at.
+ *
+ * The `bot_article_offered` / `bot_article_rejected` event types and the
+ * `bot_article` confirm phase deliberately keep their names. Those are written
+ * history and the columns metrics already group by; renaming them would either
+ * rewrite the past or split every article funnel in two at this deploy. The
+ * article is still what is being offered — only the form changed.
+ */
+export const ANSWER_FROM_ARTICLE_TOOL_NAME = 'answer_from_article'
 const MAX_ARTICLES_PER_TURN = 3
 
 const ALWAYS_AVAILABLE_TOOLS = [
@@ -32,10 +48,16 @@ const ALWAYS_AVAILABLE_TOOLS = [
   {
     type: 'function',
     function: {
-      name: 'offer_article',
-      description: 'Post one of the articles returned by search_articles this turn to the player, and ask if it solved their problem.',
+      name: ANSWER_FROM_ARTICLE_TOOL_NAME,
+      description:
+        "Answer the player using one of the articles returned by search_articles this turn, and ask if it solved their problem. `answer` is what the player reads, so write it in the article's own words: reuse its sentences and its terms, keep every step, number and condition exactly as written, and change only what is needed to address this player's situation. Add nothing the article does not say.",
       strict: true,
-      parameters: { type: 'object', properties: { article_id: { type: 'string' } }, required: ['article_id'], additionalProperties: false },
+      parameters: {
+        type: 'object',
+        properties: { article_id: { type: 'string' }, answer: { type: 'string' } },
+        required: ['article_id', 'answer'],
+        additionalProperties: false,
+      },
     },
   },
   {
@@ -83,11 +105,32 @@ export type SearchArticlesResult = { id: string; title: string; body: string }[]
 /** Hybrid retrieval fired against the model's own phrased query, not the player's raw words (spec §3). */
 export async function searchArticles(tx: Tx, workspaceId: string, query: string): Promise<SearchArticlesResult> {
   const ids = await searchArticleIds(query, { workspaceId, limit: 5 })
-  if (ids.length === 0) return []
+  if (ids.length === 0) {
+    logger.info('bot.search', 'no index hits', { workspaceId, query })
+    return []
+  }
 
   const rows = await tx.select({ id: article.id, title: article.title, body: article.body }).from(article).where(eq(article.workspaceId, workspaceId))
   const byId = new Map(rows.map((r) => [r.id, r]))
-  return ids.map((id) => byId.get(id)).filter((r): r is { id: string; title: string; body: string } => r !== undefined)
+  const resolved = ids.map((id) => byId.get(id)).filter((r): r is { id: string; title: string; body: string } => r !== undefined)
+
+  // Index drift: Weaviate returned an article id with no row behind it, so the
+  // hit is silently dropped and the model sees fewer results than retrieval
+  // actually ranked. Warned rather than thrown — a stale index entry must not
+  // fail a player's turn — but it is a real defect in the index, not noise, and
+  // it costs a slot that a live article would otherwise have filled.
+  if (resolved.length < ids.length) {
+    const orphans = ids.filter((id) => !byId.has(id))
+    logger.warn('bot.search', 'weaviate returned article ids with no matching row — index is stale', {
+      workspaceId,
+      query,
+      orphanIds: orphans,
+      ranked: ids.length,
+      returned: resolved.length,
+    })
+  }
+
+  return resolved
 }
 
 /** Null on an out-of-range index — toolLoop maps that to the Other fallback, same as an explicit Other choice. */

@@ -7,64 +7,128 @@ export const SEED_TAXONOMY: SeedIntent[] = [
     name: 'Billing',
     subintents: ['Subscription Issues', 'Invoice Questions', 'Refund Requests', 'Payment Methods', 'Billing Errors'],
     articles: [
-      { title: 'Understanding Your Subscription', body: 'Learn how to manage your subscription, view billing history, and update payment methods.', keywords: ['subscription', 'billing', 'payment', 'renewal'] },
-      { title: 'Refund Policy and Process', body: 'Information about our refund policy, how to request a refund, and typical processing times.', keywords: ['refund', 'money back', 'return', 'policy'] },
+      { 
+        title: 'Understanding Your Subscription', 
+        body: 'Welcome to our subscription management guide. Managing your subscription is simple and can be done entirely within the account dashboard.\n\n### How to Manage Your Subscription\n1. Log in to your account and navigate to the "Billing" section in the settings menu.\n2. Here, you will see your current active subscription plan, its renewal date, and the associated costs.\n3. To change your plan, click on "Change Plan" and select the desired tier. The changes will take effect at the start of your next billing cycle.\n\n### Updating Payment Methods\nTo update your payment method, go to the "Payment Methods" tab under Billing. You can add new credit cards, remove old ones, or link your PayPal account. Ensure you have at least one valid payment method on file to avoid service interruption.\n\n### Viewing Billing History\nYou can view and download all past invoices in the "Billing History" section. If you notice any discrepancies, please reach out to support immediately.', 
+        keywords: ['subscription', 'billing', 'payment', 'renewal', 'invoices', 'manage'] 
+      },
+      { 
+        title: 'Refund Policy and Process', 
+        body: 'We strive to ensure complete satisfaction with our services. However, if you are not satisfied, you may be eligible for a refund according to our policy.\n\n### Eligibility for Refunds\n- **Digital Purchases:** Generally non-refundable unless the content is defective or there is a proven billing error (e.g., double charge).\n- **Subscriptions:** You may request a refund within 14 days of your initial purchase if you have not extensively used the service.\n\n### How to Request a Refund\n1. Go to the "Support" section in your account dashboard.\n2. Select "Submit a Request" and choose "Refund Request" from the dropdown menu.\n3. Provide your transaction ID and a brief explanation of why you are requesting a refund.\n\n### Processing Times\nRefund requests are typically reviewed within 24-48 hours. Once approved, the funds will be returned to your original payment method within 5-10 business days, depending on your bank.', 
+        keywords: ['refund', 'money back', 'return', 'policy', 'reimbursement'] 
+      },
     ],
   },
   {
     name: 'Account Access',
     subintents: ['Password Reset', 'Two-Factor Auth', 'Account Recovery', 'Email Change', 'Account Deletion'],
     articles: [
-      { title: 'Resetting Your Password', body: 'Step-by-step guide to reset your password and regain access to your account.', keywords: ['password', 'reset', 'forgot', 'locked out'] },
-      { title: 'Two-Factor Authentication Setup', body: 'Secure your account with two-factor authentication. Learn how to enable and use 2FA.', keywords: ['2fa', 'security', 'authentication', 'login'] },
+      { 
+        title: 'Resetting Your Password', 
+        body: 'If you are unable to access your account, resetting your password is the first step to regaining access.\n\n### Step-by-Step Password Reset\n1. On the login screen, click the "Forgot Password?" link located below the login button.\n2. Enter the email address associated with your account and click "Send Reset Link".\n3. Check your email inbox (and spam/junk folder) for the password reset email.\n4. Click the secure link in the email. You will be redirected to a page where you can enter and confirm your new password.\n\n### Password Requirements\nFor your security, your new password must be at least 8 characters long, contain at least one uppercase letter, one number, and one special character.\n\nIf you do not receive the email within 10 minutes, please try the process again or contact support for further assistance.', 
+        keywords: ['password', 'reset', 'forgot', 'locked out', 'login issue', 'recovery'] 
+      },
+      { 
+        title: 'Two-Factor Authentication Setup', 
+        body: 'Two-Factor Authentication (2FA) adds an extra layer of security to your account by requiring a secondary verification step during login.\n\n### How to Enable 2FA\n1. Go to your Account Settings and select "Security".\n2. Click "Enable Two-Factor Authentication".\n3. You will be prompted to choose a method: SMS or Authenticator App (recommended).\n4. **For Authenticator App:** Scan the QR code displayed on your screen using apps like Google Authenticator or Authy. Enter the 6-digit code generated by the app to confirm.\n5. **For SMS:** Enter your phone number to receive a verification code via text message.\n\n### Backup Codes\nAfter enabling 2FA, you will be provided with a list of one-time use backup codes. **Save these codes in a secure location.** If you ever lose access to your authenticator app or phone, these codes are the only way to recover your account.', 
+        keywords: ['2fa', 'security', 'authentication', 'login', 'verification', 'authenticator'] 
+      },
     ],
   },
   {
     name: 'Technical Issues',
     subintents: ['Game Crashes', 'Performance Issues', 'Connection Problems', 'Battery Drain', 'Storage Issues'],
     articles: [
-      { title: 'Troubleshooting Game Crashes', body: 'Common causes of game crashes and steps to resolve them on your device.', keywords: ['crash', 'bug', 'error', 'freeze'] },
-      { title: 'Improving Game Performance', body: 'Tips and tricks to optimize your game performance and reduce lag.', keywords: ['lag', 'slow', 'fps', 'performance'] },
+      { 
+        title: 'Troubleshooting Game Crashes', 
+        body: 'Game crashes can be frustrating. Follow these comprehensive steps to identify and resolve the issue.\n\n### Common Causes and Solutions\n1. **Outdated Software:** Ensure your device OS and the game are updated to the latest versions. Developers frequently release patches for known crash issues.\n2. **Insufficient RAM:** Close background applications to free up memory. High-intensity games require significant resources.\n3. **Corrupted Cache:** Clear the game cache.\n   - **Android:** Settings > Apps > [Game Name] > Storage > Clear Cache.\n   - **iOS:** Offload the app in Settings > General > iPhone Storage > [Game Name], then reinstall it.\n4. **Overheating:** If your device is hot to the touch, it may throttle performance and crash the app. Let the device cool down before playing again.\n\nIf the issue persists, please submit a bug report with your device model and OS version so our technical team can investigate.', 
+        keywords: ['crash', 'bug', 'error', 'freeze', 'force close', 'unexpected exit'] 
+      },
+      { 
+        title: 'Improving Game Performance', 
+        body: 'Experiencing lag, stuttering, or low frame rates? Here is how you can optimize your game performance for a smoother experience.\n\n### In-Game Settings Optimization\n- **Lower Graphics Quality:** Navigate to the in-game settings and reduce the graphics preset (e.g., from High to Medium or Low). This drastically reduces the load on your GPU.\n- **Turn off Anti-Aliasing and Shadows:** These graphical features are resource-heavy. Disabling them can provide a significant FPS boost.\n- **Enable Performance Mode:** If available in the game settings, this mode prioritizes frame rate over visual fidelity.\n\n### Device-Level Optimizations\n- **Battery Saver:** Disable "Battery Saver" or "Low Power Mode" on your device, as these modes intentionally restrict CPU and GPU performance.\n- **Stable Connection:** For online games, ensure you are on a stable Wi-Fi connection rather than cellular data to reduce latency (ping).\n- **Free Up Storage Space:** Devices perform poorly when storage is nearly full. Keep at least 10% of your total storage free.', 
+        keywords: ['lag', 'slow', 'fps', 'performance', 'stutter', 'optimization', 'settings'] 
+      },
     ],
   },
   {
     name: 'Gameplay Help',
     subintents: ['How to Play', 'Tips & Tricks', 'Game Progression', 'Achievements', 'Level Guides'],
     articles: [
-      { title: 'Getting Started Guide', body: 'A comprehensive guide for new players covering the basics of gameplay.', keywords: ['tutorial', 'beginner', 'how to', 'basics'] },
-      { title: 'Advanced Tips and Strategies', body: 'Pro tips and strategies to progress faster and achieve higher scores.', keywords: ['strategy', 'tips', 'advanced', 'level up'] },
+      { 
+        title: 'Getting Started Guide', 
+        body: 'Welcome to the game! This guide will help you understand the core mechanics and get you started on your journey.\n\n### The Basics\n- **Controls:** Familiarize yourself with the control scheme in the settings. You can often customize button layouts to suit your playstyle.\n- **Objectives:** Your primary goal is displayed at the top of the screen or in the quest log. Follow the main questline to unlock new areas and abilities.\n- **Resource Management:** Collect resources (like gold, wood, or energy) scattered throughout the world. These are essential for upgrading your gear and abilities.\n\n### First Steps\n1. Complete the tutorial. It provides valuable rewards and introduces critical gameplay mechanics.\n2. Do not spend premium currency early on. Save it for significant upgrades later in the game.\n3. Explore your surroundings. Hidden chests and lore items offer great early-game advantages.\n\nJoin our community Discord to ask veteran players for advice and find groups to play with!', 
+        keywords: ['tutorial', 'beginner', 'how to', 'basics', 'start', 'guide'] 
+      },
+      { 
+        title: 'Advanced Tips and Strategies', 
+        body: 'Ready to take your gameplay to the next level? Here are some advanced strategies to help you dominate.\n\n### Mastering the Meta\n- **Synergy:** Focus on building a loadout where items and abilities complement each other. A cohesive build is always stronger than randomly equipped high-tier items.\n- **Animation Canceling:** Learn the specific timing to cancel ability animations by inputting a movement command immediately after the cast. This increases your overall damage output (DPS).\n\n### Resource Economy\n- **Farming Routes:** Optimize your farming by following specific routes that maximize resource nodes per minute. Check community wikis for the most efficient paths.\n- **Market Trading:** If the game features an auction house or player market, learn the economic trends. Buy crafting materials on weekends when supply is high and sell crafted gear during the week when demand peaks.\n\nExperiment continuously and do not be afraid to respec your character to try new builds as balance patches are released.', 
+        keywords: ['strategy', 'tips', 'advanced', 'level up', 'pro', 'guide'] 
+      },
     ],
   },
   {
     name: 'In-App Purchases',
-    subintents: ['Missing Purchase', 'Double Charge', 'Item Not Received', 'Promo Codes', 'Refund Status'],
+    subintents: ['Missing Purchase', 'Double Charge', 'Promo Codes', 'Refund Status'],
     articles: [
-      { title: 'How to Make In-App Purchases', body: 'Learn how to safely purchase items and currency within the game.', keywords: ['purchase', 'buy', 'currency', 'items'] },
-      { title: 'Troubleshooting Purchase Issues', body: 'Common purchase problems and how to resolve them.', keywords: ['purchase failed', 'transaction', 'error', 'payment issue'] },
+      { 
+        title: 'How to Make In-App Purchases', 
+        body: 'Purchasing premium items or currency can enhance your experience. Here is how to do it safely.\n\n### Making a Purchase\n1. Open the in-game store by tapping the shopping cart icon on the main menu.\n2. Browse the categories (e.g., Currency, Bundles, Cosmetics) and select the item you wish to buy.\n3. Tap the price button. This will prompt a confirmation dialog from your device app store (Apple App Store or Google Play).\n4. Authenticate the purchase using Face ID, Touch ID, or your account password.\n\n### Security Best Practices\n- Never share your account password or payment details with anyone claiming to be a game administrator.\n- Set up purchase authentication on your device to prevent unauthorized or accidental purchases, especially if children use the device.\n- Only make purchases through the official in-game store. Third-party currency sellers are fraudulent and using them will result in a permanent account ban.', 
+        keywords: ['purchase', 'buy', 'currency', 'items', 'store', 'shop'] 
+      },
+      { 
+        title: 'Troubleshooting Purchase Issues', 
+        body: 'If you experienced an issue while making a purchase, do not panic. Most issues can be resolved quickly.\n\n### Item Not Received\nSometimes there is a delay in communication between the app store and our servers.\n1. **Wait 24 Hours:** In 90% of cases, delayed purchases are automatically delivered within a few hours.\n2. **Restart the Game:** Completely close and reopen the app to force a sync with the server.\n3. **Restore Purchases:** If you bought a non-consumable item (like a "Remove Ads" upgrade), go to settings and tap "Restore Purchases".\n\n### Double Charges\nIf you were charged twice for a single transaction:\n- Check your email receipts to confirm if there are two distinct Order IDs.\n- If it is a true double charge, please contact our support team with screenshots of the receipts, and we will issue a refund for the duplicate transaction immediately.', 
+        keywords: ['purchase failed', 'transaction', 'error', 'payment issue', 'missing item'] 
+      },
     ],
   },
   {
     name: 'Social Features',
     subintents: ['Friend Issues', 'Clan Management', 'Leaderboard Problems', 'Chat Issues', 'Guild Help'],
     articles: [
-      { title: 'Managing Your Friends List', body: 'How to add friends, manage friend requests, and interact with other players.', keywords: ['friends', 'add', 'invite', 'multiplayer'] },
-      { title: 'Joining and Managing Clans', body: 'Create or join a clan, manage clan membership, and participate in clan events.', keywords: ['clan', 'guild', 'team', 'group'] },
+      { 
+        title: 'Managing Your Friends List', 
+        body: 'Playing with friends makes the game better! Here is how to manage your social connections.\n\n### Adding and Removing Friends\n- **To Add:** Navigate to the Social tab, tap "Add Friend", and enter their unique Player ID or Username. They will receive a pending request.\n- **To Accept:** Check the "Requests" tab to accept or decline incoming friend requests.\n- **To Remove:** Tap on a friend name in your list and select "Remove Friend" from the context menu.\n\n### Interacting with Friends\nOnce connected, you can see when your friends are online. Tap their name to:\n- Invite them to a party or match.\n- Send them daily gifts (if applicable).\n- View their profile and achievements.\n- Send direct messages via the in-game chat system.\n\nNote: The maximum friend limit is 100 players. If your list is full, you must remove someone before accepting new requests.', 
+        keywords: ['friends', 'add', 'invite', 'multiplayer', 'social'] 
+      },
+      { 
+        title: 'Joining and Managing Clans', 
+        body: 'Clans (or Guilds) allow you to team up with like-minded players for exclusive rewards and cooperative gameplay.\n\n### Joining a Clan\n1. Open the Clan menu and select "Search".\n2. You can search by Clan Name, or use filters like "Casual" or "Competitive" to find a good fit.\n3. Tap "Apply" or "Join" (if the clan is set to open enrollment).\n\n### Managing a Clan (For Leaders)\nIf you create a clan, you have several administrative tools:\n- **Roles:** Promote members to Co-Leader or Elder to help manage the group. Elders can accept applications, while Co-Leaders can edit clan settings.\n- **Settings:** Customize the Clan description, emblem, and minimum level requirements for new recruits.\n- **Activity Tracking:** View the "Last Online" status of members to kick inactive players and make room for active ones.\n\nParticipate in weekly Clan Wars or Guild Events to earn clan-wide buffs and premium currency.', 
+        keywords: ['clan', 'guild', 'team', 'group', 'alliance'] 
+      },
     ],
   },
   {
     name: 'Data & Sync',
     subintents: ['Lost Progress', 'Sync Failures', 'Device Transfer', 'Data Recovery', 'Cloud Backup'],
     articles: [
-      { title: 'Backing Up Your Progress', body: 'How to back up your game progress and transfer it to a new device.', keywords: ['backup', 'restore', 'transfer', 'cloud'] },
-      { title: 'Recovering Lost Progress', body: 'Steps to take if your progress is lost or not syncing correctly.', keywords: ['lost progress', 'sync', 'recovery', 'data loss'] },
+      { 
+        title: 'Backing Up Your Progress', 
+        body: 'Never lose your hard-earned progress! Linking your account is the only reliable way to back up your save data.\n\n### How to Link Your Account\nWe highly recommend linking your game to a reliable cloud service. \n1. Go to the in-game Settings menu.\n2. Tap the "Account" or "Save Data" tab.\n3. Choose an authentication method to link: Google Play Games, Apple Game Center, or a dedicated Game Account.\n4. Follow the prompts to authorize the connection.\n\n### Transferring to a New Device\nOnce your account is linked, transferring your progress is easy:\n1. Install the game on your new device.\n2. Complete the initial unskippable tutorial.\n3. Go to Settings > Account and sign in with the SAME method you linked previously.\n4. You will be prompted to restore your cloud save. Confirm the prompt to overwrite the local save with your backed-up data.', 
+        keywords: ['backup', 'restore', 'transfer', 'cloud', 'save', 'link account'] 
+      },
+      { 
+        title: 'Recovering Lost Progress', 
+        body: 'If you have opened the game and found your progress missing, follow these steps to recover it.\n\n### Immediate Steps\n1. **Check Your Login Status:** Often, the game simply logged you out after an update. Go to settings and ensure you are logged in to Google Play, Apple Game Center, or your primary account.\n2. **Check Your Server Selection:** If the game has multiple regional servers (e.g., NA, EU, ASIA), ensure you are connected to the correct one. Progress is typically not shared across servers.\n\n### Contacting Support for Recovery\nIf you were playing on a "Guest Account" (unlinked) and changed devices or reinstalled the game, your local save data is erased. In this case, contact support immediately with the following information:\n- Your old Player ID (if you remember it) or exact Username.\n- The device model you were playing on.\n- Receipts of any in-app purchases made on the lost account (this is the fastest way for us to verify ownership and locate the account).\n\nWe will do our best to manually restore your data, though recovery of unlinked accounts is not guaranteed.', 
+        keywords: ['lost progress', 'sync', 'recovery', 'data loss', 'missing account'] 
+      },
     ],
   },
   {
     name: 'Events & Promotions',
     subintents: ['Event Participation', 'Reward Issues', 'Limited Time Events', 'Seasonal Content', 'Bonus Tracking'],
     articles: [
-      { title: 'Current Events and Rewards', body: 'Information about ongoing events, how to participate, and earn exclusive rewards.', keywords: ['event', 'rewards', 'promotion', 'exclusive'] },
-      { title: 'Seasonal Content Guide', body: 'Learn about seasonal events, limited-time items, and special promotions.', keywords: ['seasonal', 'limited time', 'special', 'event'] },
+      { 
+        title: 'Current Events and Rewards', 
+        body: 'Events are a great way to earn rare items and currency. Keep track of what is happening so you never miss out.\n\n### Finding Event Information\n- **Event Hub:** Tap the calendar or banner icon on the main menu to open the Event Hub. This displays all currently active events and their remaining duration.\n- **News Tab:** Check the in-game news section for developer posts detailing upcoming event schedules and patch notes.\n\n### Participating and Claiming Rewards\nEach event has specific objectives (e.g., "Defeat 50 enemies", "Log in for 7 consecutive days"). \n- Progress is usually tracked automatically.\n- **Important:** Rewards are rarely sent directly to your inventory. You must manually claim them from the Event Hub menu before the event expires. Unclaimed rewards are permanently lost when the event timer reaches zero.', 
+        keywords: ['event', 'rewards', 'promotion', 'exclusive', 'calendar'] 
+      },
+      { 
+        title: 'Seasonal Content Guide', 
+        body: 'The game undergoes massive changes during seasonal transitions (e.g., Halloween, Winter Holidays, Summer Festival). Here is what you need to know.\n\n### What to Expect\n- **Map Changes:** The game world or hub area often receives a thematic visual overhaul.\n- **Limited-Time Game Modes:** Special modes with unique rulesets are available only during the season.\n- **Exclusive Cosmetics:** Seasonal skins, emotes, and avatars are added to the shop or reward tracks. These items are exclusive and may not return for an entire year.\n\n### Seasonal Currencies\nDuring major seasons, a unique temporary currency (e.g., "Snowflakes" or "Pumpkin Tokens") is introduced. \n- You earn these by playing normally or completing specific seasonal quests.\n- Spend them in the specialized Seasonal Shop.\n- **Warning:** Seasonal currencies expire at the end of the event. Make sure to spend them all; they will not carry over to the following year.', 
+        keywords: ['seasonal', 'limited time', 'special', 'event', 'holiday'] 
+      },
     ],
   },
 ]

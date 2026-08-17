@@ -114,17 +114,25 @@ export async function seed(): Promise<void> {
     // here with an explicit lookup — otherwise every re-run of this seed would
     // duplicate all sixteen articles.
     for (const intentData of SEED_TAXONOMY) {
-      const [newIntent] = await tx
+      let [currentIntent] = await tx
         .insert(intent)
         .values({ workspaceId, name: intentData.name })
         .onConflictDoNothing()
         .returning({ id: intent.id })
 
-      if (newIntent) {
+      if (!currentIntent) {
+        [currentIntent] = await tx
+          .select({ id: intent.id })
+          .from(intent)
+          .where(and(eq(intent.workspaceId, workspaceId), eq(intent.name, intentData.name)))
+          .limit(1)
+      }
+
+      if (currentIntent) {
         for (const subintentName of intentData.subintents) {
           await tx
             .insert(subintent)
-            .values({ workspaceId, intentId: newIntent.id, name: subintentName })
+            .values({ workspaceId, intentId: currentIntent.id, name: subintentName })
             .onConflictDoNothing()
         }
 
@@ -143,7 +151,7 @@ export async function seed(): Promise<void> {
             .insert(article)
             .values({
               workspaceId,
-              intentId: newIntent.id,
+              intentId: currentIntent.id,
               title: articleData.title,
               body: articleData.body,
               keywords: articleData.keywords,

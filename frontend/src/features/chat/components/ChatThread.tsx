@@ -9,6 +9,13 @@ type ChatThreadProps = {
   currentAuthorType: ChatAuthorType
   /** Only ever called for a message with deliveryState 'failed'. Omit only if the caller renders no optimistic sends at all — both surfaces do. */
   onRetry?: (message: ChatMessage) => void
+  /**
+   * What to call the player on their bubbles — the agent console passes the
+   * `external_player_id`, which is the only identity a player has (there is no
+   * display name on `player`). Falls back to the generic word when the caller
+   * has not resolved one yet, so a bubble is never left unlabelled mid-load.
+   */
+  playerLabel?: string
 }
 
 /**
@@ -30,7 +37,7 @@ type ChatThreadProps = {
  * bubble and leaving atBottom permanently false, which is what pins the "jump to
  * latest" button on screen. Space items with padding on a wrapper instead.
  */
-export function ChatThread({ messages, currentAuthorType, onRetry }: ChatThreadProps) {
+export function ChatThread({ messages, currentAuthorType, onRetry, playerLabel }: ChatThreadProps) {
   const { ref, showJump, missed, onAtBottomChange, jump } = useJumpToLatest(messages.length)
 
   return (
@@ -67,6 +74,16 @@ export function ChatThread({ messages, currentAuthorType, onRetry }: ChatThreadP
         itemContent={(_index, chatMessage) => {
           const isOwn = chatMessage.authorType === currentAuthorType
           const isInternal = chatMessage.visibility === 'internal'
+          const isBot = chatMessage.authorType === 'bot'
+
+          // The bot answers on support's behalf, so to an agent it is not the
+          // other party — it is their own side of the thread, and reading it
+          // opposite the agent's replies misrepresents who the player is talking
+          // to. To a player it stays the counterparty, which is why this is
+          // conditioned on who is reading rather than being a property of the
+          // message. `isOwn` still means "I typed this" and keeps driving the
+          // receipt below; only the side is widened.
+          const onOwnSide = isOwn || (isBot && currentAuthorType === 'agent')
 
           // A third state, not a variant of the other two: a system message has no
           // side of the conversation to sit on, and rendering it as "not own" made
@@ -99,13 +116,40 @@ export function ChatThread({ messages, currentAuthorType, onRetry }: ChatThreadP
               <div
                 className={[
                   'mx-3 max-w-[82%] rounded-2xl px-3 py-2 text-sm leading-snug break-words shadow-sm',
-                  isOwn ? 'ml-auto rounded-br-sm bg-accent text-accent-fg' : 'mr-auto rounded-bl-sm border border-muted/20 bg-accent-soft text-text',
+                  // Side is "whose side of the conversation", not "who typed it"
+                  // — kept separate from the colour below so the bot can sit on
+                  // support's side without also borrowing the agent's styling.
+                  onOwnSide ? 'ml-auto rounded-br-sm' : 'mr-auto rounded-bl-sm',
+                  isOwn ? 'bg-accent text-accent-fg' : 'border border-muted/20 bg-accent-soft text-text',
+                  // The bot shares a side with the agent now, so the label is no
+                  // longer the only thing separating them — this keeps them
+                  // distinguishable at a glance, without reading.
+                  isBot ? 'border-dashed border-muted/50 bg-muted/10' : null,
                   isInternal ? 'border border-amber-500 bg-amber-100 text-amber-900' : null,
                 ]
                   .filter(Boolean)
                   .join(' ')}
                 data-own={isOwn}
+                data-own-side={onOwnSide}
+                data-author={chatMessage.authorType}
               >
+                {/* Both counterparts are labelled, not just the bot: labelling
+                    only one makes the other's meaning depend on an absence, and
+                    an agent scanning a thread should never have to infer "no
+                    badge here, so a human must have said it". */}
+                {!isOwn && (
+                  // `normal-case`, not the uppercase the other labels use: a
+                  // player id is data, and upper-casing it misrepresents an
+                  // identifier that may well be case-sensitive.
+                  <span
+                    className={[
+                      'mb-1 block text-xs font-semibold tracking-wide opacity-70',
+                      isBot || chatMessage.authorType === 'agent' ? 'uppercase' : 'break-all normal-case',
+                    ].join(' ')}
+                  >
+                    {isBot ? 'Bot' : chatMessage.authorType === 'agent' ? 'Agent' : (playerLabel ?? 'Player')}
+                  </span>
+                )}
                 <p className="m-0">{chatMessage.body}</p>
                 <time dateTime={chatMessage.createdAt} className="mt-1 block text-xs opacity-80">
                   {new Date(chatMessage.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

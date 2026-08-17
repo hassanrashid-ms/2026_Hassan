@@ -17,6 +17,7 @@ import {
   truncateAll,
 } from './helpers/db.ts'
 import { enqueueBotTurn } from '../src/shared/jobs/botTurns.ts'
+import { HANDOFF_PLAYER_MESSAGES } from '../src/domain/bot/messages.ts'
 
 vi.mock('../src/shared/jobs/botTurns.ts', () => ({ enqueueBotTurn: vi.fn().mockResolvedValue(undefined) }))
 
@@ -169,7 +170,7 @@ describe('POST /surface/messages', () => {
     // response to this message, so it must carry the higher seq.
     expect(rows.map((r) => r.author_type)).toEqual(['player', 'system'])
     expect(rows[0]!.body).toBe("I'm still facing issues.")
-    expect(rows[1]!.body).toBe("You're being connected to our support team.")
+    expect(HANDOFF_PLAYER_MESSAGES as readonly string[]).toContain(rows[1]!.body)
     expect(rows[0]!.seq).toBeLessThan(rows[1]!.seq)
   })
 

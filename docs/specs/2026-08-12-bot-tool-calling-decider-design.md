@@ -42,7 +42,7 @@ Specs 1 and 2 stand, with the deltas named in *Deltas* below. `runBotTurn`, `app
 | Fifth outcome `resolve` | `bot_active → resolved`, player-confirmed |
 | Article-offer lifecycle | `bot_article_offered`, `bot_article_rejected` |
 | Reopen posts the handoff message and assigns | Spec 1 leaves the reopen branch bare |
-| Turn budgets — 4 tool calls, 8 bot messages | The runaway guards |
+| Turn budgets — 6 tool calls, 8 bot messages | The runaway guards |
 | `Other` intent + catch-all subintent, seeded | Carried unchanged from spec 3 §5 |
 | Delete `stubDecider`, remove `not_implemented` | The scaffolding spec 1 named for removal |
 
@@ -106,7 +106,7 @@ unambiguous and free, not because they are the primary path.
 |---|---|---|
 | `search_articles(query)` | always, ≤3 per turn | Hybrid Weaviate query (spec 2). No side effects. Returns `{id, title, body}[]` |
 | `classify(subintent_index)` | always, **write-once per conversation** | A second call is accepted and ignored |
-| `offer_article(article_id)` | always; the id must have been returned by `search_articles` **in this turn** | Posts the article, sets `bot_phase = 'article_confirm'` |
+| `answer_from_article(article_id, answer)` | always; the id must have been returned by `search_articles` **in this turn**, and `answer` must be grounded in that article | Posts `answer` as the bot's message, sets `bot_phase = 'article_confirm'` |
 | `confirm_resolution(helped)` | **only while `bot_phase = 'article_confirm'`** | `true` → `resolve`. `false` → `handoff('article_rejected')` |
 | `handoff(reason)` | **always, every phase** | Terminal. Reason drives the metrics, not the mechanism |
 
@@ -116,9 +116,58 @@ nothing"*; a model that reads the message, queries *"missing in-app purchase not
 the titles and re-queries will beat it. Retrieval is cheap, side-effect-free and idempotent — the
 textbook case for letting the model drive it.
 
-**`offer_article` validates against this turn's search results**, so a hallucinated or remembered
-article id cannot reach a player. The check is on the id set returned by `search_articles` during
-the current loop, not on the articles table.
+**`answer_from_article` validates against this turn's search results**, so a hallucinated or
+remembered article id cannot reach a player. The check is on the id set returned by
+`search_articles` during the current loop, not on the articles table.
+
+### Superseded: `offer_article(article_id)`
+
+The tool was originally `offer_article(article_id)`, and it posted a fixed sentence — *"Here's an
+article that might help."* — while the id went only into a `bot_article_offered` event. That
+assumed a delivery channel for articles which **does not exist and never did**: `message` has no
+article column, `PlayerMessageView` no article field, and the webview no card to render. The player
+was told an article was coming and shown nothing, then asked by the confirm banner whether it had
+solved their problem.
+
+The failure was not cosmetic. `No` is the only honest answer to that question, and `No` is wired to
+`handoff('article_rejected')` — so **every successful retrieval became a human ticket**, logged as
+the player rejecting the article. Containment on this path was structurally pinned at zero, and the
+metrics blamed retrieval quality for a missing renderer. Observed live on conversation
+`a20d5cf3`, on a purchase question that had a published article behind it.
+
+The fix delivers the *substance* rather than a pointer, which is what the player wanted in the first
+place: the model already receives each article's full `body` from `search_articles`, so it writes
+the answer from it and passes that text as `answer`. Two properties are then load-bearing:
+
+- **The wording stays the article's.** The answer is the article re-aimed at one player — its
+  sentences, its terms, every step, number and condition intact — with only the parts that do not
+  apply dropped and the player's own words used to address their case. Nothing added.
+- **That is checked, not asked for.** See "Grounding" below. This repo already learned that a
+  prompt-level promise about model output is not a guarantee, when the handoff instruction produced
+  sentences instead of tool calls for weeks.
+
+Article *delivery* — a tappable card, a real `message.article_id` — remains a reasonable future
+feature. It would be an addition to this, not a replacement: the player still wants the answer in
+the chat window, not a document to go and read.
+
+### Grounding
+
+`scoreGrounding` (`domain/bot/grounding.ts`) refuses an answer unless `MIN_GROUNDED_FRACTION` (0.9)
+of its content words appear in the permitted vocabulary. That vocabulary is exactly two things — the
+**cited article's title and body**, and the **player's own messages** — which together are the
+brief: the article supplies the substance, the player's words let the answer name their situation.
+
+- Scored against the cited article **only**, never the loop's accumulated context, which by then
+  holds every other article the turn retrieved. Widening it would let an answer assembled from
+  article B pass while citing A, making `bot_article_offered` a lie.
+- Lenient on grammar, strict on facts. Stopwords and inflection are forgiven via a five-character
+  prefix match; anything containing a digit is not, because an invented amount or duration is the
+  most damaging thing the bot can produce and `48` must never be grounded by `24`.
+- A rejection is fed back to the model **naming the offending words** and the loop continues — it
+  has already read the rule, so the useful correction is which words to drop. An answer it cannot
+  fix ends the turn in a handoff, which is a safe outcome.
+- The asymmetry is deliberate: a false rejection costs a tool call; a false acceptance puts a
+  fabricated promise in front of a player.
 
 **`confirm_resolution` is scoped, and that scope is the whole safety argument.** Outside the window
 where the bot has actually asked *"did this solve it?"*, a model reading *"ok thanks"* as
@@ -340,8 +389,9 @@ No index. It is read only alongside the conversation row itself, always by prima
    - No tool call → the model produced text. Exit with `{ kind: 'answer', reply }`.
    - `search_articles` → run it, append the result, continue.
    - `classify` → record the resolved subintent, append an acknowledgement, continue.
-   - `offer_article` → validate the id against this turn's results, exit with
-     `{ kind: 'answer', reply, articleId }`.
+   - `answer_from_article` → validate the id against this turn's results and the answer against
+     that article's text, exit with `{ kind: 'answer', reply: answer, articleId }`. A non-empty
+     answer that fails grounding is fed back for a rewrite and the loop continues.
    - `confirm_resolution(true)` → exit `{ kind: 'resolve' }`. `(false)` → exit
      `{ kind: 'handoff', reason: 'article_rejected' }`.
    - `handoff(reason)` → exit `{ kind: 'handoff', reason }`.
@@ -375,16 +425,99 @@ player-visible status changes to **Resolved**, which is the confirmation, and th
 record. Every other outcome posts because the player is being told something they do not already
 know.
 
+**A handoff is a tool call, never a sentence — and the prompt must not ask for both.** One model
+response carries tool calls *or* text, never both: `openaiClient` returns `text` only when
+`toolCalls` is empty, and `toolLoop` maps a text-only response to `answer`, which leaves the
+conversation `bot_active`. So an instruction to *"say you are passing this to the support team"*
+competes directly with calling `handoff`, and the model can satisfy it by writing the sentence and
+stopping. The player is then told they have been handed off while the bot stays in control and
+keeps replying — observed in production on conversation `fc2c383a`, which announced a handoff twice
+over three player turns before one actually fired.
+
+**The handoff words are server-owned.** The model's only job on a handoff is to call the tool and
+write nothing; what the player reads is picked from `HANDOFF_PLAYER_MESSAGES` in `messages.ts`. That
+removes the competition at its source rather than asking the model to resist it, and it means a
+rewritten workspace prompt — or a player's own injected instruction — cannot change the words. The
+model's sentence was being discarded on a real handoff anyway, so nothing is lost.
+
+It is a list, not one constant, so a player who hands off twice in a session is not answered
+verbatim the same way; `pickHandoffMessage()` draws at random per call. Every line is
+interchangeable in meaning — a human is coming, and nothing else. None may apologise, promise a
+wait, or hint at a failure, because the same list serves a clean handoff and a bot crash and the
+player must not be able to tell which they got. `tests/bot.messages.test.ts` enforces that.
+
+`DEFAULT_BOT_PROMPT` therefore points at the tool and says to write nothing alongside it;
+`tests/bot.config.test.ts` guards the wording. Any workspace that customises its prompt inherits
+this constraint — an admin who writes *"tell the player you are transferring them"* reintroduces the
+bug, and now also produces a duplicate of a line the server already posts.
+
+**A turn with no tool call and no text is a malformed response, not an empty answer.** `toolLoop`
+built its `answer` from `response.text ?? ''`, so a model that returned neither a tool call nor any
+content posted a zero-length `bot` message: the player saw a blank bubble, and nothing recorded a
+failure, because as far as the system was concerned the bot had answered. It surfaced on a player
+who said *"hi"* — the search-before-handoff rule sent the bot to retrieval on a greeting, and it
+came back with nothing to say. An empty reply now raises `InvalidResponseError`, taking the same
+path as a refusal: the player gets a handoff line and the agent gets the internal note. A reply with
+content is trimmed and kept.
+
+`postMessage` refuses an empty body outright as a second layer, at the one choke point every message
+passes through — both send routes already reject empty at their Zod schemas, so anything empty
+arriving there is server-side code posting with nothing to say. It throws before bumping `seq`, so a
+refused post does not leave a gap. For the bot that throw degrades to a retried job and then a
+handoff, which beats a blank bubble the player cannot act on.
+
+The prompt states the invariant directly — every turn ends in a reply with words in it *or* a tool
+call, never both and never neither — and carves out greetings and unintelligible messages as
+neither an answer nor a handoff: reply in one sentence and wait, without searching. The earlier
+*"call the handoff tool and write nothing"* wording was itself a contributor, being read as
+literal permission to emit empty content.
+
+**The tool-call budget is 6, raised from 4.** The happy path — `classify` → `search_articles` →
+`answer_from_article` — fits in four only if the model spends every call perfectly. Once the prompt
+required a search before concluding no article answers, a turn that classified twice or searched
+twice before committing hit the ceiling and fell out as `handoff('unsure')`: a handoff caused by the
+budget rather than by the question, on a conversation an article would have answered. Six leaves
+slack for the imperfect turn while still bounding the loop, and `bot.tool` logs `n/6` per call so
+exhausting it is visible rather than inferred. `handoff('unsure')` should now be rare enough that
+seeing it in the events is a signal worth investigating, not background noise.
+
+**Search before concluding no article answers.** The rules previously sent any report of a financial
+loss straight to a human, which meant a published article on the exact problem could never be
+offered — `fc2c383a` asked about an undelivered purchase with *Troubleshooting Purchase Issues*
+sitting published and indexed. The rules now require a search first for that class of problem, and
+reserve the search-free immediate handoff for a player who asks for a human, or a legal or safety
+issue. Offering an article costs the player nothing: the resolution banner lets them say it did not
+help, which hands them off anyway. Containment is still reported, never a goal — the bot may not
+resolve or dismiss a loss complaint itself.
+
 ### Events
 
-Four new types on top of spec 1's three, all `actorType: 'bot'`, `actorId: null`.
+Five new types on top of spec 1's three, all `actorType: 'bot'`, `actorId: null`.
 
 | Type | Payload |
 |---|---|
+| `bot_search` | `{ query, result_count, articles: [{ article_id, article_title }] }` — one row per `search_articles` call |
 | `bot_article_offered` | `{ article_id, article_title }` — title snapshotted, per the `intent_set` precedent |
 | `bot_article_rejected` | `{ article_id }` |
 | `conversation_resolved` | `{ source: 'bot', confirmed_by: 'player' }` |
 | `conversation_reopened` | `{ previous_resolution_source: 'bot' \| 'agent' \| 'timeout' }` |
+
+`bot_search` is what makes retrieval falsifiable. Without it, a turn that never searched and a turn
+that searched and found nothing produce byte-identical rows — same `conversation`, same
+`bot_handoff` — so *"the bot is ignoring the knowledge base"* and *"the knowledge base has no
+answer"* are indistinguishable after the fact, and they need opposite fixes. The event is written
+for every outcome, not just the ones that offer an article: a handoff is precisely the case where
+the question gets asked.
+
+It rides to `applyBotTurn` on `BotTurnDecision.searches` rather than being written where the search
+happens, because the decider never writes — retrieval telemetry has to commit in the same
+transaction as the outcome it explains, or a rolled-back turn leaves searches behind that nothing
+came of. An absent field means no search ran; it never means a search ran and returned nothing,
+which is `result_count: 0`.
+
+Titles are snapshotted at search time and written from that snapshot, never re-resolved from
+`article_id` in the writing transaction — the record must say what the model was actually shown,
+not what the article is called now.
 
 `bot_article_offered` / `bot_article_rejected` are what make *"which article the bot offered, and
 whether the player rejected it"* recoverable — a record `project-overview.md` lists as required and
@@ -461,9 +594,9 @@ reasons and never inspects an SDK exception shape.
 
 - A greeting — model replies with **no tool call** — produces one `bot` message, stays `bot_active`,
   writes no classification and **no event**. Asserting the absence of `intent_set` is the point.
-- `search_articles` → `offer_article` produces `{ kind: 'answer', articleId }` and sets
+- `search_articles` → `answer_from_article` produces `{ kind: 'answer', reply, articleId }` and sets
   `bot_phase = 'article_confirm'`.
-- `offer_article` with an id **not** returned by `search_articles` this turn is rejected; the loop
+- `answer_from_article` with an id **not** returned by `search_articles` this turn is rejected; the loop
   continues rather than posting it.
 - `classify` twice in one conversation writes the first and ignores the second; exactly one
   `intent_set`.
@@ -471,10 +604,23 @@ reasons and never inspects an SDK exception shape.
   explicitly, because the temptation to fabricate `Other` here is the whole of §5.
 - `confirm_resolution` is **absent from the tool set** when `bot_phase = 'none'`, and present when
   `'article_confirm'`. Asserted on the request payload, not on behaviour.
-- Budget: a model that calls `search_articles` forever stops at 4 and returns
-  `handoff('unsure')`.
+- Budget: a model that calls `search_articles` forever stops at `MAX_TOOL_CALLS_PER_TURN` and
+  returns `handoff('unsure')`.
+- Budget: `classify` → `search_articles` → `answer_from_article` still completes after two calls are
+  wasted on repeats. The budget must never be what ends an ordinary turn.
 - Budget: with 8 bot messages present, `callModel` is **never called** and the result is
   `handoff('turn_cap')`. Asserting the absence of the call is the point.
+- Every turn that searched carries its `searches` on the returned decision, including the
+  budget-forced `handoff('unsure')` — a turn that searched and then hit a limit still has to say
+  what it searched for.
+
+### `tests/bot.phase.test.ts` — `bot_search`
+
+- One `bot_search` per search, written **before** the outcome events, with the titles snapshotted on
+  the decision rather than re-read from `article`.
+- A `handoff` carrying a search writes `bot_search` too. This is the case the event exists for.
+- A decision with no `searches` writes no `bot_search` at all — the absent event is what distinguishes
+  *never searched* from *searched and found nothing* (`result_count: 0`).
 - A refusal and an unparseable tool argument each produce `invalid_response` and are asserted
   **not** retried. A network error and a timeout each throw.
 

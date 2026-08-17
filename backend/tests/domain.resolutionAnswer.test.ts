@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { applyResolutionAnswer } from '../src/domain/conversations/index.ts'
 import { withWorkspace } from '../src/shared/db/withWorkspace.ts'
 import { closeDb } from '../src/shared/db/client.ts'
+import { HANDOFF_PLAYER_MESSAGES } from '../src/domain/bot/messages.ts'
 import {
   closeOwnerPool,
   ownerPool,
@@ -127,7 +128,7 @@ describe('applyResolutionAnswer', () => {
     expect(row.confirm_phase).toBe('none')
     expect(row.assigned_agent_id).toBe(agentId)
     expect(await messagesFor(conversationId)).toEqual([
-      { author_type: 'system', visibility: 'public', body: "You're being connected to our support team." },
+      { author_type: 'system', visibility: 'public', body: expect.toBeOneOf([...HANDOFF_PLAYER_MESSAGES]) },
     ])
     // applyBotTurn's handoff branch posts the player-facing message first, via
     // postMessage, which appends its own message_sent event before the

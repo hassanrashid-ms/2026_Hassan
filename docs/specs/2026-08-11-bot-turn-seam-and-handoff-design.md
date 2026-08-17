@@ -61,7 +61,7 @@ This is the first of the specs decomposing the bot orchestrator:
 - **Every LLM concern.** No `openai` dependency, no `OPENAI_MODEL` env var, no prompt assembly, no
   retrieval, no response schema. Specs 2 and 3.
 - **The turn budgets.** Guards inside the decider, and the decider is a stub here. Spec 4 sets them
-  at 4 tool calls per turn and 8 bot messages per conversation.
+  at 6 tool calls per turn (originally 4 — see that spec) and 8 bot messages per conversation.
 - **The article-offer lifecycle** and `bot_active → resolved` on player confirmation. Spec 4 builds
   both, as `bot_article_offered` / `bot_article_rejected` and the `resolve` outcome.
 - **Form offering.** Blocked on the form-builder and the player modal, neither of which exists.

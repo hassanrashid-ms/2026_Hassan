@@ -120,4 +120,114 @@ describe('ChatThread read receipts', () => {
     )
     expect(screen.queryByText('Seen')).not.toBeInTheDocument()
   })
+
+  /**
+   * Bot and player both arrive at the agent console as "not own" and used to
+   * render as the same bubble on the same side, so an agent reading a thread
+   * could not tell which of the two had spoken — a bot's reply read as the
+   * player's own words.
+   */
+  // Rendered one at a time on purpose: jsdom computes no layout, so Virtuoso
+  // mounts only the first item of a list and a two-message thread would assert
+  // against a bubble that was never in the DOM.
+  it('labels a bot message as Bot', async () => {
+    render(
+      <div style={{ height: 600 }}>
+        <ChatThread messages={[message({ id: 'b', authorType: 'bot', body: 'from the bot' })]} currentAuthorType="agent" />
+      </div>,
+    )
+    await screen.findByText('from the bot')
+    expect(screen.getByText('Bot')).toBeInTheDocument()
+  })
+
+  /**
+   * The bot answers on support's behalf. Rendered opposite the agent's own
+   * replies it reads as something the player said, which is the confusion this
+   * whole labelling exists to end — a side is a stronger signal than a badge.
+   */
+  it('puts a bot message on the agent\'s own side, while still not counting as "own"', async () => {
+    render(
+      <div style={{ height: 600 }}>
+        <ChatThread messages={[message({ id: 'b', authorType: 'bot', body: 'from the bot' })]} currentAuthorType="agent" />
+      </div>,
+    )
+    await screen.findByText('from the bot')
+    const bot = document.querySelector('[data-author="bot"]')!
+    expect(bot.getAttribute('data-own-side')).toBe('true')
+    // Not "own": the agent did not type it, so it must not claim a read receipt.
+    expect(bot.getAttribute('data-own')).toBe('false')
+    expect(bot.className).toContain('ml-auto')
+    expect(screen.queryByText('Seen')).not.toBeInTheDocument()
+  })
+
+  it('names the player on their bubbles when the caller supplies an id, instead of the generic word', async () => {
+    render(
+      <div style={{ height: 600 }}>
+        <ChatThread
+          messages={[message({ id: 'p', authorType: 'player', body: 'from the player' })]}
+          currentAuthorType="agent"
+          playerLabel="UserId7661"
+        />
+      </div>,
+    )
+    await screen.findByText('from the player')
+    expect(screen.getByText('UserId7661')).toBeInTheDocument()
+    expect(screen.queryByText('Player')).not.toBeInTheDocument()
+  })
+
+  it('falls back to Player when no id has resolved yet, so a bubble is never unlabelled', async () => {
+    render(
+      <div style={{ height: 600 }}>
+        <ChatThread messages={[message({ id: 'p', authorType: 'player', body: 'from the player' })]} currentAuthorType="agent" />
+      </div>,
+    )
+    await screen.findByText('from the player')
+    expect(screen.getByText('Player')).toBeInTheDocument()
+  })
+
+  it('keeps the bot on the player-facing side when the reader is the player', async () => {
+    render(
+      <div style={{ height: 600 }}>
+        <ChatThread messages={[message({ id: 'b', authorType: 'bot', body: 'from the bot' })]} currentAuthorType="player" />
+      </div>,
+    )
+    await screen.findByText('from the bot')
+    const bot = document.querySelector('[data-author="bot"]')!
+    expect(bot.getAttribute('data-own-side')).toBe('false')
+    expect(bot.className).toContain('mr-auto')
+  })
+
+  it('labels a player message as Player, and styles it differently from a bot message', async () => {
+    const { unmount } = render(
+      <div style={{ height: 600 }}>
+        <ChatThread messages={[message({ id: 'p', authorType: 'player', body: 'from the player' })]} currentAuthorType="agent" />
+      </div>,
+    )
+    await screen.findByText('from the player')
+    expect(screen.getByText('Player')).toBeInTheDocument()
+    const playerBubble = document.querySelector('[data-author="player"]')!
+    const playerClass = playerBubble.className
+    expect(playerClass).toContain('mr-auto')
+    unmount()
+
+
+    render(
+      <div style={{ height: 600 }}>
+        <ChatThread messages={[message({ id: 'b', authorType: 'bot', body: 'from the bot' })]} currentAuthorType="agent" />
+      </div>,
+    )
+    await screen.findByText('from the bot')
+    // Distinguishable without reading the label, too.
+    expect(document.querySelector('[data-author="bot"]')!.className).not.toBe(playerClass)
+  })
+
+  it('does not label the reading agent\'s own messages — "own" is already the side it sits on', async () => {
+    render(
+      <div style={{ height: 600 }}>
+        <ChatThread messages={[message({ authorType: 'agent', body: 'mine' })]} currentAuthorType="agent" />
+      </div>,
+    )
+    await screen.findByText('mine')
+    expect(screen.queryByText('Agent')).not.toBeInTheDocument()
+  })
 })

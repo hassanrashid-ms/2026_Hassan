@@ -6,6 +6,7 @@ import { closeSocketServer, createSocketServer } from '../src/shared/realtime/so
 import { app, mintToken } from './helpers/app.ts'
 import { applyBotTurn } from '../src/domain/bot/applyBotTurn.ts'
 import { withWorkspace } from '../src/shared/db/withWorkspace.ts'
+import { HANDOFF_PLAYER_MESSAGES } from '../src/domain/bot/messages.ts'
 import {
   closeOwnerPool,
   ownerPool,
@@ -170,8 +171,16 @@ describe('resolution confirmation — cross-path', () => {
       `select author_type, visibility, body from message where conversation_id = $1 order by seq`,
       [conversationB],
     )
-    expect(messagesA).toEqual(messagesB)
-    expect(messagesA).toEqual([{ author_type: 'system', visibility: 'public', body: "You're being connected to our support team." }])
+    // Convergence is on shape and provenance, not on the literal string. The
+    // handoff line is drawn at random from HANDOFF_PLAYER_MESSAGES, so the two
+    // paths legitimately land on different wording — and because both draw from
+    // the same pool with the same distribution, the player still cannot infer
+    // which path produced their message, which is the property this asserts.
+    // Pinning byte-equality here would only be asserting that the RNG returned
+    // the same index twice.
+    expect(messagesA.map((m) => ({ ...m, body: undefined }))).toEqual(messagesB.map((m) => ({ ...m, body: undefined })))
+    expect(messagesA).toEqual([{ author_type: 'system', visibility: 'public', body: expect.toBeOneOf([...HANDOFF_PLAYER_MESSAGES]) }])
+    expect(messagesB).toEqual([{ author_type: 'system', visibility: 'public', body: expect.toBeOneOf([...HANDOFF_PLAYER_MESSAGES]) }])
 
     const eventsA = await eventsFor(conversationA)
     const eventsB = await eventsFor(conversationB)

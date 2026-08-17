@@ -380,7 +380,7 @@ recovery — and not, say, tournaments — shapes a query far more than guessing
 wording.
 
 **No ids and no bodies is deliberate.** Bodies would put the whole corpus in every prompt. Omitting
-ids means the model cannot call `offer_article` from the catalogue alone; it must search first, which
+ids means the model cannot call `answer_from_article` from the catalogue alone; it must search first, which
 is exactly spec 4's validation rule — an article is never offered without its body having been read.
 
 The division of labour: **the catalogue says what exists, the tool says what it says.**

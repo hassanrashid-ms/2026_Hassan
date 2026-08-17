@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { applyBotTurn } from '../src/domain/bot/applyBotTurn.ts'
-import { HANDOFF_PLAYER_MESSAGE, botFailureNote } from '../src/domain/bot/messages.ts'
+import { HANDOFF_PLAYER_MESSAGES, botFailureNote } from '../src/domain/bot/messages.ts'
 import { withWorkspace } from '../src/shared/db/withWorkspace.ts'
 import { closeDb } from '../src/shared/db/client.ts'
 import {
@@ -132,7 +132,7 @@ describe('applyBotTurn', () => {
     )
 
     const msgs = await messagesFor(conversationId)
-    expect(msgs).toEqual([{ author_type: 'system', visibility: 'public', body: HANDOFF_PLAYER_MESSAGE }])
+    expect(msgs).toEqual([{ author_type: 'system', visibility: 'public', body: expect.toBeOneOf([...HANDOFF_PLAYER_MESSAGES]) }])
 
     const row = await conversationRow(conversationId)
     expect(row.status).toBe('open')
@@ -180,7 +180,7 @@ describe('applyBotTurn', () => {
 
     const msgs = await messagesFor(conversationId)
     expect(msgs).toEqual([
-      { author_type: 'system', visibility: 'public', body: HANDOFF_PLAYER_MESSAGE },
+      { author_type: 'system', visibility: 'public', body: expect.toBeOneOf([...HANDOFF_PLAYER_MESSAGES]) },
       { author_type: 'system', visibility: 'internal', body: botFailureNote('error') },
     ])
 
@@ -207,7 +207,7 @@ describe('applyBotTurn', () => {
       )
 
       const msgs = await messagesFor(conversationId)
-      expect(msgs).toEqual([{ author_type: 'system', visibility: 'public', body: HANDOFF_PLAYER_MESSAGE }])
+      expect(msgs).toEqual([{ author_type: 'system', visibility: 'public', body: expect.toBeOneOf([...HANDOFF_PLAYER_MESSAGES]) }])
 
       const events = await eventsFor(conversationId)
       expect(events.map((e) => e.type)).toEqual(['message_sent', 'bot_unavailable'])

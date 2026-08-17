@@ -5,7 +5,7 @@ import { MarkPlayerReadBody, SendMessageBody, type PlayerMessageView, type Playe
 type SendMessageBodyType = z.infer<typeof SendMessageBody>
 type MarkPlayerReadBodyType = z.infer<typeof MarkPlayerReadBody>
 import { postMessage, toAgentView, toPlayerView, type PostedMessageRow } from '../../domain/conversations/index.ts'
-import { applyBotTurn, assignOnHandoff, HANDOFF_PLAYER_MESSAGE, resolveBotConfig } from '../../domain/bot/index.ts'
+import { applyBotTurn, assignOnHandoff, pickHandoffMessage, resolveBotConfig } from '../../domain/bot/index.ts'
 import { appendEvent } from '../../shared/events/appendEvent.ts'
 import { agent, conversation, message, session } from '../../shared/db/schema/index.ts'
 import { withWorkspace } from '../../shared/db/withWorkspace.ts'
@@ -173,17 +173,17 @@ export async function sendPlayerMessage(
       body: body.body,
     })
 
-    // Deliberately after the player's message, not before it: "You're being
-    // connected to our support team." is a response to what the player just
-    // said, and a lower `seq` rendered it above the message that triggered the
-    // reopen — support appearing to answer before anyone had spoken.
+    // Deliberately after the player's message, not before it: the handoff line
+    // is a response to what the player just said, and a lower `seq` rendered it
+    // above the message that triggered the reopen — support appearing to answer
+    // before anyone had spoken.
     if (reopening) {
       reopenPosted = await postMessage(tx, {
         workspaceId: ctx.workspaceId,
         conversationId,
         authorType: 'system',
         actorId: null,
-        body: HANDOFF_PLAYER_MESSAGE,
+        body: pickHandoffMessage(),
         visibility: 'public',
       })
     }

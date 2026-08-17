@@ -54,4 +54,28 @@ describe('postMessage', () => {
     const seqs = results.map((r) => r.seq).sort((a, b) => a - b)
     expect(seqs).toEqual([1, 2, 3, 4, 5])
   })
+
+  /**
+   * The player and agent routes reject an empty body at their Zod schemas, so
+   * anything empty reaching here is server-side code posting with nothing to
+   * say — which is what put blank `bot` bubbles in front of players. Refused at
+   * the choke point rather than at each caller, and it must not consume a seq.
+   */
+  it.each([
+    ['empty', ''],
+    ['whitespace only', '   \n\t '],
+  ])('refuses to post a %s body, and does not burn a seq doing it', async (_label, body) => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const conversationId = await seedConversation({ workspaceId, playerId })
+
+    await expect(
+      withWorkspace(workspaceId, (tx) => postMessage(tx, { workspaceId, conversationId, authorType: 'bot', actorId: null, body })),
+    ).rejects.toThrow(/refusing to post an empty bot message/)
+
+    const after = await withWorkspace(workspaceId, (tx) =>
+      postMessage(tx, { workspaceId, conversationId, authorType: 'bot', actorId: null, body: 'a real reply' }),
+    )
+    expect(after.seq).toBe(1)
+  })
 })

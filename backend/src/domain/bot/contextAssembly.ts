@@ -12,7 +12,7 @@ export type BuildMessagesResult = {
   messages: ChatMessage[]
   /** Ordered options presented in the {{subintents}} block, ending with the Other entry. tools.ts maps classify's subintent_index against this array. */
   subintentOptions: SubintentOption[]
-  /** Article ids the player-visible catalogue names — for logging/debug only, never used to validate offer_article (that's this turn's search results, see tools.ts). */
+  /** Article ids the player-visible catalogue names — for logging/debug only, never used to validate answer_from_article (that's this turn's search results, see tools.ts). */
   catalogueArticleCount: number
 }
 

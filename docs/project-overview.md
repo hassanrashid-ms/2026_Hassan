@@ -242,6 +242,13 @@ today, so a future auto-assignment path writes the same type with a different `v
 type), `conversation_player_replied`, `conversation_awaiting_player`, `bot_handoff`
 (`{ reason, assigned_agent_id }`), `bot_unavailable` (`{ reason }`), `message_sent`.
 
+Bot retrieval types: `bot_search` (`{ query, result_count, articles }` — one per `search_articles`
+call the model made, written on every outcome including a handoff), `bot_article_offered`
+(`{ article_id, article_title }`), `bot_article_rejected` (`{}`). `bot_search` is the difference
+between *"the bot never consulted the knowledge base"* and *"the knowledge base had no answer"* —
+two failures that look identical in every other row and need opposite fixes. See
+`docs/specs/2026-08-12-bot-tool-calling-decider-design.md`.
+
 **The session attribution rule.** *An event carries `session_id` when a verified player session
 accompanied the request that caused it. Otherwise `null`.* A client-supplied session id is
 **always** confirmed with a scoped `(id, player_id)` lookup before it is written — FK checks bypass

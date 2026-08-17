@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { PlayerMessagesResponse } from '@support/types'
@@ -19,17 +19,20 @@ const contextValue: SupportContextValue = {
   retry: vi.fn(),
 }
 
-function renderChat() {
+function renderChat(overrides: Partial<SupportContextValue> = {}) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return render(
-    <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={['/embed/support/chat']}>
-        <SupportContextProvider value={contextValue}>
-          <SupportChat />
-        </SupportContextProvider>
-      </MemoryRouter>
-    </QueryClientProvider>,
-  )
+  return {
+    queryClient,
+    ...render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/embed/support/chat']}>
+          <SupportContextProvider value={{ ...contextValue, ...overrides }}>
+            <SupportChat />
+          </SupportContextProvider>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    ),
+  }
 }
 
 function messages(overrides: Partial<PlayerMessagesResponse>): PlayerMessagesResponse {
@@ -114,5 +117,74 @@ describe('SupportChat resolved banner', () => {
     expect(await screen.findByText('Still facing issues')).toBeInTheDocument()
     expect(screen.getByText('Open a new ticket')).toBeInTheDocument()
     expect(screen.queryByText('Yes')).not.toBeInTheDocument()
+  })
+})
+
+/**
+ * Chat used to be the fallback when the backend was unreachable — Home offered
+ * "Talk to us anyway" on the reasoning that chat needs only the token. That
+ * holds while bootstrap alone has failed, not when the API itself is down: the
+ * thread cannot load and a send cannot be delivered, so the player was left
+ * typing into a composer above an empty screen.
+ */
+describe('SupportChat when the backend is unreachable', () => {
+  it('shows the same failure screen Home shows, with its message, instead of the thread', async () => {
+    vi.mocked(fetchPlayerMessages).mockResolvedValue(messages({}))
+    renderChat({ error: 'Could not load support.' })
+
+    expect(await screen.findByText('Could not load support')).toBeInTheDocument()
+    expect(screen.getByText('Could not load support.')).toBeInTheDocument()
+    expect(screen.getByText('Try again')).toBeInTheDocument()
+  })
+
+  it('disables the chat module — no composer, no thread, no empty-state invitation to talk', async () => {
+    vi.mocked(fetchPlayerMessages).mockResolvedValue(messages({}))
+    renderChat({ error: 'Could not load support.' })
+
+    await screen.findByText('Could not load support')
+    expect(screen.queryByLabelText('Message')).not.toBeInTheDocument()
+    expect(screen.queryByText('my game crashed')).not.toBeInTheDocument()
+    expect(screen.queryByText('Say hello')).not.toBeInTheDocument()
+  })
+
+  it("falls into the same state when this screen's own fetch fails and nothing has loaded", async () => {
+    vi.mocked(fetchPlayerMessages).mockRejectedValue(new Error('Failed to fetch'))
+    renderChat()
+
+    expect(await screen.findByText('Could not load support')).toBeInTheDocument()
+    expect(screen.getByText('Failed to fetch')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Message')).not.toBeInTheDocument()
+  })
+
+  it('retrying asks the shell to re-arm as well as refetching, since either half may be the failed one', async () => {
+    const retry = vi.fn()
+    vi.mocked(fetchPlayerMessages).mockResolvedValue(messages({}))
+    renderChat({ error: 'Could not load support.', retry })
+
+    fireEvent.click(await screen.findByText('Try again'))
+    expect(retry).toHaveBeenCalledTimes(1)
+  })
+
+  /**
+   * The guard is `data === undefined`, not bare `isError`: losing a thread the
+   * player is mid-way through reading, to report an outage that a failed send
+   * already reports as "Not sent. Retry", trades real content for a duplicate
+   * message.
+   */
+  it('keeps a thread that already loaded when a later refetch fails', async () => {
+    vi.mocked(fetchPlayerMessages).mockResolvedValue(messages({}))
+    const { queryClient } = renderChat()
+    // The composer standing in for "the thread is up": ChatBubbles renders
+    // through Virtuoso, which measures zero under jsdom and mounts no items, so
+    // message text is not assertable here.
+    await waitFor(() => expect(screen.getByLabelText('Message')).not.toBeDisabled())
+
+    vi.mocked(fetchPlayerMessages).mockRejectedValue(new Error('Failed to fetch'))
+    await act(async () => {
+      await queryClient.refetchQueries({ queryKey: ['playerMessages', 's'] })
+    })
+
+    expect(screen.queryByText('Could not load support')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Message')).toBeInTheDocument()
   })
 })

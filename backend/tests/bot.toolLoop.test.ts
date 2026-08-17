@@ -18,6 +18,7 @@ vi.mock('../src/shared/weaviate/articlesIndex.ts', () => ({
 import { closeDb } from '../src/shared/db/client.ts'
 import type { BotTurnInput } from '../src/domain/bot/botTurn.ts'
 import { toolLoopDecider, MAX_TOOL_CALLS_PER_TURN, MAX_BOT_MESSAGES } from '../src/domain/bot/toolLoop.ts'
+import { MAX_ARTICLES_PER_TURN } from '../src/domain/bot/tools.ts'
 import { ModelRefusalError, ModelTimeoutError } from '../src/domain/bot/openaiClient.ts'
 import { closeOwnerPool, ownerPool, seedConversation, seedIntent, seedPlayer, seedSubintent, seedWorkspace, truncateAll } from './helpers/db.ts'
 
@@ -81,30 +82,48 @@ describe('toolLoopDecider', () => {
     expect(decision).toEqual({ kind: 'answer', reply: 'Hi! How can I help?', subintentId: null })
   })
 
-  it('search_articles then offer_article produces answer with articleId and would set bot_article', async () => {
+  /**
+   * The model's own words reach the player, not a canned pointer. This used to
+   * return a fixed "Here's an article that might help." while the article
+   * itself had no delivery mechanism at all — the player was promised something
+   * and shown nothing, then asked whether it had helped.
+   */
+  it('search_articles then answer_from_article delivers the model answer with articleId and would set bot_article', async () => {
     const { workspaceId, conversationId } = await fixture()
-    const articleId = await seedArticle(workspaceId, { title: 'Refund policy' })
+    const articleId = await seedArticle(workspaceId, {
+      title: 'Refund policy',
+      body: 'Refunds are issued to the original payment method within 14 days of the purchase.',
+    })
     mockSearchArticleIds.mockResolvedValueOnce([articleId])
 
+    const answer = 'Refunds are issued to the original payment method within 14 days of the purchase.'
     mockCallModel.mockResolvedValueOnce({
       toolCalls: [{ id: 't1', name: 'search_articles', arguments: '{"query":"refund"}' }],
       text: null,
     })
     mockCallModel.mockResolvedValueOnce({
-      toolCalls: [{ id: 't2', name: 'offer_article', arguments: `{"article_id":"${articleId}"}` }],
+      toolCalls: [{ id: 't2', name: 'answer_from_article', arguments: JSON.stringify({ article_id: articleId, answer }) }],
       text: null,
     })
 
     const input = baseInput({ workspaceId, conversationId })
     const decision = await toolLoopDecider(input)
-    expect(decision).toEqual({ kind: 'answer', reply: "Here's an article that might help.", subintentId: null, articleId })
+    expect(decision).toEqual({
+      kind: 'answer',
+      reply: answer,
+      subintentId: null,
+      articleId,
+      // The turn's retrieval record rides on the decision so applyBotTurn can
+      // write it in the same transaction as the outcome it explains.
+      searches: [{ query: 'refund', results: [{ id: articleId, title: 'Refund policy' }] }],
+    })
   })
 
-  it('offer_article with an id not returned by search_articles this turn is rejected and the loop continues', async () => {
+  it('answer_from_article with an id not returned by search_articles this turn is rejected and the loop continues', async () => {
     const { workspaceId, conversationId } = await fixture()
 
     mockCallModel.mockResolvedValueOnce({
-      toolCalls: [{ id: 't1', name: 'offer_article', arguments: '{"article_id":"never-searched"}' }],
+      toolCalls: [{ id: 't1', name: 'answer_from_article', arguments: '{"article_id":"never-searched","answer":"Tap reset."}' }],
       text: null,
     })
     mockCallModel.mockResolvedValueOnce({ toolCalls: [], text: 'ok, anything else?' })
@@ -153,13 +172,53 @@ describe('toolLoopDecider', () => {
     expect(toolNames2).toContain('confirm_resolution')
   })
 
-  it('a model that calls search_articles forever stops at 4 tool calls and returns handoff(unsure)', async () => {
+  it('a model that calls search_articles forever stops at the tool-call budget and returns handoff(unsure)', async () => {
     const { workspaceId, conversationId } = await fixture()
     mockCallModel.mockResolvedValue({ toolCalls: [{ id: 't', name: 'search_articles', arguments: '{"query":"x"}' }], text: null })
     const input = baseInput({ workspaceId, conversationId })
     const decision = await toolLoopDecider(input)
-    expect(decision).toEqual({ kind: 'handoff', reason: 'unsure', subintentId: null })
+    // Only MAX_ARTICLES_PER_TURN searches actually run: that caps the searches,
+    // while MAX_TOOL_CALLS_PER_TURN caps the calls that count — the calls past
+    // the search cap are still spent, they just do no retrieval. A
+    // budget-forced handoff still carries what it managed to search for.
+    expect(decision).toEqual({
+      kind: 'handoff',
+      reason: 'unsure',
+      subintentId: null,
+      searches: Array.from({ length: MAX_ARTICLES_PER_TURN }, () => ({ query: 'x', results: [] })),
+    })
     expect(mockCallModel).toHaveBeenCalledTimes(MAX_TOOL_CALLS_PER_TURN)
+  })
+
+  /**
+   * The budget must not be the thing that ends an ordinary turn. `classify` →
+   * `search_articles` → `answer_from_article` is the happy path, and it has to survive
+   * a model that spends a call or two imperfectly on the way — at four, a second
+   * classify or a second search was enough to force handoff('unsure') on a
+   * question an article answered.
+   */
+  it('leaves room for the classify → search → answer path even after two wasted calls', async () => {
+    const { workspaceId, conversationId } = await fixture()
+    const intentId = await seedIntent(workspaceId, 'Billing')
+    const subintentId = await seedSubintent({ workspaceId, intentId, name: 'A Refund' })
+    const articleId = await seedArticle(workspaceId, { title: 'Refund policy', body: 'Refunds reach the original payment method.' })
+    mockSearchArticleIds.mockResolvedValue([articleId])
+
+    // Two calls burned on a repeated classify, then the real work.
+    mockCallModel.mockResolvedValueOnce({ toolCalls: [{ id: 'c1', name: 'classify', arguments: '{"subintent_index":0}' }], text: null })
+    mockCallModel.mockResolvedValueOnce({ toolCalls: [{ id: 'c2', name: 'classify', arguments: '{"subintent_index":0}' }], text: null })
+    mockCallModel.mockResolvedValueOnce({ toolCalls: [{ id: 's1', name: 'search_articles', arguments: '{"query":"refund"}' }], text: null })
+    mockCallModel.mockResolvedValueOnce({ toolCalls: [{ id: 's2', name: 'search_articles', arguments: '{"query":"refund again"}' }], text: null })
+    mockCallModel.mockResolvedValueOnce({
+      toolCalls: [
+        { id: 'o1', name: 'answer_from_article', arguments: JSON.stringify({ article_id: articleId, answer: 'Refunds reach the original payment method.' }) },
+      ],
+      text: null,
+    })
+
+    const decision = await toolLoopDecider(baseInput({ workspaceId, conversationId }))
+    expect(decision.kind).toBe('answer')
+    expect(decision).toMatchObject({ articleId, subintentId })
   })
 
   it('with 8 bot messages present, callModel is never called and the result is handoff(turn_cap)', async () => {
@@ -175,6 +234,165 @@ describe('toolLoopDecider', () => {
     const decision = await toolLoopDecider(baseInput({ workspaceId, conversationId }))
     expect(decision).toEqual({ kind: 'unavailable', reason: 'invalid_response' })
     expect(mockCallModel).toHaveBeenCalledTimes(1)
+  })
+
+  /**
+   * Regression: the empty-bubble bug. `reply: response.text ?? ''` posted a
+   * zero-length `bot` message whenever the model returned neither a tool call
+   * nor any text — the player saw a blank bubble, and nothing in the events
+   * recorded a failure, because as far as the system was concerned the bot had
+   * answered. Observed live on a player who said "hi".
+   */
+  it.each([
+    ['null text', null],
+    ['empty string', ''],
+    ['whitespace only', '   \n  '],
+  ])('no tool call and %s produces invalid_response, never an empty answer', async (_label, text) => {
+    const { workspaceId, conversationId } = await fixture()
+    mockCallModel.mockResolvedValueOnce({ toolCalls: [], text })
+    const decision = await toolLoopDecider(baseInput({ workspaceId, conversationId }))
+    expect(decision).toEqual({ kind: 'unavailable', reason: 'invalid_response' })
+  })
+
+  it('trims a reply that has content, and keeps it', async () => {
+    const { workspaceId, conversationId } = await fixture()
+    mockCallModel.mockResolvedValueOnce({ toolCalls: [], text: '  What do you need help with?  ' })
+    const decision = await toolLoopDecider(baseInput({ workspaceId, conversationId }))
+    expect(decision).toEqual({ kind: 'answer', reply: 'What do you need help with?', subintentId: null })
+  })
+
+  /**
+   * The prompt asks for the article's own wording; these assert the seam that
+   * makes it true when the prompt is not obeyed. Precedent for not trusting the
+   * prompt alone: the handoff instruction asked the model to *say* it was
+   * transferring and it wrote the sentence instead of calling the tool.
+   */
+  describe('grounding the answer in the cited article', () => {
+    const ARTICLE_BODY =
+      'If a purchase did not arrive, restart the game and open the shop. Your items are restored automatically. Contact support if they are still missing after the restart.'
+
+    async function answering(answer: string, overrides: { body?: string } = {}) {
+      const { workspaceId, conversationId } = await fixture()
+      const articleId = await seedArticle(workspaceId, {
+        title: 'Missing purchase',
+        body: overrides.body ?? ARTICLE_BODY,
+      })
+      mockSearchArticleIds.mockResolvedValue([articleId])
+      mockCallModel.mockResolvedValueOnce({ toolCalls: [{ id: 's1', name: 'search_articles', arguments: '{"query":"missing purchase"}' }], text: null })
+      mockCallModel.mockResolvedValueOnce({
+        toolCalls: [{ id: 'a1', name: 'answer_from_article', arguments: JSON.stringify({ article_id: articleId, answer }) }],
+        text: null,
+      })
+      return { workspaceId, conversationId, articleId }
+    }
+
+    it("passes an answer rebuilt from the article's own sentences", async () => {
+      const answer = 'Restart the game and open the shop — your items are restored automatically.'
+      const { workspaceId, conversationId, articleId } = await answering(answer)
+      const decision = await toolLoopDecider(baseInput({ workspaceId, conversationId }))
+      expect(decision).toMatchObject({ kind: 'answer', reply: answer, articleId })
+    })
+
+    /**
+     * The damaging case, and the reason a prompt is not enough: a timeframe the
+     * article never states reads exactly like one it does, and the player plans
+     * around it.
+     */
+    it('refuses an answer that invents a fact the article does not contain, and asks for a rewrite', async () => {
+      const { workspaceId, conversationId } = await answering(
+        'Restart the game and open the shop. Our billing team will wire your compensation within 48 hours.',
+      )
+      mockCallModel.mockResolvedValueOnce({ toolCalls: [{ id: 'h1', name: 'handoff', arguments: '{"reason":"no_article"}' }], text: null })
+
+      const decision = await toolLoopDecider(baseInput({ workspaceId, conversationId }))
+      expect(decision).toMatchObject({ kind: 'handoff', reason: 'no_article' })
+
+      // The rejection has to name the offending words: the model has already
+      // read the rule and produced this anyway, so restating it teaches nothing.
+      const rejection = mockCallModel.mock.calls[2]![0].at(-1)
+      expect(rejection.content).toContain('rejected')
+      expect(rejection.content).toMatch(/compensation|billing|48/)
+      expect(rejection.content).toContain("article's own wording")
+    })
+
+    it('allows the answer to speak the player\'s own words back to them', async () => {
+      // "treasure quest" is nowhere in the article — it is the player's name for
+      // their problem, and refusing it would forbid addressing them by their
+      // own situation, which is the whole point of rewriting per player.
+      const { workspaceId, conversationId } = await fixture()
+      const articleId = await seedArticle(workspaceId, { title: 'Missing purchase', body: ARTICLE_BODY })
+      mockSearchArticleIds.mockResolvedValue([articleId])
+      await ownerPool.query(
+        `insert into message (workspace_id, conversation_id, seq, author_type, body, visibility)
+         values ($1, $2, 1, 'player', $3, 'public')`,
+        [workspaceId, conversationId, 'i ordered treasure quest but didnt receive it'],
+      )
+      const answer = 'For your treasure quest order, restart the game and open the shop — items are restored automatically.'
+      mockCallModel.mockResolvedValueOnce({ toolCalls: [{ id: 's1', name: 'search_articles', arguments: '{"query":"missing purchase"}' }], text: null })
+      mockCallModel.mockResolvedValueOnce({
+        toolCalls: [{ id: 'a1', name: 'answer_from_article', arguments: JSON.stringify({ article_id: articleId, answer }) }],
+        text: null,
+      })
+
+      const decision = await toolLoopDecider(baseInput({ workspaceId, conversationId }))
+      expect(decision).toMatchObject({ kind: 'answer', reply: answer, articleId })
+    })
+
+    it.each([
+      ['empty', ''],
+      ['whitespace only', '   \n '],
+    ])('an %s answer is invalid_response, never a blank bubble', async (_label, answer) => {
+      const { workspaceId, conversationId } = await answering(answer)
+      const decision = await toolLoopDecider(baseInput({ workspaceId, conversationId }))
+      expect(decision).toMatchObject({ kind: 'unavailable', reason: 'invalid_response' })
+    })
+
+    it('a missing answer argument is invalid_response', async () => {
+      const { workspaceId, conversationId } = await fixture()
+      const articleId = await seedArticle(workspaceId, { title: 'Missing purchase', body: ARTICLE_BODY })
+      mockSearchArticleIds.mockResolvedValue([articleId])
+      mockCallModel.mockResolvedValueOnce({ toolCalls: [{ id: 's1', name: 'search_articles', arguments: '{"query":"x"}' }], text: null })
+      mockCallModel.mockResolvedValueOnce({
+        toolCalls: [{ id: 'a1', name: 'answer_from_article', arguments: JSON.stringify({ article_id: articleId }) }],
+        text: null,
+      })
+      const decision = await toolLoopDecider(baseInput({ workspaceId, conversationId }))
+      expect(decision).toMatchObject({ kind: 'unavailable', reason: 'invalid_response' })
+    })
+
+    /**
+     * Provenance, not just plausibility: an answer written from article B while
+     * citing article A would make `bot_article_offered` a lie, and every metric
+     * built on it wrong.
+     */
+    it('scores against the cited article only, not everything the turn retrieved', async () => {
+      const { workspaceId, conversationId } = await fixture()
+      const cited = await seedArticle(workspaceId, { title: 'Missing purchase', body: ARTICLE_BODY })
+      const other = await seedArticle(workspaceId, {
+        title: 'Season pass',
+        body: 'The season pass grants a cosmetic aura, doubled quest rewards and a weekly banner slot.',
+      })
+      mockSearchArticleIds.mockResolvedValue([cited, other])
+      mockCallModel.mockResolvedValueOnce({ toolCalls: [{ id: 's1', name: 'search_articles', arguments: '{"query":"x"}' }], text: null })
+      mockCallModel.mockResolvedValueOnce({
+        toolCalls: [
+          {
+            id: 'a1',
+            name: 'answer_from_article',
+            // Every content word is grounded — in the wrong article.
+            arguments: JSON.stringify({
+              article_id: cited,
+              answer: 'The season pass grants a cosmetic aura, doubled quest rewards and a weekly banner slot.',
+            }),
+          },
+        ],
+        text: null,
+      })
+      mockCallModel.mockResolvedValueOnce({ toolCalls: [{ id: 'h1', name: 'handoff', arguments: '{"reason":"no_article"}' }], text: null })
+
+      const decision = await toolLoopDecider(baseInput({ workspaceId, conversationId }))
+      expect(decision).toMatchObject({ kind: 'handoff', reason: 'no_article' })
+    })
   })
 
   it('an unparseable tool argument produces invalid_response', async () => {

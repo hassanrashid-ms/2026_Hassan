@@ -196,7 +196,7 @@ export function ThreadPanel({
             data arrival. Mounting with the real transcript makes the initial
             position the deterministic thing it reads as. */}
         {messagesQuery.data ? (
-          <ChatThread key={conversationId} messages={chatMessages} currentAuthorType="agent" onRetry={onRetry} />
+          <ChatThread key={conversationId} messages={chatMessages} currentAuthorType="agent" onRetry={onRetry} playerLabel={playerExternalId} />
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-muted">
             {messagesQuery.isError ? 'Could not load this conversation.' : 'Loading…'}

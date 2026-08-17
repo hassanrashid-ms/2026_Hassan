@@ -1,7 +1,7 @@
 import { and, eq, isNull } from 'drizzle-orm'
 import type { BotTurnDecision } from './botTurn.ts'
 import { SILENT_UNAVAILABLE_REASONS } from './botTurn.ts'
-import { botFailureNote, HANDOFF_PLAYER_MESSAGE } from './messages.ts'
+import { botFailureNote, pickHandoffMessage } from './messages.ts'
 import { assignOnHandoff } from './assignOnHandoff.ts'
 import { postMessage, type PostedMessageRow } from '../conversations/postMessage.ts'
 import { appendEvent } from '../../shared/events/appendEvent.ts'
@@ -25,6 +25,8 @@ export type ApplyBotTurnResult = {
  * only after the caller's transaction commits.
  */
 export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: BotTurnDecision): Promise<ApplyBotTurnResult> {
+  await appendSearchEvents(tx, ctx, decision)
+
   switch (decision.kind) {
     case 'noop':
       return { posted: [], statusChanged: false }
@@ -80,7 +82,7 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
         conversationId: ctx.conversationId,
         authorType: 'system',
         actorId: null,
-        body: HANDOFF_PLAYER_MESSAGE,
+        body: pickHandoffMessage(),
         visibility: 'public',
       })
       if (decision.subintentId) await classifyIfUnset(tx, ctx, decision.subintentId)
@@ -119,7 +121,7 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
           conversationId: ctx.conversationId,
           authorType: 'system',
           actorId: null,
-          body: HANDOFF_PLAYER_MESSAGE,
+          body: pickHandoffMessage(),
           visibility: 'public',
         }),
       ]
@@ -150,6 +152,39 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
       })
       return { posted, statusChanged: true }
     }
+  }
+}
+
+/**
+ * One `bot_search` per `search_articles` call the model made, written before the
+ * outcome events so the timeline reads in the order it happened: what the bot
+ * looked for, then what it did about it.
+ *
+ * Written for every decision kind, including `handoff` and `unavailable`. A
+ * handoff that searched first and a handoff that never searched at all are the
+ * same row in `conversation` and produced the same `bot_handoff` event, and
+ * telling them apart is the whole point — "the bot ignored the knowledge base"
+ * and "the knowledge base has no answer" are different problems with different
+ * fixes.
+ *
+ * Titles come from the decision's snapshot, not a join: the search happened
+ * before this transaction, and re-resolving the ids here would record what the
+ * articles are called now rather than what the model was actually shown.
+ */
+async function appendSearchEvents(tx: Tx, ctx: ApplyBotTurnContext, decision: BotTurnDecision): Promise<void> {
+  for (const search of decision.searches ?? []) {
+    await appendEvent(tx, {
+      workspaceId: ctx.workspaceId,
+      type: 'bot_search',
+      conversationId: ctx.conversationId,
+      actorId: null,
+      actorType: 'bot',
+      payload: {
+        query: search.query,
+        result_count: search.results.length,
+        articles: search.results.map((r) => ({ article_id: r.id, article_title: r.title })),
+      },
+    })
   }
 }
 

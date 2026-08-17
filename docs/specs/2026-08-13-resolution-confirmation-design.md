@@ -65,7 +65,7 @@ conversation.confirm_phase   text not null default 'none'
 Replaces spec 4's planned `bot_phase` column — never shipped, so this is a rename with no migration
 cost. The forms slice still adds a `'form'` value later, unchanged from spec 4's plan.
 
-- `bot_article` — set by the bot's `offer_article` tool call (spec 4 §3), unchanged. Continues to
+- `bot_article` — set by the bot's `answer_from_article` tool call (spec 4 §3), unchanged. Continues to
   gate whether `confirm_resolution` is offered to the model at all.
 - `agent_ask` — set by the new agent endpoint below. No article required.
 - The player-facing banner renders whenever `confirm_phase != 'none'`, regardless of value. The

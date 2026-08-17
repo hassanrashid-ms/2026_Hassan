@@ -46,6 +46,51 @@ describe('DEFAULT_BOT_PROMPT', () => {
     expect(DEFAULT_BOT_PROMPT).not.toContain(BOT_RULES_HEADING)
     expect(DEFAULT_BOT_PROMPT).not.toContain(DEFAULT_BOT_RULES)
   })
+
+  /**
+   * Regression guard. The prompt used to say "when you hand off, say plainly that
+   * you are passing this to the support team" — but a text reply and a tool call
+   * are mutually exclusive in one model response (openaiClient returns `text`
+   * only when `toolCalls` is empty), so the model obeyed the sentence and never
+   * called `handoff`. toolLoop scored that as an ordinary answer and the
+   * conversation stayed bot_active, leaving the player told they had been handed
+   * off while the bot kept replying. The prompt must point at the tool.
+   */
+  it('directs handoff to the tool and never asks the model to announce one in prose', () => {
+    expect(DEFAULT_BOT_PROMPT).toContain('handoff tool')
+    expect(DEFAULT_BOT_PROMPT.toLowerCase()).not.toContain('say plainly')
+  })
+
+  it('requires a search before concluding no article answers the player', () => {
+    expect(DEFAULT_BOT_PROMPT).toContain('search_articles')
+  })
+
+  /**
+   * The prompt has to ask for the article's substance, not a pointer to it.
+   * `offer_article` used to post a fixed "Here's an article that might help."
+   * while nothing carried the article to the player — they were promised a
+   * document, shown nothing, and then asked whether it had solved their problem.
+   * The tool now takes the answer itself.
+   */
+  it('directs the answer through answer_from_article, not a pointer to a document', () => {
+    expect(DEFAULT_BOT_PROMPT).toContain('answer_from_article')
+    expect(DEFAULT_BOT_PROMPT).not.toContain('offer_article')
+  })
+
+  it("requires the article's own wording and forbids adding to it", () => {
+    expect(DEFAULT_BOT_PROMPT).toContain("article's own sentences")
+    expect(DEFAULT_BOT_PROMPT).toMatch(/Do not add a step, a cause, a timeframe or a reassurance the article does not\ncontain/)
+  })
+
+  /**
+   * The three-sentence rule and "keep every step" are in direct conflict on a
+   * multi-step article: obeying the shorter one silently drops steps, which is
+   * the same fabrication risk wearing the opposite coat.
+   */
+  it('exempts an article-derived answer from the three-sentence limit rather than forcing steps to be dropped', () => {
+    expect(DEFAULT_BOT_RULES).toContain('three short sentences')
+    expect(DEFAULT_BOT_RULES).toContain('never drop or merge a step to fit')
+  })
 })
 
 describe('DEFAULT_BOT_RULES', () => {

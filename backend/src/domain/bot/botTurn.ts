@@ -16,12 +16,38 @@ export type UnavailableReason =
   | 'timeout' // callModel exceeded its 15s budget
   | 'invalid_response' // a refusal or an unparseable tool argument — not retried
 
-export type BotTurnDecision =
+/**
+ * One `search_articles` call the model made while deciding this turn, with the
+ * results it was shown. Titles are snapshotted here rather than resolved from
+ * `article_id` at read time, so the record of what the bot was offered survives
+ * a later rename or an article being archived — the `bot_article_offered`
+ * precedent, and the reason `appendEvent` forbids live pointers in payloads.
+ */
+export type BotSearchRecord = {
+  query: string
+  results: { id: string; title: string }[]
+}
+
+type BotTurnOutcome =
   | { kind: 'noop' }
   | { kind: 'answer'; reply: string; subintentId: string | null; articleId?: string }
   | { kind: 'resolve'; subintentId: string | null }
   | { kind: 'handoff'; reason: HandoffReason; subintentId: string | null }
   | { kind: 'unavailable'; reason: UnavailableReason }
+
+/**
+ * `searches` rides on the decision rather than being written by the decider,
+ * because the decider never writes — `applyBotTurn` is the single transactional
+ * writer of a turn's outcome, and retrieval telemetry has to land in the same
+ * transaction as the outcome it explains or the two can disagree.
+ *
+ * Intersected across the union rather than repeated on each member so a new
+ * outcome kind cannot forget to carry it. Narrowing on `kind` is unaffected.
+ * Optional because the budget-forced and error-fallback decisions are built
+ * without ever calling a model — an absent field means "no search ran", which
+ * is itself the answer to "did retrieval happen?".
+ */
+export type BotTurnDecision = BotTurnOutcome & { searches?: BotSearchRecord[] }
 
 export type BotTurnInput = {
   workspaceId: string

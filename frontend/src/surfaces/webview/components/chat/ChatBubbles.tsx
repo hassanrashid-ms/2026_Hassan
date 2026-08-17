@@ -20,9 +20,11 @@ import { cn } from '@/surfaces/webview/lib/cn'
  */
 export function ChatBubbles({
   messages,
+  isTyping,
   onRetry,
 }: {
   messages: ChatMessage[]
+  isTyping?: boolean
   onRetry: (message: ChatMessage) => void
 }) {
   const { ref, showJump, missed, onAtBottomChange, jump } = useJumpToLatest(messages.length)
@@ -36,6 +38,20 @@ export function ChatBubbles({
         initialTopMostItemIndex={messages.length > 0 ? messages.length - 1 : 0}
         atBottomStateChange={onAtBottomChange}
         followOutput="auto"
+        components={{
+          Footer: () => isTyping ? (
+            <div className="flex w-full px-4 py-1.5 justify-start">
+              <div className="flex items-center rounded-card rounded-bl-sm bg-surface px-4 py-3 text-text">
+                <span className="flex gap-1">
+                  <span className="size-1.5 animate-bounce rounded-full bg-muted"></span>
+                  <span className="size-1.5 animate-bounce rounded-full bg-muted" style={{ animationDelay: '150ms' }}></span>
+                  <span className="size-1.5 animate-bounce rounded-full bg-muted" style={{ animationDelay: '300ms' }}></span>
+                </span>
+                <span className="ml-2 text-sm text-muted font-medium">Bot is typing...</span>
+              </div>
+            </div>
+          ) : null
+        }}
         itemContent={(_index, message) => <ChatBubble message={message} onRetry={onRetry} />}
       />
 

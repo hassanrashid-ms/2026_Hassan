@@ -5,7 +5,7 @@ import { sendPlayerMessage } from '../src/surface/services/messagesService.ts'
 import { withWorkspace } from '../src/shared/db/withWorkspace.ts'
 import { closeDb } from '../src/shared/db/client.ts'
 import { conversation } from '../src/shared/db/schema/index.ts'
-import { HANDOFF_PLAYER_MESSAGE } from '../src/domain/bot/messages.ts'
+import { HANDOFF_PLAYER_MESSAGES } from '../src/domain/bot/messages.ts'
 import { closeSocketServer, createSocketServer } from '../src/shared/realtime/socketServer.ts'
 import type { PlayerContext } from '../src/shared/middleware/requirePlayerToken.ts'
 import {
@@ -54,7 +54,7 @@ async function setResolved(
 }
 
 describe('reopen', () => {
-  it('reopen from resolved posts HANDOFF_PLAYER_MESSAGE and lands on open, never bot_active', async () => {
+  it('reopen from resolved posts a handoff line and lands on open, never bot_active', async () => {
     const workspaceId = await seedWorkspace()
     const playerId = await seedPlayer(workspaceId)
     const conversationId = await seedConversation({ workspaceId, playerId })
@@ -71,7 +71,7 @@ describe('reopen', () => {
       `select body from message where conversation_id = $1 and author_type = 'system'`,
       [conversationId],
     )
-    expect(rows.some((r) => r.body === HANDOFF_PLAYER_MESSAGE)).toBe(true)
+    expect(rows.some((r) => (HANDOFF_PLAYER_MESSAGES as readonly string[]).includes(r.body))).toBe(true)
   })
 
   it('awaiting_player -> open posts no system message', async () => {
