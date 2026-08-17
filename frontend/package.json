@@ -7,6 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "//serve:built": "Build, then serve on the dev port so an existing tunnel needs no change. Use this for phone/Unity testing: `dev` serves every dependency as its own request (62 for the webview) which is free on localhost and brutal through a tunnel; the build serves 9 preloaded files. No HMR — re-run after each change.",
+    "serve:built": "vite build && vite preview --port 5173 --strictPort",
     "typecheck": "tsc --noEmit && eslint .",
     "lint": "eslint .",
     "test": "vitest run"
