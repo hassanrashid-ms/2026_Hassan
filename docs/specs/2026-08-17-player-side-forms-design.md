@@ -289,10 +289,55 @@ skipped produce the identical `form_submission` row, and they need opposite fixe
 nobody wanted, the other is a form that lost the player halfway. Following the existing rule that a
 negative outcome must be falsifiable rather than inferred from absence.
 
-`event.type` is `text` (*"new types arrive every slice"*), so `form_offered` and `form_completed`
-need no migration.
-
 `confirm_phase` gains `'form'`. `enums.ts:30` already reserves it: *"The forms slice adds 'form'."*
+
+### Events
+
+Three types. `event.type` is `text` (*"new types arrive every slice"*), so none needs a migration.
+All three are written through `appendEvent`, in the same transaction as the state change they
+explain, with `actorType: 'player'` and `actorId` the player id — except `form_offered`, which the
+bot writes, and the sweeper's `form_completed`, which is `'system'` with a null actor.
+
+| Type | When | Payload |
+|---|---|---|
+| `form_offered` | The offer transaction | `{ form_id, form_version, field_count }` |
+| `form_field_answered` | Every accepted `POST /surface/form/answer` | `{ form_id, field_key, field_type, position, is_correction }` |
+| `form_completed` | The terminate transaction | `{ status, terminated_by, answered_count, field_count }` |
+
+**`form_field_answered` carries no answer value.** The value's durable home is `form_answer.value`,
+which is RLS-scoped, append-only and read through one path. Copying player-written text into `event`
+would put PII in a second table with different access characteristics and no consumer that needs it
+— and *"treat `state.raw` as PII by default"* is the same instinct. The event records *that* a field
+was answered and *which*, which is the whole of what the analysis needs.
+
+What it makes answerable, and nothing else in the schema can:
+
+- **Per-question drop-off.** A submission that timed out after question three is
+  indistinguishable, in `form_answer`, from one that timed out after question three *last week* —
+  but the gap between consecutive `form_field_answered` rows and the `form_completed` that never
+  came is where a question that loses players shows up. A form nobody finishes is a form worth
+  rewriting, and today that is invisible.
+- **Time per question**, from the interval between consecutive events. A field averaging two
+  minutes is a field asking for something the player has to go and look up.
+- **Correction rate.** `is_correction` is true when an answer row already exists for that
+  `field_key` — the append-only correction mechanism made visible. A field corrected often is a
+  field whose label is unclear.
+
+`position` is snapshotted rather than resolved from the version at read time, following the rule
+that payload values are snapshots, never live pointers — so a field reordered in v2 does not rewrite
+what question three meant in v1.
+
+`answered_count` on `form_completed` is likewise a snapshot, not a live count, even though it is
+derivable from the `form_field_answered` rows. Two rows disagreeing is a bug worth catching; a
+report silently re-deriving it against a changed table is not.
+
+**Volume.** One row per field per submission — a four-field form writes at most four, plus
+corrections. `event` is append-only with a BRIN index on `created_at` and is already the spine every
+bot turn writes to; this is a rounding error against `bot_search`.
+
+`event.session_id` follows the existing rule — attribution, never a gate. The answer route carries a
+player token, so the session id is confirmed with a scoped `(id, player_id)` select and stamped, or
+degraded to `null` on any miss.
 
 ### Why the transition is gated at all
 
@@ -314,13 +359,19 @@ POST /surface/form/submit
 POST /surface/form/skip
 ```
 
-`answer` runs the inherited spec's five-step write, unchanged:
+`answer` runs the inherited spec's five-step write, plus the event:
 
 1. Resolve the submission's `(form_id, form_version)` to its `form_version.fields`.
 2. Reject a `field_key` absent from that array.
 3. Validate `value` against the field's declared type, plus `options` membership for `choice`.
 4. Reject `attachment` as unsupported.
 5. Insert a new row with `field_type` snapshotted from the resolved field. Never update.
+6. Append `form_field_answered`, in the same transaction — a row written without its event, or an
+   event without its row, is the divergence `appendEvent` exists to prevent.
+
+A rejected answer writes neither. The event means *an answer was accepted*, so emitting one for a
+validation failure would put a question in the drop-off numbers as answered when the player is still
+looking at it.
 
 `submit` and `skip` both call `completeFormAndHandoff`. They are the same function because the only
 difference between them is which rows happen to exist, and §1.3 derives the status from exactly
@@ -445,6 +496,24 @@ follow-up.
   `options`, and any `attachment`.
 - A second `submit` or `skip` on a terminal submission is refused.
 - Answers written before a skip are readable afterwards.
+
+**`backend/tests/forms.events.test.ts`**
+
+- `form_offered` is written in the offer transaction, once, with the version and field count.
+- One `form_field_answered` per accepted answer, in `position` order, each carrying `field_key`,
+  `field_type` and `position`.
+- **No `form_field_answered` carries the answer value** — assert the payload keys exactly, so a
+  later change that adds `value` fails rather than quietly leaking PII into `event`.
+- A **rejected** answer writes no event and no `form_answer` row.
+- A second answer for the same `field_key` sets `is_correction: true`; the first sets `false`.
+- `position` is the snapshot from the submission's version, not the current one, after the form is
+  edited to v2 with fields reordered.
+- Atomicity: an `appendEvent` failure rolls the `form_answer` insert back, exercised through a real
+  transaction rather than a mock — the same assertion `changeLog.test.ts` makes.
+- `session_id` is stamped when a verified session accompanies the request and is `null` on a miss,
+  never causing the answer to be rejected.
+- `answered_count` on `form_completed` equals the number of distinct answered `field_key`s, not the
+  number of `form_field_answered` events, when a correction happened.
 
 **`backend/tests/forms.timeout.test.ts`**
 
