@@ -20,6 +20,7 @@ import {
 } from '@/features/chat/api/playerChatApi'
 import { createSocket } from '@/features/chat/api/socket'
 import { reconcilePending, type PendingMessage } from '@/features/chat/hooks/chatReconcile'
+import { showBotTyping } from './showBotTyping.ts'
 import type { ChatMessage } from '@/features/chat/components/types'
 
 function toChatMessage(m: {
@@ -94,8 +95,13 @@ export function SupportChat() {
       // the entry lets chatReconcile.ts's reconcilePending drop it only once the
       // refetched list actually contains that message, so the optimistic bubble
       // never disappears and reappears in the gap before that refetch lands.
+      // deliveryState moves to 'sent' here, not just serverId: the bubble stays on
+      // screen until the refetch lands, and while it still read 'sending' the
+      // typing indicator could not tell an in-flight send from a delivered one.
       setPending((current) =>
-        current.map((p) => (p.tempId === context?.tempId ? { ...p, serverId: data.message.id } : p)),
+        current.map((p) =>
+          p.tempId === context?.tempId ? { ...p, serverId: data.message.id, deliveryState: 'sent' } : p,
+        ),
       )
       void queryClient.invalidateQueries({ queryKey: ['playerMessages', boot?.sessionId] })
     },
@@ -216,12 +222,13 @@ export function SupportChat() {
   const unreachableMessage =
     error ?? (messagesQuery.error instanceof Error ? messagesQuery.error.message : 'Could not reach support. Check your connection and try again.')
 
-  const isTyping =
-    messagesQuery.data?.status === 'bot_active' &&
-    chatMessages[chatMessages.length - 1]?.authorType === 'player' &&
-    !settled &&
-    !confirmPending &&
-    activeForm === null
+  const isTyping = showBotTyping({
+    lastMessage: chatMessages[chatMessages.length - 1],
+    status: messagesQuery.data?.status,
+    settled,
+    confirmPending,
+    hasActiveForm: activeForm !== null,
+  })
 
   const onRetryConnection = () => {
     // Both, for the same reason both are checked above: whichever failed needs
