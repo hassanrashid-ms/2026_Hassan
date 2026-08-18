@@ -1,10 +1,18 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest'
+import { createServer } from 'node:http'
+import express from 'express'
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { eq } from 'drizzle-orm'
 import type { FormField } from '@support/types'
+import { req as request } from './helpers/http.ts'
 import { closeDb } from '../src/shared/db/client.ts'
 import { withWorkspace } from '../src/shared/db/withWorkspace.ts'
 import { conversation, event, formSubmission, message } from '../src/shared/db/schema/index.ts'
 import { completeFormAndHandoff } from '../src/domain/forms/completeFormAndHandoff.ts'
+import { closeSocketServer, createSocketServer } from '../src/shared/realtime/socketServer.ts'
+import { errorMiddleware } from '../src/errors.ts'
+import { requirePlayerToken } from '../src/shared/middleware/requirePlayerToken.ts'
+import { formRouter } from '../src/surface/routers/formRouter.ts'
+import { mintToken } from './helpers/app.ts'
 import {
   closeOwnerPool,
   ownerPool,
@@ -27,7 +35,17 @@ const FIELDS: FormField[] = [
   { key: 'd', label: 'D', type: 'short_text', isRequired: false, position: 3 },
 ]
 
+const app = express()
+app.use(express.json())
+app.use(requirePlayerToken, formRouter)
+app.use(errorMiddleware)
+
+beforeAll(() => {
+  createSocketServer(createServer())
+})
+
 afterAll(async () => {
+  await closeSocketServer()
   await closeDb()
   await closeOwnerPool()
 })
@@ -58,6 +76,47 @@ async function offered(answers: string[]) {
     await seedFormAnswer({ workspaceId, formSubmissionId: submissionId, fieldKey: key, fieldType: 'short_text', value: 'x' })
   }
   return { workspaceId, agentId, playerId, conversationId, submissionId }
+}
+
+/**
+ * The same offer, reached over HTTP: one live submission on the player's latest
+ * conversation plus a minted player token. `store` sits at position 0 so a later
+ * version that reorders the fields is visibly not what the answer is scored on.
+ */
+const LIVE_FIELDS: FormField[] = [
+  {
+    key: 'store',
+    label: 'Store',
+    type: 'choice',
+    isRequired: true,
+    position: 0,
+    options: ['Apple App Store', 'Google Play'],
+  },
+  { key: 'quantity', label: 'Quantity', type: 'number', isRequired: false, position: 1 },
+  { key: 'proof', label: 'Proof', type: 'attachment', isRequired: false, position: 2 },
+]
+
+async function liveForm() {
+  const workspaceId = await seedWorkspace()
+  const agentId = await seedAgent()
+  await seedWorkspaceMember({ workspaceId, agentId })
+  const playerId = await seedPlayer(workspaceId)
+  const conversationId = await seedConversation({ workspaceId, playerId })
+  await ownerPool.query(`update conversation set confirm_phase = 'form' where id = $1`, [conversationId])
+  const formId = await seedForm({ workspaceId })
+  await seedFormVersion({ workspaceId, formId, version: 1, fields: LIVE_FIELDS, publishedAt: new Date() })
+  const submissionId = await seedFormSubmission({ workspaceId, conversationId, formId, formVersion: 1 })
+  await ownerPool.query(
+    `insert into event (workspace_id, type, conversation_id, actor_type, payload)
+     values ($1, 'form_offered', $2, 'bot', $3::jsonb)`,
+    [
+      workspaceId,
+      conversationId,
+      JSON.stringify({ form_id: formId, form_version: 1, field_count: 3, handoff_reason: 'no_article' }),
+    ],
+  )
+  const token = await mintToken({ workspace_id: workspaceId, player_id: playerId, external_player_id: 'p-1' })
+  return { workspaceId, agentId, playerId, conversationId, submissionId, formId, token }
 }
 
 function terminate(f: Awaited<ReturnType<typeof offered>>, by: 'submit' | 'skip' | 'timeout') {
@@ -165,5 +224,124 @@ describe('completeFormAndHandoff', () => {
     )
     expect(events.filter((e) => e.type === 'bot_handoff')).toHaveLength(1)
     expect(events.filter((e) => e.type === 'form_completed')).toHaveLength(1)
+  })
+})
+
+describe('POST /surface/form/answer', () => {
+  it('accepts a valid answer and reports it as not a correction', async () => {
+    const f = await liveForm()
+    const res = await request(app)
+      .post('/form/answer')
+      .set('Authorization', `Bearer ${f.token}`)
+      .send({ field_key: 'store', value: 'Google Play' })
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ ok: true, is_correction: false })
+  })
+
+  it('reports the second answer for the same field as a correction', async () => {
+    const f = await liveForm()
+    const post = (value: string) =>
+      request(app)
+        .post('/form/answer')
+        .set('Authorization', `Bearer ${f.token}`)
+        .send({ field_key: 'store', value })
+    await post('Google Play')
+    const res = await post('Apple App Store')
+    expect(res.body.is_correction).toBe(true)
+    const { rows } = await ownerPool.query(`select value from form_answer order by created_at`)
+    expect(rows).toHaveLength(2)
+  })
+
+  it('rejects an unknown field key', async () => {
+    const f = await liveForm()
+    const res = await request(app)
+      .post('/form/answer')
+      .set('Authorization', `Bearer ${f.token}`)
+      .send({ field_key: 'not_a_field', value: 'x' })
+    expect(res.status).toBe(422)
+    expect(res.body.error.code).toBe('unknown_field')
+  })
+
+  it('rejects a value of the wrong type', async () => {
+    const f = await liveForm()
+    const res = await request(app)
+      .post('/form/answer')
+      .set('Authorization', `Bearer ${f.token}`)
+      .send({ field_key: 'quantity', value: 'seven' })
+    expect(res.status).toBe(422)
+    expect(res.body.error.code).toBe('invalid_value')
+  })
+
+  it('rejects a choice outside its options', async () => {
+    const f = await liveForm()
+    const res = await request(app)
+      .post('/form/answer')
+      .set('Authorization', `Bearer ${f.token}`)
+      .send({ field_key: 'store', value: 'Steam' })
+    expect(res.status).toBe(422)
+    expect(res.body.error.code).toBe('invalid_value')
+  })
+
+  it('rejects an attachment as unsupported', async () => {
+    const f = await liveForm()
+    const res = await request(app)
+      .post('/form/answer')
+      .set('Authorization', `Bearer ${f.token}`)
+      .send({ field_key: 'proof', value: { attachmentId: '00000000-0000-4000-8000-000000000000' } })
+    expect(res.status).toBe(422)
+    expect(res.body.error.code).toBe('unsupported_field_type')
+  })
+
+  it('never posts an answer as a chat message', async () => {
+    const f = await liveForm()
+    await request(app)
+      .post('/form/answer')
+      .set('Authorization', `Bearer ${f.token}`)
+      .send({ field_key: 'store', value: 'Google Play' })
+    const { rows } = await ownerPool.query(`select body from message where conversation_id = $1`, [f.conversationId])
+    expect(rows.map((r) => r.body)).not.toContain('Google Play')
+  })
+})
+
+describe('POST /surface/form/submit and /skip', () => {
+  it('submit terminates with terminated_by submit', async () => {
+    const f = await liveForm()
+    const res = await request(app).post('/form/submit').set('Authorization', `Bearer ${f.token}`).send({})
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ confirm_phase: 'none', status: 'open', form_status: 'skipped' })
+    const { rows } = await ownerPool.query(`select payload from event where type = 'form_completed'`)
+    expect(rows[0]!.payload.terminated_by).toBe('submit')
+  })
+
+  it('skip terminates with terminated_by skip and keeps earlier answers readable', async () => {
+    const f = await liveForm()
+    await request(app)
+      .post('/form/answer')
+      .set('Authorization', `Bearer ${f.token}`)
+      .send({ field_key: 'store', value: 'Google Play' })
+    const res = await request(app).post('/form/skip').set('Authorization', `Bearer ${f.token}`).send({})
+    expect(res.body.form_status).toBe('partial')
+    const { rows } = await ownerPool.query(`select field_key, value from form_answer`)
+    expect(rows).toEqual([{ field_key: 'store', value: 'Google Play' }])
+    const { rows: events } = await ownerPool.query(`select payload from event where type = 'form_completed'`)
+    expect(events[0]!.payload.terminated_by).toBe('skip')
+  })
+
+  it('refuses a second terminate on a terminal submission', async () => {
+    const f = await liveForm()
+    await request(app).post('/form/skip').set('Authorization', `Bearer ${f.token}`).send({})
+    const res = await request(app).post('/form/submit').set('Authorization', `Bearer ${f.token}`).send({})
+    expect(res.status).toBe(409)
+  })
+
+  it('refuses an answer once the submission is terminal', async () => {
+    const f = await liveForm()
+    await request(app).post('/form/skip').set('Authorization', `Bearer ${f.token}`).send({})
+    const res = await request(app)
+      .post('/form/answer')
+      .set('Authorization', `Bearer ${f.token}`)
+      .send({ field_key: 'store', value: 'Google Play' })
+    expect(res.status).toBe(409)
+    expect(res.body.error.code).toBe('no_form_pending')
   })
 })

@@ -3,6 +3,7 @@ import { requirePlayerToken } from '../shared/middleware/requirePlayerToken.ts'
 import { articleReadRouter } from './routers/articleReadRouter.ts'
 import { articlesRouter } from './routers/articlesRouter.ts'
 import { bootstrapRouter } from './routers/bootstrapRouter.ts'
+import { formRouter } from './routers/formRouter.ts'
 import { intentsRouter } from './routers/intentsRouter.ts'
 import { messagesRouter } from './routers/messagesRouter.ts'
 import { newTicketRouter } from './routers/newTicketRouter.ts'
@@ -17,6 +18,7 @@ surfaceRouter.use(requirePlayerToken)
 surfaceRouter.use(bootstrapRouter)
 surfaceRouter.use(articleReadRouter)
 surfaceRouter.use(articlesRouter)
+surfaceRouter.use(formRouter)
 surfaceRouter.use(intentsRouter)
 surfaceRouter.use(messagesRouter)
 surfaceRouter.use(newTicketRouter)

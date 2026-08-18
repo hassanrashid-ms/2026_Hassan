@@ -4,7 +4,7 @@ import {
   extendZodWithOpenApi,
 } from '@asteasolutions/zod-to-openapi'
 import { z } from 'zod'
-import { NewTicketBody, ResolutionAnswerBody } from '@support/types'
+import { FormAnswerBody, FormTerminateBody, NewTicketBody, ResolutionAnswerBody } from '@support/types'
 
 extendZodWithOpenApi(z)
 
@@ -863,6 +863,69 @@ registry.registerPath({
     },
     404: { description: 'No conversation for this player' },
     409: { description: 'No resolution check pending' },
+  },
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/surface/form/answer',
+  summary: 'Player Answer One Form Question',
+  description:
+    "One question of the pinned form card. No conversation id — the submission is the live one on the player's latest conversation. Answers are append-only: a second answer for the same field_key is a correction, not an update, and the newest wins on read. 409 when no form is pending; 422 for an unknown field, a value of the wrong type, a choice outside its options, or an attachment.",
+  security: [{ [bearerPlayerJwt.name]: [] }],
+  request: { body: { content: { 'application/json': { schema: FormAnswerBody } } } },
+  responses: {
+    200: {
+      description: 'Answer accepted',
+      content: { 'application/json': { schema: z.object({ ok: z.literal(true), is_correction: z.boolean() }) } },
+    },
+    404: { description: 'No conversation for this player' },
+    409: { description: 'No form pending' },
+    422: { description: 'Unknown field, invalid value, or unsupported field type' },
+  },
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/surface/form/submit',
+  summary: 'Player Submit Form',
+  description:
+    'Terminates the form and completes the gated handoff: the status is derived from the answer rows (completed / partial / skipped), an agent is assigned, the conversation opens, and a summary card is posted. 409 on an already-terminal submission.',
+  security: [{ [bearerPlayerJwt.name]: [] }],
+  request: { body: { content: { 'application/json': { schema: FormTerminateBody } } } },
+  responses: {
+    200: {
+      description: 'Form terminated and handoff completed',
+      content: {
+        'application/json': {
+          schema: z.object({ confirm_phase: z.literal('none'), status: z.string(), form_status: z.string() }),
+        },
+      },
+    },
+    404: { description: 'No conversation for this player' },
+    409: { description: 'No form pending' },
+  },
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/surface/form/skip',
+  summary: 'Player Skip Form',
+  description:
+    'The "Skip and talk to an agent" button, present on every question and never removable — nothing about a form may block a player reaching a human. Identical end state to submit; only form_completed.terminated_by differs. Answers given before the skip are kept, so a partly-filled form terminates as partial, not skipped.',
+  security: [{ [bearerPlayerJwt.name]: [] }],
+  request: { body: { content: { 'application/json': { schema: FormTerminateBody } } } },
+  responses: {
+    200: {
+      description: 'Form skipped and handoff completed',
+      content: {
+        'application/json': {
+          schema: z.object({ confirm_phase: z.literal('none'), status: z.string(), form_status: z.string() }),
+        },
+      },
+    },
+    404: { description: 'No conversation for this player' },
+    409: { description: 'No form pending' },
   },
 })
 
