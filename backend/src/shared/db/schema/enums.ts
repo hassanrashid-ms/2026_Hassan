@@ -27,10 +27,12 @@ export const messageDeliveryState = pgEnum('message_delivery_state', [
 export const eventActorType = pgEnum('event_actor_type', ['player', 'agent', 'bot', 'system'])
 export const declaredFieldType = pgEnum('declared_field_type', ['string', 'number', 'boolean', 'timestamp'])
 export const articleState = pgEnum('article_state', ['draft', 'published', 'archived'])
-// The forms slice adds 'form'. `bot_article` is set by the bot's answer_from_article,
-// `agent_ask` by POST /agent/conversations/:id/ask-resolved. Both mean the same
-// thing to the player: a yes/no question is on screen.
-export const confirmPhase = pgEnum('confirm_phase', ['none', 'bot_article', 'agent_ask'])
+// `bot_article` is set by the bot's answer_from_article, `agent_ask` by
+// POST /agent/conversations/:id/ask-resolved — both mean a yes/no question is on
+// the player's screen. `form` means the pinned form card is up instead: not a
+// yes/no, and the reason the webview must branch on the value rather than test
+// it against 'none'. See docs/specs/2026-08-17-player-side-forms-design.md §2.4.
+export const confirmPhase = pgEnum('confirm_phase', ['none', 'bot_article', 'agent_ask', 'form'])
 export const resolutionSource = pgEnum('resolution_source', ['bot', 'agent'])
 
 /**

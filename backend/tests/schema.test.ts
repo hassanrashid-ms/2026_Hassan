@@ -240,8 +240,8 @@ describe('schema', () => {
     const workspaceId = await seedWorkspace()
     const playerId = await seedPlayer(workspaceId)
     const { rows } = await ownerPool.query<{ confirm_phase: string }>(
-      `insert into conversation (workspace_id, player_id, confirm_phase)
-       values ($1, $2, 'form') returning confirm_phase`,
+      `insert into conversation (workspace_id, player_id, number, confirm_phase)
+       values ($1, $2, 1, 'form') returning confirm_phase`,
       [workspaceId, playerId],
     )
     expect(rows[0]!.confirm_phase).toBe('form')
