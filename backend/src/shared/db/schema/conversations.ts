@@ -12,6 +12,7 @@ import {
 import { agent, workspace } from './identity.ts'
 import { player, session } from './players.ts'
 import { subintent } from './taxonomy.ts'
+import { article } from './articles.ts'
 
 const tz = { withTimezone: true, mode: 'date' } as const
 
@@ -92,6 +93,19 @@ export const message = pgTable(
     authorType: messageAuthorType('author_type').notNull(),
     authorAgentId: uuid('author_agent_id').references(() => agent.id, { onDelete: 'restrict' }),
     body: text('body').notNull(),
+    /**
+     * The article this bot answer was written from, or null. Delivery, not
+     * reporting: `bot_article_offered` keeps its own snapshotted title and stays
+     * the record every funnel metric groups by. The two must never become two
+     * sources for one number.
+     *
+     * Never client-supplied — toolLoop only accepts an id searchArticles already
+     * proved visible in this workspace — so no scoped re-check guards this FK.
+     *
+     * No index on purpose: it is read on rows already fetched by
+     * conversation_id, and is never a filter or a join key.
+     */
+    articleId: uuid('article_id').references(() => article.id, { onDelete: 'restrict' }),
     /** Never filtered in a query — two serializers do that. Internal notes leaking is safety-critical. */
     visibility: messageVisibility('visibility').notNull().default('public'),
     deliveryState: messageDeliveryState('delivery_state').notNull().default('sent'),

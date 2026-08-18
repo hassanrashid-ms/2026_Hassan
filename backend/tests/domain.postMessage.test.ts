@@ -2,7 +2,16 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { closeDb } from '../src/shared/db/client.ts'
 import { postMessage } from '../src/domain/conversations/index.ts'
 import { withWorkspace } from '../src/shared/db/withWorkspace.ts'
-import { closeOwnerPool, seedConversation, seedPlayer, seedWorkspace, truncateAll } from './helpers/db.ts'
+import {
+  closeOwnerPool,
+  ownerPool,
+  seedAgent,
+  seedArticle,
+  seedConversation,
+  seedPlayer,
+  seedWorkspace,
+  truncateAll,
+} from './helpers/db.ts'
 
 afterAll(async () => {
   await closeDb()
@@ -77,5 +86,39 @@ describe('postMessage', () => {
       postMessage(tx, { workspaceId, conversationId, authorType: 'bot', actorId: null, body: 'a real reply' }),
     )
     expect(after.seq).toBe(1)
+  })
+
+  it('persists article_id when given one, and leaves it null when not', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const conversationId = await seedConversation({ workspaceId, playerId })
+    const agentId = await seedAgent()
+    const articleId = await seedArticle({ workspaceId, createdBy: agentId })
+
+    const cited = await withWorkspace(workspaceId, (tx) =>
+      postMessage(tx, {
+        workspaceId,
+        conversationId,
+        authorType: 'bot',
+        actorId: null,
+        body: 'Refunds take 48 hours.',
+        articleId,
+      }),
+    )
+    const uncited = await withWorkspace(workspaceId, (tx) =>
+      postMessage(tx, { workspaceId, conversationId, authorType: 'bot', actorId: null, body: 'Anything else?' }),
+    )
+
+    // The returned row, not just the database: PostedMessageRow is what both
+    // serializers read, so a column that persisted but did not come back through
+    // .returning() would still reach the client as null.
+    expect(cited.articleId).toBe(articleId)
+    expect(uncited.articleId).toBeNull()
+
+    const { rows } = await ownerPool.query(
+      `select article_id from message where conversation_id = $1 order by seq`,
+      [conversationId],
+    )
+    expect(rows).toEqual([{ article_id: articleId }, { article_id: null }])
   })
 })

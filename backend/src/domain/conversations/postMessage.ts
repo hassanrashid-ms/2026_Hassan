@@ -25,6 +25,13 @@ export type PostMessageInput = {
   authorAgentId?: string | null
   body: string
   visibility?: 'public' | 'internal'
+  /**
+   * The article the bot answered from, when it answered from one. Null for every
+   * other author and every other decision kind. Not validated here: the only
+   * caller that sets it is applyBotTurn's `answer` branch, and toolLoop already
+   * refused any id that searchArticles had not returned for this workspace.
+   */
+  articleId?: string | null
 }
 
 export type PostedMessageRow = {
@@ -34,6 +41,7 @@ export type PostedMessageRow = {
   authorType: ChatAuthorType
   authorAgentId: string | null
   body: string
+  articleId: string | null
   visibility: 'public' | 'internal'
   deliveryState: ChatDeliveryState
   readAt: Date | null
@@ -84,6 +92,7 @@ export async function postMessage(tx: Tx, input: PostMessageInput): Promise<Post
       authorType: input.authorType,
       authorAgentId: input.authorAgentId ?? null,
       body: input.body,
+      articleId: input.articleId ?? null,
       visibility: input.visibility ?? 'public',
     })
     .returning()
