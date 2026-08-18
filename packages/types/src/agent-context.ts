@@ -1,4 +1,5 @@
 import type { ConversationStatusValue } from './chat.ts'
+import type { FormFieldType, FormSubmissionStatus } from './forms.ts'
 import type { DeclaredFieldType } from './player-state.ts'
 
 /** The resolving side. Mirrors the `resolution_source` pg enum. */
@@ -61,6 +62,45 @@ export type AgentTicketSummary = {
 }
 
 /**
+ * One row of the form section. Every field in the submission's version gets one,
+ * answered or not: a gap is a row, never an omission, because the agent has to
+ * be able to tell "the player did not answer this" from "this was never asked".
+ */
+export type AgentFormFieldView = {
+  key: string
+  /** From the submission's snapshotted form_version, never the current one. */
+  label: string
+  position: number
+  /**
+   * From the answer's own snapshotted field_type when answered — the value is
+   * interpretable without resolving the version, which is why that column
+   * exists. From the version's declared type when unanswered.
+   */
+  field_type: FormFieldType
+  /** null when the field has no answer row. Read `answered`, not this. */
+  value: unknown
+  answered: boolean
+}
+
+/**
+ * The form section of the context rail. `null` on the response when this
+ * conversation was never offered a form — the frontend omits the section
+ * entirely rather than opening onto nothing, the same precedent `raw` sets.
+ */
+export type AgentFormView = {
+  form_name: string
+  /** The submission's snapshot. The section header names it: "Purchase receipt · v1". */
+  form_version: number
+  status: FormSubmissionStatus
+  /** The version's field count. The denominator in "2 of 4". */
+  field_count: number
+  /** Distinct answered keys that are in the version. Never exceeds field_count. */
+  answered_count: number
+  /** In `position` order, answered and unanswered alike. */
+  fields: AgentFormFieldView[]
+}
+
+/**
  * The whole context rail in one payload — one endpoint rather than two, because
  * the rail is one thing, always fetched together, and its two halves have the
  * same cache lifetime.
@@ -81,4 +121,9 @@ export type AgentConversationContextResponse = {
     /** player.first_seen_at, ISO 8601. */
     first_contact_at: string
   }
+  /**
+   * null when this conversation has no form submission. Not an error and not an
+   * empty object: the rail omits the section entirely.
+   */
+  form: AgentFormView | null
 }

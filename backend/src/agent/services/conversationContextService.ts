@@ -2,8 +2,11 @@ import { and, asc, count, desc, eq, sql } from 'drizzle-orm'
 import type {
   AgentConversationContextResponse,
   AgentConversationDetail,
+  AgentFormFieldView,
   AgentPlayerStateView,
   AgentTicketSummary,
+  FormField,
+  FormFieldType,
 } from '@support/types'
 import {
   agent,
@@ -266,6 +269,63 @@ export async function getConversationContext(
         total_reopened: history.totalReopened,
         first_contact_at: current.firstSeenAt.toISOString(),
       },
+      form: null,
     }
   })
+}
+
+/** One field's current answer: the row with the greatest `created_at` for its key. */
+export type LatestAnswer = { fieldKey: string; fieldType: FormFieldType; value: unknown }
+
+/**
+ * The submission's snapshotted field list folded together with its current
+ * answers. Pure, and exported so the behaviour that carries the product
+ * requirement is testable without a database.
+ *
+ * Labels come from the version the player was actually asked. Types come from
+ * the answers themselves. Unanswered fields stay in the list as rows — dropping
+ * them would make a partial form indistinguishable from a shorter one.
+ */
+export function buildFormFieldViews(
+  fields: FormField[],
+  answers: LatestAnswer[],
+): { rows: AgentFormFieldView[]; answeredCount: number } {
+  const byKey = new Map(answers.map((answer) => [answer.fieldKey, answer]))
+  const rows: AgentFormFieldView[] = []
+  let answeredCount = 0
+
+  // Sorted here rather than trusted from the jsonb array: this list is read as
+  // the order the questions were asked in, and a mis-ordered row misreads.
+  const ordered = [...fields].sort((a, b) => a.position - b.position)
+  for (const field of ordered) {
+    const answer = byKey.get(field.key)
+    if (answer) answeredCount += 1
+    rows.push({
+      key: field.key,
+      label: field.label,
+      position: field.position,
+      field_type: answer ? answer.fieldType : field.type,
+      value: answer ? answer.value : null,
+      answered: answer !== undefined,
+    })
+  }
+
+  // An answer whose key is not in the version cannot normally occur — the answer
+  // route validates against this same version — but appending beats dropping,
+  // the same call getPlayerStateView makes for an undeclared blob key. It does
+  // not count toward answered_count: the denominator is the questions asked.
+  const known = new Set(ordered.map((field) => field.key))
+  for (const answer of answers) {
+    if (known.has(answer.fieldKey)) continue
+    rows.push({
+      key: answer.fieldKey,
+      label: answer.fieldKey,
+      position: rows.length,
+      field_type: answer.fieldType,
+      value: answer.value,
+      answered: true,
+    })
+  }
+
+  return { rows, answeredCount }
 }
