@@ -5,7 +5,7 @@ import type { BotDecider, BotTurnDecision, BotTurnInput } from './botTurn.ts'
 import { toAgentView, toPlayerView, type PostedMessageRow } from '../conversations/index.ts'
 import { conversation, message } from '../../shared/db/schema/index.ts'
 import { withWorkspace, type Tx } from '../../shared/db/withWorkspace.ts'
-import { emitInboxChanged, emitMessageToRooms } from '../../shared/realtime/emit.ts'
+import { emitInboxChanged, emitMessageToRooms, emitPhaseChanged } from '../../shared/realtime/emit.ts'
 import { getIo } from '../../shared/realtime/socketServer.ts'
 import { logger } from '../../shared/logging/logger.ts'
 import type { ConfirmPhaseValue, PlayerMessageView } from '@support/types'
@@ -50,7 +50,7 @@ async function gather(
 function emitApplied(
   workspaceId: string,
   conversationId: string,
-  result: { posted: PostedMessageRow[]; statusChanged: boolean },
+  result: { posted: PostedMessageRow[]; statusChanged: boolean; phaseChanged: ConfirmPhaseValue | null },
 ): void {
   let io: Server
   try {
@@ -67,13 +67,18 @@ function emitApplied(
   for (const row of result.posted) {
     emitMessageToRooms(io, conversationId, toPlayerView(row), toAgentView(row))
   }
+  // The form offer changes no status, so `conversation:changed` says nothing and
+  // the agent rail would never learn the card went up. Only the offer sets this.
+  if (result.phaseChanged) {
+    emitPhaseChanged(io, conversationId, { conversation_id: conversationId, confirm_phase: result.phaseChanged })
+  }
   if (result.statusChanged) {
     emitInboxChanged(io, workspaceId, conversationId, 'open')
   }
 }
 
 export type ApplyIfBotActiveResult =
-  | { applied: true; posted: PostedMessageRow[]; statusChanged: boolean }
+  | { applied: true; posted: PostedMessageRow[]; statusChanged: boolean; phaseChanged: ConfirmPhaseValue | null }
   | { applied: false }
 
 /**

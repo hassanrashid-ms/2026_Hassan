@@ -24,7 +24,7 @@ const CALL_TIMEOUT_MS = 15_000
 
 let client: OpenAI | undefined
 function getClient(): OpenAI {
-  client ??= observeOpenAI(new OpenAI({ apiKey: getEnv().OPENAI_APIKEY })) as any
+  client ??= observeOpenAI(new OpenAI({ apiKey: getEnv().OPENAI_APIKEY })) as unknown as OpenAI
   return client
 }
 

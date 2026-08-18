@@ -6,7 +6,9 @@ import { assignOnHandoff } from './assignOnHandoff.ts'
 import { postMessage, type PostedMessageRow } from '../conversations/postMessage.ts'
 import { appendEvent } from '../../shared/events/appendEvent.ts'
 import type { Tx } from '../../shared/db/withWorkspace.ts'
-import { article, conversation, intent, subintent } from '../../shared/db/schema/index.ts'
+import { article, conversation, formSubmission, intent, subintent } from '../../shared/db/schema/index.ts'
+import { resolveSubintentForm } from '../forms/resolveSubintentForm.ts'
+import type { ConfirmPhaseValue } from '@support/types'
 
 export type ApplyBotTurnContext = {
   workspaceId: string
@@ -16,6 +18,15 @@ export type ApplyBotTurnContext = {
 export type ApplyBotTurnResult = {
   posted: PostedMessageRow[]
   statusChanged: boolean
+  /**
+   * Non-null only when this turn moved confirm_phase in a way a client must be
+   * told about out of band. Today that is exactly one case: the form offer,
+   * which changes no status and so triggers no other refetch on the agent side.
+   * Every other branch returns null deliberately — adding an emit to a path
+   * that never had one is a behaviour change, and the no-form handoff must stay
+   * byte-identical.
+   */
+  phaseChanged: ConfirmPhaseValue | null
 }
 
 /**
@@ -29,7 +40,7 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
 
   switch (decision.kind) {
     case 'noop':
-      return { posted: [], statusChanged: false }
+      return { posted: [], statusChanged: false, phaseChanged: null }
 
     case 'answer': {
       const posted = await postMessage(tx, {
@@ -56,7 +67,7 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
           payload: { article_id: decision.articleId, article_title: row?.title ?? null },
         })
       }
-      return { posted: [posted], statusChanged: false }
+      return { posted: [posted], statusChanged: false, phaseChanged: null }
     }
 
     case 'resolve': {
@@ -73,7 +84,7 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
         actorType: 'bot',
         payload: { source: 'bot', confirmed_by: 'player' },
       })
-      return { posted: [], statusChanged: true }
+      return { posted: [], statusChanged: true, phaseChanged: null }
     }
 
     case 'handoff': {
@@ -86,6 +97,68 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
         visibility: 'public',
       })
       if (decision.subintentId) await classifyIfUnset(tx, ctx, decision.subintentId)
+
+      // The offer branch. Everything after this block is today's behaviour,
+      // untouched — a subintent with no published form falls straight through.
+      //
+      // `asked_for_person` is excluded explicitly: the product spec requires an
+      // immediate redirect to an agent, and four questions in front of someone
+      // who just asked for a human is the behaviour that rule forbids. The other
+      // two exclusions need no special case — `turn_cap` carries a null
+      // subintent, and `unavailable` is a different decision kind entirely.
+      if (decision.subintentId && decision.reason !== 'asked_for_person') {
+        const resolved = await resolveSubintentForm(tx, decision.subintentId)
+        if (resolved) {
+          await tx.insert(formSubmission).values({
+            workspaceId: ctx.workspaceId,
+            conversationId: ctx.conversationId,
+            formId: resolved.formId,
+            formVersion: resolved.version,
+          })
+          await tx
+            .update(conversation)
+            .set({ confirmPhase: 'form' })
+            .where(eq(conversation.id, ctx.conversationId))
+
+          // Written here rather than deferred to terminate: it records why the
+          // handoff happened, which is a fact about this turn. A form the player
+          // abandons would otherwise lose the record of the rejection entirely.
+          if (decision.reason === 'article_rejected') {
+            await appendEvent(tx, {
+              workspaceId: ctx.workspaceId,
+              type: 'bot_article_rejected',
+              conversationId: ctx.conversationId,
+              actorId: null,
+              actorType: 'bot',
+              payload: {},
+            })
+          }
+
+          // `handoff_reason` is here because `bot_handoff` still has to carry it
+          // at terminate, and by then the decision is gone and no column holds
+          // it. A snapshot in the event that explains the offer is this repo's
+          // mechanism for exactly that.
+          await appendEvent(tx, {
+            workspaceId: ctx.workspaceId,
+            type: 'form_offered',
+            conversationId: ctx.conversationId,
+            actorId: null,
+            actorType: 'bot',
+            payload: {
+              form_id: resolved.formId,
+              form_version: resolved.version,
+              field_count: resolved.fields.length,
+              handoff_reason: decision.reason,
+            },
+          })
+
+          // Status stays bot_active, no agent is assigned, and no bot_handoff is
+          // written. completeFormAndHandoff does all three at terminate — that
+          // gate is what keeps a half-filled ticket out of the queue.
+          return { posted: [posted], statusChanged: false, phaseChanged: 'form' }
+        }
+      }
+
       const assignedAgentId = await assignOnHandoff(tx, ctx.workspaceId)
       await tx
         .update(conversation)
@@ -111,7 +184,7 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
         // agent exists, and that is explicitly not an error.
         payload: { reason: decision.reason, assigned_agent_id: assignedAgentId },
       })
-      return { posted: [posted], statusChanged: true }
+      return { posted: [posted], statusChanged: true, phaseChanged: null }
     }
 
     case 'unavailable': {
@@ -150,7 +223,7 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
         actorType: 'bot',
         payload: { reason: decision.reason },
       })
-      return { posted, statusChanged: true }
+      return { posted, statusChanged: true, phaseChanged: null }
     }
   }
 }
