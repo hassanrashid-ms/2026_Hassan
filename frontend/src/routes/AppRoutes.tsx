@@ -36,6 +36,7 @@ export function AppRoutes() {
         <Route path="inbox" element={<Inbox />} />
         <Route path="inbox/:conversationId" element={<Inbox />} />
         <Route path="articles" element={<KnowledgeBase />} />
+        <Route path="articles/:id" element={<KnowledgeBase />} />
       </Route>
     </Routes>
   )
