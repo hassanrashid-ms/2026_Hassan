@@ -102,7 +102,13 @@ export function FormCard({ form, onAnswer, onSubmit, onSkip, busy }: FormCardPro
         <span className="text-sm text-muted">{`${index + 1} of ${fields.length}`}</span>
       </div>
 
-      <p className="text-lg font-semibold text-text">{field.label}</p>
+      <div className="flex flex-col gap-1">
+        <p className="flex items-baseline gap-2 text-xl font-bold tracking-tight text-text">
+          <span aria-hidden="true" className="inline-block size-1.5 rounded-full bg-accent" />
+          {field.label}
+        </p>
+        {field.helperText && <p className="text-sm text-muted">{field.helperText}</p>}
+      </div>
 
       <FieldInput field={field} value={value} onChange={set} disabled={disabled} />
 
@@ -179,6 +185,7 @@ function FieldInput({
         <textarea
           rows={3}
           aria-label={field.label}
+          placeholder={field.placeholder}
           disabled={disabled}
           value={typeof value === 'string' ? value : ''}
           onChange={(e) => onChange(e.target.value)}
@@ -191,6 +198,7 @@ function FieldInput({
           type="number"
           inputMode="decimal"
           aria-label={field.label}
+          placeholder={field.placeholder}
           disabled={disabled}
           value={typeof value === 'number' ? String(value) : ''}
           onChange={(e) => onChange(e.target.value === '' ? undefined : Number(e.target.value))}
@@ -202,6 +210,11 @@ function FieldInput({
         <input
           type="date"
           aria-label={field.label}
+          // A support form never has a legitimate reason to ask about a date that
+          // hasn't happened yet — "when did you buy this" and "when did it break"
+          // are both always in the past. Soft, not enforced server-side: nothing
+          // about a form may block a player reaching a human.
+          max={today()}
           disabled={disabled}
           value={typeof value === 'string' ? value : ''}
           onChange={(e) => onChange(e.target.value === '' ? undefined : e.target.value)}
@@ -229,6 +242,7 @@ function FieldInput({
         <input
           type="text"
           aria-label={field.label}
+          placeholder={field.placeholder}
           disabled={disabled}
           value={typeof value === 'string' ? value : ''}
           onChange={(e) => onChange(e.target.value)}
@@ -236,4 +250,12 @@ function FieldInput({
         />
       )
   }
+}
+
+/** Local YYYY-MM-DD, matching the `<input type="date">` value format exactly. */
+function today(): string {
+  const d = new Date()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}-${month}-${day}`
 }

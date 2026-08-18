@@ -45,6 +45,10 @@ export const formFieldSchema = z.object({
   isRequired: z.boolean(),
   position: z.number().int().nonnegative(),
   options: z.array(z.string().min(1)).min(2).optional(),
+  /** Grey example text inside an empty input — "e.g. ABC-123456" — never a value. */
+  placeholder: z.string().min(1).max(200).optional(),
+  /** One line under the question, for context the label alone doesn't carry. */
+  helperText: z.string().min(1).max(300).optional(),
 })
 export type FormField = z.infer<typeof formFieldSchema>
 

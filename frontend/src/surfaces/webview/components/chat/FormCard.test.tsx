@@ -17,8 +17,22 @@ const FORM: PlayerFormView = {
       position: 0,
       options: ['Apple App Store', 'Google Play'],
     },
-    { key: 'order_id', label: 'Order or receipt ID', type: 'short_text', isRequired: true, position: 1 },
-    { key: 'purchase_date', label: 'Date of purchase', type: 'date', isRequired: true, position: 2 },
+    {
+      key: 'order_id',
+      label: 'Order or receipt ID',
+      type: 'short_text',
+      isRequired: true,
+      position: 1,
+      placeholder: 'e.g. GPA.1234-5678',
+    },
+    {
+      key: 'purchase_date',
+      label: 'Date of purchase',
+      type: 'date',
+      isRequired: true,
+      position: 2,
+      helperText: "Can't be in the future.",
+    },
   ],
   answers: [],
 }
@@ -102,6 +116,27 @@ describe('FormCard', () => {
     setup({ ...FORM, answers: [{ field_key: 'store', value: 'Google Play' }] })
     expect(screen.getByText('2 of 3')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^back$/i })).toBeInTheDocument()
+  })
+
+  it('shows a placeholder inside an empty text field', () => {
+    setup()
+    fireEvent.click(screen.getByRole('button', { name: /^next$/i }))
+    expect(screen.getByPlaceholderText('e.g. GPA.1234-5678')).toBeInTheDocument()
+  })
+
+  it('shows helper text under the question when the field has one', () => {
+    setup()
+    fireEvent.click(screen.getByRole('button', { name: /^next$/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^next$/i }))
+    expect(screen.getByText("Can't be in the future.")).toBeInTheDocument()
+  })
+
+  it('caps the date field at today, so a purchase cannot be dated in the future', () => {
+    setup()
+    fireEvent.click(screen.getByRole('button', { name: /^next$/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^next$/i }))
+    const todayStr = new Date().toISOString().slice(0, 10)
+    expect(screen.getByLabelText('Date of purchase')).toHaveAttribute('max', todayStr)
   })
 
   it('calls onSubmit from the last question', async () => {
