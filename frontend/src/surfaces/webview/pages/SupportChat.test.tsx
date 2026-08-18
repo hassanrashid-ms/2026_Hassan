@@ -1,6 +1,6 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { describe, expect, it, vi, beforeEach, beforeAll } from 'vitest'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { PlayerMessagesResponse } from '@support/types'
 import { SupportChat } from './SupportChat.tsx'
@@ -14,9 +14,34 @@ import {
   submitForm,
 } from '@/features/chat/api/playerChatApi'
 import { createSocket } from '@/features/chat/api/socket'
+import { fetchArticleDetail, reportArticleRead } from '@/surfaces/webview/api/surfaceApi'
 
 vi.mock('@/features/chat/api/playerChatApi')
 vi.mock('@/features/chat/api/socket')
+vi.mock('@/surfaces/webview/api/surfaceApi')
+
+// jsdom lays out nothing, so without this Virtuoso measures a zero-height
+// viewport and mounts no items — the same fix ChatBubbles.test.tsx applies,
+// needed here because the article-delivery tests assert on rendered message
+// text and the "Read more" link, both of which live inside Virtuoso's list.
+beforeAll(() => {
+  Object.defineProperty(HTMLElement.prototype, 'offsetHeight', { configurable: true, value: 600 })
+  Object.defineProperty(HTMLElement.prototype, 'offsetWidth', { configurable: true, value: 600 })
+  Object.defineProperty(HTMLElement.prototype, 'offsetParent', { configurable: true, get: () => document.body })
+  Element.prototype.getBoundingClientRect = () =>
+    ({ width: 600, height: 600, top: 0, left: 0, right: 600, bottom: 600, x: 0, y: 0, toJSON() {} }) as DOMRect
+  globalThis.ResizeObserver = class {
+    callback: ResizeObserverCallback
+    constructor(callback: ResizeObserverCallback) {
+      this.callback = callback
+    }
+    observe(target: Element) {
+      this.callback([{ target, contentRect: target.getBoundingClientRect() } as ResizeObserverEntry], this as unknown as ResizeObserver)
+    }
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver
+})
 
 const contextValue: SupportContextValue = {
   boot: { token: 't', sessionId: 's', entryPoint: 'test' },
@@ -70,7 +95,35 @@ beforeEach(() => {
   vi.mocked(postFormAnswer).mockResolvedValue({ ok: true, is_correction: false })
   vi.mocked(submitForm).mockResolvedValue({ confirm_phase: 'none', status: 'open', form_status: 'completed' })
   vi.mocked(skipForm).mockResolvedValue({ confirm_phase: 'none', status: 'open', form_status: 'skipped' })
+  vi.mocked(fetchArticleDetail).mockResolvedValue({
+    id: 'art-1',
+    title: 'Refund timing',
+    body: 'Refunds take **48 hours**.',
+    keywords: [],
+    intent_id: null,
+    published_at: null,
+  })
+  // ArticleSheet's own once-per-session read effect calls this directly (not
+  // through useArticleDetail), so the whole-module mock otherwise leaves it
+  // returning undefined and the sheet's effect throws on `.catch`.
+  vi.mocked(reportArticleRead).mockResolvedValue(undefined as never)
 })
+
+function renderChatAt(path: string) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={[path]}>
+        <SupportContextProvider value={contextValue}>
+          <Routes>
+            <Route path="/embed/support/chat" element={<SupportChat />} />
+            <Route path="/embed/support/chat/articles/:id" element={<SupportChat />} />
+          </Routes>
+        </SupportContextProvider>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  )
+}
 
 describe('SupportChat composer gating', () => {
   it('leaves the composer usable while no banner is showing', async () => {
@@ -266,5 +319,53 @@ describe('the form card', () => {
     )
     renderChat()
     await waitFor(() => expect(screen.getByLabelText('Message')).not.toBeDisabled())
+  })
+})
+
+describe('SupportChat article delivery', () => {
+  it('carries article_id from the wire onto the bubble as a Read more link', async () => {
+    vi.mocked(fetchPlayerMessages).mockResolvedValue(
+      messages({
+        messages: [
+          {
+            id: 'm1',
+            seq: 1,
+            author_type: 'bot',
+            body: 'Refunds take 48 hours.',
+            created_at: '2026-08-18T10:00:00.000Z',
+            delivery_state: 'sent',
+            read_at: null,
+            article_id: 'art-1',
+          },
+        ],
+      }),
+    )
+
+    renderChatAt('/embed/support/chat')
+
+    const link = await screen.findByRole('link', { name: 'Read more' })
+    expect(link).toHaveAttribute('href', '/embed/support/chat/articles/art-1')
+  })
+
+  it('opens the article sheet over the thread when mounted at the nested route', async () => {
+    vi.mocked(fetchPlayerMessages).mockResolvedValue(messages({}))
+
+    renderChatAt('/embed/support/chat/articles/art-1')
+
+    // The sheet is open...
+    expect(await screen.findByText('Refund timing')).toBeInTheDocument()
+    // ...and the thread underneath it never unmounted: the player's own message
+    // is still on screen, which is what a route that rendered SupportHome would
+    // have destroyed along with the socket.
+    await waitFor(() => expect(screen.getByText('my game crashed')).toBeInTheDocument())
+  })
+
+  it('leaves the sheet closed on the plain chat route', async () => {
+    vi.mocked(fetchPlayerMessages).mockResolvedValue(messages({}))
+
+    renderChatAt('/embed/support/chat')
+
+    await waitFor(() => expect(screen.getByText('my game crashed')).toBeInTheDocument())
+    expect(screen.queryByText('Refund timing')).not.toBeInTheDocument()
   })
 })

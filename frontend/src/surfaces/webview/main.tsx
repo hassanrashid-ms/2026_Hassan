@@ -71,7 +71,16 @@ createRoot(root).render(
                   <SupportChat />
                 </Suspense>
               }
-            />
+            >
+              {/*
+                Nested under chat, and rendering the SAME SupportChat element, so
+                the sheet opens over a thread that never unmounted. Reusing
+                /embed/support/articles/:id would render SupportHome instead —
+                killing the socket and leaving the hardware back button stepping
+                through local state that no longer exists.
+              */}
+              <Route path="articles/:id" element={null} />
+            </Route>
             {/* No dead ends, including mistyped ones. */}
             <Route path="*" element={<Navigate to="/embed/support" replace />} />
           </Route>

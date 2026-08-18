@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { TopBar } from '@/surfaces/webview/components/TopBar'
 import { DebugDialog } from '@/surfaces/webview/components/DebugDialog'
@@ -8,6 +9,8 @@ import { SupportButton } from '@/surfaces/webview/components/SupportButton'
 import { BootstrapFailedScreen } from '@/surfaces/webview/components/StateScreens'
 import { useSupport } from '@/surfaces/webview/components/SupportContext'
 import { FormCard } from '@/surfaces/webview/components/chat/FormCard'
+import { ArticleSheet } from '@/surfaces/webview/components/ArticleSheet'
+import { useCloseOverlay } from '@/surfaces/webview/hooks/useCloseOverlay'
 import {
   answerResolution,
   fetchPlayerMessages,
@@ -30,6 +33,7 @@ function toChatMessage(m: {
   created_at: string
   delivery_state: NonNullable<ChatMessage['deliveryState']>
   read_at: string | null
+  article_id: string | null
 }): ChatMessage {
   return {
     id: m.id,
@@ -38,6 +42,7 @@ function toChatMessage(m: {
     createdAt: m.created_at,
     deliveryState: m.delivery_state,
     readAt: m.read_at,
+    articleId: m.article_id,
   }
 }
 
@@ -73,6 +78,15 @@ export function SupportChat() {
   const queryClient = useQueryClient()
   const [pending, setPending] = useState<PendingMessage[]>([])
   const [debugOpen, setDebugOpen] = useState(false)
+
+  /*
+   * The article sheet is a route, not state, so Android's back button closes it —
+   * and it is a route NESTED under chat so that opening it never unmounts this
+   * screen. The socket stays connected, the thread keeps its scroll position, and
+   * a bot or agent message arriving mid-read still lands.
+   */
+  const { id: articleId } = useParams<{ id: string }>()
+  const closeArticle = useCloseOverlay('/embed/support/chat')
 
   const messagesQuery = useQuery({
     queryKey: ['playerMessages', boot?.sessionId],
@@ -346,6 +360,12 @@ export function SupportChat() {
       />
 
       <DebugDialog open={debugOpen} onOpenChange={setDebugOpen} />
+
+      {/* ArticleSheet fires its own once-per-session reportArticleRead and
+          `article_read` bridge post. Correct: a player reading from a bot answer
+          did read the article, and this is simply a third entry point to that
+          signal. */}
+      <ArticleSheet articleId={articleId ?? null} onClose={closeArticle} />
     </>
   )
 }
