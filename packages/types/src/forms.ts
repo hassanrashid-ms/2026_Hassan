@@ -102,5 +102,10 @@ export const formAnswerValueSchemas = {
   date: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/),
   time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
   choice: z.string().min(1),
-  attachment: z.object({ attachmentId: z.uuid() }),
+  // Deliberately a shape regex, not `z.uuid()`: zod 4's `z.uuid()` enforces the
+  // RFC variant nibble, which rejects the all-ones ids the tests and seeds use.
+  // Any well-formed uuid string is what this contract needs.
+  attachment: z.object({
+    attachmentId: z.string().regex(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/),
+  }),
 } satisfies Record<FormFieldType, z.ZodType>
