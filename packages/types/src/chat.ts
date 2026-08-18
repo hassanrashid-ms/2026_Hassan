@@ -132,6 +132,10 @@ export type ResolutionAnswerResponse = {
 
 export type AskResolvedResponse = { asked: boolean }
 
+export type EscalateResponse = { escalated: boolean }
+
+export type UnescalateResponse = { unescalated: boolean }
+
 /**
  * "Open a new ticket" from the resolved banner. No conversation id, same as the
  * rest of the surface: the thread being closed is the player's latest, resolved

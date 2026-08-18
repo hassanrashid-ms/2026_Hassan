@@ -2,10 +2,12 @@ import { Router } from 'express'
 import {
   askResolvedHandler,
   claimConversationHandler,
+  escalateConversationHandler,
   getConversationContextHandler,
   getConversationDetailHandler,
   getConversationMessagesHandler,
   listConversationsHandler,
+  unescalateConversationHandler,
 } from '../controllers/conversationsController.ts'
 
 export const conversationsRouter = Router()
@@ -15,3 +17,5 @@ conversationsRouter.get('/conversations/:id/context', getConversationContextHand
 conversationsRouter.post('/conversations/:id/claim', claimConversationHandler)
 conversationsRouter.get('/conversations/:id/messages', getConversationMessagesHandler)
 conversationsRouter.post('/conversations/:id/ask-resolved', askResolvedHandler)
+conversationsRouter.post('/conversations/:id/escalate', escalateConversationHandler)
+conversationsRouter.post('/conversations/:id/unescalate', unescalateConversationHandler)

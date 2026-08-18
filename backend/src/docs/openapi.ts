@@ -609,6 +609,37 @@ registry.registerPath({
 })
 
 registry.registerPath({
+  method: 'post',
+  path: '/agent/conversations/{id}/escalate',
+  summary: 'Agent Escalate Conversation',
+  description:
+    'Moves status from open or awaiting_player to escalated. A direct status flip, not a message side effect. Does not change assigned_agent_id — the agent keeps the conversation, only its status changes. Requires either ownership or an unassigned conversation.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: { params: z.object({ id: z.uuid() }) },
+  responses: {
+    200: { description: 'Escalated', content: { 'application/json': { schema: z.object({ escalated: z.boolean() }) } } },
+    403: { description: 'Another agent owns this conversation' },
+    404: { description: 'Conversation not found' },
+    409: { description: 'Wrong status' },
+  },
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/agent/conversations/{id}/unescalate',
+  summary: 'Agent Unescalate Conversation',
+  description: 'Moves status from escalated back to open. Requires either ownership or an unassigned conversation.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: { params: z.object({ id: z.uuid() }) },
+  responses: {
+    200: { description: 'Unescalated', content: { 'application/json': { schema: z.object({ unescalated: z.boolean() }) } } },
+    403: { description: 'Another agent owns this conversation' },
+    404: { description: 'Conversation not found' },
+    409: { description: 'Wrong status' },
+  },
+})
+
+registry.registerPath({
   method: 'get',
   path: '/agent/conversations/{id}/messages',
   summary: 'Agent Get Conversation Messages',

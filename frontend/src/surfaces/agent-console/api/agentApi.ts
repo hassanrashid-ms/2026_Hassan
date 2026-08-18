@@ -10,7 +10,9 @@ import type {
   ClaimResponse,
   CreateIntentResponse,
   CreateSubintentResponse,
+  EscalateResponse,
   IntentsResponse,
+  UnescalateResponse,
 } from '@support/types'
 import { apiCall } from '../../../lib/httpClient.ts'
 
@@ -131,4 +133,12 @@ export function archiveArticle(token: string, id: string): Promise<AgentArticleD
 
 export function askResolved(token: string, conversationId: string): Promise<AskResolvedResponse> {
   return apiCall(`/agent/conversations/${conversationId}/ask-resolved`, token, { method: 'POST' })
+}
+
+export function escalateConversation(token: string, conversationId: string): Promise<EscalateResponse> {
+  return apiCall(`/agent/conversations/${conversationId}/escalate`, token, { method: 'POST' })
+}
+
+export function unescalateConversation(token: string, conversationId: string): Promise<UnescalateResponse> {
+  return apiCall(`/agent/conversations/${conversationId}/unescalate`, token, { method: 'POST' })
 }

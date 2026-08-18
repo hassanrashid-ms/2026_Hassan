@@ -5,7 +5,13 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { AgentMessageView } from '@support/types'
 import { ThreadPanel } from './ThreadPanel.tsx'
-import { fetchConversationMessages, markAgentMessagesRead, sendAgentMessage } from '../../../api/agentApi.ts'
+import {
+  escalateConversation,
+  fetchConversationMessages,
+  markAgentMessagesRead,
+  sendAgentMessage,
+  unescalateConversation,
+} from '../../../api/agentApi.ts'
 import { createSocket } from '../../../../../features/chat/api/socket.ts'
 
 vi.mock('../../../api/agentApi.ts')
@@ -243,6 +249,57 @@ describe('ThreadPanel read-only tickets', () => {
     await screen.findByText('Sent')
 
     await waitFor(() => expect(markAgentMessagesRead).toHaveBeenCalledWith('t', 'c1', 1))
+  })
+})
+
+describe('ThreadPanel escalation', () => {
+  it('escalates an open conversation without leaving the ticket', async () => {
+    fakeSocket()
+    vi.mocked(fetchConversationMessages).mockResolvedValue({ messages: [agentMessage()] } as never)
+    vi.mocked(escalateConversation).mockResolvedValue({ escalated: true } as never)
+
+    renderPanel({ status: 'open' })
+    await screen.findByText('Sent')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Escalate' }))
+
+    expect(escalateConversation).toHaveBeenCalledWith('t', 'c1')
+  })
+
+  it('shows Un-escalate once a conversation is escalated, and calls unescalate on click', async () => {
+    fakeSocket()
+    vi.mocked(fetchConversationMessages).mockResolvedValue({ messages: [agentMessage()] } as never)
+    vi.mocked(unescalateConversation).mockResolvedValue({ unescalated: true } as never)
+
+    renderPanel({ status: 'escalated' })
+    await screen.findByText('Sent')
+
+    expect(screen.queryByRole('button', { name: 'Escalate' })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Un-escalate' }))
+
+    expect(unescalateConversation).toHaveBeenCalledWith('t', 'c1')
+  })
+
+  it('hides both escalation buttons on a read-only ticket', async () => {
+    fakeSocket()
+    vi.mocked(fetchConversationMessages).mockResolvedValue({ messages: [agentMessage()] } as never)
+
+    renderPanel(RESOLVED)
+    await screen.findByLabelText('Message')
+
+    expect(screen.queryByRole('button', { name: 'Escalate' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Un-escalate' })).not.toBeInTheDocument()
+  })
+
+  it('hides both escalation buttons while the conversation is bot_active', async () => {
+    fakeSocket()
+    vi.mocked(fetchConversationMessages).mockResolvedValue({ messages: [agentMessage()] } as never)
+
+    renderPanel({ status: 'bot_active' })
+    await screen.findByText('Sent')
+
+    expect(screen.queryByRole('button', { name: 'Escalate' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Un-escalate' })).not.toBeInTheDocument()
   })
 })
 

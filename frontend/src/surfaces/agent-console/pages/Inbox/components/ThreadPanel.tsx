@@ -7,7 +7,14 @@ import type {
 } from '@support/types'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Archive, Clock, MessageSquare, PanelRight } from 'lucide-react'
-import { askResolved, fetchConversationMessages, markAgentMessagesRead, sendAgentMessage } from '../../../api/agentApi.ts'
+import {
+  askResolved,
+  escalateConversation,
+  fetchConversationMessages,
+  markAgentMessagesRead,
+  sendAgentMessage,
+  unescalateConversation,
+} from '../../../api/agentApi.ts'
 import { createSocket } from '../../../../../features/chat/api/socket.ts'
 import { ChatThread } from '../../../../../features/chat/components/ChatThread.tsx'
 import { reconcilePending, type PendingMessage } from '../../../../../features/chat/hooks/chatReconcile.ts'
@@ -132,9 +139,27 @@ export function ThreadPanel({
     },
   })
 
+  const invalidateAfterEscalationChange = () => {
+    void queryClient.invalidateQueries({ queryKey: ['conversation', conversationId, 'messages'] })
+    void queryClient.invalidateQueries({ queryKey: ['inbox', 'mine'] })
+    void queryClient.invalidateQueries({ queryKey: ['inbox', 'unassigned'] })
+  }
+
+  const escalate = useMutation({
+    mutationFn: () => escalateConversation(token, conversationId!),
+    onSuccess: invalidateAfterEscalationChange,
+  })
+
+  const unescalate = useMutation({
+    mutationFn: () => unescalateConversation(token, conversationId!),
+    onSuccess: invalidateAfterEscalationChange,
+  })
+
   const askable =
     !readOnly && (status === 'open' || status === 'awaiting_player') && (confirmPhase ?? 'none') === 'none'
   const waiting = confirmPhase === 'agent_ask'
+  const escalatable = !readOnly && (status === 'open' || status === 'awaiting_player')
+  const unescalatable = !readOnly && status === 'escalated'
 
   // An optimistic bubble belongs to the thread it was typed in. Switching
   // conversations must drop it, or a send that is still in flight reappears
@@ -219,6 +244,16 @@ export function ThreadPanel({
               onClick={() => ask.mutate()}
             >
               Ask if resolved
+            </Button>
+          )}
+          {escalatable && (
+            <Button type="button" variant="outline" size="sm" disabled={escalate.isPending} onClick={() => escalate.mutate()}>
+              Escalate
+            </Button>
+          )}
+          {unescalatable && (
+            <Button type="button" variant="outline" size="sm" disabled={unescalate.isPending} onClick={() => unescalate.mutate()}>
+              Un-escalate
             </Button>
           )}
           {onToggleRail && (

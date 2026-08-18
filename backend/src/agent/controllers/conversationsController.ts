@@ -6,6 +6,7 @@ import { emitInboxChanged, emitMessageToRooms, emitPhaseChanged } from '../../sh
 import { toAgentView, toPlayerView } from '../../domain/conversations/index.ts'
 import { claimConversation, getAgentConversationMessages, listConversations } from '../services/conversationsService.ts'
 import { askResolved } from '../services/resolutionService.ts'
+import { escalateConversation, unescalateConversation } from '../services/escalationService.ts'
 import { getConversationContext, getConversationDetail } from '../services/conversationContextService.ts'
 
 const ConversationsQuery = z.object({ status: z.enum(['unassigned', 'mine']) })
@@ -80,6 +81,50 @@ export const askResolvedHandler: RequestHandler = async (req, res) => {
   emitPhaseChanged(getIo(), params.data.id, { conversation_id: params.data.id, confirm_phase: 'agent_ask' })
 
   res.status(200).json({ asked: true })
+}
+
+const ESCALATION_ERRORS = {
+  not_found: [404, 'Conversation not found.'],
+  wrong_status: [409, 'Escalation can only be toggled from open, awaiting player, or escalated.'],
+  not_owner: [403, 'Another agent owns this conversation.'],
+} as const
+
+export const escalateConversationHandler: RequestHandler = async (req, res) => {
+  const ctx = req.agent!
+  const params = ConversationIdParams.safeParse(req.params)
+  if (!params.success) {
+    sendError(res, 422, 'invalid_request', 'id must be a uuid.')
+    return
+  }
+
+  const result = await escalateConversation(ctx, params.data.id)
+  if (!result.ok) {
+    const [status, message] = ESCALATION_ERRORS[result.reason]
+    sendError(res, status, result.reason, message)
+    return
+  }
+
+  emitInboxChanged(getIo(), ctx.workspaceId, params.data.id, 'escalated')
+  res.status(200).json({ escalated: true })
+}
+
+export const unescalateConversationHandler: RequestHandler = async (req, res) => {
+  const ctx = req.agent!
+  const params = ConversationIdParams.safeParse(req.params)
+  if (!params.success) {
+    sendError(res, 422, 'invalid_request', 'id must be a uuid.')
+    return
+  }
+
+  const result = await unescalateConversation(ctx, params.data.id)
+  if (!result.ok) {
+    const [status, message] = ESCALATION_ERRORS[result.reason]
+    sendError(res, status, result.reason, message)
+    return
+  }
+
+  emitInboxChanged(getIo(), ctx.workspaceId, params.data.id, 'open')
+  res.status(200).json({ unescalated: true })
 }
 
 export const getConversationDetailHandler: RequestHandler = async (req, res) => {
