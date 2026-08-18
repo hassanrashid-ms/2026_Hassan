@@ -26,6 +26,7 @@ function toChatMessage(m: AgentMessageView): ChatMessage {
     deliveryState: m.delivery_state,
     readAt: m.read_at,
     visibility: m.visibility,
+    articleId: m.article_id,
   }
 }
 

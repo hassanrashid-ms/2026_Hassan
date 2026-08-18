@@ -43,6 +43,7 @@ function agentMessage(overrides: Partial<AgentMessageView> = {}): AgentMessageVi
     delivery_state: 'sent',
     read_at: null,
     created_at: '2026-08-13T11:58:48.140Z',
+    article_id: null,
     ...overrides,
   } as AgentMessageView
 }
@@ -286,5 +287,17 @@ describe('ThreadPanel read receipts', () => {
 
     expect(await screen.findByText('Seen')).toBeInTheDocument()
     await waitFor(() => expect(screen.queryByText('Sent')).not.toBeInTheDocument())
+  })
+
+  it('carries article_id from the wire through to a Read more link', async () => {
+    fakeSocket()
+    vi.mocked(fetchConversationMessages).mockResolvedValue({
+      messages: [agentMessage({ author_type: 'bot', body: 'Refunds take 48 hours.', article_id: 'art-1' })],
+    } as never)
+
+    renderPanel()
+
+    const link = await screen.findByRole('link', { name: 'Read more' })
+    expect(link).toHaveAttribute('href', '/articles/art-1')
   })
 })

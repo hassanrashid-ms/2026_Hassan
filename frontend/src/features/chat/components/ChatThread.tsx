@@ -1,6 +1,8 @@
+import { Suspense } from 'react'
 import { Virtuoso } from 'react-virtuoso'
 import { ArrowDown } from 'lucide-react'
 import { DeliveryTicks } from './DeliveryTicks.tsx'
+import { MessageBody } from './MessageBody.tsx'
 import { useJumpToLatest } from '../hooks/useJumpToLatest.ts'
 import type { ChatAuthorType, ChatMessage } from './types.ts'
 
@@ -44,6 +46,10 @@ export function ChatThread({ messages, currentAuthorType, onRetry, playerLabel }
     // relative so the jump button can sit over the list; the wrapper takes the
     // height the caller gave this component and passes it straight through.
     <div className="relative h-full">
+      {/* One boundary for the whole thread: MessageBody's ArticleBody is lazy,
+          and a per-bubble boundary would flash a fallback on every message as
+          the list scrolls. Same reasoning as the webview's ChatBubbles. */}
+      <Suspense fallback={null}>
       <Virtuoso
         ref={ref}
         style={{ height: '100%' }}
@@ -150,10 +156,30 @@ export function ChatThread({ messages, currentAuthorType, onRetry, playerLabel }
                     {isBot ? 'Bot' : chatMessage.authorType === 'agent' ? 'Agent' : (playerLabel ?? 'Player')}
                   </span>
                 )}
-                <p className="m-0">{chatMessage.body}</p>
+                {/* `agent` renders as markdown too, so article steps an agent
+                    pasted read exactly like the bot's own answer. */}
+                <div className="m-0">
+                  <MessageBody authorType={chatMessage.authorType} body={chatMessage.body} />
+                </div>
                 <time dateTime={chatMessage.createdAt} className="mt-1 block text-xs opacity-80">
                   {new Date(chatMessage.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </time>
+                {/*
+                  A plain anchor in a new tab, not in-app navigation: routing the
+                  console to the article would hijack the conversation the agent
+                  is reading. Client-appended from articleId — the model is never
+                  asked to write a link.
+                */}
+                {chatMessage.articleId && (
+                  <a
+                    href={`/articles/${chatMessage.articleId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-1 inline-flex items-center rounded-md border border-muted/30 px-2 py-0.5 text-xs font-medium underline underline-offset-2"
+                  >
+                    Read more
+                  </a>
+                )}
                 {/* Never on an internal note: the player cannot see the message, so
                     any receipt would be a claim about something they never got. */}
                 {isOwn && !isInternal && (
@@ -180,6 +206,7 @@ export function ChatThread({ messages, currentAuthorType, onRetry, playerLabel }
           )
         }}
       />
+      </Suspense>
 
       {showJump && (
         <button

@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import { ChatThread } from './ChatThread.tsx'
 import type { ChatMessage } from './types.ts'
 
@@ -229,5 +229,43 @@ describe('ChatThread read receipts', () => {
     )
     await screen.findByText('mine')
     expect(screen.queryByText('Agent')).not.toBeInTheDocument()
+  })
+})
+
+describe('ChatThread article delivery', () => {
+  it('renders a bot body as markdown', async () => {
+    const { container } = render(
+      <ChatThread messages={[message({ authorType: 'bot', body: 'Refunds take **48 hours**.' })]} currentAuthorType="agent" />,
+    )
+
+    await waitFor(() => expect(container.querySelector('strong')?.textContent).toBe('48 hours'))
+    expect(container.textContent).not.toContain('**')
+  })
+
+  it('renders a player body literally', async () => {
+    const { container } = render(
+      <ChatThread messages={[message({ authorType: 'player', body: 'my **game** crashed' })]} currentAuthorType="agent" />,
+    )
+
+    await waitFor(() => expect(screen.getByText('my **game** crashed')).toBeInTheDocument())
+    expect(container.querySelector('strong')).toBeNull()
+  })
+
+  it('opens the cited article in a new tab, so the conversation stays on screen', async () => {
+    render(
+      <ChatThread messages={[message({ authorType: 'bot', body: 'answer', articleId: 'art-1' })]} currentAuthorType="agent" />,
+    )
+
+    const link = await screen.findByRole('link', { name: 'Read more' })
+    expect(link).toHaveAttribute('href', '/articles/art-1')
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+  })
+
+  it('renders no button when nothing was cited', async () => {
+    render(<ChatThread messages={[message({ authorType: 'bot', body: 'answer' })]} currentAuthorType="agent" />)
+
+    await waitFor(() => expect(screen.getByText('answer')).toBeInTheDocument())
+    expect(screen.queryByRole('link', { name: 'Read more' })).not.toBeInTheDocument()
   })
 })
