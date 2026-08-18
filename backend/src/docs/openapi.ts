@@ -43,6 +43,22 @@ const IncidentBodySchema = z.object({
   client_version: z.string().max(60).optional().openapi({ example: '0.1.0' }),
 })
 
+const AgentMessageViewSchema = z.object({
+  id: z.uuid(),
+  seq: z.number().int().nonnegative(),
+  author_type: z.enum(['player', 'agent', 'bot', 'system']),
+  author_agent_id: z.uuid().nullable(),
+  body: z.string(),
+  visibility: z.enum(['public', 'internal']),
+  delivery_state: z.enum(['sending', 'sent', 'delivered', 'read', 'failed']),
+  read_at: z.string().nullable(),
+  created_at: z.string(),
+  article_id: z
+    .uuid()
+    .nullable()
+    .openapi({ description: 'The article a bot answer was written from, or null. Clients render their own "Read more" from it.' }),
+})
+
 // Register Component Schemas
 const playerTokenRequestComponent = registry.register('PlayerTokenRequest', PlayerTokenRequestSchema)
 const sessionStartBodyComponent = registry.register('SessionStartBody', SessionStartBodySchema)
@@ -602,7 +618,10 @@ registry.registerPath({
     params: z.object({ id: z.uuid() }),
   },
   responses: {
-    200: { description: 'Messages list' },
+    200: {
+      description: 'Messages list',
+      content: { 'application/json': { schema: z.object({ messages: z.array(AgentMessageViewSchema) }) } },
+    },
   },
 })
 

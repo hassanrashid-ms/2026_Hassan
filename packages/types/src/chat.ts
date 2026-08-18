@@ -49,6 +49,12 @@ export type PlayerMessageView = {
   /** ISO 8601, or null until the other side reads it. Additive — the frozen contract permits new response fields. */
   read_at: string | null
   created_at: string
+  /**
+   * The article this bot answer was written from, or null. Additive — the frozen
+   * contract permits new response fields. Clients append their own "Read more"
+   * affordance from this; the model is never asked to write a link.
+   */
+  article_id: string | null
 }
 
 /** Same fields as PlayerMessageView plus the two an agent may see and a player may not. */
