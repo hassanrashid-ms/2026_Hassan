@@ -1,6 +1,9 @@
+import { eq } from 'drizzle-orm'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { closeDb } from '../src/shared/db/client.ts'
 import { postMessage } from '../src/domain/conversations/index.ts'
+import { nextInactivityDueAt } from '../src/domain/conversations/resolutionCycle.ts'
+import { resolutionCycle } from '../src/shared/db/schema/index.ts'
 import { withWorkspace } from '../src/shared/db/withWorkspace.ts'
 import {
   closeOwnerPool,
@@ -9,6 +12,7 @@ import {
   seedArticle,
   seedConversation,
   seedPlayer,
+  seedResolutionCycle,
   seedWorkspace,
   truncateAll,
 } from './helpers/db.ts'
@@ -120,5 +124,88 @@ describe('postMessage', () => {
       [conversationId],
     )
     expect(rows).toEqual([{ article_id: articleId }, { article_id: null }])
+  })
+})
+
+describe('postMessage inactivity clock touch', () => {
+  const NOW = new Date('2026-08-18T12:00:00Z')
+
+  async function fixture(status: 'open' | 'awaiting_player' | 'bot_active' | 'escalated') {
+    const workspaceId = await seedWorkspace({ slug: `ws-${status}` })
+    const playerId = await seedPlayer(workspaceId)
+    const conversationId = await seedConversation({ workspaceId, playerId, status })
+    await seedResolutionCycle({ workspaceId, conversationId })
+    return { workspaceId, playerId, conversationId }
+  }
+
+  const due = (workspaceId: string, conversationId: string) =>
+    withWorkspace(workspaceId, async (tx) => {
+      const [row] = await tx
+        .select({ dueAt: resolutionCycle.inactivityDueAt })
+        .from(resolutionCycle)
+        .where(eq(resolutionCycle.conversationId, conversationId))
+      return row!.dueAt
+    })
+
+  it('pushes the due date one window out on a public message in open', async () => {
+    const { workspaceId, playerId, conversationId } = await fixture('open')
+    await withWorkspace(workspaceId, (tx) =>
+      postMessage(tx, {
+        workspaceId,
+        conversationId,
+        authorType: 'player',
+        actorId: playerId,
+        body: 'still broken',
+        now: NOW,
+      }),
+    )
+    expect((await due(workspaceId, conversationId))!.toISOString()).toBe(nextInactivityDueAt(NOW).toISOString())
+  })
+
+  it('touches on awaiting_player too', async () => {
+    const { workspaceId, conversationId } = await fixture('awaiting_player')
+    await withWorkspace(workspaceId, (tx) =>
+      postMessage(tx, {
+        workspaceId,
+        conversationId,
+        authorType: 'system',
+        actorId: null,
+        body: 'Did this solve it?',
+        now: NOW,
+      }),
+    )
+    expect((await due(workspaceId, conversationId))!.toISOString()).toBe(nextInactivityDueAt(NOW).toISOString())
+  })
+
+  it('does not touch while the bot owns the conversation', async () => {
+    const { workspaceId, playerId, conversationId } = await fixture('bot_active')
+    await withWorkspace(workspaceId, (tx) =>
+      postMessage(tx, { workspaceId, conversationId, authorType: 'player', actorId: playerId, body: 'hi', now: NOW }),
+    )
+    expect(await due(workspaceId, conversationId)).toBeNull()
+  })
+
+  it('does not touch while escalated', async () => {
+    const { workspaceId, conversationId } = await fixture('escalated')
+    await withWorkspace(workspaceId, (tx) =>
+      postMessage(tx, { workspaceId, conversationId, authorType: 'system', actorId: null, body: 'note', now: NOW }),
+    )
+    expect(await due(workspaceId, conversationId)).toBeNull()
+  })
+
+  it('does not touch on an internal note', async () => {
+    const { workspaceId, conversationId } = await fixture('open')
+    await withWorkspace(workspaceId, (tx) =>
+      postMessage(tx, {
+        workspaceId,
+        conversationId,
+        authorType: 'agent',
+        actorId: null,
+        body: 'internal only',
+        visibility: 'internal',
+        now: NOW,
+      }),
+    )
+    expect(await due(workspaceId, conversationId)).toBeNull()
   })
 })

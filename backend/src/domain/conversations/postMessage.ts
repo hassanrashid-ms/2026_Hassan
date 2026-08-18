@@ -3,6 +3,7 @@ import type { ChatAuthorType, ChatDeliveryState } from '@support/types'
 import { appendEvent } from '../../shared/events/appendEvent.ts'
 import { conversation, message } from '../../shared/db/schema/index.ts'
 import type { Tx } from '../../shared/db/withWorkspace.ts'
+import { touchInactivityClock } from './resolutionCycle.ts'
 
 export type PostMessageInput = {
   workspaceId: string
@@ -32,6 +33,12 @@ export type PostMessageInput = {
    * refused any id that searchArticles had not returned for this workspace.
    */
   articleId?: string | null
+  /**
+   * The timestamp the inactivity-clock touch below is computed from. Defaults to
+   * wall-clock now. Only the background jobs pass it, and only so their tests can
+   * assert an exact due date instead of a range.
+   */
+  now?: Date
 }
 
 export type PostedMessageRow = {
@@ -77,11 +84,13 @@ export async function postMessage(tx: Tx, input: PostMessageInput): Promise<Post
     .update(conversation)
     .set({ messageSeq: sql`${conversation.messageSeq} + 1` })
     .where(eq(conversation.id, input.conversationId))
-    .returning({ seq: conversation.messageSeq })
+    .returning({ seq: conversation.messageSeq, status: conversation.status })
 
   if (!bumped) {
     throw new Error(`postMessage: conversation ${input.conversationId} not found`)
   }
+
+  const visibility = input.visibility ?? 'public'
 
   const [inserted] = await tx
     .insert(message)
@@ -93,7 +102,7 @@ export async function postMessage(tx: Tx, input: PostMessageInput): Promise<Post
       authorAgentId: input.authorAgentId ?? null,
       body: input.body,
       articleId: input.articleId ?? null,
-      visibility: input.visibility ?? 'public',
+      visibility,
     })
     .returning()
 
@@ -108,8 +117,21 @@ export async function postMessage(tx: Tx, input: PostMessageInput): Promise<Post
     sessionId: input.sessionId ?? null,
     actorId: input.actorId,
     actorType: input.authorType,
-    payload: { seq: bumped.seq, author_type: input.authorType, visibility: input.visibility ?? 'public' },
+    payload: { seq: bumped.seq, author_type: input.authorType, visibility },
   })
+
+  // The one place the inactivity clock is wound. Every message path — agent
+  // reply, player reply, the bot's handoff line, the clock's own ask, the
+  // decline — already funnels through here, so no other call site needs to know
+  // a clock exists.
+  //
+  // Public only: an internal note is a conversation between agents, and letting
+  // it reset the player's clock would hide a ticket nobody had actually replied
+  // to. Status-gated because the clock does not run under the bot (`bot_active`)
+  // or while escalated, and never after `resolved`/`closed`.
+  if (visibility === 'public' && (bumped.status === 'open' || bumped.status === 'awaiting_player')) {
+    await touchInactivityClock(tx, { conversationId: input.conversationId, now: input.now ?? new Date() })
+  }
 
   return inserted
 }
