@@ -49,6 +49,7 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
         authorType: 'bot',
         actorId: null,
         body: decision.reply,
+        articleId: decision.articleId ?? null,
         visibility: 'public',
       })
       if (decision.subintentId) await classifyIfUnset(tx, ctx, decision.subintentId)

@@ -8,6 +8,7 @@ import {
   closeOwnerPool,
   ownerPool,
   seedAgent,
+  seedArticle,
   seedConversation,
   seedIntent,
   seedPlayer,
@@ -43,6 +44,14 @@ async function eventsFor(conversationId: string) {
   const { rows } = await ownerPool.query(`select type, payload from event where conversation_id = $1 order by id`, [
     conversationId,
   ])
+  return rows
+}
+
+async function articleIdsFor(conversationId: string) {
+  const { rows } = await ownerPool.query(
+    `select author_type, article_id from message where conversation_id = $1 order by seq`,
+    [conversationId],
+  )
   return rows
 }
 
@@ -250,6 +259,66 @@ describe('applyBotTurn', () => {
     const row = await conversationRow(conversationId)
     expect(row.status).toBe('bot_active')
     expect(await messagesFor(conversationId)).toEqual([])
+  })
+
+  it('answer persists the cited article on the message it posted', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const conversationId = await seedConversation({ workspaceId, playerId })
+    const authorId = await seedAgent()
+    const articleId = await seedArticle({ workspaceId, createdBy: authorId, title: 'Refund timing' })
+
+    await withWorkspace(workspaceId, (tx) =>
+      applyBotTurn(
+        tx,
+        { workspaceId, conversationId },
+        { kind: 'answer', reply: 'Refunds take 48 hours.', articleId },
+      ),
+    )
+
+    expect(await articleIdsFor(conversationId)).toEqual([{ author_type: 'bot', article_id: articleId }])
+
+    // The event is the reporting record and stays exactly as it was — same type,
+    // same snapshotted title. Delivery did not replace it.
+    const events = await eventsFor(conversationId)
+    expect(events.map((e) => e.type)).toEqual(['message_sent', 'bot_article_offered'])
+    expect(events[1].payload).toMatchObject({ article_id: articleId, article_title: 'Refund timing' })
+
+    // Unchanged: reading an article is not answering "did this help?".
+    expect((await conversationRow(conversationId)).status).toBe('bot_active')
+  })
+
+  it('leaves article_id null on an answer that cited nothing', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const conversationId = await seedConversation({ workspaceId, playerId })
+
+    await withWorkspace(workspaceId, (tx) =>
+      applyBotTurn(tx, { workspaceId, conversationId }, { kind: 'answer', reply: 'Can you tell me more?' }),
+    )
+
+    expect(await articleIdsFor(conversationId)).toEqual([{ author_type: 'bot', article_id: null }])
+  })
+
+  it('leaves article_id null on handoff and on unavailable', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const availableAgent = await seedAgent()
+    await seedWorkspaceMember({ workspaceId, agentId: availableAgent })
+
+    const handoffConversation = await seedConversation({ workspaceId, playerId })
+    await withWorkspace(workspaceId, (tx) =>
+      applyBotTurn(tx, { workspaceId, conversationId: handoffConversation }, { kind: 'handoff', reason: 'article_rejected' }),
+    )
+
+    const unavailableConversation = await seedConversation({ workspaceId, playerId })
+    await withWorkspace(workspaceId, (tx) =>
+      applyBotTurn(tx, { workspaceId, conversationId: unavailableConversation }, { kind: 'unavailable', reason: 'error' }),
+    )
+
+    for (const row of [...(await articleIdsFor(handoffConversation)), ...(await articleIdsFor(unavailableConversation))]) {
+      expect(row.article_id).toBeNull()
+    }
   })
 
   it('cross-tenant FK is refused by the database, not a handler', async () => {
