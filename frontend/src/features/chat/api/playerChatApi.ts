@@ -1,4 +1,11 @@
-import type { NewTicketResponse, PlayerMessageView, PlayerMessagesResponse, ResolutionAnswerResponse } from '@support/types'
+import type {
+  FormAnswerResponse,
+  FormTerminateResponse,
+  NewTicketResponse,
+  PlayerMessageView,
+  PlayerMessagesResponse,
+  ResolutionAnswerResponse,
+} from '@support/types'
 import { apiCall } from '../../../lib/httpClient.ts'
 
 export function fetchPlayerMessages(token: string, sessionId: string): Promise<PlayerMessagesResponse> {
@@ -46,5 +53,38 @@ export function answerResolution(token: string, helped: boolean, sessionId?: str
   return apiCall(`/surface/resolution-answer`, token, {
     method: 'POST',
     body: JSON.stringify(sessionId ? { helped, session_id: sessionId } : { helped }),
+  })
+}
+
+/**
+ * One question, one request. Considered and rejected: collecting every answer
+ * client-side and submitting once — it loses everything if the player drops
+ * mid-form, and to preserve partial answers on skip it has to send them anyway.
+ */
+export function postFormAnswer(
+  token: string,
+  fieldKey: string,
+  value: unknown,
+  sessionId?: string,
+): Promise<FormAnswerResponse> {
+  return apiCall(`/surface/form/answer`, token, {
+    method: 'POST',
+    body: JSON.stringify(
+      sessionId ? { field_key: fieldKey, value, session_id: sessionId } : { field_key: fieldKey, value },
+    ),
+  })
+}
+
+export function submitForm(token: string, sessionId?: string): Promise<FormTerminateResponse> {
+  return apiCall(`/surface/form/submit`, token, {
+    method: 'POST',
+    body: JSON.stringify(sessionId ? { session_id: sessionId } : {}),
+  })
+}
+
+export function skipForm(token: string, sessionId?: string): Promise<FormTerminateResponse> {
+  return apiCall(`/surface/form/skip`, token, {
+    method: 'POST',
+    body: JSON.stringify(sessionId ? { session_id: sessionId } : {}),
   })
 }
