@@ -1,9 +1,12 @@
-import { useQuery } from '@tanstack/react-query'
+import { useEffect } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { fetchConversationContext } from '../../../api/agentApi.ts'
+import { createSocket } from '../../../../../features/chat/api/socket.ts'
 import { ApiError } from '../../../../../lib/httpClient.ts'
 import { Button } from '../../../components/ui/button.tsx'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../../../components/ui/sheet.tsx'
+import { FormPanel } from './context/FormPanel.tsx'
 import { PlayerStatePanel } from './context/PlayerStatePanel.tsx'
 import { TicketList } from './context/TicketList.tsx'
 
@@ -19,6 +22,7 @@ export function ContextRail({
   onOpenChange: (open: boolean) => void
 }) {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
 
   // Long staleTime and no socket wiring: the snapshot is immutable by
   // construction and ticket history moves on the order of days. Only navigating
@@ -28,6 +32,28 @@ export function ContextRail({
     queryFn: () => fetchConversationContext(token, conversationId),
     staleTime: 5 * 60_000,
   })
+
+  // The one narrow trigger. The staleTime above is not dropped: player state is
+  // immutable by construction and ticket history moves on the order of days.
+  // The exception is a form in progress, and bot_active conversations sit in the
+  // unassigned queue, so an agent can open a ticket mid-form. A missed
+  // invalidation leaves the panel stale rather than wrong, and the next
+  // navigation corrects it.
+  useEffect(() => {
+    const socket = createSocket(token, 'agent')
+    // Inside 'connect', not once at setup: rooms live on the server's socket
+    // instance, so every reconnect lands in a socket that has joined nothing.
+    socket.on('connect', () => {
+      socket.emit('join_conversation', { conversation_id: conversationId })
+    })
+    socket.on('conversation:phase_changed', () => {
+      void queryClient.invalidateQueries({ queryKey: ['conversation', conversationId, 'context'] })
+    })
+    return () => {
+      socket.emit('leave_conversation', { conversation_id: conversationId })
+      socket.close()
+    }
+  }, [token, conversationId, queryClient])
 
   const error = contextQuery.error
   const notFound = error instanceof ApiError && error.status === 404
@@ -62,6 +88,9 @@ export function ContextRail({
                 currentId={conversationId}
                 onSelect={(id) => void navigate(`/inbox/${id}`)}
               />
+              {/* Five states, and this is the one that renders nothing: no form
+                  means no section, following the raw-is-{} precedent. */}
+              {contextQuery.data.form ? <FormPanel form={contextQuery.data.form} /> : null}
             </>
           ) : (
             <p className="px-4 py-3 text-sm text-muted">Loading…</p>
