@@ -47,15 +47,12 @@ function toChatMessage(m: {
 }
 
 /**
- * Both banners are the same object: a sheet that rises above the dimmed screen
- * and owns the player's next decision. Shared as a constant rather than a
- * wrapper component because the two differ only in their contents, and a
- * one-prop wrapper would hide that they must stay visually identical.
+ * Both banners are the same object: a sheet below the thread that owns the
+ * player's next decision. Shared as a constant rather than a wrapper component
+ * because the two differ only in their contents, and a one-prop wrapper would
+ * hide that they must stay visually identical.
  */
-const BANNER_CLASS = [
-  'relative z-20 shrink-0 rounded-t-card bg-surface px-4 pt-5 pb-5',
-  'shadow-[0_-10px_40px_rgba(0,0,0,0.45)]',
-].join(' ')
+const BANNER_CLASS = 'shrink-0 rounded-t-card border-t border-text/10 bg-surface px-4 pt-5 pb-5'
 
 /**
  * The chat that used to be a panel inside the support surface, now its own route.

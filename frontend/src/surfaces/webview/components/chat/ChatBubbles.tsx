@@ -110,25 +110,27 @@ function ChatBubble({ message, onRetry }: { message: ChatMessage; onRetry: (mess
           )}
         >
           <MessageBody authorType={message.authorType} body={message.body} />
+
+          {/*
+            Inside the same bubble, not a sibling block: a sibling with its own
+            background reads as a second message. Client-appended, always —
+            never model output. A prompt that asks for the link produces prose
+            describing a link, which is the same failure mode CLAUDE.md
+            documents for `handoff` and `answer_from_article`.
+
+            A nested route, not the shared /embed/support/articles/:id: that one
+            renders SupportHome, which would unmount a live chat and break the
+            hardware back button.
+          */}
+          {!own && message.articleId && (
+            <Link
+              to={`/embed/support/chat/articles/${message.articleId}`}
+              className="mt-2 inline-flex min-h-8 items-center border-t border-text/10 pt-2 text-sm font-semibold text-accent underline underline-offset-2"
+            >
+              Read more
+            </Link>
+          )}
         </div>
-
-        {/*
-          Client-appended, always — never model output. A prompt that asks for the
-          link produces prose describing a link, which is the same failure mode
-          CLAUDE.md documents for `handoff` and `answer_from_article`.
-
-          A nested route, not the shared /embed/support/articles/:id: that one
-          renders SupportHome, which would unmount a live chat and break the
-          hardware back button.
-        */}
-        {!own && message.articleId && (
-          <Link
-            to={`/embed/support/chat/articles/${message.articleId}`}
-            className="inline-flex min-h-9 items-center rounded-card bg-accent-soft px-3 py-1.5 text-sm font-semibold text-accent"
-          >
-            Read more
-          </Link>
-        )}
 
         <div className="flex items-center gap-2 px-1 text-xs text-muted">
           <time dateTime={message.createdAt}>
