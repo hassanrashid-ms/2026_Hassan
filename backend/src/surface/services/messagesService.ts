@@ -10,7 +10,7 @@ import {
 
 type SendMessageBodyType = z.infer<typeof SendMessageBody>
 type MarkPlayerReadBodyType = z.infer<typeof MarkPlayerReadBody>
-import { allocateTicketNumber, postMessage, toAgentView, toPlayerView, type PostedMessageRow } from '../../domain/conversations/index.ts'
+import { allocateTicketNumber, openResolutionCycle, postMessage, toAgentView, toPlayerView, type PostedMessageRow } from '../../domain/conversations/index.ts'
 import { applyBotTurn, assignOnHandoff, pickHandoffMessage, resolveBotConfig } from '../../domain/bot/index.ts'
 import { appendEvent } from '../../shared/events/appendEvent.ts'
 import {
@@ -30,6 +30,16 @@ import type { PlayerContext } from '../../shared/middleware/requirePlayerToken.t
 import { enqueueBotTurn } from '../../shared/jobs/botTurns.ts'
 
 const REOPENABLE_STATUSES = new Set(['resolved', 'closed'])
+
+/**
+ * Resolutions that happened while a human owned the conversation. All three
+ * reach `resolved` from `open`/`awaiting_player`, so the agent who was handling
+ * it stays the owner on reopen; only a bot resolve goes back through
+ * assignOnHandoff. Widened from a bare `=== 'agent'` when the inactivity clock
+ * added its two kinds — without this, shipping the clock quietly started
+ * dumping owned conversations into Unassigned.
+ */
+const AGENT_OWNED_RESOLUTIONS = new Set(['agent', 'player_confirmed', 'timed_out'])
 
 export async function sendPlayerMessage(
   ctx: PlayerContext,
@@ -121,6 +131,10 @@ export async function sendPlayerMessage(
         actorId: ctx.playerId,
         actorType: 'player',
       })
+      // Cycle 1 opens with the conversation, per spec §1. `inactivity_due_at`
+      // stays NULL: the bot owns this conversation and the clock does not run
+      // under the bot.
+      await openResolutionCycle(tx, { workspaceId: ctx.workspaceId, conversationId })
     } else {
       conversationId = existing.id
       if (REOPENABLE_STATUSES.has(existing.status)) {
@@ -131,7 +145,7 @@ export async function sendPlayerMessage(
           .limit(1)
 
         let nextAssignedAgentId: string | null = null
-        if (prior?.resolutionSource === 'agent' && prior.assignedAgentId) {
+        if (prior?.resolutionSource && AGENT_OWNED_RESOLUTIONS.has(prior.resolutionSource) && prior.assignedAgentId) {
           const [previousOwner] = await tx.select({ status: agent.status }).from(agent).where(eq(agent.id, prior.assignedAgentId)).limit(1)
           nextAssignedAgentId = previousOwner?.status === 'active' ? prior.assignedAgentId : await assignOnHandoff(tx, ctx.workspaceId)
         } else {
@@ -160,6 +174,11 @@ export async function sendPlayerMessage(
           actorType: 'player',
           payload: { previous_resolution_source: prior?.resolutionSource ?? null },
         })
+        // The next cycle. Deliberately opened before the player's message is
+        // posted below: postMessage's touch needs an open cycle to find, and
+        // that touch is what starts this cycle's clock — a reopen lands in
+        // `open`, where the clock does run.
+        await openResolutionCycle(tx, { workspaceId: ctx.workspaceId, conversationId })
         inboxStatus = 'open'
       } else if (existing.status === 'awaiting_player') {
         // The other half of the pair `sendAgentMessage` opens with its

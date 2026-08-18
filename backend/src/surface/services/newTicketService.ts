@@ -2,7 +2,7 @@ import { and, desc, eq } from 'drizzle-orm'
 import type { z } from 'zod'
 import type { ConversationStatusValue, NewTicketBody } from '@support/types'
 import { appendEvent } from '../../shared/events/appendEvent.ts'
-import { allocateTicketNumber } from '../../domain/conversations/index.ts'
+import { allocateTicketNumber, openResolutionCycle, stampCycleClosed } from '../../domain/conversations/index.ts'
 import { conversation, player, session } from '../../shared/db/schema/index.ts'
 import { withWorkspace } from '../../shared/db/withWorkspace.ts'
 import { emitInboxChanged } from '../../shared/realtime/emit.ts'
@@ -80,6 +80,15 @@ export async function openNewTicket(ctx: PlayerContext, body: Body): Promise<Ope
       payload: { previous_status: latest.status, reason: 'new_ticket' },
     })
 
+    // The force-close is a close in the auto-close sense, so it stamps the same
+    // column runAutoClose would have. `resolved_at` is deliberately left as-is:
+    // this conversation may never have been resolved, and inventing a resolution
+    // to satisfy a column would put a fiction in the reporting spine. The cycle
+    // stays open-but-closed, which no worker will ever pick up — both scan on
+    // conversation status, and this conversation is `closed` forever (a
+    // replacement is inserted below, so it can never be the player's latest again).
+    await stampCycleClosed(tx, { conversationId: latest.id, now: new Date() })
+
     const number = await allocateTicketNumber(tx, ctx.workspaceId)
     const [created] = await tx
       .insert(conversation)
@@ -106,6 +115,7 @@ export async function openNewTicket(ctx: PlayerContext, body: Body): Promise<Ope
       actorId: ctx.playerId,
       actorType: 'player',
     })
+    await openResolutionCycle(tx, { workspaceId: ctx.workspaceId, conversationId: created.id })
 
     return { ok: true as const, closedConversationId: latest.id, conversationId: created.id, status: created.status }
   })
