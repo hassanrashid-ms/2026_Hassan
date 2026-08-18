@@ -1,8 +1,10 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
+import { eq } from 'drizzle-orm'
 import { applyResolutionAnswer } from '../src/domain/conversations/index.ts'
 import { withWorkspace } from '../src/shared/db/withWorkspace.ts'
 import { closeDb } from '../src/shared/db/client.ts'
 import { HANDOFF_PLAYER_MESSAGES } from '../src/domain/bot/messages.ts'
+import { conversation, event, resolutionCycle } from '../src/shared/db/schema/index.ts'
 import {
   closeOwnerPool,
   ownerPool,
@@ -12,6 +14,7 @@ import {
   seedFormVersion,
   seedIntent,
   seedPlayer,
+  seedResolutionCycle,
   seedSubintent,
   seedWorkspace,
   seedWorkspaceMember,
@@ -225,5 +228,123 @@ describe('applyResolutionAnswer', () => {
     // nothing from the second — a double tap must not post twice.
     expect((await eventsFor(conversationId)).map((e) => e.type)).toEqual(['message_sent', 'resolution_check_declined'])
     expect(await messagesFor(conversationId)).toHaveLength(1)
+  })
+})
+
+describe('applyResolutionAnswer — inactivity_ask', () => {
+  it('resolves as player_confirmed on Yes and closes the cycle', async () => {
+    const workspaceId = await seedWorkspace({ slug: 'demo-game' })
+    const playerId = await seedPlayer(workspaceId)
+    const conversationId = await seedConversation({
+      workspaceId,
+      playerId,
+      status: 'awaiting_player',
+      confirmPhase: 'inactivity_ask',
+    })
+    await seedResolutionCycle({ workspaceId, conversationId, inactivityDueAt: new Date() })
+
+    const outcome = await withWorkspace(workspaceId, (tx) =>
+      applyResolutionAnswer(tx, { workspaceId, conversationId, playerId, sessionId: null }, true),
+    )
+    expect(outcome.kind).toBe('resolved')
+    if (outcome.kind === 'resolved') expect(outcome.source).toBe('player_confirmed')
+
+    const [conv] = await withWorkspace(workspaceId, (tx) =>
+      tx.select().from(conversation).where(eq(conversation.id, conversationId)),
+    )
+    expect(conv!.status).toBe('resolved')
+    expect(conv!.confirmPhase).toBe('none')
+    expect(conv!.resolutionSource).toBe('player_confirmed')
+
+    const [cycle] = await withWorkspace(workspaceId, (tx) =>
+      tx.select().from(resolutionCycle).where(eq(resolutionCycle.conversationId, conversationId)),
+    )
+    expect(cycle!.resolutionKind).toBe('player_confirmed')
+    expect(cycle!.resolvedAt).not.toBeNull()
+    expect(cycle!.inactivityDueAt).toBeNull()
+
+    const events = await withWorkspace(workspaceId, (tx) =>
+      tx.select().from(event).where(eq(event.type, 'conversation_resolved')),
+    )
+    expect(events[0]!.payload).toMatchObject({ source: 'inactivity', confirmed_by: 'player' })
+  })
+
+  it('on No, clears the phase, posts the decline and restarts the clock', async () => {
+    const workspaceId = await seedWorkspace({ slug: 'demo-game' })
+    const playerId = await seedPlayer(workspaceId)
+    const conversationId = await seedConversation({
+      workspaceId,
+      playerId,
+      status: 'awaiting_player',
+      confirmPhase: 'inactivity_ask',
+    })
+    const past = new Date('2026-08-01T00:00:00Z')
+    await seedResolutionCycle({ workspaceId, conversationId, inactivityDueAt: past })
+
+    const outcome = await withWorkspace(workspaceId, (tx) =>
+      applyResolutionAnswer(tx, { workspaceId, conversationId, playerId, sessionId: null }, false),
+    )
+    expect(outcome.kind).toBe('declined')
+
+    const [conv] = await withWorkspace(workspaceId, (tx) =>
+      tx.select().from(conversation).where(eq(conversation.id, conversationId)),
+    )
+    expect(conv!.status).toBe('awaiting_player')
+    expect(conv!.confirmPhase).toBe('none')
+
+    const [cycle] = await withWorkspace(workspaceId, (tx) =>
+      tx.select().from(resolutionCycle).where(eq(resolutionCycle.conversationId, conversationId)),
+    )
+    expect(cycle!.resolvedAt).toBeNull()
+    // Spec step 3: "clock restarts". The decline message's own postMessage did it.
+    expect(cycle!.inactivityDueAt!.getTime()).toBeGreaterThan(past.getTime())
+
+    const events = await withWorkspace(workspaceId, (tx) =>
+      tx.select().from(event).where(eq(event.type, 'resolution_check_declined')),
+    )
+    expect(events[0]!.payload).toMatchObject({ source: 'inactivity' })
+  })
+
+  it('closes the cycle on the agent_ask Yes path too', async () => {
+    const workspaceId = await seedWorkspace({ slug: 'demo-game' })
+    const playerId = await seedPlayer(workspaceId)
+    const conversationId = await seedConversation({
+      workspaceId,
+      playerId,
+      status: 'open',
+      confirmPhase: 'agent_ask',
+    })
+    await seedResolutionCycle({ workspaceId, conversationId, inactivityDueAt: new Date() })
+
+    await withWorkspace(workspaceId, (tx) =>
+      applyResolutionAnswer(tx, { workspaceId, conversationId, playerId, sessionId: null }, true),
+    )
+
+    const [cycle] = await withWorkspace(workspaceId, (tx) =>
+      tx.select().from(resolutionCycle).where(eq(resolutionCycle.conversationId, conversationId)),
+    )
+    expect(cycle!.resolutionKind).toBe('agent')
+    expect(cycle!.resolvedAt).not.toBeNull()
+  })
+
+  it('closes the cycle on the bot_article Yes path', async () => {
+    const workspaceId = await seedWorkspace({ slug: 'demo-game' })
+    const playerId = await seedPlayer(workspaceId)
+    const conversationId = await seedConversation({
+      workspaceId,
+      playerId,
+      status: 'bot_active',
+      confirmPhase: 'bot_article',
+    })
+    await seedResolutionCycle({ workspaceId, conversationId })
+
+    await withWorkspace(workspaceId, (tx) =>
+      applyResolutionAnswer(tx, { workspaceId, conversationId, playerId, sessionId: null }, true),
+    )
+
+    const [cycle] = await withWorkspace(workspaceId, (tx) =>
+      tx.select().from(resolutionCycle).where(eq(resolutionCycle.conversationId, conversationId)),
+    )
+    expect(cycle!.resolutionKind).toBe('bot')
   })
 })

@@ -4,6 +4,7 @@ import { SILENT_UNAVAILABLE_REASONS } from './botTurn.ts'
 import { botFailureNote, pickHandoffMessage } from './messages.ts'
 import { assignOnHandoff } from './assignOnHandoff.ts'
 import { postMessage, type PostedMessageRow } from '../conversations/postMessage.ts'
+import { closeResolutionCycle } from '../conversations/resolutionCycle.ts'
 import { appendEvent } from '../../shared/events/appendEvent.ts'
 import type { Tx } from '../../shared/db/withWorkspace.ts'
 import { article, conversation, formSubmission, intent, subintent } from '../../shared/db/schema/index.ts'
@@ -77,6 +78,7 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
         .update(conversation)
         .set({ status: 'resolved', confirmPhase: 'none', resolutionSource: 'bot' })
         .where(eq(conversation.id, ctx.conversationId))
+      await closeResolutionCycle(tx, { conversationId: ctx.conversationId, kind: 'bot', now: new Date() })
       await appendEvent(tx, {
         workspaceId: ctx.workspaceId,
         type: 'conversation_resolved',
