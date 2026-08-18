@@ -6,7 +6,13 @@ import type { PlayerMessagesResponse } from '@support/types'
 import { SupportChat } from './SupportChat.tsx'
 import { SupportContextProvider, type SupportContextValue } from '@/surfaces/webview/components/SupportContext.tsx'
 import { makeBootstrapResponse } from '@/surfaces/webview/test-support/fixtures.ts'
-import { fetchPlayerMessages, markPlayerMessagesRead } from '@/features/chat/api/playerChatApi'
+import {
+  fetchPlayerMessages,
+  markPlayerMessagesRead,
+  postFormAnswer,
+  skipForm,
+  submitForm,
+} from '@/features/chat/api/playerChatApi'
 import { createSocket } from '@/features/chat/api/socket'
 
 vi.mock('@/features/chat/api/playerChatApi')
@@ -51,6 +57,7 @@ function messages(overrides: Partial<PlayerMessagesResponse>): PlayerMessagesRes
     ],
     status: 'open',
     confirm_phase: 'none',
+    form: null,
     ...overrides,
   } as PlayerMessagesResponse
 }
@@ -60,6 +67,9 @@ beforeEach(() => {
   // Nothing in these tests drives realtime; the component only needs a socket
   // whose handlers can be registered and whose close() exists for cleanup.
   vi.mocked(createSocket).mockReturnValue({ on: vi.fn(), emit: vi.fn(), close: vi.fn() } as never)
+  vi.mocked(postFormAnswer).mockResolvedValue({ ok: true, is_correction: false })
+  vi.mocked(submitForm).mockResolvedValue({ confirm_phase: 'none', status: 'open', form_status: 'completed' })
+  vi.mocked(skipForm).mockResolvedValue({ confirm_phase: 'none', status: 'open', form_status: 'skipped' })
 })
 
 describe('SupportChat composer gating', () => {
@@ -186,5 +196,75 @@ describe('SupportChat when the backend is unreachable', () => {
 
     expect(screen.queryByText('Could not load support')).not.toBeInTheDocument()
     expect(screen.getByLabelText('Message')).toBeInTheDocument()
+  })
+})
+
+const FORM = {
+  submission_id: 's1',
+  form_id: 'f1',
+  form_name: 'Purchase receipt',
+  version: 1,
+  fields: [
+    {
+      key: 'store',
+      label: 'Store',
+      type: 'choice',
+      isRequired: true,
+      position: 0,
+      options: ['Apple App Store', 'Google Play'],
+    },
+    { key: 'order_id', label: 'Order or receipt ID', type: 'short_text', isRequired: true, position: 1 },
+  ],
+  answers: [],
+} as unknown as NonNullable<PlayerMessagesResponse['form']>
+
+describe('the form card', () => {
+  it('does not render the resolution banner while confirm_phase is form', async () => {
+    vi.mocked(fetchPlayerMessages).mockResolvedValue(
+      messages({ status: 'bot_active', confirm_phase: 'form', form: FORM }),
+    )
+    renderChat()
+    expect(await screen.findByText('Store')).toBeInTheDocument()
+    // The old `!== 'none'` check made a third enum value silently render the
+    // yes/no banner underneath the card.
+    expect(screen.queryByText('Is your issue resolved?')).not.toBeInTheDocument()
+  })
+
+  it('disables the composer while the card is showing', async () => {
+    vi.mocked(fetchPlayerMessages).mockResolvedValue(
+      messages({ status: 'bot_active', confirm_phase: 'form', form: FORM }),
+    )
+    renderChat()
+    await screen.findByText('Store')
+    expect(screen.getByLabelText('Message')).toBeDisabled()
+  })
+
+  it('resumes mid-form at the right question with earlier answers present', async () => {
+    vi.mocked(fetchPlayerMessages).mockResolvedValue(
+      messages({
+        status: 'bot_active',
+        confirm_phase: 'form',
+        form: { ...FORM, answers: [{ field_key: 'store', value: 'Google Play' }] },
+      }),
+    )
+    renderChat()
+    expect(await screen.findByText('2 of 2')).toBeInTheDocument()
+    expect(screen.getByText('Order or receipt ID')).toBeInTheDocument()
+  })
+
+  it('still renders the resolution banner on bot_article', async () => {
+    vi.mocked(fetchPlayerMessages).mockResolvedValue(
+      messages({ status: 'bot_active', confirm_phase: 'bot_article', form: null }),
+    )
+    renderChat()
+    expect(await screen.findByText('Is your issue resolved?')).toBeInTheDocument()
+  })
+
+  it('renders no card when confirm_phase is form but the form block is null', async () => {
+    vi.mocked(fetchPlayerMessages).mockResolvedValue(
+      messages({ status: 'bot_active', confirm_phase: 'form', form: null }),
+    )
+    renderChat()
+    await waitFor(() => expect(screen.getByLabelText('Message')).not.toBeDisabled())
   })
 })

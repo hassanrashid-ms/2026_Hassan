@@ -7,12 +7,16 @@ import { ChatComposer } from '@/surfaces/webview/components/chat/ChatComposer'
 import { SupportButton } from '@/surfaces/webview/components/SupportButton'
 import { BootstrapFailedScreen } from '@/surfaces/webview/components/StateScreens'
 import { useSupport } from '@/surfaces/webview/components/SupportContext'
+import { FormCard } from '@/surfaces/webview/components/chat/FormCard'
 import {
   answerResolution,
   fetchPlayerMessages,
   markPlayerMessagesRead,
   openNewTicket,
+  postFormAnswer,
   sendPlayerMessage,
+  skipForm,
+  submitForm,
 } from '@/features/chat/api/playerChatApi'
 import { createSocket } from '@/features/chat/api/socket'
 import { reconcilePending, type PendingMessage } from '@/features/chat/hooks/chatReconcile'
@@ -109,6 +113,27 @@ export function SupportChat() {
     },
   })
 
+  /**
+   * Deliberately does not invalidate the messages query. The card owns its own
+   * progress until terminate, and a refetch mid-form would remount it back to
+   * whatever the server thinks the first unanswered question is — which, for a
+   * player who went Back to correct question one, is the wrong one.
+   */
+  const formAnswer = useMutation({
+    mutationFn: ({ fieldKey, value }: { fieldKey: string; value: unknown }) =>
+      postFormAnswer(boot!.token, fieldKey, value, boot!.sessionId),
+  })
+
+  const formTerminate = useMutation({
+    mutationFn: (action: 'submit' | 'skip') =>
+      action === 'submit' ? submitForm(boot!.token, boot!.sessionId) : skipForm(boot!.token, boot!.sessionId),
+    onSuccess: () => {
+      // The terminate posts the summary card and flips the status, so the whole
+      // thread is stale — unlike an answer, which changes nothing on screen.
+      void queryClient.invalidateQueries({ queryKey: ['playerMessages', boot?.sessionId] })
+    },
+  })
+
   const newTicket = useMutation({
     mutationFn: () => openNewTicket(boot!.token, boot!.sessionId),
     onSuccess: () => {
@@ -165,7 +190,13 @@ export function SupportChat() {
   const chatMessages = reconcilePending(serverMessages, pending)
 
   const settled = messagesQuery.data?.status === 'resolved' || messagesQuery.data?.status === 'closed'
-  const confirmPending = (messagesQuery.data?.confirm_phase ?? 'none') !== 'none'
+  // Explicit, not `!== 'none'`. The old check made every future enum value render
+  // the yes/no banner by default, and 'form' is the value that proved it: the
+  // banner would have appeared underneath the form card asking about an article
+  // nobody had offered.
+  const phase = messagesQuery.data?.confirm_phase ?? 'none'
+  const confirmPending = phase === 'bot_article' || phase === 'agent_ask'
+  const activeForm = phase === 'form' ? (messagesQuery.data?.form ?? null) : null
 
   /**
    * Two independent signals for the same condition, because either can be the
@@ -185,7 +216,12 @@ export function SupportChat() {
   const unreachableMessage =
     error ?? (messagesQuery.error instanceof Error ? messagesQuery.error.message : 'Could not reach support. Check your connection and try again.')
 
-  const isTyping = messagesQuery.data?.status === 'bot_active' && chatMessages[chatMessages.length - 1]?.authorType === 'player' && !settled && !confirmPending
+  const isTyping =
+    messagesQuery.data?.status === 'bot_active' &&
+    chatMessages[chatMessages.length - 1]?.authorType === 'player' &&
+    !settled &&
+    !confirmPending &&
+    activeForm === null
 
   const onRetryConnection = () => {
     // Both, for the same reason both are checked above: whichever failed needs
@@ -226,6 +262,21 @@ export function SupportChat() {
       </div>
 
 
+
+      {activeForm && (
+        <div role="dialog" aria-modal="true" aria-label={activeForm.form_name} className={BANNER_CLASS}>
+          {/* Keyed by the submission so an unrelated refetch — a socket
+              message:new, a read receipt — cannot reset the player's progress. */}
+          <FormCard
+            key={activeForm.submission_id}
+            form={activeForm}
+            onAnswer={(fieldKey, value) => formAnswer.mutateAsync({ fieldKey, value })}
+            onSubmit={() => formTerminate.mutate('submit')}
+            onSkip={() => formTerminate.mutate('skip')}
+            busy={formTerminate.isPending}
+          />
+        </div>
+      )}
 
       {confirmPending && (
         <div role="dialog" aria-modal="true" aria-label="Is your issue resolved?" className={BANNER_CLASS}>
@@ -282,7 +333,10 @@ export function SupportChat() {
       {/* A banner is a question the player has to answer before typing again:
           leaving the composer live let them talk past it and strand the
           conversation mid-decision. */}
-      <ChatComposer onSend={(body) => send.mutate(body)} disabled={send.isPending || confirmPending || settled} />
+      <ChatComposer
+        onSend={(body) => send.mutate(body)}
+        disabled={send.isPending || confirmPending || activeForm !== null || settled}
+      />
 
       <DebugDialog open={debugOpen} onOpenChange={setDebugOpen} />
     </>
