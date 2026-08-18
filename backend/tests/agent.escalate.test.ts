@@ -1,18 +1,23 @@
 import { createServer } from 'node:http'
 import express from 'express'
+import { eq } from 'drizzle-orm'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { req as request } from './helpers/http.ts'
 import { closeDb } from '../src/shared/db/client.ts'
+import { withWorkspace } from '../src/shared/db/withWorkspace.ts'
+import { resolutionCycle } from '../src/shared/db/schema/index.ts'
 import { requireAgentSession } from '../src/shared/middleware/requireAgentSession.ts'
 import { errorMiddleware } from '../src/errors.ts'
 import { signAgentSession } from '../src/shared/auth/agentSession.ts'
 import { closeSocketServer, createSocketServer } from '../src/shared/realtime/socketServer.ts'
 import { conversationsRouter } from '../src/agent/routers/conversationsRouter.ts'
+import { escalateConversation, unescalateConversation } from '../src/agent/services/escalationService.ts'
 import {
   closeOwnerPool,
   ownerPool,
   seedConversation,
   seedPlayer,
+  seedResolutionCycle,
   seedWorkspace,
   truncateAll,
 } from './helpers/db.ts'
@@ -45,6 +50,14 @@ async function setupAgent(workspaceId: string) {
   ])
   const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId })
   return { agentId, token }
+}
+
+async function openConversationFixture() {
+  const workspaceId = await seedWorkspace()
+  const { agentId, token } = await setupAgent(workspaceId)
+  const playerId = await seedPlayer(workspaceId)
+  const conversationId = await seedConversation({ workspaceId, playerId, status: 'open', assignedAgentId: agentId })
+  return { workspaceId, agentId, token, conversationId }
 }
 
 async function conversationRow(id: string) {
@@ -228,5 +241,50 @@ describe('POST /agent/conversations/:id/unescalate', () => {
     const workspaceId = await seedWorkspace()
     const { token } = await setupAgent(workspaceId)
     expect((await request(app).post('/conversations/not-a-uuid/unescalate').set('Authorization', `Bearer ${token}`)).status).toBe(422)
+  })
+})
+
+describe('escalation and the inactivity clock', () => {
+  it('nulls inactivity_due_at on escalate and sets a fresh window on unescalate', async () => {
+    const { workspaceId, agentId, conversationId } = await openConversationFixture()
+    const dueAt = new Date('2026-08-18T12:00:00Z')
+    await seedResolutionCycle({ workspaceId, conversationId, inactivityDueAt: dueAt })
+
+    const ctx = { workspaceId, agentId } as never
+
+    expect(await escalateConversation(ctx, conversationId)).toEqual({ ok: true })
+    const paused = await withWorkspace(workspaceId, (tx) =>
+      tx.select().from(resolutionCycle).where(eq(resolutionCycle.conversationId, conversationId)),
+    )
+    expect(paused[0]!.inactivityDueAt).toBeNull()
+
+    expect(await unescalateConversation(ctx, conversationId)).toEqual({ ok: true })
+    const resumed = await withWorkspace(workspaceId, (tx) =>
+      tx.select().from(resolutionCycle).where(eq(resolutionCycle.conversationId, conversationId)),
+    )
+    expect(resumed[0]!.inactivityDueAt).not.toBeNull()
+    // A fresh full window, not the remainder of the paused one.
+    expect(resumed[0]!.inactivityDueAt!.getTime()).toBeGreaterThan(dueAt.getTime())
+  })
+
+  it('leaves a resolved cycle untouched when the toggle is rejected', async () => {
+    const { workspaceId, agentId, conversationId } = await openConversationFixture()
+    await seedResolutionCycle({
+      workspaceId,
+      conversationId,
+      inactivityDueAt: null,
+      resolvedAt: new Date('2026-08-17T00:00:00Z'),
+      resolutionKind: 'agent',
+    })
+
+    // Wrong status for unescalate — the guard rejects before any clock write.
+    expect(await unescalateConversation({ workspaceId, agentId } as never, conversationId)).toEqual({
+      ok: false,
+      reason: 'wrong_status',
+    })
+    const rows = await withWorkspace(workspaceId, (tx) =>
+      tx.select().from(resolutionCycle).where(eq(resolutionCycle.conversationId, conversationId)),
+    )
+    expect(rows[0]!.inactivityDueAt).toBeNull()
   })
 })

@@ -3,6 +3,7 @@ import { appendEvent } from '../../shared/events/appendEvent.ts'
 import { conversation } from '../../shared/db/schema/index.ts'
 import { withWorkspace } from '../../shared/db/withWorkspace.ts'
 import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts'
+import { pauseInactivityClock, resumeInactivityClock } from '../../domain/conversations/index.ts'
 
 const ESCALATABLE_STATUSES = new Set(['open', 'awaiting_player'])
 
@@ -20,6 +21,7 @@ export async function escalateConversation(ctx: AgentContext, conversationId: st
     allowedFrom: ESCALATABLE_STATUSES,
     next: 'escalated',
     eventType: 'conversation_escalated',
+    clock: 'pause',
   })
 }
 
@@ -28,13 +30,19 @@ export async function unescalateConversation(ctx: AgentContext, conversationId: 
     allowedFrom: new Set(['escalated']),
     next: 'open',
     eventType: 'conversation_unescalated',
+    clock: 'resume',
   })
 }
 
 async function toggle(
   ctx: AgentContext,
   conversationId: string,
-  opts: { allowedFrom: Set<string>; next: 'escalated' | 'open'; eventType: 'conversation_escalated' | 'conversation_unescalated' },
+  opts: {
+    allowedFrom: Set<string>
+    next: 'escalated' | 'open'
+    eventType: 'conversation_escalated' | 'conversation_unescalated'
+    clock: 'pause' | 'resume'
+  },
 ): Promise<EscalationOutcome> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
     const [found] = await tx
@@ -52,6 +60,19 @@ async function toggle(
     }
 
     await tx.update(conversation).set({ status: opts.next }).where(eq(conversation.id, conversationId))
+
+    // No message carries an escalation, so the clock cannot ride on
+    // postMessage's touch here — these two calls are the only direct writers of
+    // inactivity_due_at outside that hook. Pausing (rather than filtering on
+    // status in the worker) is what the design requires: an escalated
+    // conversation must be invisible to the scan, not merely skipped by it.
+    // Resume grants a fresh full window rather than the remainder of the paused
+    // one — the escalation, however long it ran, is not silence from the player.
+    if (opts.clock === 'pause') {
+      await pauseInactivityClock(tx, { conversationId })
+    } else {
+      await resumeInactivityClock(tx, { conversationId, now: new Date() })
+    }
 
     // No session_id: an agent-console request has no player session behind it.
     await appendEvent(tx, {
