@@ -272,7 +272,7 @@ describe('applyBotTurn', () => {
       applyBotTurn(
         tx,
         { workspaceId, conversationId },
-        { kind: 'answer', reply: 'Refunds take 48 hours.', articleId },
+        { kind: 'answer', reply: 'Refunds take 48 hours.', subintentId: null, articleId },
       ),
     )
 
@@ -294,7 +294,7 @@ describe('applyBotTurn', () => {
     const conversationId = await seedConversation({ workspaceId, playerId })
 
     await withWorkspace(workspaceId, (tx) =>
-      applyBotTurn(tx, { workspaceId, conversationId }, { kind: 'answer', reply: 'Can you tell me more?' }),
+      applyBotTurn(tx, { workspaceId, conversationId }, { kind: 'answer', reply: 'Can you tell me more?', subintentId: null }),
     )
 
     expect(await articleIdsFor(conversationId)).toEqual([{ author_type: 'bot', article_id: null }])
@@ -308,7 +308,7 @@ describe('applyBotTurn', () => {
 
     const handoffConversation = await seedConversation({ workspaceId, playerId })
     await withWorkspace(workspaceId, (tx) =>
-      applyBotTurn(tx, { workspaceId, conversationId: handoffConversation }, { kind: 'handoff', reason: 'article_rejected' }),
+      applyBotTurn(tx, { workspaceId, conversationId: handoffConversation }, { kind: 'handoff', reason: 'article_rejected', subintentId: null }),
     )
 
     const unavailableConversation = await seedConversation({ workspaceId, playerId })
