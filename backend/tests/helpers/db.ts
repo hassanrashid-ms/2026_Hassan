@@ -180,15 +180,14 @@ export async function seedSubintent(args: {
   workspaceId: string
   intentId: string
   name?: string
+  formId?: string | null
 }): Promise<string> {
   const id = randomUUID()
   const name = args.name ?? `Subintent ${randomUUID().slice(0, 8)}`
-  await ownerPool.query(`insert into subintent (id, workspace_id, intent_id, name) values ($1, $2, $3, $4)`, [
-    id,
-    args.workspaceId,
-    args.intentId,
-    name,
-  ])
+  await ownerPool.query(
+    `insert into subintent (id, workspace_id, intent_id, name, form_id) values ($1, $2, $3, $4, $5)`,
+    [id, args.workspaceId, args.intentId, name, args.formId ?? null],
+  )
   return id
 }
 

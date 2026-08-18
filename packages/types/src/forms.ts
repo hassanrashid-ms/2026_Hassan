@@ -110,3 +110,45 @@ export const formAnswerValueSchemas = {
     attachmentId: z.string().regex(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/),
   }),
 } satisfies Record<FormFieldType, z.ZodType>
+
+export type FormSubmissionStatus = 'in_progress' | 'completed' | 'partial' | 'skipped'
+
+/** The latest answer for a field. Older rows are history and never reach a player. */
+export type PlayerFormAnswerView = { field_key: string; value: unknown }
+
+/**
+ * Everything the pinned card needs to render from cold, including a reconnect
+ * mid-form. `fields` comes from the submission's snapshotted version, never the
+ * current one, so a form edited to v2 does not renumber a v1 card mid-answer.
+ */
+export type PlayerFormView = {
+  submission_id: string
+  form_id: string
+  form_name: string
+  version: number
+  fields: FormField[]
+  answers: PlayerFormAnswerView[]
+}
+
+/**
+ * `value` is `unknown` on the wire on purpose: which schema validates it depends
+ * on the resolved field's declared type, which only the server can look up.
+ * `session_id` is best-effort attribution — verified server-side, degraded to
+ * null on any miss, and never a gate on the answer being accepted.
+ */
+export const FormAnswerBody = z.object({
+  field_key: z.string().min(1).max(64),
+  value: z.unknown(),
+  session_id: z.uuid().optional(),
+})
+
+/** Submit and skip carry nothing but attribution. Which one was called is the whole difference. */
+export const FormTerminateBody = z.object({ session_id: z.uuid().optional() })
+
+export type FormAnswerResponse = { ok: true; is_correction: boolean }
+
+export type FormTerminateResponse = {
+  confirm_phase: 'none'
+  status: ConversationStatusValue
+  form_status: Exclude<FormSubmissionStatus, 'in_progress'>
+}

@@ -248,11 +248,11 @@ export async function getPlayerMessages(
       .limit(1)
     // No conversation means no question on screen — 'none', not undefined, so
     // the banner has one thing to test and never a missing field.
-    if (!found) return { conversation_id: null, messages: [], confirm_phase: 'none' }
+    if (!found) return { conversation_id: null, messages: [], confirm_phase: 'none', form: null }
 
     const rows = await tx.select().from(message).where(eq(message.conversationId, found.id)).orderBy(message.seq)
     const messages = rows.map(toPlayerView).filter((m): m is PlayerMessageView => m !== null)
-    return { conversation_id: found.id, messages, status: found.status, confirm_phase: found.confirmPhase }
+    return { conversation_id: found.id, messages, status: found.status, confirm_phase: found.confirmPhase, form: null }
   })
 }
 

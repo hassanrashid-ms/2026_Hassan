@@ -1,6 +1,6 @@
 // backend/src/domain/bot/botTurn.ts
 
-import type { PlayerMessageView } from '@support/types'
+import type { ConfirmPhaseValue, PlayerMessageView } from '@support/types'
 
 /**
  * Model-chosen (`asked_for_person`, `no_article`, `sensitive` — passed directly
@@ -54,7 +54,7 @@ export type BotTurnInput = {
   conversationId: string
   subintentId: string | null
   /** Guards whether confirm_resolution is offered to the model this turn. */
-  confirmPhase: 'none' | 'bot_article' | 'agent_ask'
+  confirmPhase: ConfirmPhaseValue
   /** Bot-authored messages so far, in this conversation. Drives MAX_BOT_MESSAGES. */
   botMessageCount: number
   /** Null if the player has never sent a message (should not happen once a turn runs). */

@@ -8,14 +8,14 @@ import { withWorkspace, type Tx } from '../../shared/db/withWorkspace.ts'
 import { emitInboxChanged, emitMessageToRooms } from '../../shared/realtime/emit.ts'
 import { getIo } from '../../shared/realtime/socketServer.ts'
 import { logger } from '../../shared/logging/logger.ts'
-import type { PlayerMessageView } from '@support/types'
+import type { ConfirmPhaseValue, PlayerMessageView } from '@support/types'
 
 export type { BotTurnInput }
 
 type GatherResult = {
   status: string
   subintentId: string | null
-  confirmPhase: 'none' | 'bot_article' | 'agent_ask'
+  confirmPhase: ConfirmPhaseValue
 } | null
 
 async function gather(

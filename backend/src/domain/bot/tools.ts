@@ -4,9 +4,10 @@ import type { Tx } from '../../shared/db/withWorkspace.ts'
 import { article } from '../../shared/db/schema/index.ts'
 import { searchArticleIds } from '../../shared/weaviate/articlesIndex.ts'
 import { logger } from '../../shared/logging/logger.ts'
+import type { ConfirmPhaseValue } from '@support/types'
 import type { SubintentOption } from './contextAssembly.ts'
 
-export type ToolPhase = 'none' | 'bot_article' | 'agent_ask'
+export type ToolPhase = ConfirmPhaseValue
 
 export const CONFIRM_RESOLUTION_TOOL_NAME = 'confirm_resolution'
 
