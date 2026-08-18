@@ -12,10 +12,23 @@ additive unique key on `conversation`, two grant revokes.
 The storage shape the bot orchestrator reads and writes when it offers a form and when it decides
 whether to run at all. Nothing else.
 
-Forms are **structured, Google-Form-style UIs opened in a modal** — not questions asked
-turn-by-turn in the thread. That supersession is recorded in `docs/project-overview.md`
-(2026-08-10) and is the premise for everything below; the conversational design in
-`docs/specs/2026-08-04-database-and-schema-design.md` §Forms is history.
+Forms were originally specified as **structured, Google-Form-style UIs opened in a modal** — a
+supersession recorded in `docs/project-overview.md` on 2026-08-10. **That premise is reverted by
+`docs/specs/2026-08-17-player-side-forms-design.md`:** the questions are asked one at a time, in a
+card pinned above the composer, not in a modal and not as conversation turns.
+
+**Nothing below changes.** Append-only `form_answer` rows keyed by `field_key`, each snapshotting its
+`field_type`, is a better fit for one-at-a-time than for a modal — a modal submits once and could
+have been a single row, whereas one-at-a-time writes a row per step and needs exactly the durability
+this shape already provides. Every column, constraint, composite FK and design rationale in this
+document stands as written; read "the modal" below as "the pinned card". The conversational design in
+`docs/specs/2026-08-04-database-and-schema-design.md` §Forms remains history — it modelled fields as
+`form_field` rows, which is the part that did not come back.
+
+Two other things in this document are amended by the 2026-08-17 design, both without a schema change:
+`form_status` is **derived from the answer rows** rather than from which button was pressed (§1.3
+there), and `time` is declared but must never be offered by the form-builder or used by a seeded form
+(§1.4 there).
 
 ### In scope
 

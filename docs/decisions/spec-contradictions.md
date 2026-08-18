@@ -281,6 +281,45 @@ project owner. See `docs/plans/2026-08-13-resolution-confirmation-implementation
 
 ---
 
+### 23. Forms: a modal, or one question at a time in the thread?
+
+**Conflict:** `docs/project-overview.md`'s 2026-08-10 note supersedes the original conversational
+design and makes forms "structured, Google-Form-style UIs opened in a modal — not messages in the
+conversation thread." `docs/specs/2026-08-11-forms-and-bot-config-data-model-design.md` is built on
+that premise throughout. The product spec (pages 21–23) draws neither: it draws a card pinned above
+the composer, asking one question at a time, with a "Skip and talk to an agent" button on every
+question.
+
+**Decision:** **One question at a time, in a card pinned above the composer** — not a modal, and not
+conversation turns. The card is not a message and writes no `message` rows for questions or answers;
+it leaves exactly one trace in the transcript, a summary system card posted at terminate. Answers
+must never be posted as chat messages: they would then live in both `message` and `form_answer`,
+which can disagree, and they would fill the agent transcript with questionnaire noise the context
+rail renders properly anyway.
+
+**The storage shape is unchanged by this**, which is why this is a prose reversal and not a schema
+one. Append-only `form_answer` rows keyed by `field_key`, each snapshotting its `field_type`, fit
+one-at-a-time better than they fit a modal: a modal submits once and could have been a single row,
+whereas one-at-a-time writes a row per step and needs exactly that durability. The 2026-08-11 spec's
+tables, columns, constraints and composite FKs all stand as written.
+
+Two consequences worth naming, both free of schema cost:
+
+- `form_submission.status` is **derived from the answer rows**, not from which button was pressed.
+  With a skip that can land at any point, "submitted with a required field left blank" is not a
+  condition that can be evaluated. `completed` = every field in the version has at least one answer;
+  `partial` = at least one answer and at least one field with none; `skipped` = zero answers. Partial
+  answers survive a skip. `is_required` stays soft either way, because nothing about a form may
+  block a player reaching a human.
+- The `form_field_type` enum keeps all seven values including `time`. Removing a value from a shipped
+  enum is a migration for no gain. No seeded form uses `time`, and the form-builder must offer
+  neither `time` nor `attachment`.
+
+See `docs/specs/2026-08-17-player-side-forms-design.md` §1.2–§1.4 and
+`docs/plans/2026-08-17-forms-slice-1-data-model-and-seed.md`.
+
+---
+
 ## Contradictions still open (no decision yet)
 
 These have not been resolved. Do not silently pick a side — add a decision here when one is made.

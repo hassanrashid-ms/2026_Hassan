@@ -63,11 +63,16 @@ modelling, metrics, or any feature that touches the core entities.
 - Which article the bot offered is **not a column** — it's in `article_shown` / `article_rejected`
   events with the title snapshotted into the payload.
 
-**Forms** — *(2026-08-10: superseding the earlier conversational design below)*
-- **Forms are structured, Google-Form-style UIs opened in a modal — not messages in the
-  conversation thread.** The bot no longer asks form questions turn-by-turn in the thread; it
-  offers the form as a distinct UI action, the player fills it out in the modal, and the answers
-  land as one structured submission.
+**Forms** — *(2026-08-17: the modal premise below is reverted; see
+`docs/specs/2026-08-17-player-side-forms-design.md`. The 2026-08-10 note it supersedes still stands
+for everything except where the questions are asked.)*
+- **Forms are asked one question at a time, in a card pinned above the composer** — not in a modal,
+  and not as conversation turns. The 2026-08-10 note said modal; that is the one thing that changed.
+  The player answers or skips; either way they reach an agent, and **the skip is always present, one
+  tap, and cannot be removed.**
+- **The storage shape is unaffected by that reversal.** Append-only `form_answer` rows keyed by
+  `field_key` suit one-at-a-time better than they suited a modal: a modal submits once, whereas
+  one-at-a-time writes a row per step and needs exactly that durability.
 - **Mapped at the subintent level, admin-decided.** An admin chooses which subintents get a
   form and builds it. A subintent maps to exactly one form; a form can serve several subintents.
   A subintent with no form mapped never shows one.
@@ -78,6 +83,11 @@ modelling, metrics, or any feature that touches the core entities.
   thread is still the record of what happened.
 - `form_submission.status` is `in_progress | completed | partial | skipped`. Row created when
   the modal opens (`started_at`); `submitted_at` is nullable.
+- `status` is **derived from the answer rows** at terminate time, not from which button was pressed:
+  `completed` = every field has at least one answer, `partial` = some do and some do not, `skipped` =
+  zero answers. Partial answers therefore survive a skip. *Which* action terminated the submission —
+  submit, skip or the abandonment sweeper — is a fact about the turn and lives in the
+  `form_completed` event payload, not in a column.
 - `form_answer` now holds the field value written directly from the modal's structured input —
   **not** extracted from a chat message. `form_answer.message_id` is dropped; there is no prose
   to parse, so the earlier "original words must be reachable" reasoning no longer applies.
