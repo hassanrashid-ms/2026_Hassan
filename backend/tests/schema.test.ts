@@ -19,6 +19,7 @@ const EXPECTED_TABLES = [
   'message',
   'player',
   'player_state_snapshot',
+  'resolution_cycle',
   'session',
   'subintent',
   'workspace',
@@ -45,9 +46,9 @@ async function columns(table: string): Promise<Map<string, { type: string; nulla
   )
 }
 
-describe('schema', () => {
-  afterAll(closeOwnerPool)
+afterAll(closeOwnerPool)
 
+describe('schema', () => {
   it('creates exactly the twenty tables of the SDK-path + articles-KB + bot-config + forms subset', async () => {
     const { rows } = await ownerPool.query<{ table_name: string }>(
       `select table_name from information_schema.tables
@@ -355,5 +356,76 @@ describe('schema', () => {
       `select indexdef from pg_indexes where tablename = 'conversation'`,
     )
     expect(rows.map((r) => r.indexdef).join('\n')).toMatch(/UNIQUE.*\(workspace_id, id\)/)
+  })
+})
+
+describe('resolution_cycle', () => {
+  it('has the columns, partial indexes and composite FK the design requires', async () => {
+    const { rows: cols } = await ownerPool.query<{ column_name: string; is_nullable: string }>(
+      `select column_name, is_nullable from information_schema.columns
+        where table_name = 'resolution_cycle' order by column_name`,
+    )
+    const names = cols.map((c) => c.column_name)
+    expect(names).toEqual([
+      'closed_at',
+      'conversation_id',
+      'cycle_no',
+      'first_human_reply_at',
+      'id',
+      'inactivity_due_at',
+      'opened_at',
+      'resolution_kind',
+      'resolved_at',
+      'support_owed_flag',
+      'workspace_id',
+    ])
+    expect(cols.find((c) => c.column_name === 'support_owed_flag')!.is_nullable).toBe('NO')
+
+    const { rows: idx } = await ownerPool.query<{ indexname: string; indexdef: string }>(
+      `select indexname, indexdef from pg_indexes where tablename = 'resolution_cycle'`,
+    )
+    const open = idx.find((i) => i.indexname === 'resolution_cycle_open_uk')!
+    expect(open.indexdef).toContain('UNIQUE')
+    expect(open.indexdef).toContain('resolved_at IS NULL')
+    expect(idx.find((i) => i.indexname === 'resolution_cycle_due_idx')!.indexdef).toContain(
+      'resolved_at IS NULL',
+    )
+    expect(idx.find((i) => i.indexname === 'resolution_cycle_autoclose_idx')!.indexdef).toContain(
+      'closed_at IS NULL',
+    )
+
+    const { rows: fks } = await ownerPool.query<{ conname: string }>(
+      `select conname from pg_constraint
+        where conrelid = 'resolution_cycle'::regclass and contype = 'f'`,
+    )
+    expect(fks.map((f) => f.conname)).toContain('resolution_cycle_conversation_fk')
+  })
+
+  it('is covered by the generic tenant RLS policy', async () => {
+    const { rows } = await ownerPool.query<{ policyname: string }>(
+      `select policyname from pg_policies where tablename = 'resolution_cycle'`,
+    )
+    expect(rows.length).toBeGreaterThan(0)
+  })
+
+  it('extends the two enums', async () => {
+    const { rows } = await ownerPool.query<{ typname: string; labels: string[] }>(
+      `select t.typname, array_agg(e.enumlabel order by e.enumsortorder) as labels
+         from pg_type t join pg_enum e on e.enumtypid = t.oid
+        where t.typname in ('confirm_phase', 'resolution_source')
+        group by t.typname`,
+    )
+    const byName = Object.fromEntries(rows.map((r) => [r.typname, r.labels]))
+    expect(byName.confirm_phase).toEqual(['none', 'bot_article', 'agent_ask', 'form', 'inactivity_ask'])
+    expect(byName.resolution_source).toEqual(['bot', 'agent', 'player_confirmed', 'timed_out'])
+  })
+
+  it('gives workspace an auto_close_days default of 7', async () => {
+    const { rows } = await ownerPool.query<{ column_default: string; is_nullable: string }>(
+      `select column_default, is_nullable from information_schema.columns
+        where table_name = 'workspace' and column_name = 'auto_close_days'`,
+    )
+    expect(rows[0]!.is_nullable).toBe('NO')
+    expect(rows[0]!.column_default).toContain('7')
   })
 })

@@ -15,6 +15,7 @@ import { getEnv } from '../../src/env.ts'
 export const ownerPool = new Pool({ connectionString: getEnv().MIGRATION_DATABASE_URL, max: 4 })
 
 const SCOPED_TABLES = [
+  'resolution_cycle',
   'form_answer',
   'form_submission',
   'form_version',
@@ -44,13 +45,21 @@ export async function closeOwnerPool(): Promise<void> {
 }
 
 export async function seedWorkspace(
-  overrides: { id?: string; slug?: string; name?: string; secretHash?: string; disabledAt?: Date | null } = {},
+  overrides: {
+    id?: string
+    slug?: string
+    name?: string
+    secretHash?: string
+    disabledAt?: Date | null
+    autoCloseDays?: number
+  } = {},
 ): Promise<string> {
   const id = overrides.id ?? randomUUID()
   const slug = overrides.slug ?? `ws-${id.slice(0, 8)}`
   await ownerPool.query(
-    `insert into workspace (id, name, slug, secret_hash, disabled_at) values ($1, $2, $3, $4, $5)`,
-    [id, overrides.name ?? slug, slug, overrides.secretHash ?? 'unset', overrides.disabledAt ?? null],
+    `insert into workspace (id, name, slug, secret_hash, disabled_at, auto_close_days)
+     values ($1, $2, $3, $4, $5, $6)`,
+    [id, overrides.name ?? slug, slug, overrides.secretHash ?? 'unset', overrides.disabledAt ?? null, overrides.autoCloseDays ?? 7],
   )
   return id
 }
@@ -112,6 +121,10 @@ export async function seedConversation(args: {
   playerId: string
   sessionId?: string | null
   createdAt?: Date
+  status?: 'new' | 'bot_active' | 'open' | 'awaiting_player' | 'escalated' | 'resolved' | 'closed'
+  confirmPhase?: 'none' | 'bot_article' | 'agent_ask' | 'form' | 'inactivity_ask'
+  assignedAgentId?: string | null
+  resolutionSource?: 'bot' | 'agent' | 'player_confirmed' | 'timed_out' | null
 }): Promise<string> {
   const id = randomUUID()
   // Bumped the same way the request path bumps it, so a test that seeds three
@@ -122,9 +135,21 @@ export async function seedConversation(args: {
   )
   const number = rows[0]!.ticket_seq
   await ownerPool.query(
-    `insert into conversation (id, workspace_id, player_id, session_id, number, created_at)
-     values ($1, $2, $3, $4, $5, coalesce($6, now()))`,
-    [id, args.workspaceId, args.playerId, args.sessionId ?? null, number, args.createdAt ?? null],
+    `insert into conversation
+       (id, workspace_id, player_id, session_id, number, created_at, status, confirm_phase, assigned_agent_id, resolution_source)
+     values ($1, $2, $3, $4, $5, coalesce($6, now()), coalesce($7::conversation_status, 'bot_active'), coalesce($8::confirm_phase, 'none'), $9, $10::resolution_source)`,
+    [
+      id,
+      args.workspaceId,
+      args.playerId,
+      args.sessionId ?? null,
+      number,
+      args.createdAt ?? null,
+      args.status ?? null,
+      args.confirmPhase ?? null,
+      args.assignedAgentId ?? null,
+      args.resolutionSource ?? null,
+    ],
   )
   return id
 }
@@ -298,6 +323,39 @@ export async function seedFormAnswer(args: {
       args.fieldType ?? 'short_text',
       JSON.stringify(args.value ?? 'answer'),
       args.createdAt ?? null,
+    ],
+  )
+  return id
+}
+
+export async function seedResolutionCycle(args: {
+  workspaceId: string
+  conversationId: string
+  cycleNo?: number
+  openedAt?: Date
+  inactivityDueAt?: Date | null
+  resolvedAt?: Date | null
+  resolutionKind?: 'bot' | 'agent' | 'player_confirmed' | 'timed_out' | null
+  closedAt?: Date | null
+  supportOwedFlag?: boolean
+}): Promise<string> {
+  const id = randomUUID()
+  await ownerPool.query(
+    `insert into resolution_cycle
+       (id, workspace_id, conversation_id, cycle_no, opened_at, inactivity_due_at,
+        resolved_at, resolution_kind, closed_at, support_owed_flag)
+     values ($1, $2, $3, $4, coalesce($5, now()), $6, $7, $8, $9, $10)`,
+    [
+      id,
+      args.workspaceId,
+      args.conversationId,
+      args.cycleNo ?? 1,
+      args.openedAt ?? null,
+      args.inactivityDueAt ?? null,
+      args.resolvedAt ?? null,
+      args.resolutionKind ?? null,
+      args.closedAt ?? null,
+      args.supportOwedFlag ?? false,
     ],
   )
   return id

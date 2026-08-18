@@ -22,6 +22,12 @@ export const workspace = pgTable('workspace', {
    * sequence and could infer its neighbours' volume from the gaps.
    */
   ticketSeq: integer('ticket_seq').notNull().default(0),
+  /**
+   * How many days a `resolved` conversation waits before runAutoClose flips it
+   * to `closed`. Per-workspace because support cadences differ per game; a
+   * column rather than an env var so one noisy tenant can be tuned alone.
+   */
+  autoCloseDays: integer('auto_close_days').notNull().default(7),
   /** Set to refuse token minting without deleting anything. */
   disabledAt: timestamp('disabled_at', tz),
   createdAt: timestamp('created_at', tz).notNull().defaultNow(),

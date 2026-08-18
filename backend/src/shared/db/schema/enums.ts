@@ -28,12 +28,34 @@ export const eventActorType = pgEnum('event_actor_type', ['player', 'agent', 'bo
 export const declaredFieldType = pgEnum('declared_field_type', ['string', 'number', 'boolean', 'timestamp'])
 export const articleState = pgEnum('article_state', ['draft', 'published', 'archived'])
 // `bot_article` is set by the bot's answer_from_article, `agent_ask` by
-// POST /agent/conversations/:id/ask-resolved — both mean a yes/no question is on
-// the player's screen. `form` means the pinned form card is up instead: not a
-// yes/no, and the reason the webview must branch on the value rather than test
-// it against 'none'. See docs/specs/2026-08-17-player-side-forms-design.md §2.4.
-export const confirmPhase = pgEnum('confirm_phase', ['none', 'bot_article', 'agent_ask', 'form'])
-export const resolutionSource = pgEnum('resolution_source', ['bot', 'agent'])
+// POST /agent/conversations/:id/ask-resolved, `inactivity_ask` by the inactivity
+// clock's stage 1 — all three mean a yes/no question is on the player's screen.
+// The clock gets its own value rather than reusing `agent_ask` so the answer can
+// be attributed to the right resolution kind: a Yes on `agent_ask` is
+// 'agent', a Yes on `inactivity_ask` is 'player_confirmed'. `form` means the
+// pinned form card is up instead: not a yes/no, and the reason the webview must
+// branch on the value rather than test it against 'none'.
+// See docs/specs/2026-08-17-player-side-forms-design.md §2.4 and
+// docs/specs/2026-08-18-inactivity-clock-and-auto-close-design.md §2.
+export const confirmPhase = pgEnum('confirm_phase', [
+  'none',
+  'bot_article',
+  'agent_ask',
+  'form',
+  'inactivity_ask',
+])
+/**
+ * Also the type of `resolution_cycle.resolution_kind`, deliberately one
+ * vocabulary rather than two enums that could drift. `player_confirmed` (the
+ * player answered Yes to the clock's ask) and `timed_out` (nobody answered)
+ * are separate values because metrics must report them separately.
+ */
+export const resolutionSource = pgEnum('resolution_source', [
+  'bot',
+  'agent',
+  'player_confirmed',
+  'timed_out',
+])
 
 /**
  * Seven declared, six usable. `time` is declared and unused, must not be offered by the form-builder.

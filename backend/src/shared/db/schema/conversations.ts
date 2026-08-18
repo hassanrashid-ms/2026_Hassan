@@ -1,4 +1,5 @@
-import { foreignKey, index, integer, pgTable, text, timestamp, unique, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
+import { boolean, foreignKey, index, integer, pgTable, text, timestamp, unique, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
+import { sql } from 'drizzle-orm'
 import {
   classificationSource,
   conversationPriority,
@@ -117,5 +118,62 @@ export const message = pgTable(
     uniqueIndex('message_conversation_seq_uk').on(t.conversationId, t.seq),
     // The GET /sdk/unread scan.
     index('message_unread_idx').on(t.conversationId, t.deliveryState, t.authorType),
+  ],
+)
+
+/**
+ * One row per resolution attempt. Cycle 1 opens with the conversation; every
+ * reopen opens the next, so `reopen_count = cycle_no - 1` and no counter column
+ * exists.
+ *
+ * A mutable projection, not an append-only log: `inactivity_due_at` ticks
+ * forward on every public message for the life of the cycle. That is why there
+ * is no REVOKE UPDATE on it, unlike `event`/`change_log`/`form_answer`.
+ *
+ * `first_human_reply_at` ships unpopulated on purpose — it belongs to the
+ * metrics slice ("time to first reply"), not to either clock.
+ */
+export const resolutionCycle = pgTable(
+  'resolution_cycle',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspace.id, { onDelete: 'restrict' }),
+    conversationId: uuid('conversation_id').notNull(),
+    /** 1-based. */
+    cycleNo: integer('cycle_no').notNull(),
+    openedAt: timestamp('opened_at', tz).notNull().defaultNow(),
+    /** Column ships now, population is the metrics slice. */
+    firstHumanReplyAt: timestamp('first_human_reply_at', tz),
+    /** NULL means the clock is not running: bot_active, escalated, or resolved. */
+    inactivityDueAt: timestamp('inactivity_due_at', tz),
+    resolvedAt: timestamp('resolved_at', tz),
+    resolutionKind: resolutionSource('resolution_kind'),
+    closedAt: timestamp('closed_at', tz),
+    /** Set by the clock's stage 2 when the last public word was the player's. */
+    supportOwedFlag: boolean('support_owed_flag').notNull().default(false),
+  },
+  (t) => [
+    // Same composite-FK pattern as subintent/form_submission: a cycle can never
+    // name another workspace's conversation.
+    foreignKey({
+      name: 'resolution_cycle_conversation_fk',
+      columns: [t.workspaceId, t.conversationId],
+      foreignColumns: [conversation.workspaceId, conversation.id],
+    }).onDelete('restrict'),
+    // "At most one open cycle per conversation", enforced by the database rather
+    // than by every writer remembering to check.
+    uniqueIndex('resolution_cycle_open_uk')
+      .on(t.conversationId)
+      .where(sql`resolved_at is null`),
+    // The inactivity worker's stage 1 + stage 2 scan.
+    index('resolution_cycle_due_idx')
+      .on(t.workspaceId, t.inactivityDueAt)
+      .where(sql`resolved_at is null`),
+    // The auto-close worker's scan.
+    index('resolution_cycle_autoclose_idx')
+      .on(t.workspaceId, t.resolvedAt)
+      .where(sql`closed_at is null and resolved_at is not null`),
   ],
 )

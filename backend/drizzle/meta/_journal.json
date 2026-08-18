@@ -50,6 +50,13 @@
       "when": 1787050399882,
       "tag": "0006_ancient_vivisector",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787057121143,
+      "tag": "0007_freezing_sharon_carter",
+      "breakpoints": true
     }
   ]
 }
