@@ -45,6 +45,8 @@ function formatTicketDate(iso: string): string {
 function resolverLabel(source: ResolutionSourceValue | null | undefined, agentName: string | null | undefined): string {
   if (source === 'agent') return `Resolved by ${agentName ?? 'an agent'}`
   if (source === 'bot') return 'Resolved by the bot'
+  if (source === 'player_confirmed') return 'Resolved by the player'
+  if (source === 'timed_out') return 'Resolved after no reply'
   return 'Closed'
 }
 
@@ -157,7 +159,9 @@ export function ThreadPanel({
 
   const askable =
     !readOnly && (status === 'open' || status === 'awaiting_player') && (confirmPhase ?? 'none') === 'none'
-  const waiting = confirmPhase === 'agent_ask'
+  // Either ask puts the same question on the player's screen; the agent's panel
+  // must read "waiting" for both, or a clock-triggered ask looks like no ask.
+  const waiting = confirmPhase === 'agent_ask' || confirmPhase === 'inactivity_ask'
   const escalatable = !readOnly && (status === 'open' || status === 'awaiting_player')
   const unescalatable = !readOnly && status === 'escalated'
 

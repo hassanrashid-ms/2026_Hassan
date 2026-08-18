@@ -210,9 +210,11 @@ export function SupportChat() {
   // Explicit, not `!== 'none'`. The old check made every future enum value render
   // the yes/no banner by default, and 'form' is the value that proved it: the
   // banner would have appeared underneath the form card asking about an article
-  // nobody had offered.
+  // nobody had offered. So every new phase that IS a yes/no has to be added here
+  // by hand — 'inactivity_ask' is one, and the inactivity clock's stage 1 is
+  // unanswerable without it.
   const phase = messagesQuery.data?.confirm_phase ?? 'none'
-  const confirmPending = phase === 'bot_article' || phase === 'agent_ask'
+  const confirmPending = phase === 'bot_article' || phase === 'agent_ask' || phase === 'inactivity_ask'
   const activeForm = phase === 'form' ? (messagesQuery.data?.form ?? null) : null
 
   /**
