@@ -56,7 +56,15 @@ export function ConversationRow({
     >
       <div className="flex items-center justify-between gap-2">
         <span className="truncate text-sm font-medium">{conversation.player.external_player_id}</span>
-        <Badge variant={STATUS_BADGE_VARIANT[conversation.status]}>{conversation.status}</Badge>
+        <span className="flex shrink-0 items-center gap-1.5">
+          {/* No new data: confirm_phase already rides on the summary. A
+              bot_active ticket sits in the unassigned queue, so without this a
+              half-filled form reads as a stuck ticket. */}
+          {conversation.confirm_phase === 'form' && (
+            <span className="text-xs text-muted">Answering questions</span>
+          )}
+          <Badge variant={STATUS_BADGE_VARIANT[conversation.status]}>{conversation.status}</Badge>
+        </span>
       </div>
       <div className="flex items-center justify-between gap-2">
         <span className="truncate text-xs text-muted">{conversation.last_message_preview ?? '(no messages)'}</span>

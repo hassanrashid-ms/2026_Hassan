@@ -143,3 +143,33 @@ describe('ConversationList reacts to conversation:changed without a blocking ref
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(4), { timeout: 3000 })
   })
 })
+
+describe('ConversationList form label', () => {
+  it('labels a row whose player is still answering the form', async () => {
+    vi.spyOn(agentApi, 'fetchInbox').mockImplementation((_token, status) =>
+      Promise.resolve({
+        conversations:
+          status === 'unassigned'
+            ? [{ ...UNASSIGNED_CONVERSATION, status: 'bot_active' as const, confirm_phase: 'form' as const }]
+            : [],
+      }),
+    )
+
+    renderWithClient(<ConversationList token="tok" selectedId={null} onSelect={() => {}} />)
+
+    // Without this, an unassigned bot_active ticket with no agent and a
+    // half-filled form reads as a stuck ticket.
+    expect(await screen.findByText('Answering questions')).toBeInTheDocument()
+  })
+
+  it('does not label a row in any other phase', async () => {
+    vi.spyOn(agentApi, 'fetchInbox').mockImplementation((_token, status) =>
+      Promise.resolve({ conversations: status === 'unassigned' ? [UNASSIGNED_CONVERSATION] : [] }),
+    )
+
+    renderWithClient(<ConversationList token="tok" selectedId={null} onSelect={() => {}} />)
+
+    await screen.findByText('player-42')
+    expect(screen.queryByText('Answering questions')).not.toBeInTheDocument()
+  })
+})
