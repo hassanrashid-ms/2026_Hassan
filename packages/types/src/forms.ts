@@ -102,5 +102,5 @@ export const formAnswerValueSchemas = {
   date: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/),
   time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
   choice: z.string().min(1),
-  attachment: z.object({ attachmentId: z.string().regex(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/) }),
+  attachment: z.object({ attachmentId: z.uuid() }),
 } satisfies Record<FormFieldType, z.ZodType>

@@ -48,6 +48,9 @@ export const subintent = pgTable(
     // together, so a conversation can never name another workspace's subintent — see
     // docs/decisions/2026-08-04-composite-foreign-keys-for-tenancy.md.
     unique('subintent_workspace_id_uk').on(t.workspaceId, t.id),
+    // Composite, not a bare FK: RI checks run with row security suspended, so a
+    // single-column FK would let workspace A point a subintent at workspace B's
+    // form. See docs/decisions/2026-08-04-composite-foreign-keys-for-tenancy.md.
     foreignKey({
       name: 'subintent_form_fk',
       columns: [t.workspaceId, t.formId],
