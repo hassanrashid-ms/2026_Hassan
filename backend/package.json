@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "^9.1.0",
+    "@langfuse/openai": "^5.10.0",
     "@socket.io/redis-adapter": "^8",
     "@support/types": "workspace:*",
     "bullmq": "^5",

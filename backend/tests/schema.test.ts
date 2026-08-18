@@ -236,6 +236,17 @@ describe('schema', () => {
     ).rejects.toThrow()
   })
 
+  it('conversation.confirm_phase accepts form', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const { rows } = await ownerPool.query<{ confirm_phase: string }>(
+      `insert into conversation (workspace_id, player_id, confirm_phase)
+       values ($1, $2, 'form') returning confirm_phase`,
+      [workspaceId, playerId],
+    )
+    expect(rows[0]!.confirm_phase).toBe('form')
+  })
+
   it('adds a nullable conversation.resolution_source column', async () => {
     const cols = await columns('conversation')
     expect(cols.get('resolution_source')?.nullable).toBe(true)

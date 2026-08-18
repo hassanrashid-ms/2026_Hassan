@@ -1,5 +1,5 @@
-// backend/src/domain/bot/openaiClient.ts
 import OpenAI from 'openai'
+import { observeOpenAI } from '@langfuse/openai'
 import { getEnv } from '../../env.ts'
 import type { ChatMessage } from './contextAssembly.ts'
 
@@ -24,7 +24,7 @@ const CALL_TIMEOUT_MS = 15_000
 
 let client: OpenAI | undefined
 function getClient(): OpenAI {
-  client ??= new OpenAI({ apiKey: getEnv().OPENAI_APIKEY })
+  client ??= observeOpenAI(new OpenAI({ apiKey: getEnv().OPENAI_APIKEY })) as any
   return client
 }
 

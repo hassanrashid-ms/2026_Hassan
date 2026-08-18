@@ -1,7 +1,11 @@
 import http from 'node:http'
 import https from 'node:https'
-import { afterAll } from 'vitest'
+import { afterAll, vi } from 'vitest'
 import { closeTestServers } from './helpers/http.ts'
+
+vi.mock('@langfuse/openai', () => ({
+  observeOpenAI: (client: any) => client
+}))
 
 // Every server tests/helpers/http.ts opened stays listening for the whole file,
 // so the worker only shuts down cleanly if they are closed here.

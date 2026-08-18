@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { ConversationStatusValue } from './chat.ts'
 
 /**
  * NOT part of the frozen SDK contract in the sdk-wire sense, but the type union

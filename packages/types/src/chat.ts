@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { PlayerFormView } from './forms.ts'
 
 /**
  * NOT part of the frozen SDK contract — this ships with the server, same as
@@ -62,6 +63,14 @@ export type PlayerMessagesResponse = {
   status?: ConversationStatusValue
   /** 'none' when there is no conversation at all. */
   confirm_phase: ConfirmPhaseValue
+  /**
+   * The pinned form card's whole state, or null. Always present, never
+   * undefined — the same rule confirm_phase follows, so the card has one thing
+   * to test. Non-null only when confirm_phase === 'form' and an in_progress
+   * submission still exists; a reconnect therefore resumes at the right
+   * question with earlier answers intact.
+   */
+  form: PlayerFormView | null
 }
 export type AgentMessagesResponse = { messages: AgentMessageView[] }
 export type ClaimResponse = { claimed: boolean }
@@ -97,7 +106,7 @@ export type MessageReadEvent = {
  * whenever this is not 'none'; the value only tells the *server* what a tap
  * means, which is why the webview never branches on it.
  */
-export type ConfirmPhaseValue = 'none' | 'bot_article' | 'agent_ask'
+export type ConfirmPhaseValue = 'none' | 'bot_article' | 'agent_ask' | 'form'
 
 /**
  * The banner's Yes/No. No conversation id: the thread is resolved from the
