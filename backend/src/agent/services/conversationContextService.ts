@@ -3,6 +3,7 @@ import type {
   AgentConversationContextResponse,
   AgentConversationDetail,
   AgentFormFieldView,
+  AgentFormView,
   AgentPlayerStateView,
   AgentTicketSummary,
   FormField,
@@ -13,6 +14,10 @@ import {
   conversation,
   declaredField,
   event,
+  form,
+  formAnswer,
+  formSubmission,
+  formVersion,
   intent,
   player,
   playerStateSnapshot,
@@ -260,6 +265,7 @@ export async function getConversationContext(
       playerId: current.playerId,
       currentConversationId: conversationId,
     })
+    const formView = await getFormView(tx, conversationId)
 
     return {
       player_state: playerState,
@@ -269,7 +275,7 @@ export async function getConversationContext(
         total_reopened: history.totalReopened,
         first_contact_at: current.firstSeenAt.toISOString(),
       },
-      form: null,
+      form: formView,
     }
   })
 }
@@ -328,4 +334,79 @@ export function buildFormFieldViews(
   }
 
   return { rows, answeredCount }
+}
+
+/**
+ * The rail's form section, or null when this conversation was never offered a
+ * form — the common case, and not an error. The frontend omits the section
+ * entirely rather than opening onto nothing.
+ *
+ * Three reads, all inside the caller's transaction so the whole rail is one
+ * consistent snapshot:
+ *
+ * 1. the submission, joined to `form` for its name
+ * 2. the version the submission snapshotted — never the current one, which is
+ *    the entire reason form_submission.form_version exists
+ * 3. every answer row, folded to the greatest created_at per field_key
+ *
+ * The answers are folded in JS rather than with DISTINCT ON: a submission holds
+ * one row per field plus corrections, so this is a handful of rows, and it keeps
+ * the read inside the typed query builder.
+ */
+export async function getFormView(tx: Tx, conversationId: string): Promise<AgentFormView | null> {
+  const [submission] = await tx
+    .select({
+      id: formSubmission.id,
+      formId: formSubmission.formId,
+      version: formSubmission.formVersion,
+      status: formSubmission.status,
+      formName: form.name,
+    })
+    .from(formSubmission)
+    .innerJoin(form, eq(form.id, formSubmission.formId))
+    .where(eq(formSubmission.conversationId, conversationId))
+    // UNIQUE (conversation_id, form_id) and "offered once per conversation" mean
+    // there is at most one today. Newest-first with limit 1 so a future second
+    // form shows the current one rather than an arbitrary row.
+    .orderBy(desc(formSubmission.startedAt))
+    .limit(1)
+
+  if (!submission) return null
+
+  const [version] = await tx
+    .select({ fields: formVersion.fields })
+    .from(formVersion)
+    .where(and(eq(formVersion.formId, submission.formId), eq(formVersion.version, submission.version)))
+    .limit(1)
+
+  // FK (form_id, form_version) -> form_version (form_id, version) makes the
+  // miss impossible; an empty list beats a throw if the constraint ever slips.
+  const fields = version?.fields ?? []
+
+  const answerRows = await tx
+    .select({
+      fieldKey: formAnswer.fieldKey,
+      fieldType: formAnswer.fieldType,
+      value: formAnswer.value,
+    })
+    .from(formAnswer)
+    .where(eq(formAnswer.formSubmissionId, submission.id))
+    .orderBy(asc(formAnswer.createdAt), asc(formAnswer.id))
+
+  // Oldest first, so the last write for a key wins — which is the read rule:
+  // the current answer is the row with the greatest created_at. Older rows stay
+  // queryable; revision history in a rail nobody asked for is noise.
+  const latest = new Map<string, LatestAnswer>()
+  for (const row of answerRows) latest.set(row.fieldKey, row)
+
+  const { rows, answeredCount } = buildFormFieldViews(fields, [...latest.values()])
+
+  return {
+    form_name: submission.formName,
+    form_version: submission.version,
+    status: submission.status,
+    field_count: fields.length,
+    answered_count: answeredCount,
+    fields: rows,
+  }
 }

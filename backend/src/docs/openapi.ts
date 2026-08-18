@@ -495,12 +495,40 @@ const AgentTicketSummarySchema = z.object({
   reopen_count: z.number().int(),
 })
 
+const FormFieldTypeSchema = z.enum([
+  'short_text',
+  'long_text',
+  'number',
+  'date',
+  'time',
+  'choice',
+  'attachment',
+])
+
+const AgentFormViewSchema = z.object({
+  form_name: z.string(),
+  form_version: z.number().int(),
+  status: z.enum(['in_progress', 'completed', 'partial', 'skipped']),
+  field_count: z.number().int(),
+  answered_count: z.number().int(),
+  fields: z.array(
+    z.object({
+      key: z.string(),
+      label: z.string(),
+      position: z.number().int(),
+      field_type: FormFieldTypeSchema,
+      value: z.unknown(),
+      answered: z.boolean(),
+    }),
+  ),
+})
+
 registry.registerPath({
   method: 'get',
   path: '/agent/conversations/{id}/context',
   summary: 'Agent Conversation Context',
   description:
-    "The context rail in one payload: the player-state snapshot captured when this ticket was raised, the player's other tickets in this workspace (newest first, capped at 20), and totals. All four player_state cases return 200 — missing player state is a state, not an error. `raw` is PII and is returned in full, uncollapsed by the API.",
+    "The context rail in one payload: the player-state snapshot captured when this ticket was raised, the player's other tickets in this workspace (newest first, capped at 20), and totals. All four player_state cases return 200 — missing player state is a state, not an error. `raw` is PII and is returned in full, uncollapsed by the API. Plus `form`: the form the player was asked before handoff, or null when the subintent had none. Labels resolve against the submission's snapshotted form_version, never the current one; values carry the answer's own snapshotted field_type. Unanswered fields are present as rows with `answered: false` — a gap is a row, never an omission.",
   security: [{ [bearerAgentJwt.name]: [] }],
   request: {
     params: z.object({ id: z.uuid() }),
@@ -518,6 +546,7 @@ registry.registerPath({
               total_reopened: z.number().int(),
               first_contact_at: z.string(),
             }),
+            form: AgentFormViewSchema.nullable(),
           }),
         },
       },
