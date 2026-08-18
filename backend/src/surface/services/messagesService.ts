@@ -1,14 +1,29 @@
 import { and, desc, eq, lte, ne } from 'drizzle-orm'
 import type { z } from 'zod'
-import { MarkPlayerReadBody, SendMessageBody, type PlayerMessageView, type PlayerMessagesResponse } from '@support/types'
+import {
+  MarkPlayerReadBody,
+  SendMessageBody,
+  type PlayerFormView,
+  type PlayerMessageView,
+  type PlayerMessagesResponse,
+} from '@support/types'
 
 type SendMessageBodyType = z.infer<typeof SendMessageBody>
 type MarkPlayerReadBodyType = z.infer<typeof MarkPlayerReadBody>
 import { allocateTicketNumber, postMessage, toAgentView, toPlayerView, type PostedMessageRow } from '../../domain/conversations/index.ts'
 import { applyBotTurn, assignOnHandoff, pickHandoffMessage, resolveBotConfig } from '../../domain/bot/index.ts'
 import { appendEvent } from '../../shared/events/appendEvent.ts'
-import { agent, conversation, message, session } from '../../shared/db/schema/index.ts'
-import { withWorkspace } from '../../shared/db/withWorkspace.ts'
+import {
+  agent,
+  conversation,
+  form,
+  formAnswer,
+  formSubmission,
+  formVersion,
+  message,
+  session,
+} from '../../shared/db/schema/index.ts'
+import { withWorkspace, type Tx } from '../../shared/db/withWorkspace.ts'
 import { emitInboxChanged, emitMessageToRooms, emitReadReceipt } from '../../shared/realtime/emit.ts'
 import { getIo } from '../../shared/realtime/socketServer.ts'
 import type { PlayerContext } from '../../shared/middleware/requirePlayerToken.ts'
@@ -247,13 +262,74 @@ export async function getPlayerMessages(
       .orderBy(desc(conversation.createdAt))
       .limit(1)
     // No conversation means no question on screen — 'none', not undefined, so
-    // the banner has one thing to test and never a missing field.
+    // the banner has one thing to test and never a missing field. `form` follows
+    // the same rule for the same reason.
     if (!found) return { conversation_id: null, messages: [], confirm_phase: 'none', form: null }
 
     const rows = await tx.select().from(message).where(eq(message.conversationId, found.id)).orderBy(message.seq)
     const messages = rows.map(toPlayerView).filter((m): m is PlayerMessageView => m !== null)
-    return { conversation_id: found.id, messages, status: found.status, confirm_phase: found.confirmPhase, form: null }
+    return {
+      conversation_id: found.id,
+      messages,
+      status: found.status,
+      confirm_phase: found.confirmPhase,
+      form: found.confirmPhase === 'form' ? await loadPlayerForm(tx, found.id) : null,
+    }
   })
+}
+
+/**
+ * Everything the pinned card needs to render from cold. A reconnect mid-form
+ * therefore resumes at the right question with earlier answers intact, which is
+ * the whole reason the answers are written per step rather than batched at the
+ * end.
+ *
+ * Fields come from the submission's snapshotted version, never the form's
+ * current one: a form edited to v2 while a player is on question three must not
+ * renumber the card underneath them.
+ *
+ * Returns null when confirm_phase says 'form' but no live submission exists —
+ * the narrow window between a terminate committing and the phase update being
+ * observed. A null there renders no card, which is correct.
+ */
+async function loadPlayerForm(tx: Tx, conversationId: string): Promise<PlayerFormView | null> {
+  const [submission] = await tx
+    .select({
+      id: formSubmission.id,
+      formId: formSubmission.formId,
+      version: formSubmission.formVersion,
+      formName: form.name,
+      fields: formVersion.fields,
+    })
+    .from(formSubmission)
+    .innerJoin(form, eq(form.id, formSubmission.formId))
+    .innerJoin(
+      formVersion,
+      and(eq(formVersion.formId, formSubmission.formId), eq(formVersion.version, formSubmission.formVersion)),
+    )
+    .where(and(eq(formSubmission.conversationId, conversationId), eq(formSubmission.status, 'in_progress')))
+    .orderBy(desc(formSubmission.startedAt))
+    .limit(1)
+
+  if (!submission) return null
+
+  // The current answer for a field is the row with the greatest created_at for
+  // that (form_submission_id, field_key). Older rows are correction history and
+  // never reach the player — the card only needs what to prefill.
+  const answers = await tx
+    .selectDistinctOn([formAnswer.fieldKey], { fieldKey: formAnswer.fieldKey, value: formAnswer.value })
+    .from(formAnswer)
+    .where(eq(formAnswer.formSubmissionId, submission.id))
+    .orderBy(formAnswer.fieldKey, desc(formAnswer.createdAt))
+
+  return {
+    submission_id: submission.id,
+    form_id: submission.formId,
+    form_name: submission.formName,
+    version: submission.version,
+    fields: [...submission.fields].sort((a, b) => a.position - b.position),
+    answers: answers.map((a) => ({ field_key: a.fieldKey, value: a.value })),
+  }
 }
 
 /**

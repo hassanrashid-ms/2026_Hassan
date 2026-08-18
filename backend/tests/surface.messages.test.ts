@@ -10,6 +10,10 @@ import {
   seedAgent,
   seedBotConfig,
   seedConversation,
+  seedForm,
+  seedFormAnswer,
+  seedFormSubmission,
+  seedFormVersion,
   seedPlayer,
   seedSession,
   seedWorkspace,
@@ -487,7 +491,7 @@ describe('GET /surface/messages', () => {
       .query({ session_id: sessionId })
       .set('Authorization', `Bearer ${token}`)
       .expect(200)
-    expect(res.body).toEqual({ conversation_id: null, messages: [], confirm_phase: 'none' })
+    expect(res.body).toEqual({ conversation_id: null, messages: [], confirm_phase: 'none', form: null })
   })
 
   it("ignores a session_id that is not the caller's own and returns the caller's own thread", async () => {
@@ -578,6 +582,115 @@ describe('GET /surface/messages', () => {
 
     expect(res.body.conversation_id).toBe(null)
     expect(res.body.confirm_phase).toBe('none')
+  })
+
+  // A player mid-form: the card is up, the submission is live, and the
+  // snapshotted v1 fields are stored out of render order on purpose so the
+  // position sort is exercised rather than assumed from insertion order.
+  async function liveForm() {
+    const base = await setup()
+    const conversationId = await seedConversation({ workspaceId: base.workspaceId, playerId: base.playerId })
+    await ownerPool.query(`update conversation set confirm_phase = 'form' where id = $1`, [conversationId])
+    const formId = await seedForm({ workspaceId: base.workspaceId, name: 'Missing Purchase' })
+    await seedFormVersion({
+      workspaceId: base.workspaceId,
+      formId,
+      version: 1,
+      fields: [
+        { key: 'proof', label: 'Receipt', type: 'short_text', isRequired: false, position: 2 },
+        { key: 'store', label: 'Which store?', type: 'choice', isRequired: true, position: 0, options: ['Google Play', 'Apple App Store'] },
+        { key: 'quantity', label: 'How many?', type: 'number', isRequired: true, position: 1 },
+      ],
+      publishedAt: new Date(),
+    })
+    const submissionId = await seedFormSubmission({
+      workspaceId: base.workspaceId,
+      conversationId,
+      formId,
+      formVersion: 1,
+    })
+    return { ...base, conversationId, formId, submissionId }
+  }
+
+  it('returns the resolved form and the answers so far while the card is up', async () => {
+    const f = await liveForm()
+    await seedFormAnswer({
+      workspaceId: f.workspaceId,
+      formSubmissionId: f.submissionId,
+      fieldKey: 'store',
+      fieldType: 'choice',
+      value: 'Google Play',
+    })
+
+    const res = await request(app)
+      .get('/surface/messages')
+      .query({ session_id: f.sessionId })
+      .set('Authorization', `Bearer ${f.token}`)
+      .expect(200)
+
+    expect(res.body.confirm_phase).toBe('form')
+    expect(res.body.form.submission_id).toBe(f.submissionId)
+    expect(res.body.form.form_id).toBe(f.formId)
+    expect(res.body.form.form_name).toBe('Missing Purchase')
+    expect(res.body.form.version).toBe(1)
+    expect(res.body.form.fields.map((x: { key: string }) => x.key)).toEqual(['store', 'quantity', 'proof'])
+    expect(res.body.form.answers).toEqual([{ field_key: 'store', value: 'Google Play' }])
+  })
+
+  it('returns only the newest answer per field', async () => {
+    const f = await liveForm()
+    await seedFormAnswer({
+      workspaceId: f.workspaceId,
+      formSubmissionId: f.submissionId,
+      fieldKey: 'store',
+      fieldType: 'choice',
+      value: 'Google Play',
+      createdAt: new Date(Date.now() - 60_000),
+    })
+    await seedFormAnswer({
+      workspaceId: f.workspaceId,
+      formSubmissionId: f.submissionId,
+      fieldKey: 'store',
+      fieldType: 'choice',
+      value: 'Apple App Store',
+    })
+
+    const res = await request(app)
+      .get('/surface/messages')
+      .query({ session_id: f.sessionId })
+      .set('Authorization', `Bearer ${f.token}`)
+      .expect(200)
+
+    expect(res.body.form.answers).toEqual([{ field_key: 'store', value: 'Apple App Store' }])
+  })
+
+  it('returns form null when no card is up', async () => {
+    const f = await liveForm()
+    await ownerPool.query(`update conversation set confirm_phase = 'none' where id = $1`, [f.conversationId])
+
+    const res = await request(app)
+      .get('/surface/messages')
+      .query({ session_id: f.sessionId })
+      .set('Authorization', `Bearer ${f.token}`)
+      .expect(200)
+
+    expect(res.body.form).toBeNull()
+  })
+
+  // The window between a terminate committing and the phase update being
+  // observed: the phase still says 'form' but nothing is live behind it.
+  it('returns form null when the phase says form but the submission is finished', async () => {
+    const f = await liveForm()
+    await ownerPool.query(`update form_submission set status = 'completed' where id = $1`, [f.submissionId])
+
+    const res = await request(app)
+      .get('/surface/messages')
+      .query({ session_id: f.sessionId })
+      .set('Authorization', `Bearer ${f.token}`)
+      .expect(200)
+
+    expect(res.body.confirm_phase).toBe('form')
+    expect(res.body.form).toBeNull()
   })
 })
 
