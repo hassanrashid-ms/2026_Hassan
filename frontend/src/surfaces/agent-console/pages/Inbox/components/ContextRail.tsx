@@ -24,9 +24,10 @@ export function ContextRail({
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
-  // Long staleTime and no socket wiring: the snapshot is immutable by
-  // construction and ticket history moves on the order of days. Only navigating
-  // to another ticket changes the key.
+  // Long staleTime: the snapshot is immutable by construction and ticket
+  // history moves on the order of days. Navigating to another ticket changes the
+  // key; the one exception is the effect below, which invalidates this query on
+  // the single event that can move a form mid-read.
   const contextQuery = useQuery({
     queryKey: ['conversation', conversationId, 'context'],
     queryFn: () => fetchConversationContext(token, conversationId),
