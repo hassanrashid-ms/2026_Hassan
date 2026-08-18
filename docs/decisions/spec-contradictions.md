@@ -423,3 +423,36 @@ the gate reading won.
   beat inconsistent stamps.
 
 See `docs/specs/2026-08-13-conversation-lifecycle-events-and-session-attribution-design.md`.
+
+---
+
+### 16. `form_offered` carries `handoff_reason`
+
+**Conflict:** `2026-08-17-player-side-forms-design.md` pins `form_offered`'s payload to
+`{ form_id, form_version, field_count }`, and separately requires the `bot_handoff` written at
+terminate to carry `reason` "as today". The reason is known only at offer time — by terminate the
+decision object is long gone and no column holds it.
+
+**Decided 2026-08-17 — the payload gains `handoff_reason`.** Event payloads are this repo's
+snapshot mechanism, so the reason rides on the event that explains the offer.
+`completeFormAndHandoff` reads the latest `form_offered` for the conversation back out and writes
+it onto `bot_handoff`. If that event is missing — impossible by construction — `reason` is written
+as `null` rather than fabricated: a null reason is a falsifiable bug signal, an invented one is
+not, and the payload already documents `assigned_agent_id: null` as legitimate.
+
+---
+
+### 17. HTTP status codes for `/surface/form/*`
+
+**Conflict:** the same spec pins no status codes for the three player form routes.
+
+**Decided 2026-08-17**, following `resolutionController`'s `ERRORS` map shape exactly:
+
+- `404 not_found` — no conversation for this player.
+- `409 no_form_pending` — no `in_progress` submission. This also covers submit or skip on an
+  already-terminal submission: a terminal state has no transition out of it, so "there is no form
+  pending" is literally true, and one reason string keeps the two callers from drifting.
+- `422` — `invalid_request`, `unknown_field`, `invalid_value`, `unsupported_field_type`.
+
+`attachment` is `unsupported_field_type` rather than `invalid_value`: the field exists and is
+declared, there is just no channel to answer it yet, and a client must be able to tell those apart.
