@@ -45,6 +45,7 @@ See `README.md` for the full getting-started sequence and `.env.example` for req
 | Files | S3 or Cloudflare R2, presigned PUT — never proxy uploads through Node |
 | Bot retrieval | Weaviate Cloud, BM25 (see `docs/specs/2026-08-07-weaviate-faq-search-design.md`) |
 | Console | Vite + React + TanStack Query + Tailwind + shadcn/ui |
+| Styling | Tailwind v4 utilities only — no hand-written CSS classes. See Styling below |
 | Charts | Recharts |
 | Logging | `logger` (`backend/src/shared/logging/logger.ts`) — see Logging below |
 
@@ -103,6 +104,17 @@ Console ───┘         │
 │   └── decisions/            ADRs and spec contradictions
 └── docker-compose.yml
 ```
+
+---
+
+## Styling
+
+- **Tailwind v4 utilities only. There are no hand-written CSS classes anywhere, and none may be added.** Style with utilities on the theme tokens; if a token is missing, add it to the surface's `@theme` block rather than writing a class.
+- **The three `.css` files are theme definitions, not stylesheets.** `frontend/src/webview.css` and `frontend/src/agent-console.css` each contain `@import "tailwindcss"`, an `@theme` block, global `html`/`body` background, and a couple of `@utility` helpers (`hairline`, `no-scrollbar`) plus keyframes. Nothing else. **`frontend/src/styles.css` is `/* deprecated */` — one line. It styles nothing.** Any comment claiming a component is "styled by styles.css classes" is stale; fix it when you find it.
+- **Both surfaces define the same token names with different values** — `--color-bg`, `--color-surface`, `--color-accent`, `--color-accent-deep`, `--color-accent-soft`, `--color-accent-fg`, `--color-text`, `--color-muted`, `--radius-card`. So a shared component written in `bg-surface` / `text-text` / `text-accent` / `rounded-card` re-themes correctly in each surface with no per-surface branching. This is what makes `features/**` components genuinely shareable; write them in tokens, never in raw colours.
+- **Each surface's stylesheet is imported by its shell alone, never from `main.tsx`** — `webview.css` by `WebviewShell.tsx`, `agent-console.css` by `AgentConsoleShell.tsx` (lazy). Vite concatenates every statically reachable stylesheet into one bundle, so a static import from a shared entry would leak Tailwind's preflight reset into the other surface. Keep both imports where they are.
+- **`@tailwindcss/typography` is not installed and must not be.** It ships absolute font sizes that would fight the `clamp()` on `html` that the webview's entire rem-based scale rides on. Prose styling is a `components` map on `react-markdown` — see `features/articles/components/ArticleBody.tsx`, the one place article markdown is rendered.
+- The webview's only fixed unit is the 1px `hairline` border. Everything else is rem-based so it scales with the `clamp()` on `html`; a border that scales with the viewport is a bug.
 
 ---
 

@@ -8,12 +8,17 @@ import { cn } from '@/surfaces/webview/lib/cn'
 /**
  * The webview's own thread renderer.
  *
- * features/chat/components/ChatThread.tsx stays exactly as it is — the agent
- * console renders it, and it is styled by styles.css classes the webview no
- * longer loads. Rather than teach that shared component two visual languages, the
- * webview hand-builds its bubbles (as the design's component split calls for) and
- * shares what actually matters: the ChatMessage shape, reconcilePending, the
- * socket, and the API module. Behaviour is identical; only the pixels differ.
+ * features/chat/components/ChatThread.tsx is the agent console's renderer. Rather
+ * than teach one shared component two visual languages, the webview hand-builds
+ * its bubbles (as the design's component split calls for) and shares what
+ * actually matters: the ChatMessage shape, reconcilePending, the socket, and the
+ * API module. Behaviour is identical; only the pixels differ.
+ *
+ * Both renderers are plain Tailwind on the per-surface @theme tokens, so a
+ * component written in `bg-surface`/`text-text` drops into either one. An earlier
+ * version of this comment claimed ChatThread was styled by styles.css classes;
+ * styles.css is a one-line deprecation notice and styles nothing at all.
+ * See CLAUDE.md § Styling.
  *
  * followOutput="auto" sticks to the bottom on a new message but doesn't yank the
  * viewport if the reader has scrolled up to read history.
