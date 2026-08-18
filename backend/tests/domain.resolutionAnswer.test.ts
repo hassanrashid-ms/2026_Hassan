@@ -8,7 +8,11 @@ import {
   ownerPool,
   seedAgent,
   seedConversation,
+  seedForm,
+  seedFormVersion,
+  seedIntent,
   seedPlayer,
+  seedSubintent,
   seedWorkspace,
   seedWorkspaceMember,
   truncateAll,
@@ -44,6 +48,10 @@ async function eventsFor(conversationId: string) {
 
 async function setConfirmPhase(conversationId: string, phase: 'none' | 'bot_article' | 'agent_ask') {
   await ownerPool.query(`update conversation set confirm_phase = $2 where id = $1`, [conversationId, phase])
+}
+
+async function setSubintent(conversationId: string, subintentId: string) {
+  await ownerPool.query(`update conversation set subintent_id = $2 where id = $1`, [conversationId, subintentId])
 }
 
 describe('applyResolutionAnswer', () => {
@@ -138,6 +146,35 @@ describe('applyResolutionAnswer', () => {
       'message_sent',
       'bot_article_rejected',
       'bot_handoff',
+    ])
+  })
+
+  it('no on bot_article offers the classified subintent\'s published form instead of handing off straight to a human', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const conversationId = await seedConversation({ workspaceId, playerId })
+    const agentId = await seedAgent()
+    await seedWorkspaceMember({ workspaceId, agentId })
+    const intentId = await seedIntent(workspaceId)
+    const formId = await seedForm({ workspaceId })
+    await seedFormVersion({ workspaceId, formId, version: 1, fields: [], publishedAt: new Date() })
+    const subintentId = await seedSubintent({ workspaceId, intentId, formId })
+    await setConfirmPhase(conversationId, 'bot_article')
+    await setSubintent(conversationId, subintentId)
+
+    const outcome = await withWorkspace(workspaceId, (tx) =>
+      applyResolutionAnswer(tx, { workspaceId, conversationId, playerId, sessionId: null }, false),
+    )
+
+    expect(outcome.kind).toBe('handed_off')
+    const row = await conversationRow(conversationId)
+    expect(row.status).toBe('bot_active')
+    expect(row.confirm_phase).toBe('form')
+    expect(row.assigned_agent_id).toBe(null)
+    expect((await eventsFor(conversationId)).map((e) => e.type)).toEqual([
+      'message_sent',
+      'bot_article_rejected',
+      'form_offered',
     ])
   })
 

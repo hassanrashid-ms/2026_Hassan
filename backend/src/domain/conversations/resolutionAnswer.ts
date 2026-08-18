@@ -43,7 +43,7 @@ export async function applyResolutionAnswer(
   helped: boolean,
 ): Promise<ResolutionAnswerOutcome> {
   const [found] = await tx
-    .select({ confirmPhase: conversation.confirmPhase })
+    .select({ confirmPhase: conversation.confirmPhase, subintentId: conversation.subintentId })
     .from(conversation)
     .where(eq(conversation.id, ctx.conversationId))
     .limit(1)
@@ -60,7 +60,11 @@ export async function applyResolutionAnswer(
       await applyBotTurn(tx, botCtx, { kind: 'resolve', subintentId: null })
       return { kind: 'resolved', source: 'bot', posted: null }
     }
-    const result = await applyBotTurn(tx, botCtx, { kind: 'handoff', reason: 'article_rejected', subintentId: null })
+    const result = await applyBotTurn(tx, botCtx, {
+      kind: 'handoff',
+      reason: 'article_rejected',
+      subintentId: found.subintentId,
+    })
     const posted = result.posted[0]
     if (!posted) throw new Error('handoff produced no player message')
     return { kind: 'handed_off', posted }

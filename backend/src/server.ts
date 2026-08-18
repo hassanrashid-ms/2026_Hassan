@@ -13,6 +13,9 @@ const { getEnv } = await import('./env.ts')
 const { registerJobs } = await import('./shared/jobs/queue.ts')
 const { createSocketServer } = await import('./shared/realtime/socketServer.ts')
 const { logger } = await import('./shared/logging/logger.ts')
+const { initLangfuse, shutdownLangfuse } = await import('./shared/observability/langfuse.ts')
+
+initLangfuse()
 
 const port = getEnv().PORT
 const server = createApp().listen(port, () => {
@@ -26,6 +29,7 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => {
     void (async () => {
       await jobs.close()
+      await shutdownLangfuse()
       server.close(() => process.exit(0))
     })()
   })

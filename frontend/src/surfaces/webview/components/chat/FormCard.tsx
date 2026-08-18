@@ -76,6 +76,14 @@ export function FormCard({ form, onAnswer, onSubmit, onSkip, busy }: FormCardPro
 
   return (
     <div role="group" aria-label={form.form_name} className="flex flex-col gap-4">
+      {/* One line, not a paragraph: it only needs to set expectations once,
+          before the player invests in typing an answer. */}
+      {index === 0 && (
+        <p className="text-xs leading-snug text-muted sm:text-sm">
+          Quick questions before we connect you with support
+        </p>
+      )}
+
       <div className="flex items-center justify-between">
         {/* Back is not politeness: a player who mistypes a receipt ID on a
             four-question form has no other recovery. */}
@@ -142,7 +150,7 @@ function FieldInput({
 }) {
   const inputClass = cn(
     'min-h-11 w-full rounded-card bg-surface px-4 py-3 text-base text-text placeholder:text-muted',
-    'border border-transparent focus:border-accent outline-none disabled:opacity-60',
+    'border border-muted/30 focus:border-accent outline-none disabled:opacity-60',
   )
 
   switch (field.type) {

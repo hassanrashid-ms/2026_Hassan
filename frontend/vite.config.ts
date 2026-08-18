@@ -1,6 +1,8 @@
 import { fileURLToPath, URL } from 'node:url'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import compression from 'compression'
+import type { Connect } from 'vite'
 // The brief's `import { defineConfig } from 'vite'` no longer typechecks against the
 // installed vite@8/vitest@4: vite's own UserConfig type has no `test` field. vitest/config
 // re-exports vite's defineConfig after augmenting that type with the `test` block, which is
@@ -43,6 +45,17 @@ function serveWebviewEntry(): Plugin {
       })
     },
     configurePreviewServer(server) {
+      // `vite preview`'s static server sends every asset uncompressed. That's
+      // invisible on localhost but not through the cloudflared tunnel this gets
+      // opened behind for on-device testing: webview.html's critical path pulls
+      // down ~440KB of JS/CSS before React can mount, and on a phone's link that
+      // was slow enough to blow past the SDK's webviewLoadTimeoutSeconds (8s)
+      // three times in a row — tripping maxOpenRetries and showing Close instead
+      // of Retry. gzip here is the same fix a real static host gets for free.
+      // compression()'s Express-flavoured types don't match Connect's
+      // NextHandleFunction; the middleware itself is Connect-compatible, which
+      // is the whole reason it works against Vite's server unmodified.
+      server.middlewares.use(compression() as unknown as Connect.NextHandleFunction)
       server.middlewares.use((req, _res, next) => {
         rewrite(req)
         next()

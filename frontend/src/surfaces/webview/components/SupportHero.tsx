@@ -38,16 +38,12 @@ export function SupportHero({ gameName, imageUrl, onSearchTap }: SupportHeroProp
       className={cn(
         'relative flex h-[25dvh] shrink-0 flex-col justify-end overflow-hidden px-5 pb-4',
         // The gradient is the fallback and is drawn unconditionally: when an asset
-        // exists it sits underneath as the scrim's base, so the overlaid text keeps
-        // its contrast against a photograph nobody on this team has seen.
+        // exists it sits underneath as the image loads in.
         'bg-linear-to-br from-accent to-accent-deep',
       )}
     >
       {asset !== null && (
-        <>
-          <img src={asset} alt="" aria-hidden className="absolute inset-0 size-full object-cover" />
-          <div className="absolute inset-0 bg-linear-to-t from-black/65 via-black/20 to-transparent" />
-        </>
+        <img src={asset} alt="" aria-hidden className="absolute inset-0 size-full object-cover" />
       )}
 
       <div className="relative flex flex-col gap-3">

@@ -6,6 +6,15 @@ import { closeTestServers } from './helpers/http.ts'
 vi.mock('@langfuse/openai', () => ({
   observeOpenAI: (client: any) => client
 }))
+vi.mock('@langfuse/otel', () => ({
+  LangfuseSpanProcessor: class {}
+}))
+vi.mock('@opentelemetry/sdk-node', () => ({
+  NodeSDK: class {
+    start() {}
+    async shutdown() {}
+  }
+}))
 
 // Every server tests/helpers/http.ts opened stays listening for the whole file,
 // so the worker only shuts down cleanly if they are closed here.
