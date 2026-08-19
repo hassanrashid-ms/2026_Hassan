@@ -242,12 +242,22 @@ export async function seedArticle(args: {
 export async function seedBotConfig(args: {
   workspaceId: string
   isProvisioned?: boolean
-  prompt?: string | null
-  rules?: string | null
+  prompt?: string
+  rules?: unknown[]
+  toolsConfig?: unknown[]
+  limitsConfig?: unknown[]
 }): Promise<void> {
   await ownerPool.query(
-    `insert into bot_config (workspace_id, is_provisioned, prompt, rules) values ($1, $2, $3, $4)`,
-    [args.workspaceId, args.isProvisioned ?? false, args.prompt ?? null, args.rules ?? null],
+    `insert into bot_config (workspace_id, is_provisioned, prompt, rules, tools_config, limits_config)
+     values ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb)`,
+    [
+      args.workspaceId,
+      args.isProvisioned ?? false,
+      args.prompt ?? 'RAW SEEDED PROMPT',
+      JSON.stringify(args.rules ?? []),
+      JSON.stringify(args.toolsConfig ?? []),
+      JSON.stringify(args.limitsConfig ?? []),
+    ],
   )
 }
 

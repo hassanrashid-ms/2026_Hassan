@@ -1,131 +1,199 @@
 import { eq } from 'drizzle-orm'
 import type { Tx } from '../../shared/db/withWorkspace.ts'
 import { botConfig } from '../../shared/db/schema/index.ts'
-import { buildSystemPrompt, DEFAULT_BOT_PROMPT, DEFAULT_BOT_RULES } from './defaultPrompt.ts'
+import { buildSystemPrompt, DEFAULT_BOT_PROMPT } from './defaultPrompt.ts'
+import { BUILTIN_RULE_KEYS, LOCKED_RULE_KEYS, buildBaselineRules, type RuleEntry } from './rulesCatalog.ts'
+import { TOOL_CATALOG, buildBaselineToolsConfig, type ToolToggle } from './tools.ts'
+import { LIMIT_CATALOG, buildBaselineLimits, clampLimitBounds } from './limitsCatalog.ts'
+import type { LimitKey, LimitToggleValue as LimitToggle } from '@support/types'
+import { getOrCreateSystemActor } from './systemActor.ts'
 import { appendChangeLog } from '../../shared/changeLog/appendChangeLog.ts'
 
-/**
- * `prompt` and `rules` are never null: the resolver has already substituted the
- * defaults. They stay separate here — two stored fields, audited separately —
- * and `systemPrompt` is what actually goes to the bot, so no caller joins them
- * itself and they cannot drift apart at different call sites.
- */
 export type ResolvedBotConfig = {
   isProvisioned: boolean
   prompt: string
-  rules: string
+  rules: RuleEntry[]
+  toolsConfig: ToolToggle[]
+  /** Derived from toolsConfig — what toolsForPhase actually filters against. */
+  enabledTools: ReadonlySet<string>
+  limitsConfig: LimitToggle[]
+  resolvedLimits: Record<LimitKey, number>
   systemPrompt: string
 }
 
-/** Both stored fields resolved, plus the one string the bot is sent. */
-function resolved(isProvisioned: boolean, prompt: string | null, rules: string | null): ResolvedBotConfig {
-  const resolvedPrompt = prompt ?? DEFAULT_BOT_PROMPT
-  const resolvedRules = rules ?? DEFAULT_BOT_RULES
+function resolved(
+  isProvisioned: boolean,
+  prompt: string,
+  rules: RuleEntry[],
+  toolsConfig: ToolToggle[],
+  limitsConfig: LimitToggle[],
+): ResolvedBotConfig {
   return {
     isProvisioned,
-    prompt: resolvedPrompt,
-    rules: resolvedRules,
-    systemPrompt: buildSystemPrompt(resolvedPrompt, resolvedRules),
+    prompt,
+    rules,
+    toolsConfig,
+    enabledTools: new Set(toolsConfig.filter((t) => t.enabled).map((t) => t.tool)),
+    limitsConfig,
+    resolvedLimits: Object.fromEntries(limitsConfig.map((l) => [l.key, l.value])) as Record<LimitKey, number>,
+    systemPrompt: buildSystemPrompt(prompt, rules),
   }
 }
 
 /**
- * The one place four different "the bot is off" shapes collapse into one answer:
- * no row at all, `is_provisioned = false`, `prompt IS NULL`, `rules IS NULL`. Every caller
- * goes through here, so an absent row and an explicit false can never diverge —
- * and no caller ever has to know which of the three it hit, or handle a null
- * prompt.
- *
- * `is_provisioned = false` means every message on this workspace takes the same
- * fallback path as "bot disabled": no bot reply, straight to the human queue.
- *
- * The explicit workspace predicate is belt-and-braces on top of RLS, matching
- * the codebase rule that scoped reads name their workspace.
+ * The one place an absent row collapses to the off state on the catalog
+ * baseline. Every caller goes through here. Unlike before this migration, a
+ * PRESENT row's prompt/rules/tools_config are never null — the NOT NULL
+ * columns guarantee that — so this function's only remaining job is the
+ * absent-row case.
  */
 export async function resolveBotConfig(tx: Tx, workspaceId: string): Promise<ResolvedBotConfig> {
   const [row] = await tx
-    .select({ isProvisioned: botConfig.isProvisioned, prompt: botConfig.prompt, rules: botConfig.rules })
+    .select({
+      isProvisioned: botConfig.isProvisioned,
+      prompt: botConfig.prompt,
+      rules: botConfig.rules,
+      toolsConfig: botConfig.toolsConfig,
+      limitsConfig: botConfig.limitsConfig,
+    })
     .from(botConfig)
     .where(eq(botConfig.workspaceId, workspaceId))
     .limit(1)
 
-  if (!row) return resolved(false, null, null)
-  return resolved(row.isProvisioned, row.prompt, row.rules)
+  if (!row) {
+    return resolved(false, DEFAULT_BOT_PROMPT, buildBaselineRules(), buildBaselineToolsConfig(), buildBaselineLimits())
+  }
+  return resolved(
+    row.isProvisioned,
+    row.prompt,
+    row.rules as RuleEntry[],
+    row.toolsConfig as ToolToggle[],
+    row.limitsConfig as LimitToggle[],
+  )
 }
 
-/** The `change_log.entity_type` this slice writes. The only one, for now. */
 export const BOT_CONFIG_ENTITY_TYPE = 'bot_config'
 
-/**
- * Thrown rather than stored. An empty or whitespace-only value would be a second
- * representation of "not customised" alongside NULL, and the resolver would have
- * to guess. Clearing a field is an explicit `null`.
- *
- * Carries the field name so an admin editing rules is not told their prompt is
- * wrong. The name is the COLUMN name, matching the audit trail.
- */
 export class EmptyBotPrompt extends Error {
-  // Declared-then-assigned rather than a `readonly` constructor parameter property:
-  // `node --experimental-strip-types` erases types only, and a parameter property
-  // needs a transform, so it fails the dev server at load with
-  // ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX. Matches InvalidWorkspaceId.
-  readonly field: 'prompt' | 'rules'
-
-  constructor(field: 'prompt' | 'rules' = 'prompt') {
-    super(`Bot ${field} cannot be empty — pass null to reset it to the default`)
+  readonly field: 'prompt'
+  constructor() {
+    super('Bot prompt cannot be empty — pass null to reset it to the default')
     this.name = 'EmptyBotPrompt'
-    this.field = field
+    this.field = 'prompt'
+  }
+}
+
+export class InvalidRulesPayload extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'InvalidRulesPayload'
+  }
+}
+
+export class InvalidToolsPayload extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'InvalidToolsPayload'
+  }
+}
+
+export class InvalidLimitsPayload extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'InvalidLimitsPayload'
+  }
+}
+
+/** Save-time domain validation beyond Zod's shape check (spec "API / types"). */
+function validateRules(rules: readonly RuleEntry[]): void {
+  const byKey = new Map(rules.map((r) => [r.key, r]))
+
+  for (const key of BUILTIN_RULE_KEYS) {
+    const entry = byKey.get(key)
+    if (!entry) throw new InvalidRulesPayload(`Rules payload is missing builtin rule "${key}".`)
+    if (LOCKED_RULE_KEYS.has(key) && !entry.enabled) {
+      throw new InvalidRulesPayload(`"${key}" is a locked rule and cannot be disabled.`)
+    }
+  }
+
+  for (const rule of rules) {
+    if (rule.source === 'custom' && BUILTIN_RULE_KEYS.has(rule.key)) {
+      throw new InvalidRulesPayload(`Custom rule cannot reuse builtin key "${rule.key}".`)
+    }
+  }
+
+  if (!rules.some((r) => r.enabled)) {
+    throw new InvalidRulesPayload('At least one rule must remain enabled.')
+  }
+}
+
+function validateToolsConfig(toolsConfig: readonly ToolToggle[]): void {
+  const names = new Set(toolsConfig.map((t) => t.tool))
+  for (const t of TOOL_CATALOG) {
+    if (!names.has(t.name)) throw new InvalidToolsPayload(`tools_config is missing "${t.name}".`)
+  }
+}
+
+function validateLimitsConfig(limitsConfig: readonly LimitToggle[]): void {
+  const byKey = new Map(limitsConfig.map((l) => [l.key, l.value]))
+  for (const entry of LIMIT_CATALOG) {
+    const value = byKey.get(entry.key)
+    if (value === undefined) throw new InvalidLimitsPayload(`limits_config is missing "${entry.key}".`)
+    const bounds = clampLimitBounds(entry.key, value)
+    if (!bounds.ok) {
+      throw new InvalidLimitsPayload(`"${entry.key}" must be between ${bounds.min} and ${bounds.max}.`)
+    }
   }
 }
 
 export type BotConfigSave = {
   workspaceId: string
-  /** The authenticated agent. Attribution is not optional. */
   actorId: string
-  /** Omitted means leave alone. */
   isProvisioned?: boolean
-  /** Omitted means leave alone; explicit null is a reset to DEFAULT_BOT_PROMPT. */
+  /** Omitted means leave alone; explicit null resets to DEFAULT_BOT_PROMPT. */
   prompt?: string | null
-  /** Omitted means leave alone; explicit null is a reset to DEFAULT_BOT_RULES. */
-  rules?: string | null
+  /** Omitted means leave alone; explicit null resets to the catalog baseline. */
+  rules?: RuleEntry[] | null
+  /** Omitted means leave alone; explicit null resets to the catalog baseline. */
+  toolsConfig?: ToolToggle[] | null
+  /** Omitted means leave alone; explicit null resets to the catalog baseline. */
+  limitsConfig?: LimitToggle[] | null
 }
 
 /**
- * The only way `bot_config` is written. The upsert and its audit rows land in the
- * caller's single transaction, so a config change that leaves no audit row is
- * impossible, and a failed audit write rolls the config change back.
- *
- * Audited field names are the COLUMN names, so the trail stays readable against
- * the schema when an API shape changes.
- *
- * A first save that sets both fields to their already-resolved defaults writes no
- * audit row: an absent row and `{ false, null }` resolve identically, so nothing
- * observable changed. The row still gets created.
+ * The only way `bot_config` is written for an ordinary edit. `seedBotConfig`
+ * below is the only OTHER writer, and it never calls this — see its own
+ * before_value semantics.
  */
 export async function saveBotConfig(tx: Tx, input: BotConfigSave): Promise<ResolvedBotConfig> {
-  if (typeof input.prompt === 'string' && input.prompt.trim() === '') {
-    throw new EmptyBotPrompt('prompt')
-  }
-  if (typeof input.rules === 'string' && input.rules.trim() === '') {
-    throw new EmptyBotPrompt('rules')
-  }
+  if (typeof input.prompt === 'string' && input.prompt.trim() === '') throw new EmptyBotPrompt()
+  if (input.rules) validateRules(input.rules)
+  if (input.toolsConfig) validateToolsConfig(input.toolsConfig)
+  if (input.limitsConfig) validateLimitsConfig(input.limitsConfig)
 
   const [existing] = await tx
-    .select({ isProvisioned: botConfig.isProvisioned, prompt: botConfig.prompt, rules: botConfig.rules })
+    .select({
+      isProvisioned: botConfig.isProvisioned,
+      prompt: botConfig.prompt,
+      rules: botConfig.rules,
+      toolsConfig: botConfig.toolsConfig,
+      limitsConfig: botConfig.limitsConfig,
+    })
     .from(botConfig)
     .where(eq(botConfig.workspaceId, input.workspaceId))
     .limit(1)
 
-  // An absent row means the same thing as { false, null, null } — the same
-  // collapse resolveBotConfig performs — so a first save's before-values are
-  // those, not "unknown".
   const beforeProvisioned = existing?.isProvisioned ?? false
-  const beforePrompt = existing?.prompt ?? null
-  const beforeRules = existing?.rules ?? null
+  const beforePrompt = existing?.prompt ?? DEFAULT_BOT_PROMPT
+  const beforeRules = (existing?.rules as RuleEntry[] | undefined) ?? buildBaselineRules()
+  const beforeTools = (existing?.toolsConfig as ToolToggle[] | undefined) ?? buildBaselineToolsConfig()
+  const beforeLimits = (existing?.limitsConfig as LimitToggle[] | undefined) ?? buildBaselineLimits()
 
   const afterProvisioned = input.isProvisioned ?? beforeProvisioned
-  const afterPrompt = input.prompt === undefined ? beforePrompt : input.prompt
-  const afterRules = input.rules === undefined ? beforeRules : input.rules
+  const afterPrompt = input.prompt === undefined ? beforePrompt : (input.prompt ?? DEFAULT_BOT_PROMPT)
+  const afterRules = input.rules === undefined ? beforeRules : (input.rules ?? buildBaselineRules())
+  const afterTools = input.toolsConfig === undefined ? beforeTools : (input.toolsConfig ?? buildBaselineToolsConfig())
+  const afterLimits = input.limitsConfig === undefined ? beforeLimits : (input.limitsConfig ?? buildBaselineLimits())
 
   await tx
     .insert(botConfig)
@@ -134,6 +202,8 @@ export async function saveBotConfig(tx: Tx, input: BotConfigSave): Promise<Resol
       isProvisioned: afterProvisioned,
       prompt: afterPrompt,
       rules: afterRules,
+      toolsConfig: afterTools,
+      limitsConfig: afterLimits,
     })
     .onConflictDoUpdate({
       target: botConfig.workspaceId,
@@ -141,7 +211,8 @@ export async function saveBotConfig(tx: Tx, input: BotConfigSave): Promise<Resol
         isProvisioned: afterProvisioned,
         prompt: afterPrompt,
         rules: afterRules,
-        // Explicit, because there is no trigger — see the schema comment.
+        toolsConfig: afterTools,
+        limitsConfig: afterLimits,
         updatedAt: new Date(),
       },
     })
@@ -155,8 +226,48 @@ export async function saveBotConfig(tx: Tx, input: BotConfigSave): Promise<Resol
       { field: 'is_provisioned', before: beforeProvisioned, after: afterProvisioned },
       { field: 'prompt', before: beforePrompt, after: afterPrompt },
       { field: 'rules', before: beforeRules, after: afterRules },
+      { field: 'tools_config', before: beforeTools, after: afterTools },
+      { field: 'limits_config', before: beforeLimits, after: afterLimits },
     ],
   })
 
-  return resolved(afterProvisioned, afterPrompt, afterRules)
+  return resolved(afterProvisioned, afterPrompt, afterRules, afterTools, afterLimits)
+}
+
+/**
+ * Materialises the catalog baseline into a real row — "version 1" (spec
+ * "Seeding / baseline"). A workspace that already has a row is left
+ * untouched. Deliberately does NOT call saveBotConfig: a first save's
+ * before-values collapse to the baseline (nothing observably changed), which
+ * would make appendChangeLog drop every field as a no-op — but the seed's
+ * before_value must be `null` (genuinely never set), not "collapsed to
+ * baseline", so the History panel shows a real "version 1" row.
+ */
+export async function seedBotConfig(tx: Tx, workspaceId: string): Promise<ResolvedBotConfig> {
+  const [existing] = await tx.select({ workspaceId: botConfig.workspaceId }).from(botConfig).where(eq(botConfig.workspaceId, workspaceId)).limit(1)
+  if (existing) return resolveBotConfig(tx, workspaceId)
+
+  const actorId = await getOrCreateSystemActor(tx)
+
+  const prompt = DEFAULT_BOT_PROMPT
+  const rules = buildBaselineRules()
+  const toolsConfig = buildBaselineToolsConfig()
+  const limitsConfig = buildBaselineLimits()
+
+  await tx.insert(botConfig).values({ workspaceId, isProvisioned: false, prompt, rules, toolsConfig, limitsConfig })
+
+  await appendChangeLog(tx, {
+    workspaceId,
+    entityType: BOT_CONFIG_ENTITY_TYPE,
+    entityId: workspaceId,
+    actorId,
+    changes: [
+      { field: 'prompt', before: null, after: prompt },
+      { field: 'rules', before: null, after: rules },
+      { field: 'tools_config', before: null, after: toolsConfig },
+      { field: 'limits_config', before: null, after: limitsConfig },
+    ],
+  })
+
+  return resolved(false, prompt, rules, toolsConfig, limitsConfig)
 }
