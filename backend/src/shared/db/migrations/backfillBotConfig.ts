@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { sql } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/node-postgres'
 import { Pool } from 'pg'
+import * as schema from '../schema/index.ts'
 import { getEnv } from '../../../env.ts'
 import { loadRootEnv } from '../../../env/loadRootEnv.ts'
 import { logger } from '../../logging/logger.ts'
@@ -23,7 +24,7 @@ type LegacyRow = { workspaceId: string; prompt: string | null; rulesLegacyText: 
  */
 export async function backfillBotConfig(url: string = getEnv().MIGRATION_DATABASE_URL): Promise<void> {
   const pool = new Pool({ connectionString: url })
-  const db = drizzle(pool)
+  const db = drizzle(pool, { schema })
   try {
     const rows = await db.execute<LegacyRow & { rules: unknown }>(
       `select workspace_id as "workspaceId", prompt, rules_legacy_text as "rulesLegacyText", rules
