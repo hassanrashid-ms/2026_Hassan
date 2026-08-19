@@ -50,9 +50,11 @@ const INTENTS = {
     {
       id: 'int-1',
       name: 'Billing',
+      isSystem: false,
+      archivedAt: null,
       subintents: [
-        { id: 'sub-1', name: 'Refund', formId: 'form-1', archivedAt: null },
-        { id: 'sub-2', name: 'Chargeback', formId: null, archivedAt: null },
+        { id: 'sub-1', name: 'Refund', formId: 'form-1', archivedAt: null, defaultPriority: null, mergedIntoId: null },
+        { id: 'sub-2', name: 'Chargeback', formId: null, archivedAt: null, defaultPriority: null, mergedIntoId: null },
       ],
     },
   ],

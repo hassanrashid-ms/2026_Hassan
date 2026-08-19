@@ -8,19 +8,37 @@ const INTENTS: IntentView[] = [
   {
     id: 'int-billing',
     name: 'Billing',
+    isSystem: false,
+    archivedAt: null,
     subintents: [
-      { id: 'sub-refund', name: 'Refund request', formId: null, archivedAt: null },
-      { id: 'sub-payment', name: 'Payment failed', formId: null, archivedAt: null },
-      { id: 'sub-cancel', name: 'Subscription cancel', formId: 'other-form', archivedAt: null },
-      { id: 'sub-old', name: 'Old billing thing', formId: null, archivedAt: '2026-01-01T00:00:00Z' },
+      { id: 'sub-refund', name: 'Refund request', formId: null, archivedAt: null, defaultPriority: null, mergedIntoId: null },
+      { id: 'sub-payment', name: 'Payment failed', formId: null, archivedAt: null, defaultPriority: null, mergedIntoId: null },
+      {
+        id: 'sub-cancel',
+        name: 'Subscription cancel',
+        formId: 'other-form',
+        archivedAt: null,
+        defaultPriority: null,
+        mergedIntoId: null,
+      },
+      {
+        id: 'sub-old',
+        name: 'Old billing thing',
+        formId: null,
+        archivedAt: '2026-01-01T00:00:00Z',
+        defaultPriority: null,
+        mergedIntoId: null,
+      },
     ],
   },
   {
     id: 'int-account',
     name: 'Account Access',
+    isSystem: false,
+    archivedAt: null,
     subintents: [
-      { id: 'sub-pw', name: 'Password reset', formId: null, archivedAt: null },
-      { id: 'sub-2fa', name: '2FA locked out', formId: null, archivedAt: null },
+      { id: 'sub-pw', name: 'Password reset', formId: null, archivedAt: null, defaultPriority: null, mergedIntoId: null },
+      { id: 'sub-2fa', name: '2FA locked out', formId: null, archivedAt: null, defaultPriority: null, mergedIntoId: null },
     ],
   },
 ]
