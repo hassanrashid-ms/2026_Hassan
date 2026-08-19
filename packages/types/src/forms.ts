@@ -145,7 +145,7 @@ export type CreateFormResponse = { id: string; draftVersionId: string }
 
 export type FormMappedSubintent = { id: string; name: string; intentId: string }
 
-export type FormVersionView = { id: string; version: number; fields: FormField[] }
+export type FormVersionView = { version: number; fields: FormField[]; publishedAt: string | null }
 
 export type FormDetail = {
   id: string
@@ -154,7 +154,7 @@ export type FormDetail = {
   createdAt: string
   draft: FormVersionView | null
   published: FormVersionView | null
-  mappedSubintents: FormMappedSubintent[]
+  subintents: FormMappedSubintent[]
 }
 
 export type FormSubmissionStatus = 'in_progress' | 'completed' | 'partial' | 'skipped'

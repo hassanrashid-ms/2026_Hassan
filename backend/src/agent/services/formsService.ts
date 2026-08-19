@@ -19,8 +19,8 @@ function hasForbiddenFieldType(fields: FormField[]): boolean {
   return fields.some((f) => FORBIDDEN_FIELD_TYPES.has(f.type))
 }
 
-function toVersionView(row: { id: string; version: number; fields: FormField[] }): FormVersionView {
-  return { id: row.id, version: row.version, fields: row.fields }
+function toVersionView(row: { version: number; fields: FormField[]; publishedAt: Date | null }): FormVersionView {
+  return { version: row.version, fields: row.fields, publishedAt: row.publishedAt ? row.publishedAt.toISOString() : null }
 }
 
 async function loadVersions(tx: Tx, formId: string) {
@@ -92,7 +92,7 @@ async function loadFormDetail(tx: Tx, formId: string): Promise<FormDetail | null
     .from(subintent)
     .where(eq(subintent.formId, formId))
 
-  const mappedSubintents: FormMappedSubintent[] = mapped.map((m) => ({ id: m.id, name: m.name, intentId: m.intentId }))
+  const subintents: FormMappedSubintent[] = mapped.map((m) => ({ id: m.id, name: m.name, intentId: m.intentId }))
 
   return {
     id: formRow.id,
@@ -101,7 +101,7 @@ async function loadFormDetail(tx: Tx, formId: string): Promise<FormDetail | null
     createdAt: formRow.createdAt.toISOString(),
     draft: draftRow ? toVersionView(draftRow) : null,
     published: publishedRow ? toVersionView(publishedRow) : null,
-    mappedSubintents,
+    subintents,
   }
 }
 

@@ -5,7 +5,7 @@ import {
   canPublish,
   formStatusLabel,
   isBuilderFieldType,
-  keyFromLabel,
+  slugifyKey,
   renumberPositions,
   validateFields,
 } from './formForm.ts'
@@ -69,19 +69,19 @@ describe('isBuilderFieldType', () => {
 
 describe('canPublish', () => {
   it('is false with no draft', () => {
-    expect(canPublish(false, [])).toBe(false)
+    expect(canPublish([])).toBe(false)
   })
 
   it('is false with an empty draft', () => {
-    expect(canPublish(true, [])).toBe(false)
+    expect(canPublish([])).toBe(false)
   })
 
   it('is false when the draft fails validation', () => {
-    expect(canPublish(true, [field({ key: 'a', position: 0 }), field({ key: 'a', position: 1 })])).toBe(false)
+    expect(canPublish([field({ key: 'a', position: 0 }), field({ key: 'a', position: 1 })])).toBe(false)
   })
 
   it('is true with a non-empty, valid draft', () => {
-    expect(canPublish(true, [field({ key: 'a', position: 0 })])).toBe(true)
+    expect(canPublish([field({ key: 'a', position: 0 })])).toBe(true)
   })
 })
 
@@ -112,12 +112,12 @@ describe('formStatusLabel', () => {
   })
 })
 
-describe('keyFromLabel', () => {
+describe('slugifyKey', () => {
   it('slugifies a label', () => {
-    expect(keyFromLabel('Order ID', [])).toBe('order_id')
+    expect(slugifyKey('Order ID', [])).toBe('order_id')
   })
 
   it('dedupes against existing keys', () => {
-    expect(keyFromLabel('Order ID', ['order_id'])).toBe('order_id_2')
+    expect(slugifyKey('Order ID', ['order_id'])).toBe('order_id_2')
   })
 })

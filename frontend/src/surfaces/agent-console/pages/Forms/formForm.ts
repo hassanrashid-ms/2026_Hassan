@@ -58,8 +58,8 @@ export function isBuilderFieldType(type: FormFieldType): type is BuilderFieldTyp
 }
 
 /** Publish-time rule mirrored from `publishedFormFieldsSchema`: no fields, nothing to publish. */
-export function canPublish(hasDraft: boolean, draftFields: FormField[]): boolean {
-  return hasDraft && draftFields.length > 0 && validateFields(draftFields).length === 0
+export function canPublish(fields: FormField[]): boolean {
+  return fields.length > 0 && validateFields(fields).length === 0
 }
 
 /**
@@ -80,13 +80,30 @@ export function formStatusLabel(form: {
   return 'Draft'
 }
 
+/** Badge colour for `formStatusLabel`'s four states — archived reads neutral, a clean publish reads success, a pending draft on top of a live publish reads as a warning worth a second look. */
+export function formStatusVariant(form: {
+  archivedAt: string | null
+  publishedVersion: number | null
+  hasDraft: boolean
+}): 'secondary' | 'success' | 'outline' | 'warning' {
+  if (form.archivedAt !== null) return 'outline'
+  if (form.publishedVersion === null) return 'secondary'
+  return form.hasDraft ? 'warning' : 'success'
+}
+
 /** Renumbers `position` to a dense 0..n-1 sequence matching array order — used after add/remove/move. */
 export function renumberPositions(fields: FormField[]): FormField[] {
   return fields.map((field, index) => ({ ...field, position: index }))
 }
 
+/** One past the highest existing position — the slot a newly added field lands in. */
+export function nextPosition(fields: FormField[]): number {
+  if (fields.length === 0) return 0
+  return Math.max(...fields.map((f) => f.position)) + 1
+}
+
 /** Derives a stable `key` from a label: lower-case, underscores, deduped against existing keys. */
-export function keyFromLabel(label: string, existingKeys: readonly string[]): string {
+export function slugifyKey(label: string, existingKeys: readonly string[]): string {
   const base =
     label
       .trim()

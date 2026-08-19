@@ -16,7 +16,8 @@ import {
   BUILDER_FIELD_TYPES,
   FIELD_TYPE_LABELS,
   canPublish,
-  keyFromLabel,
+  nextPosition,
+  slugifyKey,
   renumberPositions,
   validateFields,
 } from '../formForm.ts'
@@ -127,7 +128,7 @@ function FormEditorForm({
   const initialFields = form?.draft?.fields ?? form?.published?.fields ?? []
   const [name, setName] = useState(form?.name ?? '')
   const [fields, setFields] = useState<FormField[]>(initialFields)
-  const [shownFor, setShownFor] = useState<string[]>(form?.mappedSubintents.map((s) => s.id) ?? [])
+  const [shownFor, setShownFor] = useState<string[]>(form?.subintents.map((s) => s.id) ?? [])
   const [expandedKey, setExpandedKey] = useState<string | null>(null)
   const [addingField, setAddingField] = useState(false)
   const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false)
@@ -178,13 +179,13 @@ function FormEditorForm({
 
   const addField = (type: (typeof BUILDER_FIELD_TYPES)[number]) => {
     const label = 'New question'
-    const key = keyFromLabel(label, fields.map((f) => f.key))
+    const key = slugifyKey(label, fields.map((f) => f.key))
     const next: FormField = {
       key,
       label,
       type,
       isRequired: false,
-      position: fields.length,
+      position: nextPosition(fields),
       options: type === 'choice' ? ['Option 1', 'Option 2'] : undefined,
     }
     setFields([...fields, next])
@@ -216,7 +217,7 @@ function FormEditorForm({
   }
 
   const canSave = name.trim() !== '' && errors.length === 0 && !archived
-  const canPublishNow = admin && canPublish(form?.draft != null, form?.draft?.fields ?? [])
+  const canPublishNow = admin && canPublish(form?.draft?.fields ?? [])
 
   return (
     <>

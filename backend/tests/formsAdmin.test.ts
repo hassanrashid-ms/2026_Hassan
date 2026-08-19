@@ -164,8 +164,8 @@ describe('formsService', () => {
 
     const formAAfter = await getForm(ctx, formA.id)
     const formBAfter = await getForm(ctx, formB.id)
-    expect(formAAfter!.mappedSubintents.map((s) => s.id)).toEqual([s2])
-    expect(formBAfter!.mappedSubintents.map((s) => s.id)).toEqual([s1])
+    expect(formAAfter!.subintents.map((s) => s.id)).toEqual([s2])
+    expect(formBAfter!.subintents.map((s) => s.id)).toEqual([s1])
   })
 
   it('rejects a cross-workspace subintent id', async () => {

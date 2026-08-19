@@ -27,12 +27,12 @@ const FORM_WITH_DRAFT: FormDetail = {
   archivedAt: null,
   createdAt: '2026-01-01T00:00:00Z',
   draft: {
-    id: 'v2',
     version: 2,
     fields: [{ key: 'order_id', label: 'Order ID', type: 'short_text', isRequired: true, position: 0 }],
+    publishedAt: null,
   },
-  published: { id: 'v1', version: 1, fields: [] },
-  mappedSubintents: [{ id: 'sub-1', name: 'Refund', intentId: 'int-1' }],
+  published: { version: 1, fields: [], publishedAt: '2026-01-01T00:00:00Z' },
+  subintents: [{ id: 'sub-1', name: 'Refund', intentId: 'int-1' }],
 }
 
 const FORM_WITH_EMPTY_DRAFT: FormDetail = {
@@ -40,9 +40,9 @@ const FORM_WITH_EMPTY_DRAFT: FormDetail = {
   name: 'Empty draft form',
   archivedAt: null,
   createdAt: '2026-01-01T00:00:00Z',
-  draft: { id: 'v1', version: 1, fields: [] },
+  draft: { version: 1, fields: [], publishedAt: null },
   published: null,
-  mappedSubintents: [],
+  subintents: [],
 }
 
 const INTENTS = {

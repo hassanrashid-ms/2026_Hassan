@@ -31,9 +31,9 @@ beforeEach(() => {
     name: 'Refund request',
     archivedAt: null,
     createdAt: '2026-01-01T00:00:00Z',
-    draft: { id: 'v1', version: 1, fields: [] },
+    draft: { version: 1, fields: [], publishedAt: null },
     published: null,
-    mappedSubintents: [],
+    subintents: [],
   })
   vi.spyOn(agentApi, 'fetchIntents').mockResolvedValue({ intents: [] })
 })

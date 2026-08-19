@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { EllipsisVertical } from 'lucide-react'
 import { archiveForm, fetchForms } from '../../../api/agentApi.ts'
 import { isAdmin, type StoredAgentSession } from '../../../lib/agentSession.ts'
-import { formStatusLabel } from '../formForm.ts'
+import { formStatusLabel, formStatusVariant } from '../formForm.ts'
 import { Badge } from '../../../components/ui/badge.tsx'
 import { Button } from '../../../components/ui/button.tsx'
 import {
@@ -72,7 +72,9 @@ export function FormTable({
                     <span className="text-xs text-muted">Not shown</span>
                   )}
                 </TableCell>
-                <TableCell className="text-muted">{formStatusLabel(form)}</TableCell>
+                <TableCell>
+                  <Badge variant={formStatusVariant(form)}>{formStatusLabel(form)}</Badge>
+                </TableCell>
                 <TableCell onClick={(e) => e.stopPropagation()}>
                   {canArchive && form.archivedAt === null && (
                     <DropdownMenu>
