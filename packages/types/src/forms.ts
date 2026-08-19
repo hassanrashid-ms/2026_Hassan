@@ -115,6 +115,48 @@ export const formAnswerValueSchemas = {
   }),
 } satisfies Record<FormFieldType, z.ZodType>
 
+/**
+ * Admin authoring wire contract for `formsRouter`/`formsService`. Not part of
+ * the SDK-frozen contract above this comment — these ship with the server.
+ */
+export const CreateFormBody = z.object({ name: z.string().min(1).max(200) })
+
+/** `fields`, when present, is validated shape-wise here; the attachment/time
+ * builder-policy rejection is a service-layer check the schema doesn't express. */
+export const UpdateFormBody = z.object({
+  name: z.string().min(1).max(200).optional(),
+  fields: formFieldsSchema.optional(),
+})
+
+export const SetFormSubintentsBody = z.object({ subintentIds: z.array(z.uuid()) })
+
+export type FormSummary = {
+  id: string
+  name: string
+  archivedAt: string | null
+  createdAt: string
+  mappedSubintentCount: number
+  publishedVersion: number | null
+  hasDraft: boolean
+}
+export type FormsListResponse = { forms: FormSummary[] }
+
+export type CreateFormResponse = { id: string; draftVersionId: string }
+
+export type FormMappedSubintent = { id: string; name: string; intentId: string }
+
+export type FormVersionView = { id: string; version: number; fields: FormField[] }
+
+export type FormDetail = {
+  id: string
+  name: string
+  archivedAt: string | null
+  createdAt: string
+  draft: FormVersionView | null
+  published: FormVersionView | null
+  mappedSubintents: FormMappedSubintent[]
+}
+
 export type FormSubmissionStatus = 'in_progress' | 'completed' | 'partial' | 'skipped'
 
 /** The latest answer for a field. Older rows are history and never reach a player. */

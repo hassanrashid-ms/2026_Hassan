@@ -28,7 +28,7 @@ export const PublicArticleListQuery = z.object({
 
 export type ArticleStateValue = 'draft' | 'published' | 'archived'
 
-export type IntentSubintentView = { id: string; name: string }
+export type IntentSubintentView = { id: string; name: string; formId: string | null; archivedAt: string | null }
 export type IntentView = { id: string; name: string; subintents: IntentSubintentView[] }
 export type IntentsResponse = { intents: IntentView[] }
 export type CreateIntentResponse = { id: string; name: string }
