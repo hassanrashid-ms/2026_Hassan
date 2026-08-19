@@ -77,36 +77,53 @@ Seeding, below).
 
 ## Built-in rule catalog
 
-`domain/bot/defaultPrompt.ts`'s `DEFAULT_BOT_RULES` (currently one 8-line string) becomes a typed
-array, `DEFAULT_BOT_RULES_CATALOG: RuleEntry[]`, sourced from the doc's Rules screen:
+**Behavior parity is the hard constraint here.** `docs/specs/...` mockup text and the product doc's
+Rules screen show *illustrative* rule wording (6 short rules, one off by default) — that is not
+what `DEFAULT_BOT_RULES` actually says today. The earlier draft of this spec mistakenly used the
+doc's illustrative wording as the catalog. That is now corrected: the catalog is a **verbatim
+split of the real `DEFAULT_BOT_RULES` string**, in its current order, all enabled by default,
+because that string is what every workspace's bot has been running on. The doc's screen only
+supplies the *shape* (toggleable list, some locked, custom rules addable) — never the wording or
+the defaults, which come from the actual shipped constant:
 
-| key | text | default enabled | locked | enforcement |
+| key | text (verbatim from `DEFAULT_BOT_RULES`) | default enabled | locked | enforcement |
 |---|---|---|---|---|
-| `articles_only` | Answer only from published help articles | on | no | `code` — already guaranteed by `scoreGrounding`/`isGrounded` (≥90% grounded) regardless of prompt wording |
-| `no_promises` | Never promise a refund, a credit, or a timeline | on | no | `prompt` |
-| `handoff_on_request` | Hand off immediately if the player asks for a person | on | **yes** | `prompt` |
-| `no_credentials` | Never ask for a password, card number, or personal ID | on | **yes** | `prompt` |
-| `handoff_after_three` | Hand off if the player has not been helped after three replies | on | no | `code` — already guaranteed by `MAX_BOT_MESSAGES` turn-cap in `toolLoop.ts` |
-| `reply_in_language` | Reply in the language the player wrote in | off | no | `prompt` |
+| `no_invented_facts` | Never invent a fact about the game, an account, a purchase, a refund, or a balance. If the articles do not say it, you do not know it. | on | no | `code` — backed by `scoreGrounding`/`isGrounded` (≥90% grounded), independent of this sentence being present |
+| `handoff_immediate` | If the player asks for a human, mentions a legal or safety issue, or is upset with you rather than with the game, hand off immediately, without searching first. | on | **yes** | `prompt` |
+| `search_before_financial_handoff` | If the player reports a financial loss or a setback they did not cause, search before you hand off. A published article on the exact problem is faster than a queue, and answering from it costs the player nothing — they can still say it did not help, which hands them off. Never resolve or dismiss the complaint yourself. | on | no | `prompt` |
+| `handoff_after_empty_search` | If a search comes back with nothing that answers the question, hand off. A fast handoff is a good outcome, not a failure — but "fast" means after one search, not instead of one. | on | no | `prompt` |
+| `no_promises` | Never promise a compensation, a refund, a timeline, or an outcome. A human decides those. | on | no | `prompt` |
+| `no_credentials` | Never ask the player for a password, a payment detail, or a one-time code. | on | **yes** | `prompt` |
+| `language_and_length` | Reply in the player's language. Keep an ordinary reply to at most three short sentences — this is a chat window on a phone, not an email. An answer drawn from an article may run longer when its steps need the room: never drop or merge a step to fit, and never pad past what the article says. | on | no | `prompt` |
+| `no_regreet` | Do not greet the player again if the conversation is already underway. | on | no | `prompt` |
+
+All 8 default to `enabled: true` — today there is no on/off distinction, every bullet always
+ships. `handoff_immediate` and `no_credentials` are the 2 locked rules (closest existing match to
+the doc's "reach a person" / "never ask for credentials" hard constraints). There is currently no
+rule or code path resembling the doc's "hand off after three replies" toggle — `MAX_BOT_MESSAGES`
+in `toolLoop.ts` is an unrelated technical turn cap, not tied to any rule sentence, and this spec
+does not add one (that would be new behavior, not parity).
 
 `enforcement` is informational only, shown as a badge in the UI ("always enforced in code — this
 toggle only controls the wording sent to the model" vs "enforced by prompt instruction only").
-Toggling `articles_only` or `handoff_after_three` off does **not** weaken the underlying code
-guard; it only removes that sentence from the rendered rules block. This is stated explicitly in
-the UI so admins aren't misled into thinking they've disabled a safety check.
+Toggling `no_invented_facts` off does **not** weaken `scoreGrounding`'s 90% threshold; it only
+removes that sentence from the rendered rules block. This is stated explicitly in the UI so admins
+aren't misled into thinking they've disabled a safety check.
 
-Locked rules (`handoff_on_request`, `no_credentials`) cannot be disabled or removed — the save
+Locked rules (`handoff_immediate`, `no_credentials`) cannot be disabled or removed — the save
 endpoint rejects a payload where a locked key has `enabled: false` or is missing, and rejects any
 rule set with zero enabled entries (mirrors today's "empty rules" rejection).
 
 Custom rules (`source: 'custom'`) are free text, admin-authored, `enforcement: 'prompt'` always,
 never locked, deletable.
 
-`buildSystemPrompt(prompt, rules)` renders enabled entries (locked + custom + toggled-on) as a
-bullet list in a fixed order (locked first, then builtin, then custom) and joins it after the
-prompt exactly as today — the resulting `system_prompt` string shape is unchanged, so nothing
-downstream (grounding, tests expecting rules-after-prompt ordering) is affected beyond the source
-of the bullet text.
+`buildSystemPrompt(prompt, rules)` renders enabled entries **in catalog declaration order** (the
+order in the table above — not reordered by locked/unlocked), each as `- {text}`, one per line,
+with any enabled custom entries appended after the catalog ones in the order they were added. On
+an unmodified, freshly-seeded workspace this produces the exact same 8 lines, in the exact same
+order, that `DEFAULT_BOT_RULES` produces today — byte-for-byte. Reordering locked rules to the
+front (as an earlier draft proposed) is explicitly rejected: it would change the rendered prompt
+for every workspace on day one, which is exactly the behavior change this task must avoid.
 
 ## Tool gating (deterministic)
 
@@ -114,27 +131,34 @@ of the bullet text.
 
 ```ts
 export const TOOL_CATALOG = [
-  { name: 'search_articles', lockable: true, consequence: 'Bot can never look anything up; every turn ends in classify-only or handoff.' },
-  { name: 'classify', lockable: true, consequence: 'Conversations stay unclassified from the bot; agents classify manually.' },
-  { name: 'answer_from_article', lockable: true, consequence: 'Bot can search/classify but never answers itself — always hands off after searching.' },
-  { name: 'confirm_resolution', lockable: true, consequence: 'Article answers are never confirmed by the player; bot_active exits only via handoff or the turn cap.' },
-  // handoff is intentionally absent: always available, never configurable.
+  // Declared in the same order as ALWAYS_AVAILABLE_TOOLS today: search_articles,
+  // classify, answer_from_article, handoff (locked, listed for completeness but
+  // never filtered), then confirm_resolution when the phase includes it.
+  { name: 'search_articles', lockable: true, defaultEnabled: true, consequence: 'Bot can never look anything up; every turn ends in classify-only or handoff.' },
+  { name: 'classify', lockable: true, defaultEnabled: true, consequence: 'Conversations stay unclassified from the bot; agents classify manually.' },
+  { name: 'answer_from_article', lockable: true, defaultEnabled: true, consequence: 'Bot can search/classify but never answers itself — always hands off after searching.' },
+  // handoff is intentionally absent from the toggleable list: always available, never configurable.
+  { name: 'confirm_resolution', lockable: true, defaultEnabled: true, consequence: 'Article answers are never confirmed by the player; bot_active exits only via handoff or the turn cap.' },
 ] as const
 
 export function toolsForPhase(phase: ToolPhase, enabledTools: ReadonlySet<string>): unknown[] {
   const base = [...ALWAYS_AVAILABLE_TOOLS, ...(phase === 'bot_article' ? [CONFIRM_RESOLUTION_TOOL] : [])]
-  return [
-    HANDOFF_TOOL, // always included, unconditionally
-    ...base.filter((t) => t.name === HANDOFF_TOOL.name || enabledTools.has(t.name)),
-  ]
+  // Filter in place — DO NOT reorder. handoff's name is never checked against
+  // enabledTools, so it always passes the filter and stays exactly where
+  // ALWAYS_AVAILABLE_TOOLS already puts it (today: 4th). Every other tool is
+  // dropped only if its name isn't in enabledTools.
+  return base.filter((t) => t.function.name === 'handoff' || enabledTools.has(t.function.name))
 }
 ```
 
 `resolveBotConfig` gains `enabledTools: Set<string>`, read directly off the now-always-populated
-`toolsConfig`. `toolLoop.ts` passes this into `toolsForPhase` instead of calling it with just
-`phase`. A disabled tool is absent from the array passed to `openaiClient` — the model has no
-schema for it and cannot emit a call to it. No prompt wording is used to suppress a tool; there is
-nothing to "beg" the model to avoid.
+`toolsConfig`. On a freshly-seeded, never-touched workspace `enabledTools` contains all 4
+toggleable names, so `toolsForPhase` returns the identical array, in the identical order, that
+`toolsForPhase(phase)` returns today — the filter is a no-op until an admin actually disables
+something. `toolLoop.ts` passes this into `toolsForPhase` instead of calling it with just `phase`.
+A disabled tool is absent from the array passed to `openaiClient` — the model has no schema for it
+and cannot emit a call to it. No prompt wording is used to suppress a tool; there is nothing to
+"beg" the model to avoid.
 
 ## Seeding / baseline (version 1)
 
@@ -160,6 +184,23 @@ default:
   (`domain/bot/defaultPrompt.ts`) for what "baseline" means; the seed just materialises them into
   a row. "Reset to default" (Prompt tab) and "Restore catalog defaults" (Rules tab) both just call
   `saveBotConfig` with these same constants — ordinary saves, not a special code path.
+
+### Behavior parity guarantee
+
+This migration must produce **zero change** in what the bot says or which tools it can call, for
+every workspace that hasn't touched its config. Concretely, for a freshly seeded/backfilled row:
+
+- `buildSystemPrompt(resolved.prompt, resolved.rules)` (new signature, taking `RuleEntry[]`) must
+  return a string **identical, character for character**, to today's
+  `buildSystemPrompt(DEFAULT_BOT_PROMPT, DEFAULT_BOT_RULES)` (old signature, taking the raw
+  string). This is the reason the catalog above is a verbatim split of the real constant in its
+  real order, not the doc's illustrative rewrite.
+- `toolsForPhase(phase, enabledTools)` with `enabledTools` = all 4 toggleable names must return an
+  array `deepEqual` (including order) to today's `toolsForPhase(phase)`.
+- `resolveBotConfig` for a freshly seeded row must report `is_provisioned`, `system_prompt`, and
+  `enabled_tools` such that a bot turn run against it makes the exact same tool calls, in the
+  exact same circumstances, as the same turn run against today's code. This is the thing to
+  actually verify, not just the string/array equality above — see Testing.
 
 ## Versioning / history / rollback
 
@@ -247,13 +288,22 @@ No existing frontend code to preserve here — no Bot Config UI exists today (co
 
 ## Testing
 
+- **Parity test (write this first, before any refactor lands):** a snapshot test that captures
+  `buildSystemPrompt(DEFAULT_BOT_PROMPT, DEFAULT_BOT_RULES)`'s current output *before* touching any
+  code, then asserts the new `buildSystemPrompt(seeded.prompt, seeded.rules)` produces the
+  identical string post-migration. Same for `toolsForPhase('bot_article')` and
+  `toolsForPhase('agent_ask')` (or whatever the non-confirm phase value is) — capture today's
+  array, assert deep+order equality against the seeded-workspace result. This test is the actual
+  enforcement mechanism for "no behavior change," not just a description in this doc.
 - `backend/tests/bot.config.test.ts`: update for `DEFAULT_BOT_RULES_CATALOG` shape; add cases for
-  locked-rule rejection, empty-rules rejection, `enforcement` tagging, and `toolsForPhase`
-  filtering (each tool individually disabled removes it from the returned array; `handoff` never
-  removable).
+  locked-rule rejection, builtin-key-deletion rejection, empty-rules rejection, `enforcement`
+  tagging, and `toolsForPhase` filtering (each tool individually disabled removes it from the
+  returned array without reordering the rest; `handoff` never removable).
 - `backend/tests/agent.botConfig.test.ts`: update save/read tests for the new `rules`/
   `tools_config` shapes; add rollback endpoint tests (restore before/after value creates a new
-  audit row, admin-only, 404 on unknown `change_log_id`, 422 on cross-workspace id).
+  audit row, admin-only, 404 on unknown `change_log_id`, 422 on cross-workspace id); add a seeding
+  test asserting a brand-new workspace's `GET /bot-config` response is identical to today's
+  never-provisioned-workspace response (same `system_prompt`, same tool availability implied).
 - New: a `toolLoop` test asserting a disabled tool's name never appears in the payload passed to
   `openaiClient`, independent of prompt/rules content — the determinism guarantee this whole
   feature exists for.
