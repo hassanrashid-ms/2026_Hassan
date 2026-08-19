@@ -1,3 +1,5 @@
+import type { RuleEntry } from './rulesCatalog.ts'
+
 /**
  * The four substitutions the orchestrator performs before sending. Exported so a
  * test can assert the prompt carries all of them rather than trusting the string.
@@ -101,17 +103,19 @@ export const DEFAULT_BOT_RULES = `- Never invent a fact about the game, an accou
 export const BOT_RULES_HEADING = 'Rules:'
 
 /**
- * The single place `prompt` and `rules` become one system prompt. They are two
- * stored fields and one sent string: keeping the join here means the orchestrator
- * cannot invent its own order or heading, and a future third section lands in one
- * function rather than at every call site.
+ * The single place `prompt` and `rules` become one system prompt. Rules go
+ * last on purpose — a constraint stated after the task it constrains is the
+ * one the model is most likely to still be holding when it answers.
  *
- * Rules go last on purpose — a constraint stated after the task it constrains is
- * the one the model is most likely to still be holding when it answers.
- *
- * Takes the RESOLVED values, so neither argument is ever null: callers get them
- * from resolveBotConfig, which has already substituted the defaults.
+ * Renders enabled entries in ARRAY order — callers (resolveBotConfig,
+ * saveBotConfig) are responsible for that being catalog-declaration order
+ * followed by custom entries in the order they were added. This function does
+ * not reorder anything.
  */
-export function buildSystemPrompt(prompt: string, rules: string): string {
-  return `${prompt.trimEnd()}\n\n${BOT_RULES_HEADING}\n${rules.trim()}`
+export function buildSystemPrompt(prompt: string, rules: RuleEntry[]): string {
+  const rulesBlock = rules
+    .filter((r) => r.enabled)
+    .map((r) => `- ${r.text}`)
+    .join('\n')
+  return `${prompt.trimEnd()}\n\n${BOT_RULES_HEADING}\n${rulesBlock.trim()}`
 }

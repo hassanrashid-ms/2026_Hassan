@@ -11,6 +11,7 @@ import { closeDb } from '../src/shared/db/client.ts'
 import { withWorkspace } from '../src/shared/db/withWorkspace.ts'
 import { EmptyBotPrompt, resolveBotConfig, saveBotConfig } from '../src/domain/bot/botConfig.ts'
 import { closeOwnerPool, ownerPool, seedAgent, seedBotConfig, seedWorkspace, truncateAll } from './helpers/db.ts'
+import { buildBaselineRules, type RuleEntry } from '../src/domain/bot/rulesCatalog.ts'
 
 describe('DEFAULT_BOT_PROMPT', () => {
   it('contains {{subintents}} and {{articles}}, not {{player_level}} or {{spend_tier}}', () => {
@@ -139,16 +140,42 @@ describe('DEFAULT_BOT_RULES', () => {
 })
 
 describe('buildSystemPrompt', () => {
-  it('sends both stored fields as one string, prompt first and rules last', () => {
-    const built = buildSystemPrompt('PROMPT BODY', 'RULE ONE')
+  const rule = (text: string, enabled = true): RuleEntry => ({
+    key: text,
+    text,
+    enabled,
+    locked: false,
+    source: 'builtin',
+  })
+
+  it('sends the prompt and enabled rule texts as one string, prompt first and rules last', () => {
+    const built = buildSystemPrompt('PROMPT BODY', [rule('RULE ONE')])
     expect(built).toContain('PROMPT BODY')
     expect(built).toContain('RULE ONE')
     expect(built.indexOf('PROMPT BODY')).toBeLessThan(built.indexOf(BOT_RULES_HEADING))
     expect(built.indexOf(BOT_RULES_HEADING)).toBeLessThan(built.indexOf('RULE ONE'))
   })
 
+  it('omits a disabled rule entirely', () => {
+    const built = buildSystemPrompt('P', [rule('KEEP ME'), rule('DROP ME', false)])
+    expect(built).toContain('KEEP ME')
+    expect(built).not.toContain('DROP ME')
+  })
+
+  it('renders each enabled rule as "- {text}", in array order', () => {
+    const built = buildSystemPrompt('P', [rule('first'), rule('second')])
+    const rulesBlock = built.slice(built.indexOf(BOT_RULES_HEADING))
+    expect(rulesBlock.indexOf('- first')).toBeLessThan(rulesBlock.indexOf('- second'))
+  })
+
+  it('PARITY: an unmodified catalog baseline renders byte-identical to the old string-rules formula', () => {
+    const built = buildSystemPrompt(DEFAULT_BOT_PROMPT, buildBaselineRules())
+    const oldFormula = `${DEFAULT_BOT_PROMPT.trimEnd()}\n\n${BOT_RULES_HEADING}\n${DEFAULT_BOT_RULES.trim()}`
+    expect(built).toBe(oldFormula)
+  })
+
   it('keeps the placeholders intact — the orchestrator substitutes after the join', () => {
-    const built = buildSystemPrompt(DEFAULT_BOT_PROMPT, DEFAULT_BOT_RULES)
+    const built = buildSystemPrompt(DEFAULT_BOT_PROMPT, buildBaselineRules())
     expect(built).toContain('{{subintents}}')
     expect(built).toContain('{{articles}}')
   })
