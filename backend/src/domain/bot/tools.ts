@@ -89,14 +89,57 @@ const CONFIRM_RESOLUTION_TOOL = {
 
 export const TOOL_DEFS = [...ALWAYS_AVAILABLE_TOOLS, CONFIRM_RESOLUTION_TOOL]
 
+export type ToolToggle = { tool: string; enabled: boolean }
+
+/**
+ * Declared in the same order ALWAYS_AVAILABLE_TOOLS already ships them, then
+ * confirm_resolution — matches the doc's Tool gating section. `handoff` is
+ * intentionally absent: always available, never configurable.
+ */
+export const TOOL_CATALOG = [
+  {
+    name: 'search_articles',
+    lockable: true,
+    defaultEnabled: true,
+    consequence: 'Bot can never look anything up; every turn ends in classify-only or handoff.',
+  },
+  {
+    name: 'classify',
+    lockable: true,
+    defaultEnabled: true,
+    consequence: 'Conversations stay unclassified from the bot; agents classify manually.',
+  },
+  {
+    name: ANSWER_FROM_ARTICLE_TOOL_NAME,
+    lockable: true,
+    defaultEnabled: true,
+    consequence: 'Bot can search/classify but never answers itself — always hands off after searching.',
+  },
+  {
+    name: CONFIRM_RESOLUTION_TOOL_NAME,
+    lockable: true,
+    defaultEnabled: true,
+    consequence: 'Article answers are never confirmed by the player; bot_active exits only via handoff or the turn cap.',
+  },
+] as const
+
+/** "Version 1" — every toggleable tool enabled, matching today's always-on behavior. */
+export function buildBaselineToolsConfig(): ToolToggle[] {
+  return TOOL_CATALOG.map((t) => ({ tool: t.name, enabled: true }))
+}
+
 /**
  * confirm_resolution is offered to the model only while confirm_phase =
- * 'bot_article' — a property of the request, not of the prompt (spec 4 §3).
- * 'agent_ask' deliberately does NOT unlock it: an agent-owned conversation
- * runs no bot turn, and its answer arrives through the banner instead.
+ * 'bot_article' (spec 4 §3) AND it is enabled. `handoff`'s name is never
+ * checked against `enabledTools` — it always passes the filter, so it stays
+ * exactly where ALWAYS_AVAILABLE_TOOLS already puts it. Every other tool is
+ * dropped only if its name isn't in `enabledTools`. Filter in place — never
+ * reorder: a disabled tool is simply absent from the array sent to the model,
+ * which is the entire determinism guarantee this function exists for.
  */
-export function toolsForPhase(phase: ToolPhase): unknown[] {
-  return phase === 'bot_article' ? [...ALWAYS_AVAILABLE_TOOLS, CONFIRM_RESOLUTION_TOOL] : [...ALWAYS_AVAILABLE_TOOLS]
+export function toolsForPhase(phase: ToolPhase, enabledTools: ReadonlySet<string>): unknown[] {
+  const base = phase === 'bot_article' ? [...ALWAYS_AVAILABLE_TOOLS, CONFIRM_RESOLUTION_TOOL] : [...ALWAYS_AVAILABLE_TOOLS]
+  return base.filter((t) => t.function.name === 'handoff' || enabledTools.has(t.function.name))
 }
 
 export { MAX_ARTICLES_PER_TURN }
