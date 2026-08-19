@@ -147,14 +147,12 @@ export function createForm(token: string, name: string): Promise<CreateFormRespo
   return apiCall('/agent/forms', token, { method: 'POST', body: JSON.stringify({ name }) })
 }
 
-// POST, not PATCH: app.ts's CORS allowlist is GET/POST only, so the backend
-// exposes edit as a verb-suffixed POST route (see formsRouter.ts).
 export function updateForm(
   token: string,
   id: string,
   patch: { name?: string; fields?: FormField[] },
 ): Promise<FormDetail> {
-  return apiCall(`/agent/forms/${id}/update`, token, { method: 'POST', body: JSON.stringify(patch) })
+  return apiCall(`/agent/forms/${id}`, token, { method: 'PATCH', body: JSON.stringify(patch) })
 }
 
 export function publishForm(token: string, id: string): Promise<FormDetail> {
@@ -166,8 +164,8 @@ export function archiveForm(token: string, id: string): Promise<FormDetail> {
 }
 
 export function setFormSubintents(token: string, id: string, subintentIds: string[]): Promise<FormDetail> {
-  return apiCall(`/agent/forms/${id}/subintents/set`, token, {
-    method: 'POST',
+  return apiCall(`/agent/forms/${id}/subintents`, token, {
+    method: 'PATCH',
     body: JSON.stringify({ subintentIds }),
   })
 }

@@ -881,8 +881,8 @@ registry.registerPath({
 })
 
 registry.registerPath({
-  method: 'post',
-  path: '/agent/forms/{id}/update',
+  method: 'patch',
+  path: '/agent/forms/{id}',
   summary: 'Agent Update Form',
   description:
     'Edits name and/or fields. Editing a draft edits it in place; editing a published form auto-forks a new draft version. Rejects attachment/time field types. Team Lead or Admin.',
@@ -935,8 +935,8 @@ registry.registerPath({
 })
 
 registry.registerPath({
-  method: 'post',
-  path: '/agent/forms/{id}/subintents/set',
+  method: 'patch',
+  path: '/agent/forms/{id}/subintents',
   summary: 'Agent Set Form Subintents',
   description:
     'Full set-replacement of which subintents map to this form. Client-supplied ids are verified in-workspace and non-archived first. Team Lead or Admin.',
