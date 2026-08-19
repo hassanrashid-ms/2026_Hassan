@@ -34,16 +34,7 @@ import {
 import { Input } from '../../../components/ui/input.tsx'
 import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from '../../../components/ui/sheet.tsx'
 import { Skeleton } from '../../../components/ui/skeleton.tsx'
-
-type NonArchivedSubintent = { id: string; name: string; intentName: string }
-
-function nonArchivedSubintents(intents: IntentView[]): NonArchivedSubintent[] {
-  return intents.flatMap((intent) =>
-    intent.subintents
-      .filter((s) => s.archivedAt === null)
-      .map((s) => ({ id: s.id, name: s.name, intentName: intent.name })),
-  )
-}
+import { ShownForPicker } from './ShownForPicker.tsx'
 
 export function FormEditorSheet({
   token,
@@ -134,7 +125,6 @@ function FormEditorForm({
   const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false)
 
   const errors = validateFields(fields)
-  const subintents = nonArchivedSubintents(intents)
   const admin = isAdmin(session)
   const archived = form?.archivedAt !== null && form?.archivedAt !== undefined
 
@@ -210,10 +200,6 @@ function FormEditorForm({
 
   const updateFieldAt = (key: string, patch: Partial<FormField>) => {
     setFields(fields.map((f) => (f.key === key ? { ...f, ...patch } : f)))
-  }
-
-  const toggleSubintent = (id: string) => {
-    setShownFor((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
   }
 
   const canSave = name.trim() !== '' && errors.length === 0 && !archived
@@ -399,24 +385,13 @@ function FormEditorForm({
           )}
         </div>
 
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-muted">Shown for</label>
-          <div className="flex flex-wrap gap-2">
-            {subintents.map((s) => (
-              <Button
-                key={s.id}
-                type="button"
-                size="sm"
-                variant={shownFor.includes(s.id) ? 'default' : 'outline'}
-                disabled={archived}
-                onClick={() => toggleSubintent(s.id)}
-              >
-                {s.name}
-              </Button>
-            ))}
-            {subintents.length === 0 && <span className="text-xs text-muted">No subintents available.</span>}
-          </div>
-        </div>
+        <ShownForPicker
+          intents={intents}
+          selected={shownFor}
+          onChange={setShownFor}
+          currentFormId={formId}
+          disabled={archived}
+        />
       </div>
 
       <SheetFooter className="flex-row justify-end gap-2 border-t border-slate-200">

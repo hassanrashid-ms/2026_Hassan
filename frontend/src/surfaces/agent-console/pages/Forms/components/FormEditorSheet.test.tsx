@@ -77,11 +77,13 @@ describe('FormEditorSheet — new form save', () => {
 
     await screen.findByPlaceholderText('Form name')
     await userEvent.type(screen.getByPlaceholderText('Form name'), 'New form')
-    await userEvent.click(screen.getByRole('button', { name: 'Refund' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Add sub-intents' }))
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Chargeback' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Done' }))
     await userEvent.click(screen.getByRole('button', { name: 'Create Form' }))
 
     await waitFor(() => expect(createSpy).toHaveBeenCalledWith('t', 'New form'))
-    await waitFor(() => expect(setSubintentsSpy).toHaveBeenCalledWith('t', 'new-form', ['sub-1']))
+    await waitFor(() => expect(setSubintentsSpy).toHaveBeenCalledWith('t', 'new-form', ['sub-2']))
   })
 })
 
