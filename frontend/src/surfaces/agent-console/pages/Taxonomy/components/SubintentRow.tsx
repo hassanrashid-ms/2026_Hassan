@@ -105,7 +105,7 @@ export function SubintentRow({
             </Select>
 
             <span title={disabledTitle}>
-              <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(true)} disabled={isOther}>
+              <Button type="button" size="sm" variant="outline" onClick={() => setEditing(true)} disabled={isOther}>
                 Rename
               </Button>
             </span>
