@@ -6,11 +6,12 @@ import type {
   CreateIntentResponse,
   CreateSubintentResponse,
   IntentsResponse,
+  MergeSubintentResponse,
   MoveSubintentResponse,
   RenameIntentResponse,
   RenameSubintentResponse,
 } from '@support/types'
-import { article, intent, subintent } from '../../shared/db/schema/index.ts'
+import { article, conversation, intent, subintent } from '../../shared/db/schema/index.ts'
 import { withWorkspace } from '../../shared/db/withWorkspace.ts'
 import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts'
 import { appendChangeLog } from '../../shared/changeLog/appendChangeLog.ts'
@@ -277,5 +278,56 @@ export async function moveSubintent(ctx: AgentContext, id: string, targetIntentI
       changes: [{ field: 'intent_id', before: current.intentId, after: row!.intentId }],
     })
     return { ok: true, subintent: row! }
+  })
+}
+
+export type MergeSubintentResult =
+  | { ok: true; subintent: MergeSubintentResponse }
+  | { ok: false; reason: 'not_found' | 'target_invalid' | 'is_other' }
+
+export async function mergeSubintent(ctx: AgentContext, loserId: string, survivorId: string): Promise<MergeSubintentResult> {
+  return withWorkspace(ctx.workspaceId, async (tx) => {
+    const [loser] = await tx
+      .select({ id: subintent.id, name: subintent.name, archivedAt: subintent.archivedAt, mergedIntoId: subintent.mergedIntoId })
+      .from(subintent)
+      .where(eq(subintent.id, loserId))
+      .limit(1)
+    if (!loser) return { ok: false, reason: 'not_found' }
+
+    if (survivorId === loserId) return { ok: false, reason: 'target_invalid' }
+
+    const [survivor] = await tx
+      .select({ id: subintent.id })
+      .from(subintent)
+      .where(and(eq(subintent.id, survivorId), eq(subintent.workspaceId, ctx.workspaceId), isNull(subintent.archivedAt)))
+      .limit(1)
+    if (!survivor) return { ok: false, reason: 'target_invalid' }
+
+    const otherId = await resolveFallbackSubintent(tx, ctx.workspaceId)
+    if (loser.id === otherId) return { ok: false, reason: 'is_other' }
+
+    await tx.update(conversation).set({ subintentId: survivorId }).where(eq(conversation.subintentId, loserId))
+
+    const archivedAt = new Date()
+    const [row] = await tx
+      .update(subintent)
+      .set({ archivedAt, mergedIntoId: survivorId })
+      .where(eq(subintent.id, loserId))
+      .returning({ id: subintent.id, name: subintent.name, archivedAt: subintent.archivedAt, mergedIntoId: subintent.mergedIntoId })
+
+    await appendChangeLog(tx, {
+      workspaceId: ctx.workspaceId,
+      entityType: 'subintent',
+      entityId: loserId,
+      actorId: ctx.agentId,
+      changes: [
+        { field: 'merged_into_id', before: loser.mergedIntoId, after: row!.mergedIntoId },
+        { field: 'archived_at', before: loser.archivedAt, after: row!.archivedAt },
+      ],
+    })
+    return {
+      ok: true,
+      subintent: { id: row!.id, name: row!.name, archivedAt: row!.archivedAt!.toISOString(), mergedIntoId: row!.mergedIntoId! },
+    }
   })
 }

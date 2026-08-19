@@ -833,6 +833,25 @@ registry.registerPath({
 })
 
 registry.registerPath({
+  method: 'post',
+  path: '/agent/subintents/{id}/merge',
+  summary: 'Agent Merge Subintent',
+  description:
+    'Reassigns every conversation on the loser subintent to the survivor, then archives the loser with mergedIntoId set. Admin-only.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: {
+    params: z.object({ id: z.uuid() }),
+    body: { content: { 'application/json': { schema: z.object({ intoId: z.uuid() }) } } },
+  },
+  responses: {
+    200: { description: 'Subintent merged and archived' },
+    403: { description: 'Forbidden — admin role required' },
+    404: { description: 'Subintent not found' },
+    409: { description: 'Invalid merge target, or loser is the "Other" subintent' },
+  },
+})
+
+registry.registerPath({
   method: 'get',
   path: '/agent/articles',
   summary: 'Agent List Articles',

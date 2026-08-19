@@ -9,7 +9,17 @@ import { requireAgentSession } from '../src/shared/middleware/requireAgentSessio
 import { signAgentSession } from '../src/shared/auth/agentSession.ts'
 import { closeSocketServer, createSocketServer } from '../src/shared/realtime/socketServer.ts'
 import { taxonomyRouter } from '../src/agent/routers/taxonomyRouter.ts'
-import { closeOwnerPool, ownerPool, seedArticle, seedIntent, seedSubintent, seedWorkspace, truncateAll } from './helpers/db.ts'
+import {
+  closeOwnerPool,
+  ownerPool,
+  seedArticle,
+  seedConversation,
+  seedIntent,
+  seedPlayer,
+  seedSubintent,
+  seedWorkspace,
+  truncateAll,
+} from './helpers/db.ts'
 
 // Standalone app carrying just this router, gated by the real
 // requireAgentSession/requireAdminRole middleware — mirrors
@@ -333,5 +343,92 @@ describe('POST /subintents/:id/move', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ intentId: randomUUID() })
       .expect(404)
+  })
+})
+
+describe('POST /subintents/:id/merge', () => {
+  it('reassigns conversations to the survivor and archives the loser with mergedIntoId set', async () => {
+    const workspaceId = await seedWorkspace()
+    const otherIntentId = await seedIntent(workspaceId, 'Other', true)
+    await seedSubintent({ workspaceId, intentId: otherIntentId, name: 'Other' })
+    const intentId = await seedIntent(workspaceId, 'Billing')
+    const loserId = await seedSubintent({ workspaceId, intentId, name: 'Refunds' })
+    const survivorId = await seedSubintent({ workspaceId, intentId, name: 'Refund Requests' })
+    const playerId = await seedPlayer(workspaceId)
+    const conversationId = await seedConversation({ workspaceId, playerId })
+    await ownerPool.query(`update conversation set subintent_id = $1 where id = $2`, [loserId, conversationId])
+    const { token } = await seedAgentWithRole(workspaceId, 'admin')
+
+    const res = await request(app)
+      .post(`/subintents/${loserId}/merge`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ intoId: survivorId })
+      .expect(200)
+
+    expect(res.body).toEqual({ id: loserId, name: 'Refunds', archivedAt: expect.any(String), mergedIntoId: survivorId })
+
+    const { rows } = await ownerPool.query<{ subintent_id: string }>(`select subintent_id from conversation where id = $1`, [
+      conversationId,
+    ])
+    expect(rows[0]!.subintent_id).toBe(survivorId)
+  })
+
+  it('409s when the target is archived', async () => {
+    const workspaceId = await seedWorkspace()
+    const intentId = await seedIntent(workspaceId, 'Billing')
+    const loserId = await seedSubintent({ workspaceId, intentId, name: 'Refunds' })
+    const survivorId = await seedSubintent({ workspaceId, intentId, name: 'Refund Requests' })
+    await ownerPool.query(`update subintent set archived_at = now() where id = $1`, [survivorId])
+    const { token } = await seedAgentWithRole(workspaceId, 'admin')
+
+    await request(app)
+      .post(`/subintents/${loserId}/merge`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ intoId: survivorId })
+      .expect(409)
+  })
+
+  it('409s when the target is the loser itself', async () => {
+    const workspaceId = await seedWorkspace()
+    const intentId = await seedIntent(workspaceId, 'Billing')
+    const subintentId = await seedSubintent({ workspaceId, intentId, name: 'Refunds' })
+    const { token } = await seedAgentWithRole(workspaceId, 'admin')
+
+    await request(app)
+      .post(`/subintents/${subintentId}/merge`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ intoId: subintentId })
+      .expect(409)
+  })
+
+  it('409s when the target belongs to a different workspace', async () => {
+    const workspaceA = await seedWorkspace()
+    const workspaceB = await seedWorkspace()
+    const intentA = await seedIntent(workspaceA, 'Billing')
+    const intentB = await seedIntent(workspaceB, 'Billing')
+    const loserId = await seedSubintent({ workspaceId: workspaceA, intentId: intentA, name: 'Refunds' })
+    const otherWorkspaceSubintentId = await seedSubintent({ workspaceId: workspaceB, intentId: intentB, name: 'Refunds' })
+    const { token } = await seedAgentWithRole(workspaceA, 'admin')
+
+    await request(app)
+      .post(`/subintents/${loserId}/merge`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ intoId: otherWorkspaceSubintentId })
+      .expect(409)
+  })
+
+  it("409s when the loser is the workspace's Other subintent", async () => {
+    const workspaceId = await seedWorkspace()
+    const otherIntentId = await seedIntent(workspaceId, 'Other', true)
+    const otherSubintentId = await seedSubintent({ workspaceId, intentId: otherIntentId, name: 'Other' })
+    const billingIntentId = await seedIntent(workspaceId, 'Billing')
+    const survivorId = await seedSubintent({ workspaceId, intentId: billingIntentId, name: 'Refunds' })
+    const { token } = await seedAgentWithRole(workspaceId, 'admin')
+
+    await request(app)
+      .post(`/subintents/${otherSubintentId}/merge`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ intoId: survivorId })
+      .expect(409)
   })
 })

@@ -6,6 +6,7 @@ import {
   createIntentHandler,
   createSubintentHandler,
   listIntentsHandler,
+  mergeSubintentHandler,
   moveSubintentHandler,
   renameIntentHandler,
   renameSubintentHandler,
@@ -20,3 +21,4 @@ taxonomyRouter.post('/intents/:id/subintents', requireAdminRole, createSubintent
 taxonomyRouter.patch('/subintents/:id', requireAdminRole, renameSubintentHandler)
 taxonomyRouter.post('/subintents/:id/archive', requireAdminRole, archiveSubintentHandler)
 taxonomyRouter.post('/subintents/:id/move', requireAdminRole, moveSubintentHandler)
+taxonomyRouter.post('/subintents/:id/merge', requireAdminRole, mergeSubintentHandler)
