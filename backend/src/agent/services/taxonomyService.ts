@@ -247,7 +247,7 @@ export async function archiveSubintent(ctx: AgentContext, id: string): Promise<A
 
 export type MoveSubintentResult =
   | { ok: true; subintent: MoveSubintentResponse }
-  | { ok: false; reason: 'not_found' | 'target_not_found' }
+  | { ok: false; reason: 'not_found' | 'target_not_found' | 'is_other' }
 
 export async function moveSubintent(ctx: AgentContext, id: string, targetIntentId: string): Promise<MoveSubintentResult> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
@@ -257,6 +257,9 @@ export async function moveSubintent(ctx: AgentContext, id: string, targetIntentI
       .where(eq(subintent.id, id))
       .limit(1)
     if (!current) return { ok: false, reason: 'not_found' }
+
+    const otherId = await resolveFallbackSubintent(tx, ctx.workspaceId)
+    if (current.id === otherId) return { ok: false, reason: 'is_other' }
 
     const [target] = await tx
       .select({ id: intent.id })

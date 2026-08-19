@@ -143,7 +143,11 @@ export const moveSubintentHandler: RequestHandler = async (req, res) => {
   }
   const result = await moveSubintent(req.agent!, params.data.id, body.data.intentId)
   if (!result.ok) {
-    sendError(res, 404, result.reason === 'not_found' ? 'not_found' : 'not_found', 'Subintent or target intent not found.')
+    if (result.reason === 'is_other') {
+      sendError(res, 409, 'not_archivable', 'The "Other" subintent can never be moved.')
+      return
+    }
+    sendError(res, 404, 'not_found', 'Subintent or target intent not found.')
     return
   }
   res.status(200).json(result.subintent)

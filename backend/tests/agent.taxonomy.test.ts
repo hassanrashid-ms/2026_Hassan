@@ -306,6 +306,8 @@ describe('POST /subintents/:id/move', () => {
     const billingId = await seedIntent(workspaceId, 'Billing')
     const accountId = await seedIntent(workspaceId, 'Account Access')
     const subintentId = await seedSubintent({ workspaceId, intentId: billingId, name: 'Refunds' })
+    const otherIntentId = await seedIntent(workspaceId, 'Other', true)
+    await seedSubintent({ workspaceId, intentId: otherIntentId, name: 'Other' })
     const { token } = await seedAgentWithRole(workspaceId, 'admin')
 
     const res = await request(app)
@@ -323,6 +325,8 @@ describe('POST /subintents/:id/move', () => {
     const archivedIntentId = await seedIntent(workspaceId, 'Old Category')
     await ownerPool.query(`update intent set archived_at = now() where id = $1`, [archivedIntentId])
     const subintentId = await seedSubintent({ workspaceId, intentId: billingId, name: 'Refunds' })
+    const otherIntentId = await seedIntent(workspaceId, 'Other', true)
+    await seedSubintent({ workspaceId, intentId: otherIntentId, name: 'Other' })
     const { token } = await seedAgentWithRole(workspaceId, 'admin')
 
     await request(app)
@@ -336,6 +340,8 @@ describe('POST /subintents/:id/move', () => {
     const workspaceId = await seedWorkspace()
     const billingId = await seedIntent(workspaceId, 'Billing')
     const subintentId = await seedSubintent({ workspaceId, intentId: billingId, name: 'Refunds' })
+    const otherIntentId = await seedIntent(workspaceId, 'Other', true)
+    await seedSubintent({ workspaceId, intentId: otherIntentId, name: 'Other' })
     const { token } = await seedAgentWithRole(workspaceId, 'admin')
 
     await request(app)
@@ -343,6 +349,20 @@ describe('POST /subintents/:id/move', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ intentId: randomUUID() })
       .expect(404)
+  })
+
+  it("409s for the workspace's Other subintent", async () => {
+    const workspaceId = await seedWorkspace()
+    const billingId = await seedIntent(workspaceId, 'Billing')
+    const otherIntentId = await seedIntent(workspaceId, 'Other', true)
+    const otherSubintentId = await seedSubintent({ workspaceId, intentId: otherIntentId, name: 'Other' })
+    const { token } = await seedAgentWithRole(workspaceId, 'admin')
+
+    await request(app)
+      .post(`/subintents/${otherSubintentId}/move`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ intentId: billingId })
+      .expect(409)
   })
 })
 
