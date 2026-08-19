@@ -6,8 +6,11 @@ import type {
   AgentArticlesResponse,
   AgentConversationContextResponse,
   AgentConversationDetail,
+  ArchiveIntentResponse,
+  ArchiveSubintentResponse,
   AskResolvedResponse,
   ClaimResponse,
+  ConversationPriority,
   CreateFormResponse,
   CreateIntentResponse,
   CreateSubintentResponse,
@@ -16,6 +19,10 @@ import type {
   FormField,
   FormsListResponse,
   IntentsResponse,
+  MergeSubintentResponse,
+  MoveSubintentResponse,
+  RenameIntentResponse,
+  RenameSubintentResponse,
   UnescalateResponse,
 } from '@support/types'
 import { apiCall } from '../../../lib/httpClient.ts'
@@ -102,6 +109,34 @@ export function createIntent(token: string, name: string): Promise<CreateIntentR
 
 export function createSubintent(token: string, intentId: string, name: string): Promise<CreateSubintentResponse> {
   return apiCall(`/agent/intents/${intentId}/subintents`, token, { method: 'POST', body: JSON.stringify({ name }) })
+}
+
+export function renameIntent(token: string, id: string, name: string): Promise<RenameIntentResponse> {
+  return apiCall(`/agent/intents/${id}`, token, { method: 'PATCH', body: JSON.stringify({ name }) })
+}
+
+export function archiveIntent(token: string, id: string): Promise<ArchiveIntentResponse> {
+  return apiCall(`/agent/intents/${id}/archive`, token, { method: 'POST' })
+}
+
+export function renameSubintent(
+  token: string,
+  id: string,
+  patch: { name?: string; defaultPriority?: ConversationPriority },
+): Promise<RenameSubintentResponse> {
+  return apiCall(`/agent/subintents/${id}`, token, { method: 'PATCH', body: JSON.stringify(patch) })
+}
+
+export function archiveSubintent(token: string, id: string): Promise<ArchiveSubintentResponse> {
+  return apiCall(`/agent/subintents/${id}/archive`, token, { method: 'POST' })
+}
+
+export function moveSubintent(token: string, id: string, intentId: string): Promise<MoveSubintentResponse> {
+  return apiCall(`/agent/subintents/${id}/move`, token, { method: 'POST', body: JSON.stringify({ intentId }) })
+}
+
+export function mergeSubintent(token: string, id: string, intoId: string): Promise<MergeSubintentResponse> {
+  return apiCall(`/agent/subintents/${id}/merge`, token, { method: 'POST', body: JSON.stringify({ intoId }) })
 }
 
 export function fetchArticles(token: string): Promise<AgentArticlesResponse> {
