@@ -22,8 +22,14 @@ The existing `bot_config` table (`backend/src/shared/db/schema/bot.ts`) already 
   array sent to the model. Nothing relies on the model choosing to comply with a prompt sentence.
 - Prompt and rules keep "history + rollback," implemented by restoring a prior `change_log` value
   rather than a new snapshot table — consistent with this codebase's append-only/event style.
-- No behavior change for any workspace that has never touched bot config: `rules IS NULL` and
-  `tools_config IS NULL` must resolve to exactly today's behavior.
+- The built-in prompt and rule catalog are **seeded as real rows** — a concrete "version 1"
+  baseline every workspace actually has in the database — rather than a virtual default computed
+  from `NULL`. Every workspace starts identical and every edit is a diff against a real prior row.
+- Rules that carry a code/tool-level guard (the built-in catalog) are seeded in code and can never
+  be deleted, only toggled (or, for the 2 hard-locked ones, not even that). Admins can freely add
+  and remove their own custom rules, but a custom rule can never claim a code guard — there is no
+  way to know what a free-text rule is supposed to enforce, so only the catalog rules discussed in
+  this spec ever get `enforcement: 'code'`.
 
 ## Data model
 
@@ -33,13 +39,19 @@ The existing `bot_config` table (`backend/src/shared/db/schema/bot.ts`) already 
 export const botConfig = pgTable('bot_config', {
   workspaceId: uuid('workspace_id').primaryKey().references(() => workspace.id, { onDelete: 'restrict' }),
   isProvisioned: boolean('is_provisioned').notNull().default(false),
-  prompt: text('prompt'),               // unchanged: NULL -> DEFAULT_BOT_PROMPT
-  rules: jsonb('rules'),                // CHANGED: was text, now RuleEntry[] | null
-  toolsConfig: jsonb('tools_config'),   // NEW: ToolToggle[] | null
+  prompt: text('prompt').notNull(),               // CHANGED: was nullable, now always a real value
+  rules: jsonb('rules').notNull(),                // CHANGED: was nullable text, now RuleEntry[], always populated
+  toolsConfig: jsonb('tools_config').notNull(),   // NEW: ToolToggle[], always populated
   createdAt: timestamp('created_at', tz).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', tz).notNull().defaultNow(),
 })
 ```
+
+This is a deliberate change from the current nullable/"resolve to default" model: `prompt`,
+`rules`, and `toolsConfig` are now `NOT NULL` everywhere. There is no more virtual default —
+every workspace has a real, concrete baseline row from the moment it's provisioned. "Reset to
+default" becomes "overwrite with the catalog baseline," a normal save like any other, not a
+special NULL-out case.
 
 ```ts
 type RuleEntry = {
@@ -57,8 +69,11 @@ type ToolToggle = {
 }
 ```
 
-`rules IS NULL` and `toolsConfig IS NULL` both mean "never customised" and resolve to the
-built-in defaults, same as `prompt IS NULL` does today.
+Every `RuleEntry` with `source: 'builtin'` must always be present in the stored array — the save
+path rejects a payload missing a catalog key, the same way it rejects a locked key being disabled.
+Only `source: 'custom'` entries can be added or removed freely. "Customised" is no longer a
+null-check; it's computed by diffing the stored value against the current catalog baseline (see
+Seeding, below).
 
 ## Built-in rule catalog
 
@@ -115,11 +130,36 @@ export function toolsForPhase(phase: ToolPhase, enabledTools: ReadonlySet<string
 }
 ```
 
-`resolveBotConfig` gains `enabledTools: Set<string>`, computed from `toolsConfig` (all-enabled if
-`NULL`). `toolLoop.ts` passes this into `toolsForPhase` instead of calling it with just `phase`.
-A disabled tool is absent from the array passed to `openaiClient` — the model has no schema for
-it and cannot emit a call to it. No prompt wording is used to suppress a tool; there is nothing
-to "beg" the model to avoid.
+`resolveBotConfig` gains `enabledTools: Set<string>`, read directly off the now-always-populated
+`toolsConfig`. `toolLoop.ts` passes this into `toolsForPhase` instead of calling it with just
+`phase`. A disabled tool is absent from the array passed to `openaiClient` — the model has no
+schema for it and cannot emit a call to it. No prompt wording is used to suppress a tool; there is
+nothing to "beg" the model to avoid.
+
+## Seeding / baseline (version 1)
+
+Every workspace gets a real `bot_config` row the moment it's provisioned, not a lazily-resolved
+default:
+
+- **New workspaces**: workspace-creation flow calls `seedBotConfig(workspaceId)`, inserting
+  `prompt: DEFAULT_BOT_PROMPT`, `rules: DEFAULT_BOT_RULES_CATALOG`, `tools_config:` all tools
+  enabled. This insert also writes one `change_log` entry per field, `actor: 'system'`,
+  `before_value: null`, `after_value: <baseline>` — this is what "version 1" means concretely:
+  the first entry in each field's history is always the seed, visible in the History panel like
+  any other change, just attributed to the system instead of an admin.
+- **Existing workspaces**: a one-time backfill migration runs the same `seedBotConfig` for every
+  `bot_config` row that predates this change (today's `NULL` `prompt`/`rules` rows), so no
+  workspace is left on the old virtual-default path. A workspace that had already customised its
+  `prompt` (non-null today) is seeded only for the still-`NULL` `tools_config` column — the
+  existing custom prompt is left untouched and gets no synthetic "version 1" entry, since it
+  already has real history. A workspace with a non-null legacy free-text `rules` value is migrated
+  by seeding the full builtin catalog at its defaults *plus* one extra `source: 'custom'` entry
+  wrapping the old free-text value verbatim, so no admin's existing customisation is silently
+  dropped — the old text simply becomes one custom rule alongside the new toggleable catalog.
+- `DEFAULT_BOT_RULES_CATALOG` and `DEFAULT_BOT_PROMPT` remain the single source of truth in code
+  (`domain/bot/defaultPrompt.ts`) for what "baseline" means; the seed just materialises them into
+  a row. "Reset to default" (Prompt tab) and "Restore catalog defaults" (Rules tab) both just call
+  `saveBotConfig` with these same constants — ordinary saves, not a special code path.
 
 ## Versioning / history / rollback
 
@@ -174,8 +214,11 @@ export const SaveBotConfigBody = z.object({
 Save-time domain validation (`saveBotConfig`, not just Zod shape):
 - Reject if any locked builtin key (`handoff_on_request`, `no_credentials`) is missing or has
   `enabled: false`.
+- Reject if any `source: 'builtin'` key from `DEFAULT_BOT_RULES_CATALOG` is missing from the
+  payload entirely — builtins can be toggled but never deleted, whether or not they're locked.
 - Reject if the resulting rule list has zero enabled entries.
-- Reject unknown builtin `key` values not in `DEFAULT_BOT_RULES_CATALOG` and not `source: 'custom'`.
+- Reject a payload where an entry with `source: 'custom'` claims `enforcement: 'code'` or reuses
+  a builtin `key` — custom rules are always `prompt`-enforced and get their own generated key.
 - Reject unknown `tool` names not in `TOOL_CATALOG`.
 - No validation blocks disabling `search_articles` while `answer_from_article` stays enabled —
   the UI warns about the dead-tool consequence, but the save is a policy choice, not an error.
@@ -220,7 +263,7 @@ No existing frontend code to preserve here — no Bot Config UI exists today (co
 - Forms and Knowledge tabs (separate specs / already-built admin surfaces).
 - Any code-level content scanning (e.g. regex-detecting card numbers in the bot's own draft
   reply) to backstop the two locked rules — they remain prompt-enforced only, matching the doc.
-- Migrating existing workspaces' free-text `rules` values — this is a schema type change on a
-  nullable column; any workspace with a non-null legacy string value needs a one-time migration
-  step (wrap the existing string as a single `source: 'custom', enforcement: 'prompt', locked: false`
-  entry) called out for the implementation plan, not designed in depth here.
+- Detailed migration script content for converting a workspace's existing free-text `rules`
+  value into `RuleEntry[]` (wrap as one `source: 'custom'` entry alongside the seeded catalog) —
+  the shape of this is described under Seeding, above; exact migration code is for the
+  implementation plan.
