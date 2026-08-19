@@ -223,3 +223,69 @@ describe('POST /intents/:id/archive', () => {
     await request(app).post(`/intents/${intentId}/archive`).set('Authorization', `Bearer ${token}`).expect(409)
   })
 })
+
+describe('PATCH /subintents/:id', () => {
+  it('renames a subintent and sets its default priority', async () => {
+    const workspaceId = await seedWorkspace()
+    const intentId = await seedIntent(workspaceId, 'Billing')
+    const subintentId = await seedSubintent({ workspaceId, intentId, name: 'Refunds' })
+    const { token } = await seedAgentWithRole(workspaceId, 'admin')
+
+    const res = await request(app)
+      .patch(`/subintents/${subintentId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Refund Requests', defaultPriority: 'p2' })
+      .expect(200)
+
+    expect(res.body).toEqual({ id: subintentId, name: 'Refund Requests', defaultPriority: 'p2' })
+  })
+
+  it('409s on a name collision within the same intent', async () => {
+    const workspaceId = await seedWorkspace()
+    const intentId = await seedIntent(workspaceId, 'Billing')
+    await seedSubintent({ workspaceId, intentId, name: 'Refunds' })
+    const subintentId = await seedSubintent({ workspaceId, intentId, name: 'Invoices' })
+    const { token } = await seedAgentWithRole(workspaceId, 'admin')
+
+    await request(app)
+      .patch(`/subintents/${subintentId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Refunds' })
+      .expect(409)
+  })
+
+  it('404s for an unknown subintent id', async () => {
+    const workspaceId = await seedWorkspace()
+    const { token } = await seedAgentWithRole(workspaceId, 'admin')
+
+    await request(app)
+      .patch(`/subintents/${randomUUID()}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Refunds' })
+      .expect(404)
+  })
+})
+
+describe('POST /subintents/:id/archive', () => {
+  it('archives a subintent', async () => {
+    const workspaceId = await seedWorkspace()
+    const intentId = await seedIntent(workspaceId, 'Billing')
+    const subintentId = await seedSubintent({ workspaceId, intentId, name: 'Refunds' })
+    const otherIntentId = await seedIntent(workspaceId, 'Other', true)
+    await seedSubintent({ workspaceId, intentId: otherIntentId, name: 'Other' })
+    const { token } = await seedAgentWithRole(workspaceId, 'admin')
+
+    const res = await request(app).post(`/subintents/${subintentId}/archive`).set('Authorization', `Bearer ${token}`).expect(200)
+
+    expect(res.body).toEqual({ id: subintentId, name: 'Refunds', archivedAt: expect.any(String) })
+  })
+
+  it("409s for the workspace's Other subintent", async () => {
+    const workspaceId = await seedWorkspace()
+    const otherIntentId = await seedIntent(workspaceId, 'Other', true)
+    const otherSubintentId = await seedSubintent({ workspaceId, intentId: otherIntentId, name: 'Other' })
+    const { token } = await seedAgentWithRole(workspaceId, 'admin')
+
+    await request(app).post(`/subintents/${otherSubintentId}/archive`).set('Authorization', `Bearer ${token}`).expect(409)
+  })
+})

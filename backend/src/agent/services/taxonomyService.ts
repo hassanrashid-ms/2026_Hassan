@@ -1,15 +1,19 @@
 import { and, asc, eq, isNull, ne } from 'drizzle-orm'
 import type {
   ArchiveIntentResponse,
+  ArchiveSubintentResponse,
+  ConversationPriority,
   CreateIntentResponse,
   CreateSubintentResponse,
   IntentsResponse,
   RenameIntentResponse,
+  RenameSubintentResponse,
 } from '@support/types'
 import { article, intent, subintent } from '../../shared/db/schema/index.ts'
 import { withWorkspace } from '../../shared/db/withWorkspace.ts'
 import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts'
 import { appendChangeLog } from '../../shared/changeLog/appendChangeLog.ts'
+import { resolveFallbackSubintent } from '../../domain/bot/fallbackSubintent.ts'
 
 export async function listIntents(ctx: AgentContext): Promise<IntentsResponse> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
@@ -141,5 +145,100 @@ export async function archiveIntent(ctx: AgentContext, id: string): Promise<Arch
       changes: [{ field: 'archived_at', before: current.archivedAt, after: row!.archivedAt }],
     })
     return { ok: true, intent: { id: row!.id, name: row!.name, archivedAt: row!.archivedAt!.toISOString() } }
+  })
+}
+
+export type RenameSubintentResult =
+  | { ok: true; subintent: RenameSubintentResponse }
+  | { ok: false; reason: 'not_found' | 'name_taken' }
+
+export async function renameSubintent(
+  ctx: AgentContext,
+  id: string,
+  patch: { name?: string; defaultPriority?: ConversationPriority },
+): Promise<RenameSubintentResult> {
+  return withWorkspace(ctx.workspaceId, async (tx) => {
+    const [current] = await tx
+      .select({ id: subintent.id, name: subintent.name, intentId: subintent.intentId, defaultPriority: subintent.defaultPriority })
+      .from(subintent)
+      .where(eq(subintent.id, id))
+      .limit(1)
+    if (!current) return { ok: false, reason: 'not_found' }
+
+    if (patch.name === undefined && patch.defaultPriority === undefined) {
+      return { ok: true, subintent: { id: current.id, name: current.name, defaultPriority: current.defaultPriority } }
+    }
+
+    if (patch.name !== undefined && patch.name !== current.name) {
+      const [collision] = await tx
+        .select({ id: subintent.id })
+        .from(subintent)
+        .where(
+          and(
+            eq(subintent.workspaceId, ctx.workspaceId),
+            eq(subintent.intentId, current.intentId),
+            eq(subintent.name, patch.name),
+            ne(subintent.id, id),
+          ),
+        )
+        .limit(1)
+      if (collision) return { ok: false, reason: 'name_taken' }
+    }
+
+    const changes: { field: string; before: unknown; after: unknown }[] = []
+    if (patch.name !== undefined) changes.push({ field: 'name', before: current.name, after: patch.name })
+    if (patch.defaultPriority !== undefined) {
+      changes.push({ field: 'default_priority', before: current.defaultPriority, after: patch.defaultPriority })
+    }
+
+    const [row] = await tx
+      .update(subintent)
+      .set({
+        ...(patch.name !== undefined ? { name: patch.name } : {}),
+        ...(patch.defaultPriority !== undefined ? { defaultPriority: patch.defaultPriority } : {}),
+      })
+      .where(eq(subintent.id, id))
+      .returning({ id: subintent.id, name: subintent.name, defaultPriority: subintent.defaultPriority })
+
+    await appendChangeLog(tx, {
+      workspaceId: ctx.workspaceId,
+      entityType: 'subintent',
+      entityId: id,
+      actorId: ctx.agentId,
+      changes,
+    })
+    return { ok: true, subintent: row! }
+  })
+}
+
+export type ArchiveSubintentResult =
+  | { ok: true; subintent: ArchiveSubintentResponse }
+  | { ok: false; reason: 'not_found' | 'is_other' }
+
+export async function archiveSubintent(ctx: AgentContext, id: string): Promise<ArchiveSubintentResult> {
+  return withWorkspace(ctx.workspaceId, async (tx) => {
+    const [current] = await tx
+      .select({ id: subintent.id, name: subintent.name, archivedAt: subintent.archivedAt })
+      .from(subintent)
+      .where(eq(subintent.id, id))
+      .limit(1)
+    if (!current) return { ok: false, reason: 'not_found' }
+
+    const otherId = await resolveFallbackSubintent(tx, ctx.workspaceId)
+    if (current.id === otherId) return { ok: false, reason: 'is_other' }
+
+    const [row] = await tx
+      .update(subintent)
+      .set({ archivedAt: new Date() })
+      .where(eq(subintent.id, id))
+      .returning({ id: subintent.id, name: subintent.name, archivedAt: subintent.archivedAt })
+    await appendChangeLog(tx, {
+      workspaceId: ctx.workspaceId,
+      entityType: 'subintent',
+      entityId: id,
+      actorId: ctx.agentId,
+      changes: [{ field: 'archived_at', before: current.archivedAt, after: row!.archivedAt }],
+    })
+    return { ok: true, subintent: { id: row!.id, name: row!.name, archivedAt: row!.archivedAt!.toISOString() } }
   })
 }

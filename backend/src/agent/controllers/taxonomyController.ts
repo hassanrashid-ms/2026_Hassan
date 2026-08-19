@@ -1,10 +1,19 @@
 import type { RequestHandler } from 'express'
 import { z } from 'zod'
-import { CreateIntentBody, CreateSubintentBody, RenameIntentBody } from '@support/types'
+import { CreateIntentBody, CreateSubintentBody, RenameIntentBody, RenameSubintentBody } from '@support/types'
 import { sendError } from '../../errors.ts'
-import { archiveIntent, createIntent, createSubintent, listIntents, renameIntent } from '../services/taxonomyService.ts'
+import {
+  archiveIntent,
+  archiveSubintent,
+  createIntent,
+  createSubintent,
+  listIntents,
+  renameIntent,
+  renameSubintent,
+} from '../services/taxonomyService.ts'
 
 const IntentIdParams = z.object({ id: z.uuid() })
+const SubintentIdParams = z.object({ id: z.uuid() })
 
 export const listIntentsHandler: RequestHandler = async (req, res) => {
   res.status(200).json(await listIntents(req.agent!))
@@ -77,4 +86,41 @@ export const archiveIntentHandler: RequestHandler = async (req, res) => {
     return
   }
   res.status(200).json(result.intent)
+}
+
+export const renameSubintentHandler: RequestHandler = async (req, res) => {
+  const params = SubintentIdParams.safeParse(req.params)
+  const body = RenameSubintentBody.safeParse(req.body)
+  if (!params.success || !body.success) {
+    sendError(res, 422, 'invalid_request', 'A valid subintent id is required.')
+    return
+  }
+  const result = await renameSubintent(req.agent!, params.data.id, body.data)
+  if (!result.ok) {
+    if (result.reason === 'not_found') {
+      sendError(res, 404, 'not_found', 'Subintent not found.')
+      return
+    }
+    sendError(res, 409, 'name_taken', 'Another subintent under this intent already has this name.')
+    return
+  }
+  res.status(200).json(result.subintent)
+}
+
+export const archiveSubintentHandler: RequestHandler = async (req, res) => {
+  const params = SubintentIdParams.safeParse(req.params)
+  if (!params.success) {
+    sendError(res, 422, 'invalid_request', 'A valid subintent id is required.')
+    return
+  }
+  const result = await archiveSubintent(req.agent!, params.data.id)
+  if (!result.ok) {
+    if (result.reason === 'not_found') {
+      sendError(res, 404, 'not_found', 'Subintent not found.')
+      return
+    }
+    sendError(res, 409, 'not_archivable', 'The "Other" subintent can never be archived.')
+    return
+  }
+  res.status(200).json(result.subintent)
 }

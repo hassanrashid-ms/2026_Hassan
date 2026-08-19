@@ -777,6 +777,45 @@ registry.registerPath({
 })
 
 registry.registerPath({
+  method: 'patch',
+  path: '/agent/subintents/{id}',
+  summary: 'Agent Rename/Reprioritize Subintent',
+  description: 'Renames a subintent and/or sets its default priority. Admin-only.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: {
+    params: z.object({ id: z.uuid() }),
+    body: {
+      content: {
+        'application/json': {
+          schema: z.object({ name: z.string().min(1).max(120).optional(), defaultPriority: z.enum(['p1', 'p2', 'p3', 'p4']).optional() }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: { description: 'Subintent updated' },
+    403: { description: 'Forbidden — admin role required' },
+    404: { description: 'Subintent not found' },
+    409: { description: 'Another subintent under this intent already has this name' },
+  },
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/agent/subintents/{id}/archive',
+  summary: 'Agent Archive Subintent',
+  description: 'Archives a subintent. Admin-only. The workspace’s "Other" subintent can never be archived.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: { params: z.object({ id: z.uuid() }) },
+  responses: {
+    200: { description: 'Subintent archived' },
+    403: { description: 'Forbidden — admin role required' },
+    404: { description: 'Subintent not found' },
+    409: { description: 'Not archivable — this is the "Other" subintent' },
+  },
+})
+
+registry.registerPath({
   method: 'get',
   path: '/agent/articles',
   summary: 'Agent List Articles',
