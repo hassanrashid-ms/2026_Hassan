@@ -12,6 +12,7 @@ import { signAgentSession } from '../src/shared/auth/agentSession.ts'
 import { closeSocketServer, createSocketServer } from '../src/shared/realtime/socketServer.ts'
 import { conversationsRouter } from '../src/agent/routers/conversationsRouter.ts'
 import { escalateConversation, unescalateConversation } from '../src/agent/services/escalationService.ts'
+import { ESCALATION_NOTICE_MESSAGE } from '../src/domain/conversations/index.ts'
 import {
   closeOwnerPool,
   ownerPool,
@@ -68,6 +69,13 @@ async function eventsFor(id: string) {
   const { rows } = await ownerPool.query(`select type, actor_type, payload from event where conversation_id = $1 order by id`, [id])
   return rows
 }
+async function messagesFor(id: string) {
+  const { rows } = await ownerPool.query(
+    `select author_type, visibility, body from message where conversation_id = $1 order by seq`,
+    [id],
+  )
+  return rows
+}
 
 describe('POST /agent/conversations/:id/escalate', () => {
   it('moves an open conversation to escalated, keeps the assignment, and writes conversation_escalated', async () => {
@@ -85,7 +93,23 @@ describe('POST /agent/conversations/:id/escalate', () => {
     expect(row.status).toBe('escalated')
     expect(row.assigned_agent_id).toBe(agentId)
     expect(await eventsFor(conversationId)).toEqual([
+      { type: 'message_sent', actor_type: 'system', payload: { seq: 1, author_type: 'system', visibility: 'public' } },
       { type: 'conversation_escalated', actor_type: 'agent', payload: { agent_id: agentId } },
+    ])
+  })
+
+  it('posts a public system notice telling the player their ticket was escalated', async () => {
+    const workspaceId = await seedWorkspace()
+    const { agentId, token } = await setupAgent(workspaceId)
+    const playerId = await seedPlayer(workspaceId)
+    const conversationId = await seedConversation({ workspaceId, playerId })
+    await ownerPool.query(`update conversation set status = 'open', assigned_agent_id = $2 where id = $1`, [conversationId, agentId])
+
+    const res = await request(app).post(`/conversations/${conversationId}/escalate`).set('Authorization', `Bearer ${token}`)
+
+    expect(res.status).toBe(200)
+    expect(await messagesFor(conversationId)).toEqual([
+      { author_type: 'system', visibility: 'public', body: ESCALATION_NOTICE_MESSAGE },
     ])
   })
 
@@ -193,6 +217,19 @@ describe('POST /agent/conversations/:id/unescalate', () => {
     ])
   })
 
+  it('posts no message — un-escalation carries no player-facing notice', async () => {
+    const workspaceId = await seedWorkspace()
+    const { agentId, token } = await setupAgent(workspaceId)
+    const playerId = await seedPlayer(workspaceId)
+    const conversationId = await seedConversation({ workspaceId, playerId })
+    await ownerPool.query(`update conversation set status = 'escalated', assigned_agent_id = $2 where id = $1`, [conversationId, agentId])
+
+    const res = await request(app).post(`/conversations/${conversationId}/unescalate`).set('Authorization', `Bearer ${token}`)
+
+    expect(res.status).toBe(200)
+    expect(await messagesFor(conversationId)).toEqual([])
+  })
+
   it('rejects with 409 when not currently escalated', async () => {
     const workspaceId = await seedWorkspace()
     const { agentId, token } = await setupAgent(workspaceId)
@@ -252,13 +289,15 @@ describe('escalation and the inactivity clock', () => {
 
     const ctx = { workspaceId, agentId } as never
 
-    expect(await escalateConversation(ctx, conversationId)).toEqual({ ok: true })
+    const escalated = await escalateConversation(ctx, conversationId)
+    expect(escalated.ok).toBe(true)
+    expect(escalated.ok && escalated.posted?.body).toBe(ESCALATION_NOTICE_MESSAGE)
     const paused = await withWorkspace(workspaceId, (tx) =>
       tx.select().from(resolutionCycle).where(eq(resolutionCycle.conversationId, conversationId)),
     )
     expect(paused[0]!.inactivityDueAt).toBeNull()
 
-    expect(await unescalateConversation(ctx, conversationId)).toEqual({ ok: true })
+    expect(await unescalateConversation(ctx, conversationId)).toEqual({ ok: true, posted: null })
     const resumed = await withWorkspace(workspaceId, (tx) =>
       tx.select().from(resolutionCycle).where(eq(resolutionCycle.conversationId, conversationId)),
     )

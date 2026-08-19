@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { fetchConversationContext } from '../../../api/agentApi.ts'
 import { createSocket } from '../../../../../features/chat/api/socket.ts'
+import { handleSessionExpired } from '../../../lib/authErrorHandling.ts'
 import { ApiError } from '../../../../../lib/httpClient.ts'
 import { Button } from '../../../components/ui/button.tsx'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../../../components/ui/sheet.tsx'
@@ -34,10 +35,12 @@ export function ContextRail({
     staleTime: 5 * 60_000,
   })
 
-  // The one narrow trigger. The staleTime above is not dropped: player state is
+  // The two narrow triggers. The staleTime above is not dropped: player state is
   // immutable by construction and ticket history moves on the order of days.
-  // The exception is a form in progress, and bot_active conversations sit in the
-  // unassigned queue, so an agent can open a ticket mid-form. A missed
+  // The exceptions are a form in progress (bot_active conversations sit in the
+  // unassigned queue, so an agent can open a ticket mid-form) and a status
+  // transition on the current ticket (escalate/un-escalate/resolve etc.), which
+  // the cached ticket-history snapshot would otherwise carry stale. A missed
   // invalidation leaves the panel stale rather than wrong, and the next
   // navigation corrects it.
   useEffect(() => {
@@ -47,7 +50,13 @@ export function ContextRail({
     socket.on('connect', () => {
       socket.emit('join_conversation', { conversation_id: conversationId })
     })
+    socket.on('connect_error', (err) => {
+      if (err.message === 'unauthorized') handleSessionExpired()
+    })
     socket.on('conversation:phase_changed', () => {
+      void queryClient.invalidateQueries({ queryKey: ['conversation', conversationId, 'context'] })
+    })
+    socket.on('conversation:changed', () => {
       void queryClient.invalidateQueries({ queryKey: ['conversation', conversationId, 'context'] })
     })
     return () => {

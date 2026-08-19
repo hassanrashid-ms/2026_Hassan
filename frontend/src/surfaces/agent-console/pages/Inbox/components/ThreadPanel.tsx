@@ -13,9 +13,9 @@ import {
   fetchConversationMessages,
   markAgentMessagesRead,
   sendAgentMessage,
-  unescalateConversation,
 } from '../../../api/agentApi.ts'
 import { createSocket } from '../../../../../features/chat/api/socket.ts'
+import { handleSessionExpired } from '../../../lib/authErrorHandling.ts'
 import { ChatThread } from '../../../../../features/chat/components/ChatThread.tsx'
 import { reconcilePending, type PendingMessage } from '../../../../../features/chat/hooks/chatReconcile.ts'
 import { Composer } from '../../../../../features/chat/components/Composer.tsx'
@@ -152,18 +152,16 @@ export function ThreadPanel({
     onSuccess: invalidateAfterEscalationChange,
   })
 
-  const unescalate = useMutation({
-    mutationFn: () => unescalateConversation(token, conversationId!),
-    onSuccess: invalidateAfterEscalationChange,
-  })
-
+  // Escalated can only move forward to resolved — asking is the only path there, since there is
+  // no agent-side "mark resolved" anywhere in this product — so it stays askable while escalated.
   const askable =
-    !readOnly && (status === 'open' || status === 'awaiting_player') && (confirmPhase ?? 'none') === 'none'
+    !readOnly &&
+    (status === 'open' || status === 'awaiting_player' || status === 'escalated') &&
+    (confirmPhase ?? 'none') === 'none'
   // Either ask puts the same question on the player's screen; the agent's panel
   // must read "waiting" for both, or a clock-triggered ask looks like no ask.
   const waiting = confirmPhase === 'agent_ask' || confirmPhase === 'inactivity_ask'
   const escalatable = !readOnly && (status === 'open' || status === 'awaiting_player')
-  const unescalatable = !readOnly && status === 'escalated'
 
   // An optimistic bubble belongs to the thread it was typed in. Switching
   // conversations must drop it, or a send that is still in flight reappears
@@ -182,6 +180,12 @@ export function ThreadPanel({
     // on remount, which reads as "read receipts stopped working".
     socket.on('connect', () => {
       socket.emit('join_conversation', { conversation_id: conversationId })
+    })
+    // The server rejects the handshake with 'unauthorized' for an expired or
+    // revoked session token — the same failure an HTTP 401 reports, just over a
+    // different transport, so it gets the same treatment.
+    socket.on('connect_error', (err) => {
+      if (err.message === 'unauthorized') handleSessionExpired()
     })
     socket.on('message:new', () => {
       void queryClient.invalidateQueries({ queryKey: ['conversation', conversationId, 'messages'] })
@@ -253,11 +257,6 @@ export function ThreadPanel({
           {escalatable && (
             <Button type="button" variant="outline" size="sm" disabled={escalate.isPending} onClick={() => escalate.mutate()}>
               Escalate
-            </Button>
-          )}
-          {unescalatable && (
-            <Button type="button" variant="outline" size="sm" disabled={unescalate.isPending} onClick={() => unescalate.mutate()}>
-              Un-escalate
             </Button>
           )}
           {onToggleRail && (

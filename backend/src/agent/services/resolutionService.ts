@@ -5,7 +5,10 @@ import { conversation } from '../../shared/db/schema/index.ts'
 import { withWorkspace } from '../../shared/db/withWorkspace.ts'
 import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts'
 
-const ASKABLE_STATUSES = new Set(['open', 'awaiting_player'])
+// 'escalated' is included so a ticket that's gone to engineering still has a path to
+// resolved: there is no agent-side "mark resolved" anywhere in this product (see docstring
+// below), so this ask is the only way out of escalated other than staying escalated forever.
+const ASKABLE_STATUSES = new Set(['open', 'awaiting_player', 'escalated'])
 
 export type AskResolvedOutcome =
   | { ok: true; posted: PostedMessageRow }

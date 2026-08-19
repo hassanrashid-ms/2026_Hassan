@@ -54,7 +54,10 @@ export const getConversationMessagesHandler: RequestHandler = async (req, res) =
 
 const ASK_RESOLVED_ERRORS = {
   not_found: [404, 'Conversation not found.'],
-  wrong_status: [409, 'A resolution check can only be asked while the conversation is open or awaiting player.'],
+  wrong_status: [
+    409,
+    'A resolution check can only be asked while the conversation is open, awaiting player, or escalated.',
+  ],
   not_owner: [403, 'Another agent owns this conversation.'],
   already_pending: [409, 'A resolution check is already pending on this conversation.'],
 } as const
@@ -104,6 +107,11 @@ export const escalateConversationHandler: RequestHandler = async (req, res) => {
     return
   }
 
+  // After commit, never inside it. escalateConversation always posts a notice on this path
+  // (unlike unescalate, which posts nothing), so result.posted is never null here.
+  if (result.posted) {
+    emitMessageToRooms(getIo(), params.data.id, toPlayerView(result.posted), toAgentView(result.posted))
+  }
   emitInboxChanged(getIo(), ctx.workspaceId, params.data.id, 'escalated')
   res.status(200).json({ escalated: true })
 }

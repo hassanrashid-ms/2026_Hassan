@@ -121,6 +121,23 @@ describe('applyResolutionAnswer', () => {
     ])
   })
 
+  it('yes on agent_ask resolves an escalated conversation too — the only forward path out of escalated', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const conversationId = await seedConversation({ workspaceId, playerId })
+    await ownerPool.query(`update conversation set status = 'escalated' where id = $1`, [conversationId])
+    await setConfirmPhase(conversationId, 'agent_ask')
+
+    const outcome = await withWorkspace(workspaceId, (tx) =>
+      applyResolutionAnswer(tx, { workspaceId, conversationId, playerId, sessionId: null }, true),
+    )
+
+    expect(outcome.kind).toBe('resolved')
+    const row = await conversationRow(conversationId)
+    expect(row.status).toBe('resolved')
+    expect(row.confirm_phase).toBe('none')
+  })
+
   it('no on bot_article still runs spec 4 handoff(article_rejected) unchanged', async () => {
     const workspaceId = await seedWorkspace()
     const playerId = await seedPlayer(workspaceId)

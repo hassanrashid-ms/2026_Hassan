@@ -159,7 +159,10 @@ export function ChatThread({ messages, currentAuthorType, onRetry, playerLabel }
                 {/* `agent` renders as markdown too, so article steps an agent
                     pasted read exactly like the bot's own answer. */}
                 <div className="m-0">
-                  <MessageBody authorType={chatMessage.authorType} body={chatMessage.body} />
+                  {/* dark only for a genuinely-own bubble: that's the only one styled
+                      bg-accent text-accent-fg above. The bot's own-side bubble stays on
+                      the light bg-muted/10 and keeps the default dark article text. */}
+                  <MessageBody authorType={chatMessage.authorType} body={chatMessage.body} dark={isOwn} />
                 </div>
                 <time dateTime={chatMessage.createdAt} className="mt-1 block text-xs opacity-80">
                   {new Date(chatMessage.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

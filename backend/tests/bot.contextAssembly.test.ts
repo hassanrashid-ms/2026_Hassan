@@ -71,6 +71,27 @@ describe('buildMessages', () => {
     expect(stateMessage!.content).toContain('rejected')
   })
 
+  it('lists the subintent categories in the system prompt while unclassified, and omits them once classified', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const intentId = await seedIntent(workspaceId, 'Billing')
+    const subintentId = await seedSubintent({ workspaceId, intentId, name: 'Refund' })
+
+    const unclassifiedConversationId = await seedConversation({ workspaceId, playerId })
+    const unclassifiedInput = baseInput({ workspaceId, conversationId: unclassifiedConversationId })
+    const unclassifiedResult = await withWorkspace(workspaceId, (tx) => buildMessages(tx, unclassifiedInput))
+    const unclassifiedSystemMessage = unclassifiedResult.messages[0]!
+    expect(unclassifiedSystemMessage.content).toContain('Classify the player\'s problem into one of these categories:')
+    expect(unclassifiedSystemMessage.content).toContain('Billing → Refund')
+
+    const classifiedConversationId = await seedConversation({ workspaceId, playerId })
+    const classifiedInput = baseInput({ workspaceId, conversationId: classifiedConversationId, subintentId })
+    const classifiedResult = await withWorkspace(workspaceId, (tx) => buildMessages(tx, classifiedInput))
+    const classifiedSystemMessage = classifiedResult.messages[0]!
+    expect(classifiedSystemMessage.content).not.toContain('Classify the player\'s problem into one of these categories:')
+    expect(classifiedSystemMessage.content).not.toContain('Billing → Refund')
+  })
+
   it('with 40 messages, keeps the first player message, the last 20, and an elision marker with the dropped count', async () => {
     const workspaceId = await seedWorkspace()
     const playerId = await seedPlayer(workspaceId)

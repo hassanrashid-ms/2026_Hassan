@@ -45,8 +45,13 @@ async function loadSubintentOptions(tx: Tx, workspaceId: string): Promise<Subint
   return options
 }
 
-function renderSubintents(options: SubintentOption[]): string {
-  return options.map((o) => `${o.index}. ${o.label}`).join('\n')
+// Once a subintent is classified, `classify` is write-once and the model has no further use for
+// the category list — omitting it here keeps a long-running conversation's prompt from carrying a
+// full taxonomy dump on every turn after classification has already happened.
+function renderSubintentBlock(options: SubintentOption[], alreadyClassified: boolean): string {
+  if (alreadyClassified) return ''
+  const list = options.map((o) => `${o.index}. ${o.label}`).join('\n')
+  return `Classify the player's problem into one of these categories:\n${list}`
 }
 
 async function renderArticleCatalogue(tx: Tx, workspaceId: string): Promise<{ text: string; count: number }> {
@@ -124,7 +129,9 @@ export async function buildMessages(tx: Tx, input: BotTurnInput): Promise<BuildM
   const catalogue = await renderArticleCatalogue(tx, input.workspaceId)
   const stateBlock = await renderStateBlock(tx, input)
 
-  const systemPrompt = config.systemPrompt.replace('{{subintents}}', renderSubintents(subintentOptions)).replace('{{articles}}', catalogue.text)
+  const systemPrompt = config.systemPrompt
+    .replace('{{subintents}}', renderSubintentBlock(subintentOptions, input.subintentId != null))
+    .replace('{{articles}}', catalogue.text)
 
   const rows = await tx.select().from(message).where(eq(message.conversationId, input.conversationId)).orderBy(asc(message.seq))
 

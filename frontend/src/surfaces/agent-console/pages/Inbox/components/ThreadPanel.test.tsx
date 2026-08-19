@@ -10,7 +10,6 @@ import {
   fetchConversationMessages,
   markAgentMessagesRead,
   sendAgentMessage,
-  unescalateConversation,
 } from '../../../api/agentApi.ts'
 import { createSocket } from '../../../../../features/chat/api/socket.ts'
 
@@ -266,21 +265,21 @@ describe('ThreadPanel escalation', () => {
     expect(escalateConversation).toHaveBeenCalledWith('t', 'c1')
   })
 
-  it('shows Un-escalate once a conversation is escalated, and calls unescalate on click', async () => {
+  // Escalated is a forward-only state now: there is no Un-escalate button anywhere, and the only
+  // way out is resolving, so "Ask if resolved" must still be offered while escalated.
+  it('hides Escalate but keeps Ask if resolved offered once a conversation is escalated', async () => {
     fakeSocket()
     vi.mocked(fetchConversationMessages).mockResolvedValue({ messages: [agentMessage()] } as never)
-    vi.mocked(unescalateConversation).mockResolvedValue({ unescalated: true } as never)
 
     renderPanel({ status: 'escalated' })
     await screen.findByText('Sent')
 
     expect(screen.queryByRole('button', { name: 'Escalate' })).not.toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: 'Un-escalate' }))
-
-    expect(unescalateConversation).toHaveBeenCalledWith('t', 'c1')
+    expect(screen.queryByRole('button', { name: 'Un-escalate' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Ask if resolved' })).toBeEnabled()
   })
 
-  it('hides both escalation buttons on a read-only ticket', async () => {
+  it('hides the escalate button on a read-only ticket', async () => {
     fakeSocket()
     vi.mocked(fetchConversationMessages).mockResolvedValue({ messages: [agentMessage()] } as never)
 
@@ -291,7 +290,7 @@ describe('ThreadPanel escalation', () => {
     expect(screen.queryByRole('button', { name: 'Un-escalate' })).not.toBeInTheDocument()
   })
 
-  it('hides both escalation buttons while the conversation is bot_active', async () => {
+  it('hides the escalate button while the conversation is bot_active', async () => {
     fakeSocket()
     vi.mocked(fetchConversationMessages).mockResolvedValue({ messages: [agentMessage()] } as never)
 

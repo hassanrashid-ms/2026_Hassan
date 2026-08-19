@@ -15,14 +15,22 @@ export class ApiError extends Error {
 }
 
 export async function apiCall<T>(path: string, token: string, init: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      ...(init.headers ?? {}),
-    },
-  })
+  let res: Response
+  try {
+    res = await fetch(`${BASE}${path}`, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        ...(init.headers ?? {}),
+      },
+    })
+  } catch {
+    // fetch itself rejects on a network failure (offline, DNS, CORS) before any
+    // response exists — status 0 marks that as distinct from a real HTTP status,
+    // so callers can tell "server said no" from "never reached the server".
+    throw new ApiError('Network error — check your connection and try again.', 0)
+  }
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null
     throw new ApiError(body?.error?.message ?? `Request failed with ${res.status}`, res.status)

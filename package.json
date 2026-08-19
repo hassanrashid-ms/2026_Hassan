@@ -18,6 +18,7 @@
     "repomix:watch": "repomix --watch --compress"
   },
   "devDependencies": {
+    "http-proxy": "^1.18.1",
     "repomix": "^1.18.0"
   }
 }

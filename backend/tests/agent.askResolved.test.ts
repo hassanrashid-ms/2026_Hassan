@@ -144,6 +144,22 @@ describe('POST /agent/conversations/:id/ask-resolved', () => {
     expect((await request(app).post(`/conversations/${conversationId}/ask-resolved`).set('Authorization', `Bearer ${token}`)).status).toBe(200)
   })
 
+  it('allows escalated — the only path from escalated to resolved is asking the player', async () => {
+    const workspaceId = await seedWorkspace()
+    const { agentId, token } = await setupAgent(workspaceId)
+    const playerId = await seedPlayer(workspaceId)
+    const conversationId = await seedConversation({ workspaceId, playerId })
+    await ownerPool.query(`update conversation set status = 'escalated', assigned_agent_id = $2 where id = $1`, [conversationId, agentId])
+
+    const res = await request(app).post(`/conversations/${conversationId}/ask-resolved`).set('Authorization', `Bearer ${token}`)
+
+    expect(res.status).toBe(200)
+    const row = await conversationRow(conversationId)
+    // Asking does not itself resolve anything — status stays escalated until the player answers.
+    expect(row.status).toBe('escalated')
+    expect(row.confirm_phase).toBe('agent_ask')
+  })
+
   it('allows any agent when the conversation is unassigned', async () => {
     const workspaceId = await seedWorkspace()
     const { token } = await setupAgent(workspaceId)

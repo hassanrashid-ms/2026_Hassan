@@ -196,6 +196,29 @@ describe('POST /agent/messages — internal notes and status transition', () => 
     expect(rows[0]!.status).toBe('awaiting_player')
   })
 
+  // Escalated is forward-only to resolved: an agent's reply must never pull it back into the
+  // ordinary open/awaiting_player flow, or a ticket that's gone to engineering silently loses
+  // that state the moment someone types in the thread.
+  it('a public reply while escalated leaves status escalated', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const conversationId = await seedConversation({ workspaceId, playerId })
+    await ownerPool.query(`update conversation set status = 'escalated' where id = $1`, [conversationId])
+    const { token } = await setupAssignedAgent(workspaceId, conversationId)
+
+    await request(app)
+      .post('/messages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ conversation_id: conversationId, body: 'still working on this with engineering' })
+      .expect(200)
+
+    const { rows } = await ownerPool.query<{ status: string }>(
+      `select status from conversation where id = $1`,
+      [conversationId],
+    )
+    expect(rows[0]!.status).toBe('escalated')
+  })
+
   it('message_sent event payload includes visibility', async () => {
     const workspaceId = await seedWorkspace()
     const playerId = await seedPlayer(workspaceId)

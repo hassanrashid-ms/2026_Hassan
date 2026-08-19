@@ -66,6 +66,31 @@ describe('DEFAULT_BOT_PROMPT', () => {
   })
 
   /**
+   * Regression guard. The prompt used to treat any comprehensible problem statement as
+   * search-worthy, so a broad, category-less complaint like "I've got a purchase issue" sent the
+   * model straight to search_articles/classify instead of asking what specifically happened.
+   * search_articles has zero preconditions in toolLoop.ts — this carve-out is the only thing
+   * stopping that jump, so it must stay in the prompt text.
+   */
+  it('asks a clarifying question before searching or classifying a broad, category-less statement of intent', () => {
+    expect(DEFAULT_BOT_PROMPT).toContain('a broad statement of a problem area')
+    expect(DEFAULT_BOT_PROMPT).toMatch(/Do not search,\s+classify, or hand off/)
+    expect(DEFAULT_BOT_PROMPT).toMatch(/ask one short question|asking what they need help with/)
+  })
+
+  /**
+   * Regression guard, one level deeper than the one above. A player who names only the area a
+   * category sits under (e.g. the single word "purchase", matching the "In-App Purchases" half of
+   * "In-App Purchases → Missing Purchase") was enough for the model to pick a specific subintent
+   * and search, with zero information distinguishing it from the area's other subintents. The
+   * prompt must say that naming the area is not naming the category, even as a follow-up answer.
+   */
+  it('treats naming only the category area, not a specific problem within it, as still not enough to search', () => {
+    expect(DEFAULT_BOT_PROMPT).toContain('naming the area is not naming the category')
+    expect(DEFAULT_BOT_PROMPT).toMatch(/not just the\s+area it sits under/)
+  })
+
+  /**
    * The prompt has to ask for the article's substance, not a pointer to it.
    * `offer_article` used to post a fixed "Here's an article that might help."
    * while nothing carried the article to the player — they were promised a

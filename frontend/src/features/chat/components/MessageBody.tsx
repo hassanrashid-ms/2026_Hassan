@@ -29,7 +29,16 @@ const ArticleBody = lazy(() =>
  */
 const MARKDOWN_AUTHORS: ReadonlySet<ChatAuthorType> = new Set(['bot', 'agent'])
 
-export function MessageBody({ authorType, body }: { authorType: ChatAuthorType; body: string }) {
+export function MessageBody({
+  authorType,
+  body,
+  dark = false,
+}: {
+  authorType: ChatAuthorType
+  body: string
+  /** The bubble behind this body is a dark, on-brand background (e.g. the agent-console's own-message bubble) rather than the light `bg`/`surface` an article page renders on — so markdown body text should render in the light `accent-fg` colour instead of the default dark `text`. */
+  dark?: boolean
+}) {
   if (!MARKDOWN_AUTHORS.has(authorType)) return <>{body}</>
-  return <ArticleBody markdown={body} />
+  return <ArticleBody markdown={body} dark={dark} />
 }
