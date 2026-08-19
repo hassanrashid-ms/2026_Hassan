@@ -10,6 +10,15 @@ export type ErrorCode =
   | 'unparseable_body'
   | 'invalid_request'
   | 'internal'
+  | 'wrong_status'
+  | 'not_owner'
+  | 'already_pending'
+  | 'no_check_pending'
+  | 'conversation_still_open'
+  | 'no_form_pending'
+  | 'unknown_field'
+  | 'invalid_value'
+  | 'unsupported_field_type'
 
 export function sendError(res: Response, status: number, code: ErrorCode, message: string): void {
   res.status(status).json({ error: { code, message } })

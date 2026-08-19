@@ -286,7 +286,7 @@ Every screen renders one of these. No blank regions.
 | State | Rendering |
 |---|---|
 | No token | Full-screen message: "This page must be opened by the game." No top bar — there is no session to close. |
-| Bootstrap failed (15 attempts exhausted) | Full-screen message with a **retry** button. New: today the poll simply stops with no way back. |
+| Backend unreachable (bootstrap exhausted 15 attempts, or a screen's own request failed with nothing loaded) | Full-screen message with a **retry** button, identical on every screen including chat. New: today the poll simply stops with no way back. |
 | Loading | shadcn `Skeleton` in the shape of the content. Not a spinner. |
 | Empty | Per-screen copy: "No articles yet", "No results for …". |
 
@@ -294,8 +294,34 @@ Two behaviours preserved deliberately:
 
 - **Missing player state is a state, not an error.** The `AVAILABILITY_COPY` sentences
   move into the debug dialog intact. A degraded or absent snapshot never blocks the UI.
-- **Chat is always reachable.** The chat icon works even when bootstrap failed —
-  "no dead ends" outranks having complete data.
+- **Chat is reachable whenever it can actually work.** The chat icon works with incomplete
+  data — a degraded snapshot, a session still initialising — because chat needs only the
+  token. It does **not** stay open when the backend is unreachable. See below.
+
+### Superseded: "chat is always reachable"
+
+This originally read *"the chat icon works even when bootstrap failed — no dead ends outranks
+having complete data"*, and the failure screen offered a **Talk to us anyway** button into chat.
+
+That conflated two different failures. Chat needing no bootstrap data is true; chat needing no
+*backend* is not. When the API is unreachable the chat screen cannot load a thread and cannot
+deliver a message, so the button led to an empty thread above a live composer that accepted
+what the player typed and lost it. Worse than a dead end: it looked like it worked.
+
+Now every screen that needs the API — chat included — renders the same `BootstrapFailedScreen`
+with the same message, and the button is gone, because it would only have led to a screen
+showing that same error. Retry is the one honest action, so it is the only one offered.
+
+`SupportChat` treats two signals as the same condition: the shell's `error` (bootstrap gave up
+after 15 attempts — the backend was already down when support opened) and its own query failing
+**with no data loaded** (it went down after, or chat was opened directly). The `data === undefined`
+qualifier matters: once a thread has loaded, a later refetch failing must not replace it with an
+error screen. The player can still read what was said, and a send that cannot reach the server
+already reports itself per-message as "Not sent. Retry" — tearing the screen down would lose real
+content to duplicate a message the player is already getting.
+
+The top bar stays on the failure screen: closing the webview is the player's other way out, and
+it is the one action that still works with no backend.
 
 ---
 

@@ -4,6 +4,7 @@ import {
   extendZodWithOpenApi,
 } from '@asteasolutions/zod-to-openapi'
 import { z } from 'zod'
+import { FormAnswerBody, FormTerminateBody, NewTicketBody, ResolutionAnswerBody } from '@support/types'
 
 extendZodWithOpenApi(z)
 
@@ -40,6 +41,22 @@ const IncidentBodySchema = z.object({
   detail: z.string().openapi({ example: '5s elapsed, no response' }),
   sdk_version: z.string().max(60).optional().openapi({ example: '1.0.0' }),
   client_version: z.string().max(60).optional().openapi({ example: '0.1.0' }),
+})
+
+const AgentMessageViewSchema = z.object({
+  id: z.uuid(),
+  seq: z.number().int().nonnegative(),
+  author_type: z.enum(['player', 'agent', 'bot', 'system']),
+  author_agent_id: z.uuid().nullable(),
+  body: z.string(),
+  visibility: z.enum(['public', 'internal']),
+  delivery_state: z.enum(['sending', 'sent', 'delivered', 'read', 'failed']),
+  read_at: z.string().nullable(),
+  created_at: z.string(),
+  article_id: z
+    .uuid()
+    .nullable()
+    .openapi({ description: 'The article a bot answer was written from, or null. Clients render their own "Read more" from it.' }),
 })
 
 // Register Component Schemas
@@ -357,6 +374,62 @@ registry.registerPath({
   },
 })
 
+registry.registerPath({
+  method: 'get',
+  path: '/surface/messages',
+  summary: 'Get Player Messages',
+  description:
+    "Returns the player's thread. `session_id` is validated but not used to resolve the thread — the conversation comes from the token's player under RLS.",
+  security: [{ [bearerPlayerJwt.name]: [] }],
+  request: {
+    query: z.object({ session_id: z.uuid() }),
+  },
+  responses: {
+    200: { description: 'Player thread (conversation_id is null when none exists yet)' },
+  },
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/surface/messages',
+  summary: 'Send Player Message',
+  description:
+    'Sends a player chat message. `session_id` is optional and best-effort: it is verified against the caller and used to attribute the resulting events, and is ignored when it cannot be verified.',
+  security: [{ [bearerPlayerJwt.name]: [] }],
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: z.object({ body: z.string().min(1).max(4000), session_id: z.uuid().optional() }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: { description: 'Message sent' },
+  },
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/surface/messages/read',
+  summary: 'Mark Player Messages Read',
+  description: 'Marks non-player messages as read up to the given sequence number.',
+  security: [{ [bearerPlayerJwt.name]: [] }],
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: z.object({ up_to_seq: z.number().int().nonnegative() }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: { description: 'Marked read' },
+  },
+})
+
 // --- 4. AGENT ENDPOINTS ---
 registry.registerPath({
   method: 'get',
@@ -369,6 +442,132 @@ registry.registerPath({
   },
   responses: {
     200: { description: 'Conversations list' },
+  },
+})
+
+const AgentSubintentSchema = z
+  .object({ intent_name: z.string(), subintent_name: z.string() })
+  .nullable()
+
+const AgentConversationDetailSchema = z.object({
+  id: z.uuid(),
+  number: z.number().int(),
+  player: z.object({ id: z.uuid(), external_player_id: z.string() }),
+  status: z.enum(['new', 'bot_active', 'open', 'awaiting_player', 'escalated', 'resolved', 'closed']),
+  subintent: AgentSubintentSchema,
+  assigned_agent: z.object({ id: z.uuid(), display_name: z.string() }).nullable(),
+  resolution_source: z.enum(['bot', 'agent']).nullable(),
+  resolved_by_agent_name: z.string().nullable(),
+  created_at: z.string(),
+})
+
+registry.registerPath({
+  method: 'get',
+  path: '/agent/conversations/{id}',
+  summary: 'Agent Get Conversation',
+  description:
+    'One conversation header row by id. Serves tickets that are in neither the unassigned nor the mine list — resolved, or owned by another agent — which the inbox lists can never supply.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: {
+    params: z.object({ id: z.uuid() }),
+  },
+  responses: {
+    200: {
+      description: 'Conversation header',
+      content: { 'application/json': { schema: AgentConversationDetailSchema } },
+    },
+    404: { description: 'Not found, or not in this workspace' },
+  },
+})
+
+const AgentPlayerStateSchema = z.union([
+  z.object({ status: z.literal('no_session') }),
+  z.object({ status: z.literal('not_captured') }),
+  z.object({ status: z.literal('missing') }),
+  z.object({
+    status: z.literal('captured'),
+    declared: z.array(
+      z.object({
+        key: z.string(),
+        label: z.string(),
+        type: z.enum(['string', 'number', 'boolean', 'timestamp']),
+        value: z.unknown(),
+      }),
+    ),
+    raw: z.record(z.string(), z.unknown()),
+    degraded_reason: z.string().nullable(),
+    captured_at: z.string(),
+  }),
+])
+
+const AgentTicketSummarySchema = z.object({
+  id: z.uuid(),
+  number: z.number().int(),
+  created_at: z.string(),
+  status: z.enum(['new', 'bot_active', 'open', 'awaiting_player', 'escalated', 'resolved', 'closed']),
+  subintent: AgentSubintentSchema,
+  resolution_source: z.enum(['bot', 'agent']).nullable(),
+  resolved_by_agent_name: z.string().nullable(),
+  reopen_count: z.number().int(),
+})
+
+const FormFieldTypeSchema = z.enum([
+  'short_text',
+  'long_text',
+  'number',
+  'date',
+  'time',
+  'choice',
+  'attachment',
+])
+
+const AgentFormViewSchema = z.object({
+  form_name: z.string(),
+  form_version: z.number().int(),
+  status: z.enum(['in_progress', 'completed', 'partial', 'skipped']),
+  field_count: z.number().int(),
+  answered_count: z.number().int(),
+  fields: z.array(
+    z.object({
+      key: z.string(),
+      label: z.string(),
+      position: z.number().int(),
+      field_type: FormFieldTypeSchema,
+      value: z.unknown(),
+      answered: z.boolean(),
+    }),
+  ),
+})
+
+registry.registerPath({
+  method: 'get',
+  path: '/agent/conversations/{id}/context',
+  summary: 'Agent Conversation Context',
+  description:
+    "The context rail in one payload: the player-state snapshot captured when this ticket was raised, the player's other tickets in this workspace (newest first, capped at 20), and totals. All four player_state cases return 200 — missing player state is a state, not an error. `raw` is PII and is returned in full, uncollapsed by the API. Plus `form`: the form the player was asked before handoff, or null when the subintent had none. Labels resolve against the submission's snapshotted form_version, never the current one; values carry the answer's own snapshotted field_type. Unanswered fields are present as rows with `answered: false` — a gap is a row, never an omission.",
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: {
+    params: z.object({ id: z.uuid() }),
+  },
+  responses: {
+    200: {
+      description: 'Context rail payload',
+      content: {
+        'application/json': {
+          schema: z.object({
+            player_state: AgentPlayerStateSchema,
+            tickets: z.array(AgentTicketSummarySchema),
+            summary: z.object({
+              total_tickets: z.number().int(),
+              total_reopened: z.number().int(),
+              first_contact_at: z.string(),
+            }),
+            form: AgentFormViewSchema.nullable(),
+          }),
+        },
+      },
+    },
+    404: { description: 'Not found, or not in this workspace' },
   },
 })
 
@@ -394,6 +593,53 @@ registry.registerPath({
 })
 
 registry.registerPath({
+  method: 'post',
+  path: '/agent/conversations/{id}/ask-resolved',
+  summary: 'Agent Ask If Resolved',
+  description:
+    'Asks the player "Did this solve it?" and sets confirm_phase = agent_ask. Requires status open or awaiting_player, confirm_phase none, and either ownership or an unassigned conversation. There is no agent-side resolve: only the player\'s answer moves the status. The inactivity clock sets confirm_phase = inactivity_ask on the same conversation shape after 24h of silence; the two are distinguished so the resolution can be attributed to `agent` or `player_confirmed`.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: { params: z.object({ id: z.uuid() }) },
+  responses: {
+    200: { description: 'Asked', content: { 'application/json': { schema: z.object({ asked: z.boolean() }) } } },
+    403: { description: 'Another agent owns this conversation' },
+    404: { description: 'Conversation not found' },
+    409: { description: 'Wrong status, or a check is already pending' },
+  },
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/agent/conversations/{id}/escalate',
+  summary: 'Agent Escalate Conversation',
+  description:
+    'Moves status from open or awaiting_player to escalated. A direct status flip, not a message side effect. Does not change assigned_agent_id — the agent keeps the conversation, only its status changes. Requires either ownership or an unassigned conversation.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: { params: z.object({ id: z.uuid() }) },
+  responses: {
+    200: { description: 'Escalated', content: { 'application/json': { schema: z.object({ escalated: z.boolean() }) } } },
+    403: { description: 'Another agent owns this conversation' },
+    404: { description: 'Conversation not found' },
+    409: { description: 'Wrong status' },
+  },
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/agent/conversations/{id}/unescalate',
+  summary: 'Agent Unescalate Conversation',
+  description: 'Moves status from escalated back to open. Requires either ownership or an unassigned conversation.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: { params: z.object({ id: z.uuid() }) },
+  responses: {
+    200: { description: 'Unescalated', content: { 'application/json': { schema: z.object({ unescalated: z.boolean() }) } } },
+    403: { description: 'Another agent owns this conversation' },
+    404: { description: 'Conversation not found' },
+    409: { description: 'Wrong status' },
+  },
+})
+
+registry.registerPath({
   method: 'get',
   path: '/agent/conversations/{id}/messages',
   summary: 'Agent Get Conversation Messages',
@@ -403,7 +649,10 @@ registry.registerPath({
     params: z.object({ id: z.uuid() }),
   },
   responses: {
-    200: { description: 'Messages list' },
+    200: {
+      description: 'Messages list',
+      content: { 'application/json': { schema: z.object({ messages: z.array(AgentMessageViewSchema) }) } },
+    },
   },
 })
 
@@ -588,6 +837,66 @@ registry.registerPath({
   responses: { 200: { description: 'Article archived' }, 404: { description: 'Not found' } },
 })
 
+registry.registerPath({
+  method: 'get',
+  path: '/agent/bot-config',
+  summary: 'Agent Get Bot Config',
+  description:
+    'The resolved bot config for this workspace: is_provisioned, prompt, rules, the joined system_prompt, and which of the two text fields is customised. An absent row resolves to the off state on the defaults. Team Lead or Admin.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  responses: {
+    200: { description: 'Resolved bot config' },
+    403: { description: 'Forbidden — Team Lead or Admin role required' },
+  },
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/agent/bot-config',
+  summary: 'Agent Save Bot Config',
+  description:
+    'Partial upsert of this workspace bot config, audited field-by-field into change_log in the same transaction. An omitted key is left alone; an explicit null on prompt or rules resets it to the default. An empty or whitespace-only value is refused. Admin-only.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: z.object({
+            is_provisioned: z.boolean().optional().openapi({ example: true }),
+            prompt: z.string().nullable().optional().openapi({ example: 'You are the first-line support assistant…' }),
+            rules: z.string().nullable().optional().openapi({ example: 'Never promise a refund.' }),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: { description: 'Resolved bot config after the save' },
+    403: { description: 'Forbidden — admin role required' },
+    422: { description: 'Nothing to change, an unknown field, or an empty prompt/rules value' },
+  },
+})
+
+registry.registerPath({
+  method: 'get',
+  path: '/agent/bot-config/history',
+  summary: 'Agent Get Bot Config Audit Trail',
+  description:
+    'This workspace bot-config change_log rows, newest first, cursor-paged. `field` is the database column name. `before_value` null means the field had no value before; `after_value` null means it was reset to the default. Team Lead or Admin.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: {
+    query: z.object({
+      limit: z.coerce.number().int().min(1).max(200).optional().openapi({ example: 50 }),
+      cursor: z.string().optional().openapi({ description: 'Opaque next_cursor from the previous page' }),
+    }),
+  },
+  responses: {
+    200: { description: 'Audit trail page' },
+    403: { description: 'Forbidden — Team Lead or Admin role required' },
+    422: { description: 'Invalid limit or cursor' },
+  },
+})
+
 // --- 6. SURFACE ARTICLE ENDPOINTS ---
 registry.registerPath({
   method: 'get',
@@ -616,6 +925,109 @@ registry.registerPath({
   description: 'Lists intents (categories) with at least one published article, alphabetical by name.',
   security: [{ [bearerPlayerJwt.name]: [] }],
   responses: { 200: { description: 'Intents list' } },
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/surface/resolution-answer',
+  summary: 'Player Answer Resolution Check',
+  description:
+    "The banner's Yes/No, for all three sources. Yes resolves the conversation — source `bot` on bot_article, `agent` on agent_ask, `player_confirmed` on inactivity_ask. No hands off to a human on bot_article, and only clears the phase on agent_ask and inactivity_ask (which restarts the inactivity clock). 409 when no check is pending.",
+  security: [{ [bearerPlayerJwt.name]: [] }],
+  request: { body: { content: { 'application/json': { schema: ResolutionAnswerBody } } } },
+  responses: {
+    200: {
+      description: 'Answer applied',
+      content: { 'application/json': { schema: z.object({ confirm_phase: z.string(), status: z.string() }) } },
+    },
+    404: { description: 'No conversation for this player' },
+    409: { description: 'No resolution check pending' },
+  },
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/surface/form/answer',
+  summary: 'Player Answer One Form Question',
+  description:
+    "One question of the pinned form card. No conversation id — the submission is the live one on the player's latest conversation. Answers are append-only: a second answer for the same field_key is a correction, not an update, and the newest wins on read. 409 when no form is pending; 422 for an unknown field, a value of the wrong type, a choice outside its options, or an attachment.",
+  security: [{ [bearerPlayerJwt.name]: [] }],
+  request: { body: { content: { 'application/json': { schema: FormAnswerBody } } } },
+  responses: {
+    200: {
+      description: 'Answer accepted',
+      content: { 'application/json': { schema: z.object({ ok: z.literal(true), is_correction: z.boolean() }) } },
+    },
+    404: { description: 'No conversation for this player' },
+    409: { description: 'No form pending' },
+    422: { description: 'Unknown field, invalid value, or unsupported field type' },
+  },
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/surface/form/submit',
+  summary: 'Player Submit Form',
+  description:
+    'Terminates the form and completes the gated handoff: the status is derived from the answer rows (completed / partial / skipped), an agent is assigned, the conversation opens, and a summary card is posted. 409 on an already-terminal submission.',
+  security: [{ [bearerPlayerJwt.name]: [] }],
+  request: { body: { content: { 'application/json': { schema: FormTerminateBody } } } },
+  responses: {
+    200: {
+      description: 'Form terminated and handoff completed',
+      content: {
+        'application/json': {
+          schema: z.object({ confirm_phase: z.literal('none'), status: z.string(), form_status: z.string() }),
+        },
+      },
+    },
+    404: { description: 'No conversation for this player' },
+    409: { description: 'No form pending' },
+  },
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/surface/form/skip',
+  summary: 'Player Skip Form',
+  description:
+    'The "Skip and talk to an agent" button, present on every question and never removable — nothing about a form may block a player reaching a human. Identical end state to submit; only form_completed.terminated_by differs. Answers given before the skip are kept, so a partly-filled form terminates as partial, not skipped.',
+  security: [{ [bearerPlayerJwt.name]: [] }],
+  request: { body: { content: { 'application/json': { schema: FormTerminateBody } } } },
+  responses: {
+    200: {
+      description: 'Form skipped and handoff completed',
+      content: {
+        'application/json': {
+          schema: z.object({ confirm_phase: z.literal('none'), status: z.string(), form_status: z.string() }),
+        },
+      },
+    },
+    404: { description: 'No conversation for this player' },
+    409: { description: 'No form pending' },
+  },
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/surface/new-ticket',
+  summary: 'Player Open New Ticket',
+  description:
+    "Closes the player's current conversation for good and opens a fresh one. Only valid when that conversation is already resolved or closed — 409 otherwise, since a player has at most one live conversation at a time. Returns the new conversation, which starts empty.",
+  security: [{ [bearerPlayerJwt.name]: [] }],
+  request: { body: { content: { 'application/json': { schema: NewTicketBody } } } },
+  responses: {
+    201: {
+      description: 'New conversation opened',
+      content: {
+        'application/json': {
+          schema: z.object({ conversation_id: z.uuid(), status: z.string(), message: z.null() }),
+        },
+      },
+    },
+    404: { description: 'No conversation for this player' },
+    409: { description: 'The current conversation is still open' },
+  },
 })
 
 // Build Document

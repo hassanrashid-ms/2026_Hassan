@@ -22,7 +22,13 @@ modelling, metrics, or any feature that touches the core entities.
   it on `POST /sdk/sessions/start` — before any conversation exists. A conversation reaches its
   snapshot via `conversation.session_id`.
 - A reopen never rewrites that FK — "a reopened cycle keeps the original snapshot" is enforced
-  by the graph.
+  by the graph. `conversation.session_id` therefore says **where the conversation began**;
+  `conversation_reopened.session_id` says **where this reopen happened**. Those differing on
+  purpose is the design, not drift.
+- It is set from the **verified session on the creating request**, falling back to the player's
+  latest-started session only when the request carried none. The fallback is a proxy that is
+  correct with one live device and wrong with two (an Android build and the editor at once), so
+  it is a last resort, never the first choice.
 - Snapshot may arrive *after* the conversation (Outbox retries). `ON CONFLICT (id) DO NOTHING`
   on `session_id` makes delivery order irrelevant.
 - Three distinct no-data states, all rendered "unavailable" but diagnosed differently: **no row**
@@ -57,11 +63,16 @@ modelling, metrics, or any feature that touches the core entities.
 - Which article the bot offered is **not a column** — it's in `article_shown` / `article_rejected`
   events with the title snapshotted into the payload.
 
-**Forms** — *(2026-08-10: superseding the earlier conversational design below)*
-- **Forms are structured, Google-Form-style UIs opened in a modal — not messages in the
-  conversation thread.** The bot no longer asks form questions turn-by-turn in the thread; it
-  offers the form as a distinct UI action, the player fills it out in the modal, and the answers
-  land as one structured submission.
+**Forms** — *(2026-08-17: the modal premise below is reverted; see
+`docs/specs/2026-08-17-player-side-forms-design.md`. The 2026-08-10 note it supersedes still stands
+for everything except where the questions are asked.)*
+- **Forms are asked one question at a time, in a card pinned above the composer** — not in a modal,
+  and not as conversation turns. The 2026-08-10 note said modal; that is the one thing that changed.
+  The player answers or skips; either way they reach an agent, and **the skip is always present, one
+  tap, and cannot be removed.**
+- **The storage shape is unaffected by that reversal.** Append-only `form_answer` rows keyed by
+  `field_key` suit one-at-a-time better than they suited a modal: a modal submits once, whereas
+  one-at-a-time writes a row per step and needs exactly that durability.
 - **Mapped at the subintent level, admin-decided.** An admin chooses which subintents get a
   form and builds it. A subintent maps to exactly one form; a form can serve several subintents.
   A subintent with no form mapped never shows one.
@@ -72,6 +83,11 @@ modelling, metrics, or any feature that touches the core entities.
   thread is still the record of what happened.
 - `form_submission.status` is `in_progress | completed | partial | skipped`. Row created when
   the modal opens (`started_at`); `submitted_at` is nullable.
+- `status` is **derived from the answer rows** at terminate time, not from which button was pressed:
+  `completed` = every field has at least one answer, `partial` = some do and some do not, `skipped` =
+  zero answers. Partial answers therefore survive a skip. *Which* action terminated the submission —
+  submit, skip or the abandonment sweeper — is a fact about the turn and lives in the
+  `form_completed` event payload, not in a column.
 - `form_answer` now holds the field value written directly from the modal's structured input —
   **not** extracted from a chat message. `form_answer.message_id` is dropped; there is no prose
   to parse, so the earlier "original words must be reachable" reasoning no longer applies.
@@ -230,6 +246,30 @@ Event types needed: `intent_set` (with `source: bot|agent`), `intent_corrected`,
 `conversation_reopened`, `assignment_returned`, `form_started`, `form_completed`, `form_partial`,
 `form_skipped`, `sdk_incident`.
 
+Lifecycle types added since: `conversation_opened` (`{ entry_point }`),
+`conversation_assigned_bot` (`{}`), `conversation_assigned` (`{ agent_id, via }` — `via: 'claim'`
+today, so a future auto-assignment path writes the same type with a different `via`, not a second
+type), `conversation_player_replied`, `conversation_awaiting_player`, `bot_handoff`
+(`{ reason, assigned_agent_id }`), `bot_unavailable` (`{ reason }`), `message_sent`.
+
+Bot retrieval types: `bot_search` (`{ query, result_count, articles }` — one per `search_articles`
+call the model made, written on every outcome including a handoff), `bot_article_offered`
+(`{ article_id, article_title }`), `bot_article_rejected` (`{}`). `bot_search` is the difference
+between *"the bot never consulted the knowledge base"* and *"the knowledge base had no answer"* —
+two failures that look identical in every other row and need opposite fixes. See
+`docs/specs/2026-08-12-bot-tool-calling-decider-design.md`.
+
+**The session attribution rule.** *An event carries `session_id` when a verified player session
+accompanied the request that caused it. Otherwise `null`.* A client-supplied session id is
+**always** confirmed with a scoped `(id, player_id)` lookup before it is written — FK checks bypass
+RLS, so an unverified id would point across the tenant boundary — and any miss (absent, unknown,
+another player's, or not uploaded yet) degrades to `null` rather than failing the write. Nulls are
+deliberate: a background worker has no session, and inventing one puts a wrong answer into the
+`(session_id, type)` index rather than no answer. Player-caused events (`message_sent` from a
+player, `conversation_opened`, `conversation_assigned_bot`, `conversation_reopened`,
+`conversation_player_replied`) are stamped; agent-, bot- and system-caused ones are not. See
+`docs/specs/2026-08-13-conversation-lifecycle-events-and-session-attribution-design.md`.
+
 **`article_read` and `still_need_help_reached`** are what the funnel is made of (Opened → Viewed
 article → Reached "still need help?" → Created a ticket). `article_read` ≠ `article_feedback`:
 reading and answering "did this help?" are separate signals.
@@ -363,6 +403,9 @@ put things in front of players.
 - **No cross-workspace reads, enforced in the data layer.**
 - **No published articles in a workspace** → skip the article step, go straight to the bot.
 - **Changing taxonomy, forms, bot prompt or rules must never require a release.**
+- **Bot prompt and rules are two stored fields, sent as one system prompt.** `bot_config.prompt` and
+  `bot_config.rules` are separate nullable columns — separately editable, separately audited in
+  `change_log` — joined only at send time by `buildSystemPrompt`. Never store them merged.
 
 ---
 

@@ -20,7 +20,9 @@ const { withWorkspace, withoutWorkspace } = await import('./withWorkspace.ts')
 const { generateWorkspaceSecret } = await import('../auth/workspaceSecret.ts')
 const { logger } = await import('../logging/logger.ts')
 const { SEED_TAXONOMY } = await import('./seedTaxonomy.ts')
+const { SEED_FORMS, seedForms } = await import('./seedForms.ts')
 const { upsertArticleObject } = await import('../weaviate/articlesIndex.ts')
+const { OTHER_INTENT_NAME, OTHER_SUBINTENT_NAME } = await import('../../domain/bot/fallbackSubintent.ts')
 
 const SLUG = process.env.SEED_WORKSPACE_SLUG ?? 'demo-workspace'
 const ADMIN_EMAIL = process.env.SEED_ADMIN_EMAIL ?? 'admin@example.test'
@@ -86,6 +88,8 @@ export async function seed(): Promise<void> {
   // the tenant policy's WITH CHECK. Only `workspace` and `agent` are unscoped.
   const insertedArticles: (typeof article.$inferSelect)[] = []
   let skippedArticles = 0
+  let formsCreated = 0
+  let subintentsMapped = 0
   await withWorkspace(workspaceId, async (tx) => {
     const now = new Date()
     await tx
@@ -113,17 +117,25 @@ export async function seed(): Promise<void> {
     // here with an explicit lookup — otherwise every re-run of this seed would
     // duplicate all sixteen articles.
     for (const intentData of SEED_TAXONOMY) {
-      const [newIntent] = await tx
+      let [currentIntent] = await tx
         .insert(intent)
         .values({ workspaceId, name: intentData.name })
         .onConflictDoNothing()
         .returning({ id: intent.id })
 
-      if (newIntent) {
+      if (!currentIntent) {
+        [currentIntent] = await tx
+          .select({ id: intent.id })
+          .from(intent)
+          .where(and(eq(intent.workspaceId, workspaceId), eq(intent.name, intentData.name)))
+          .limit(1)
+      }
+
+      if (currentIntent) {
         for (const subintentName of intentData.subintents) {
           await tx
             .insert(subintent)
-            .values({ workspaceId, intentId: newIntent.id, name: subintentName })
+            .values({ workspaceId, intentId: currentIntent.id, name: subintentName })
             .onConflictDoNothing()
         }
 
@@ -142,7 +154,7 @@ export async function seed(): Promise<void> {
             .insert(article)
             .values({
               workspaceId,
-              intentId: newIntent.id,
+              intentId: currentIntent.id,
               title: articleData.title,
               body: articleData.body,
               keywords: articleData.keywords,
@@ -155,6 +167,23 @@ export async function seed(): Promise<void> {
         }
       }
     }
+
+    const [otherIntent] = await tx
+      .insert(intent)
+      .values({ workspaceId, name: OTHER_INTENT_NAME, isSystem: true })
+      .onConflictDoNothing()
+      .returning({ id: intent.id })
+    if (otherIntent) {
+      await tx.insert(subintent).values({ workspaceId, intentId: otherIntent.id, name: OTHER_SUBINTENT_NAME }).onConflictDoNothing()
+    }
+
+    // After the taxonomy loop on purpose: the mapping is by subintent NAME, so
+    // every subintent row must already exist. `Other` is included in the scan
+    // and maps to nothing, which is correct — an unplaceable conversation gets
+    // no form.
+    const formCounts = await seedForms(tx, workspaceId)
+    formsCreated = formCounts.forms
+    subintentsMapped = formCounts.mapped
   })
 
   // Indexed after the transaction commits, the same shape `publishArticle` sends
@@ -183,6 +212,10 @@ export async function seed(): Promise<void> {
   logger.info(
     'db',
     `intents     ${SEED_TAXONOMY.length} categories, ${SEED_TAXONOMY.reduce((n, i) => n + i.subintents.length, 0)} sub-intents, ${insertedArticles.length} articles created (${skippedArticles} already existed), ${indexedCount} indexed into Weaviate`,
+  )
+  logger.info(
+    'db',
+    `forms       ${formsCreated} created (${SEED_FORMS.length - formsCreated} already existed), ${subintentsMapped} subintents mapped, ${SEED_FORMS.length} published at v1`,
   )
   logger.info('db', 'Workspace secret — printed only here, and only the game backend should hold it:')
   logger.info('db', `  ${secret}`)

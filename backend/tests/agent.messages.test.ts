@@ -1,7 +1,7 @@
 import { createServer } from 'node:http'
 import express from 'express'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import request from 'supertest'
+import { req as request } from './helpers/http.ts'
 import { closeDb } from '../src/shared/db/client.ts'
 import { requireAgentSession } from '../src/shared/middleware/requireAgentSession.ts'
 import { errorMiddleware } from '../src/errors.ts'
@@ -194,6 +194,29 @@ describe('POST /agent/messages — internal notes and status transition', () => 
       [conversationId],
     )
     expect(rows[0]!.status).toBe('awaiting_player')
+  })
+
+  // Escalated is forward-only to resolved: an agent's reply must never pull it back into the
+  // ordinary open/awaiting_player flow, or a ticket that's gone to engineering silently loses
+  // that state the moment someone types in the thread.
+  it('a public reply while escalated leaves status escalated', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const conversationId = await seedConversation({ workspaceId, playerId })
+    await ownerPool.query(`update conversation set status = 'escalated' where id = $1`, [conversationId])
+    const { token } = await setupAssignedAgent(workspaceId, conversationId)
+
+    await request(app)
+      .post('/messages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ conversation_id: conversationId, body: 'still working on this with engineering' })
+      .expect(200)
+
+    const { rows } = await ownerPool.query<{ status: string }>(
+      `select status from conversation where id = $1`,
+      [conversationId],
+    )
+    expect(rows[0]!.status).toBe('escalated')
   })
 
   it('message_sent event payload includes visibility', async () => {

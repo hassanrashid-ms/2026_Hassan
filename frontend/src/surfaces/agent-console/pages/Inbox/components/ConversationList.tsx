@@ -3,6 +3,7 @@ import type { AgentConversationsResponse, ConversationStatusValue } from '@suppo
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { claimConversation, fetchInbox } from '../../../api/agentApi.ts'
 import { createSocket } from '../../../../../features/chat/api/socket.ts'
+import { handleSessionExpired } from '../../../lib/authErrorHandling.ts'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../components/ui/tabs.tsx'
 import { ScrollArea } from '../../../components/ui/scroll-area.tsx'
 import { ConversationRow } from './ConversationRow.tsx'
@@ -39,6 +40,10 @@ export function ConversationList({
   useEffect(() => {
     const socket = createSocket(token, 'agent')
     let refetchTimer: ReturnType<typeof setTimeout> | undefined
+
+    socket.on('connect_error', (err) => {
+      if (err.message === 'unauthorized') handleSessionExpired()
+    })
 
     /**
      * The badge updates from the socket payload; this only catches up the fields

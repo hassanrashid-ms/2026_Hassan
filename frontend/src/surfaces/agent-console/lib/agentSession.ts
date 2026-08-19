@@ -1,4 +1,5 @@
 const STORAGE_KEY = 'support_agent_session'
+const CONTEXT_RAIL_KEY = 'support_context_rail_open'
 
 export type StoredAgentSession = {
   token: string
@@ -23,4 +24,14 @@ export function saveAgentSession(session: StoredAgentSession): void {
 
 export function clearAgentSession(): void {
   localStorage.removeItem(STORAGE_KEY)
+}
+
+// Persisted, not component state: a rail that re-collapses on every navigation
+// is a rail agents stop opening.
+export function loadContextRailOpen(): boolean {
+  return localStorage.getItem(CONTEXT_RAIL_KEY) === 'true'
+}
+
+export function saveContextRailOpen(open: boolean): void {
+  localStorage.setItem(CONTEXT_RAIL_KEY, String(open))
 }

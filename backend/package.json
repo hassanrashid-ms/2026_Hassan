@@ -9,15 +9,19 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "db:setup": "node --experimental-strip-types src/shared/db/setup.ts",
+    "db:generate": "drizzle-kit generate",
+    "db:baseline": "node --experimental-strip-types src/shared/db/baseline.ts",
     "db:seed": "node --experimental-strip-types src/shared/db/seed.ts",
     "db:studio": "drizzle-kit studio",
     "weaviate:setup": "node --experimental-strip-types scripts/setup-weaviate-collection.ts"
   },
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "^9.1.0",
+    "@langfuse/openai": "^5.10.0",
+    "@langfuse/otel": "^5.10.0",
+    "@opentelemetry/sdk-node": "^0.221.0",
     "@socket.io/redis-adapter": "^8",
     "@support/types": "workspace:*",
-    "weaviate-client": "^3",
     "bullmq": "^5",
     "cors": "^2",
     "dotenv": "^16",
@@ -25,9 +29,11 @@
     "express": "^5",
     "ioredis": "^5",
     "jose": "^6",
+    "openai": "^7.4.0",
     "pg": "^8",
     "socket.io": "^4",
     "swagger-ui-express": "^5.0.1",
+    "weaviate-client": "^3",
     "zod": "^4"
   },
   "devDependencies": {

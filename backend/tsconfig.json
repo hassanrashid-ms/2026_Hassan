@@ -5,6 +5,11 @@
     "rootDir": ".",
     "types": ["node"],
     "allowImportingTsExtensions": true,
+    // The backend runs under `node --experimental-strip-types`, which erases types
+    // and transforms nothing. This makes `tsc --noEmit` reject the syntax that
+    // needs a transform (parameter properties, enums, namespaces) instead of
+    // letting it pass typecheck and crash the server at load.
+    "erasableSyntaxOnly": true,
     "noEmit": true,
     "declaration": false
   },

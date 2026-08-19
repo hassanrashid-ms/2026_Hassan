@@ -32,6 +32,21 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public
 REVOKE UPDATE, DELETE ON event FROM support_app;
 REVOKE UPDATE, DELETE ON event FROM PUBLIC;
 
+-- 2a - change_log is the audit trail. An editable audit trail is not one, so
+-- UPDATE and DELETE come straight back off after the blanket GRANT above.
+--
+-- bot_config deliberately KEEPS UPDATE: its only writer is an
+-- INSERT ... ON CONFLICT (workspace_id) DO UPDATE, so revoking here would break
+-- the second save on every workspace. Do not "tidy" these two into symmetry.
+REVOKE UPDATE, DELETE ON change_log FROM support_app;
+REVOKE UPDATE, DELETE ON change_log FROM PUBLIC;
+
+-- 2c - form_answer is append-only: a correction is a NEW row for the same
+-- field_key and the newest created_at wins on read.
+-- DELETE is already granted nowhere, but revoked here too.
+REVOKE UPDATE, DELETE ON form_answer FROM support_app;
+REVOKE UPDATE, DELETE ON form_answer FROM PUBLIC;
+
 -- 2b - workspace and agent are the two unscoped tables, but they are NOT
 -- treated identically, and that asymmetry is intentional — do not "tidy" it
 -- into symmetry.
@@ -48,6 +63,14 @@ REVOKE UPDATE, DELETE ON event FROM PUBLIC;
 --   so support_app must keep INSERT and UPDATE here — narrowing this to
 --   column-scoped grants is future work once the console ships, not now.
 REVOKE INSERT, UPDATE ON workspace FROM support_app;
+
+-- ...with one column-scoped exception. conversation.number is allocated on the
+-- request path (allocateTicketNumber), which needs to bump this counter and
+-- nothing else on the row. Granting the column rather than the table keeps
+-- secret_hash unwritable by support_app, which is the whole point of the
+-- REVOKE above. This is the same narrowing named as future work for `agent`,
+-- applied one table over.
+GRANT UPDATE (ticket_seq) ON workspace TO support_app;
 
 -- 3 - One identical policy per scoped table. "Scoped" is defined structurally
 -- — any base table in public with a workspace_id column — rather than as a

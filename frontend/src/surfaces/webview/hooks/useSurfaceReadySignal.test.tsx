@@ -86,15 +86,32 @@ describe('useSurfaceReadySignal', () => {
     expect(posted).toEqual([{ type: 'surface_ready' }])
   })
 
-  it('does not post after the surface unmounts', async () => {
-    const posted = installBridge()
-    const spy = vi.spyOn(window, 'requestAnimationFrame')
-
+  /*
+   * With a bridge already present the signal is sent synchronously on mount, and
+   * that is deliberate: it used to wait two animation frames, which never arrive
+   * while the SDK holds the native view hidden — the signal waited on a paint that
+   * the signal itself had to unblock. So the guarantee is no longer "unmount
+   * cancels a pending post"; it is that a surface which goes away before the
+   * bridge shows up never speaks for a page that is no longer there.
+   */
+  it('does not post when the bridge arrives after the surface unmounts', async () => {
     const { unmount } = render(<Probe resolved />)
     unmount()
 
+    const posted = installBridge()
+    window.dispatchEvent(new Event('supportbridgeready'))
+    document.dispatchEvent(new Event('supportbridgeready'))
+
     await new Promise((resolve) => setTimeout(resolve, 50))
     expect(posted).toEqual([])
-    spy.mockRestore()
+  })
+
+  it('posts immediately when the bridge is already there, without waiting for a frame', () => {
+    const posted = installBridge()
+    // No rAF stub and no awaiting: a hidden webview never delivers a frame, so
+    // anything that needed one here would deadlock on the real device.
+    render(<Probe resolved />)
+
+    expect(posted).toEqual([{ type: 'surface_ready' }])
   })
 })

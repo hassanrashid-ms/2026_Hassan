@@ -9,6 +9,7 @@ const valid = {
   WEAVIATE_API_KEY: 'weaviate-test-api-key',
   PLAYER_JWT_SECRET: 'x'.repeat(32),
   AGENT_SESSION_JWT_SECRET: 'y'.repeat(32),
+  OPENAI_MODEL: 'gpt-5.4-mini',
 }
 
 describe('loadEnv', () => {
@@ -37,5 +38,10 @@ describe('loadEnv', () => {
 
   it('throws when PLAYER_JWT_SECRET is too short to be worth having', () => {
     expect(() => loadEnv({ ...valid, PLAYER_JWT_SECRET: 'short' })).toThrow(/PLAYER_JWT_SECRET/)
+  })
+
+  it('fails validation when OPENAI_MODEL is missing', () => {
+    const { OPENAI_MODEL, ...rest } = valid
+    expect(() => loadEnv(rest)).toThrow(/OPENAI_MODEL/)
   })
 })

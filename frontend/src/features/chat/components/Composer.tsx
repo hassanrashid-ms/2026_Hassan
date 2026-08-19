@@ -7,6 +7,8 @@ type ComposerProps = {
    *  onSend is always called with visibility undefined there — there is no code path for a
    *  player to send an internal note. */
   allowVisibilityToggle?: boolean
+  /** Defaults to today's copy, so the webview surface is untouched. */
+  placeholder?: string
 }
 
 /**
@@ -14,7 +16,7 @@ type ComposerProps = {
  * a semantic classname — shared across surfaces, each of which defines those
  * tokens differently in its own scoped stylesheet (see ChatThread.tsx).
  */
-export function Composer({ onSend, disabled, allowVisibilityToggle }: ComposerProps) {
+export function Composer({ onSend, disabled, allowVisibilityToggle, placeholder = 'Type a message…' }: ComposerProps) {
   const [value, setValue] = useState('')
   const [visibility, setVisibility] = useState<'public' | 'internal'>('public')
 
@@ -66,7 +68,10 @@ export function Composer({ onSend, disabled, allowVisibilityToggle }: ComposerPr
             submit()
           }
         }}
-        placeholder="Type a message…"
+        placeholder={placeholder}
+        // The visibility toggle above is labelled; this had no accessible name
+        // at all, which the webview's own composer has always carried.
+        aria-label="Message"
         className="min-h-9 max-h-24 flex-1 resize-none rounded-md border border-muted/20 bg-accent-soft px-3 py-1.5 text-sm text-text outline-none placeholder:text-muted focus:border-accent"
       />
       <button

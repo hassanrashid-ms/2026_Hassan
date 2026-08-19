@@ -1,7 +1,7 @@
 import { createServer } from 'node:http'
 import express from 'express'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import request from 'supertest'
+import { req as request } from './helpers/http.ts'
 import { closeDb } from '../src/shared/db/client.ts'
 import { requireAgentSession } from '../src/shared/middleware/requireAgentSession.ts'
 import { errorMiddleware } from '../src/errors.ts'
@@ -75,6 +75,53 @@ describe('GET /agent/conversations', () => {
     expect(res.body.conversations).toHaveLength(1)
     expect(res.body.conversations[0].last_message_preview).toBe('help please')
   })
+
+  it('lists confirm_phase per conversation', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const conversationId = await seedConversation({ workspaceId, playerId })
+    const { agentId, token } = await setupAgent(workspaceId)
+    await ownerPool.query(`update conversation set assigned_agent_id = $2 where id = $1`, [conversationId, agentId])
+    await ownerPool.query(`update conversation set confirm_phase = 'agent_ask' where id = $1`, [conversationId])
+
+    const res = await request(app).get('/conversations').query({ status: 'mine' }).set('Authorization', `Bearer ${token}`).expect(200)
+
+    expect(res.body.conversations[0].confirm_phase).toBe('agent_ask')
+  })
+
+  it('omits a resolved conversation from the unassigned list', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const resolvedId = await seedConversation({ workspaceId, playerId })
+    const openId = await seedConversation({ workspaceId, playerId })
+    await ownerPool.query(`update conversation set status = 'resolved' where id = $1`, [resolvedId])
+    const { token } = await setupAgent(workspaceId)
+
+    const res = await request(app)
+      .get('/conversations')
+      .query({ status: 'unassigned' })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+
+    expect(res.body.conversations.map((c: { id: string }) => c.id)).toEqual([openId])
+  })
+
+  it('omits a closed conversation from the mine list', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const closedId = await seedConversation({ workspaceId, playerId })
+    const openId = await seedConversation({ workspaceId, playerId })
+    const { agentId, token } = await setupAgent(workspaceId)
+    await ownerPool.query(`update conversation set assigned_agent_id = $2 where id = any($1::uuid[])`, [
+      [closedId, openId],
+      agentId,
+    ])
+    await ownerPool.query(`update conversation set status = 'closed' where id = $1`, [closedId])
+
+    const res = await request(app).get('/conversations').query({ status: 'mine' }).set('Authorization', `Bearer ${token}`).expect(200)
+
+    expect(res.body.conversations.map((c: { id: string }) => c.id)).toEqual([openId])
+  })
 })
 
 describe('POST /agent/conversations/:id/claim', () => {
@@ -89,6 +136,62 @@ describe('POST /agent/conversations/:id/claim', () => {
       .set('Authorization', `Bearer ${token}`)
       .expect(200)
     expect(res.body).toEqual({ claimed: true })
+  })
+
+  it('writes exactly one conversation_assigned event for a successful claim', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const conversationId = await seedConversation({ workspaceId, playerId })
+    const { agentId, token } = await setupAgent(workspaceId)
+
+    await request(app).post(`/conversations/${conversationId}/claim`).set('Authorization', `Bearer ${token}`).expect(200)
+
+    const { rows } = await ownerPool.query(
+      `select actor_type, actor_id, session_id, payload from event where conversation_id = $1 and type = 'conversation_assigned' order by id`,
+      [conversationId],
+    )
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({
+      actor_type: 'agent',
+      actor_id: agentId,
+      session_id: null,
+      payload: { agent_id: agentId, via: 'claim' },
+    })
+  })
+
+  it('a losing claim on an already-claimed conversation writes no extra event', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const conversationId = await seedConversation({ workspaceId, playerId })
+    const agentA = await setupAgent(workspaceId)
+    const { rows: agentBRows } = await ownerPool.query<{ id: string }>(
+      `insert into agent (email, display_name) values ('agent2@example.test', 'Agent Two') returning id`,
+    )
+    await ownerPool.query(`insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`, [
+      workspaceId,
+      agentBRows[0]!.id,
+    ])
+    const tokenB = await signAgentSession({ agent_id: agentBRows[0]!.id, workspace_id: workspaceId })
+
+    await request(app).post(`/conversations/${conversationId}/claim`).set('Authorization', `Bearer ${agentA.token}`).expect(200)
+    const resB = await request(app)
+      .post(`/conversations/${conversationId}/claim`)
+      .set('Authorization', `Bearer ${tokenB}`)
+      .expect(200)
+    expect(resB.body).toEqual({ claimed: false })
+
+    const { rows } = await ownerPool.query<{ n: number }>(
+      `select count(*)::int as n from event where conversation_id = $1 and type = 'conversation_assigned'`,
+      [conversationId],
+    )
+    expect(rows[0]!.n).toBe(1)
+
+    // The one event that exists is the winner's, not the loser's.
+    const { rows: actors } = await ownerPool.query<{ actor_id: string }>(
+      `select actor_id from event where conversation_id = $1 and type = 'conversation_assigned'`,
+      [conversationId],
+    )
+    expect(actors[0]!.actor_id).toBe(agentA.agentId)
   })
 
   it('a claim race: exactly one of two concurrent claims succeeds', async () => {
@@ -112,6 +215,68 @@ describe('POST /agent/conversations/:id/claim', () => {
 
     const claimedFlags = [resA.body.claimed, resB.body.claimed].sort()
     expect(claimedFlags).toEqual([false, true])
+  })
+
+  it('refuses to claim a resolved conversation and leaves it unassigned', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const conversationId = await seedConversation({ workspaceId, playerId })
+    await ownerPool.query(`update conversation set status = 'resolved' where id = $1`, [conversationId])
+    const { token } = await setupAgent(workspaceId)
+
+    const res = await request(app)
+      .post(`/conversations/${conversationId}/claim`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+    expect(res.body).toEqual({ claimed: false })
+
+    const { rows } = await ownerPool.query<{ assigned_agent_id: string | null }>(
+      `select assigned_agent_id from conversation where id = $1`,
+      [conversationId],
+    )
+    expect(rows[0]!.assigned_agent_id).toBeNull()
+  })
+
+  it('a refused claim on a closed conversation writes no conversation_assigned event', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const conversationId = await seedConversation({ workspaceId, playerId })
+    await ownerPool.query(`update conversation set status = 'closed' where id = $1`, [conversationId])
+    const { token } = await setupAgent(workspaceId)
+
+    await request(app).post(`/conversations/${conversationId}/claim`).set('Authorization', `Bearer ${token}`).expect(200)
+
+    const { rows } = await ownerPool.query<{ n: number }>(
+      `select count(*)::int as n from event where conversation_id = $1 and type = 'conversation_assigned'`,
+      [conversationId],
+    )
+    expect(rows[0]!.n).toBe(0)
+  })
+
+  it('an open unassigned conversation is still listed and still claimable', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const conversationId = await seedConversation({ workspaceId, playerId })
+    const { agentId, token } = await setupAgent(workspaceId)
+
+    const list = await request(app)
+      .get('/conversations')
+      .query({ status: 'unassigned' })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+    expect(list.body.conversations.map((c: { id: string }) => c.id)).toEqual([conversationId])
+
+    const res = await request(app)
+      .post(`/conversations/${conversationId}/claim`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+    expect(res.body).toEqual({ claimed: true })
+
+    const { rows } = await ownerPool.query<{ assigned_agent_id: string | null }>(
+      `select assigned_agent_id from conversation where id = $1`,
+      [conversationId],
+    )
+    expect(rows[0]!.assigned_agent_id).toBe(agentId)
   })
 })
 

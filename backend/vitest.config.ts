@@ -19,6 +19,10 @@ export default defineConfig({
   test: {
     environment: 'node',
     globalSetup: ['./tests/globalSetup.ts'],
+    // Per-worker, unlike globalSetup: it disables HTTP keep-alive so supertest's
+    // one-server-per-request model cannot reuse a pooled socket to a recycled
+    // ephemeral port. See tests/setup.ts for the failure it fixes.
+    setupFiles: ['./tests/setup.ts'],
     // Vitest 4 removed `poolOptions.forks.singleFork`; per the migration guide,
     // `fileParallelism: false` is the top-level replacement (it forces maxWorkers
     // to 1). We keep `pool: 'forks'` alongside it. Every test shares one Postgres

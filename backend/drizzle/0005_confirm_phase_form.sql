@@ -1,0 +1,1 @@
+ALTER TYPE "public"."confirm_phase" ADD VALUE 'form';

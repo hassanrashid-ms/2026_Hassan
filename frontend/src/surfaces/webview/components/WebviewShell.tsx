@@ -40,6 +40,16 @@ export function WebviewShell() {
   // idempotent instead of relying on removing StrictMode, which stays on deliberately.
   const startedRef = useRef(false)
 
+  // Mirrors `data` for the poll below. The poll must not list `data` as a
+  // dependency (see the effect for why), so it cannot read the state variable —
+  // its closure would capture the value from the render that armed the interval.
+  const dataRef = useRef<BootstrapResponse | null>(null)
+
+  const applyData = useCallback((next: BootstrapResponse) => {
+    dataRef.current = next
+    setData(next)
+  }, [])
+
   useEffect(() => {
     if (startedRef.current) return
     startedRef.current = true
@@ -72,7 +82,7 @@ export function WebviewShell() {
     scrubToken(window.history, window.location)
 
     fetchBootstrap(parsed.token, parsed.sessionId)
-      .then(setData)
+      .then(applyData)
       .catch(() => {
         // Session might still be initializing via SDK POST /sdk/sessions/start.
         // The polling effect below will retry fetchBootstrap until the session lands.
@@ -80,25 +90,53 @@ export function WebviewShell() {
   }, [])
 
   // Poll until the session exists and player state snapshot availability is no longer 'absent'.
+  //
+  // `data` is deliberately NOT a dependency, and the poll reads dataRef instead.
+  // It used to be one, while every successful poll called setData — so each tick
+  // tore this effect down and re-ran it, rebuilding the interval with `attempts`
+  // back at 0. MAX_POLL_ATTEMPTS was therefore unreachable on any path where
+  // bootstrap kept succeeding: a session whose player state stayed 'absent'
+  // polled forever at 800ms, and on a high-latency link (a phone on cellular
+  // through the dev tunnel, where a request costs over a second) those queue up
+  // faster than they drain and starve the article and intent fetches sharing the
+  // connection. Only the all-throws path could ever stop.
   useEffect(() => {
     if (!boot) return
-    if (data !== null && data.player_state.availability !== 'absent') return
+    const current = dataRef.current
+    if (current !== null && current.player_state.availability !== 'absent') return
 
     let attempts = 0
 
     const interval = setInterval(() => {
+      // The mount fetch may have landed after this interval was armed. Without
+      // `data` as a dependency nothing re-runs the effect to stop it, so the
+      // stop condition is re-checked here instead of costing a wasted request.
+      const latest = dataRef.current
+      if (latest !== null && latest.player_state.availability !== 'absent') {
+        clearInterval(interval)
+        return
+      }
+
       attempts += 1
       fetchBootstrap(boot.token, boot.sessionId)
         .then((next) => {
-          setData(next)
-          if (next.player_state.availability !== 'absent') {
+          applyData(next)
+          // Give up quietly once the budget is spent. Player state that never
+          // arrives is a legitimate state, not a failure — bootstrap itself
+          // succeeded, so the screens have everything else they need and the
+          // player must not be shown an error for a missing snapshot.
+          if (next.player_state.availability !== 'absent' || attempts >= MAX_POLL_ATTEMPTS) {
             clearInterval(interval)
           }
         })
         .catch((cause: unknown) => {
-          if (attempts >= MAX_POLL_ATTEMPTS && data === null) {
+          if (attempts >= MAX_POLL_ATTEMPTS) {
             clearInterval(interval)
-            setError(cause instanceof Error ? cause.message : 'Could not load support.')
+            // Only a total failure is worth a screen: if an earlier fetch landed,
+            // keep showing it rather than replacing real content with an error.
+            if (dataRef.current === null) {
+              setError(cause instanceof Error ? cause.message : 'Could not load support.')
+            }
           }
         })
     }, POLL_INTERVAL_MS)
@@ -106,7 +144,7 @@ export function WebviewShell() {
     return () => clearInterval(interval)
     // retryNonce is a deliberate dependency: bumping it re-arms an interval that
     // gave up. Today the poll simply stops and the player has no way back.
-  }, [boot, data, retryNonce])
+  }, [boot, retryNonce, applyData])
 
   const retry = useCallback(() => {
     setError(null)

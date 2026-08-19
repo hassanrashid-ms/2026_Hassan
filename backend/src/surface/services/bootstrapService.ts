@@ -1,4 +1,4 @@
-import { and, eq, ne, sql } from 'drizzle-orm'
+import { and, desc, eq, ne, sql } from 'drizzle-orm'
 import { conversation, message, player, playerStateSnapshot, session, workspace } from '../../shared/db/schema/index.ts'
 import { withWorkspace } from '../../shared/db/withWorkspace.ts'
 import type { PlayerContext } from '../../shared/middleware/requirePlayerToken.ts'
@@ -39,18 +39,30 @@ export async function loadBootstrap(ctx: PlayerContext, query: BootstrapQueryInp
       .where(eq(playerStateSnapshot.sessionId, found.id))
       .limit(1)
 
-    const [unread] = await tx
-      .select({ count: sql<number>`count(*)::int` })
-      .from(message)
-      .innerJoin(conversation, eq(conversation.id, message.conversationId))
-      .where(
-        and(
-          eq(conversation.playerId, ctx.playerId),
-          eq(message.visibility, 'public'),
-          ne(message.authorType, 'player'),
-          ne(message.deliveryState, 'read'),
-        ),
-      )
+    // The player's *latest* conversation, not all of them: closed tickets stay
+    // in history once "open a new ticket" ships, and a player_id-wide count
+    // would badge the player for messages on a thread they deliberately ended.
+    // Mirrors the same scoping in sdk/services/unreadService.ts.
+    const [current] = await tx
+      .select({ id: conversation.id })
+      .from(conversation)
+      .where(eq(conversation.playerId, ctx.playerId))
+      .orderBy(desc(conversation.createdAt))
+      .limit(1)
+
+    const [unread] = current
+      ? await tx
+          .select({ count: sql<number>`count(*)::int` })
+          .from(message)
+          .where(
+            and(
+              eq(message.conversationId, current.id),
+              eq(message.visibility, 'public'),
+              ne(message.authorType, 'player'),
+              ne(message.deliveryState, 'read'),
+            ),
+          )
+      : []
 
     return { found, snapshot, unreadCount: unread?.count ?? 0, workspaceName: ws?.name ?? '' }
   })

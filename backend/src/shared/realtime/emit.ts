@@ -1,5 +1,5 @@
 import type { Server } from 'socket.io'
-import type { MessageReadEvent } from '@support/types'
+import type { ConversationPhaseChangedEvent, MessageReadEvent } from '@support/types'
 import { agentRoom, inboxRoom, playerRoom } from './rooms.ts'
 
 /**
@@ -34,4 +34,15 @@ export function emitInboxChanged(io: Server, workspaceId: string, conversationId
 export function emitReadReceipt(io: Server, audience: 'player' | 'agents', payload: MessageReadEvent): void {
   const room = audience === 'player' ? playerRoom(payload.conversation_id) : agentRoom(payload.conversation_id)
   io.to(room).emit('message:read', payload)
+}
+
+/**
+ * Typed, unlike emitMessageToRooms: a two-field contract, not a serializer's
+ * output. Goes to both rooms because both sides have UI keyed to the phase —
+ * the player's banner and the agent's "Ask if resolved" button — which the
+ * decline's own message:new says nothing about.
+ */
+export function emitPhaseChanged(io: Server, conversationId: string, payload: ConversationPhaseChangedEvent): void {
+  io.to(agentRoom(conversationId)).emit('conversation:phase_changed', payload)
+  io.to(playerRoom(conversationId)).emit('conversation:phase_changed', payload)
 }

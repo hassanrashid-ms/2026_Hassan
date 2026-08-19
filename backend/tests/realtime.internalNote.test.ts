@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest'
-import request from 'supertest'
+import { req as request } from './helpers/http.ts'
 import { closeDb } from '../src/shared/db/client.ts'
 import { signAgentSession } from '../src/shared/auth/agentSession.ts'
 import { mintToken } from './helpers/app.ts'
@@ -62,6 +62,42 @@ describe('internal notes never reach the player room', () => {
     await new Promise((resolve) => setTimeout(resolve, 150))
 
     expect(playerReceived).toEqual([])
+    playerSocket.close()
+  })
+
+  it('a bot unavailable outcome posts an internal note that never reaches conv:{id}:player', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const conversationId = await seedConversation({ workspaceId, playerId })
+
+    const playerToken = await mintToken({ workspace_id: workspaceId, player_id: playerId, external_player_id: 'p1' })
+    const playerSocket = connectClient(server.url, { token: playerToken, role: 'player' })
+    await waitFor(playerSocket, 'connect')
+    await new Promise<boolean>((resolve) =>
+      playerSocket.emit('join_conversation', { conversation_id: conversationId }, resolve),
+    )
+
+    const playerReceived: unknown[] = []
+    playerSocket.on('message:new', (payload: unknown) => playerReceived.push(payload))
+
+    const { applyBotTurn } = await import('../src/domain/bot/applyBotTurn.ts')
+    const { withWorkspace } = await import('../src/shared/db/withWorkspace.ts')
+    const { toAgentView, toPlayerView } = await import('../src/domain/conversations/index.ts')
+    const { emitMessageToRooms } = await import('../src/shared/realtime/emit.ts')
+    const { getIo } = await import('../src/shared/realtime/socketServer.ts')
+
+    const { posted } = await withWorkspace(workspaceId, (tx) =>
+      applyBotTurn(tx, { workspaceId, conversationId }, { kind: 'unavailable', reason: 'error' }),
+    )
+    for (const msg of posted) {
+      emitMessageToRooms(getIo(), conversationId, toPlayerView(msg), toAgentView(msg))
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 150))
+
+    // Two messages were posted (public handoff + internal note); only the
+    // public one may reach the player.
+    expect(playerReceived.length).toBe(1)
     playerSocket.close()
   })
 })

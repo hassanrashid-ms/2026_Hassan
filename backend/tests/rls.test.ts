@@ -22,6 +22,12 @@ const SCOPED_TABLES = [
   'conversation',
   'message',
   'event',
+  'bot_config',
+  'change_log',
+  'form',
+  'form_version',
+  'form_submission',
+  'form_answer',
 ]
 
 beforeAll(async () => {
@@ -92,6 +98,110 @@ describe('row-level security', () => {
       asWorkspace(WS_A, () => app.query(`update event set type = 'tampered'`)),
     ).rejects.toThrow(/permission denied/i)
     await expect(asWorkspace(WS_A, () => app.query('delete from event'))).rejects.toThrow(/permission denied/i)
+  })
+
+  it('cannot update or delete a change_log row — an editable audit trail is not one', async () => {
+    const agentId = 'cccccccc-3333-3333-3333-333333333333'
+    await ownerPool.query(
+      `insert into agent (id, email, display_name) values ($1, 'auditor@example.test', 'Auditor')`,
+      [agentId],
+    )
+    await ownerPool.query(
+      `insert into change_log (workspace_id, entity_type, entity_id, field, before_value, after_value, actor_id)
+       values ($1, 'bot_config', $1, 'is_provisioned', 'false'::jsonb, 'true'::jsonb, $2)`,
+      [WS_A, agentId],
+    )
+
+    await expect(
+      asWorkspace(WS_A, () => app.query(`update change_log set after_value = 'false'::jsonb`)),
+    ).rejects.toThrow(/permission denied/i)
+    await expect(asWorkspace(WS_A, () => app.query('delete from change_log'))).rejects.toThrow(
+      /permission denied/i,
+    )
+  })
+
+  it('cannot update or delete a form_answer — a correction is a new row, never an edit', async () => {
+    const { rows: formRows } = await ownerPool.query<{ id: string }>(
+      `insert into form (workspace_id, name) values ($1, 'Bug report') returning id`,
+      [WS_A],
+    )
+    const formId = formRows[0]!.id
+    await ownerPool.query(
+      `insert into form_version (workspace_id, form_id, version, published_at) values ($1, $2, 1, now())`,
+      [WS_A, formId],
+    )
+    // Bump the counter the same way the request path does, so this row's number
+    // does not collide with anything else the suite seeded.
+    const { rows: seqRows } = await ownerPool.query<{ ticket_seq: number }>(
+      `update workspace set ticket_seq = ticket_seq + 1 where id = $1 returning ticket_seq`,
+      [WS_A],
+    )
+    const { rows: cRows } = await ownerPool.query<{ id: string }>(
+      `insert into conversation (workspace_id, player_id, number) values ($1, $2, $3) returning id`,
+      [WS_A, PLAYER_A, seqRows[0]!.ticket_seq],
+    )
+    const { rows: subRows } = await ownerPool.query<{ id: string }>(
+      `insert into form_submission (workspace_id, conversation_id, form_id, form_version)
+       values ($1, $2, $3, 1) returning id`,
+      [WS_A, cRows[0]!.id, formId],
+    )
+    await ownerPool.query(
+      `insert into form_answer (workspace_id, form_submission_id, field_key, field_type, value)
+       values ($1, $2, 'what_happened', 'long_text', '"it crashed"'::jsonb)`,
+      [WS_A, subRows[0]!.id],
+    )
+
+    await expect(
+      asWorkspace(WS_A, () => app.query(`update form_answer set value = '"tampered"'::jsonb`)),
+    ).rejects.toThrow(/permission denied/i)
+    await expect(asWorkspace(WS_A, () => app.query('delete from form_answer'))).rejects.toThrow(
+      /permission denied/i,
+    )
+  })
+
+  it('keeps form_submission updatable — terminating a submission sets status and submitted_at', async () => {
+    // Deliberate asymmetry with form_answer. Do not "tidy" the revoke in
+    // 002_rls.sql into covering both tables: slice 2 writes the terminal status
+    // onto this row.
+    const { rows } = await ownerPool.query<{ has_priv: boolean }>(
+      `select has_table_privilege('support_app', 'form_submission', 'UPDATE') as has_priv`,
+    )
+    expect(rows[0]?.has_priv).toBe(true)
+  })
+
+  it('keeps bot_config updatable — its writer is ON CONFLICT DO UPDATE', async () => {
+    await ownerPool.query(
+      `insert into bot_config (workspace_id, is_provisioned) values ($1, false)`,
+      [WS_A],
+    )
+    const rows = await asWorkspace(WS_A, async () => {
+      await app.query(`update bot_config set is_provisioned = true`)
+      return (await app.query(`select is_provisioned from bot_config`)).rows
+    })
+    expect(rows).toEqual([{ is_provisioned: true }])
+
+    await expect(asWorkspace(WS_A, () => app.query('delete from bot_config'))).rejects.toThrow(
+      /permission denied/i,
+    )
+  })
+
+  it('hides another workspace audit trail entirely', async () => {
+    const agentId = 'dddddddd-4444-4444-4444-444444444444'
+    await ownerPool.query(
+      `insert into agent (id, email, display_name) values ($1, 'other@example.test', 'Other')`,
+      [agentId],
+    )
+    for (const ws of [WS_A, WS_B]) {
+      await ownerPool.query(
+        `insert into change_log (workspace_id, entity_type, entity_id, field, before_value, after_value, actor_id)
+         values ($1, 'bot_config', $1, 'prompt', null, '"hi"'::jsonb, $2)`,
+        [ws, agentId],
+      )
+    }
+    const rows = await asWorkspace(WS_A, async () =>
+      (await app.query('select workspace_id from change_log')).rows,
+    )
+    expect(rows).toEqual([{ workspace_id: WS_A }])
   })
 
   it('grants DELETE on nothing at all — no hard deletes anywhere', async () => {
@@ -203,6 +313,8 @@ describe('WITH CHECK on every scoped table', () => {
   const SESSION_A = 'dddddddd-1111-1111-1111-111111111111'
   const SESSION_SMUGGLE = 'dddddddd-9999-9999-9999-999999999999'
   let conversationAId: string
+  let formAId: string
+  let submissionAId: string
 
   beforeEach(async () => {
     await ownerPool.query(
@@ -215,10 +327,26 @@ describe('WITH CHECK on every scoped table', () => {
       [SESSION_A, WS_A, PLAYER_A],
     )
     const { rows } = await ownerPool.query<{ id: string }>(
-      `insert into conversation (workspace_id, player_id, session_id) values ($1, $2, $3) returning id`,
+      `insert into conversation (workspace_id, player_id, session_id, number) values ($1, $2, $3, 1) returning id`,
       [WS_A, PLAYER_A, SESSION_A],
     )
     conversationAId = rows[0]!.id
+
+    const { rows: formRows } = await ownerPool.query<{ id: string }>(
+      `insert into form (workspace_id, name) values ($1, 'Purchase receipt') returning id`,
+      [WS_A],
+    )
+    formAId = formRows[0]!.id
+    await ownerPool.query(
+      `insert into form_version (workspace_id, form_id, version, published_at) values ($1, $2, 1, now())`,
+      [WS_A, formAId],
+    )
+    const { rows: subRows } = await ownerPool.query<{ id: string }>(
+      `insert into form_submission (workspace_id, conversation_id, form_id, form_version)
+       values ($1, $2, $3, 1) returning id`,
+      [WS_A, conversationAId, formAId],
+    )
+    submissionAId = subRows[0]!.id
   })
 
   it('refuses a workspace-smuggled insert on every scoped table, not just player', async () => {
@@ -236,7 +364,7 @@ describe('WITH CHECK on every scoped table', () => {
       },
       {
         table: 'conversation',
-        sql: `insert into conversation (workspace_id, player_id) values ($1, $2)`,
+        sql: `insert into conversation (workspace_id, player_id, number) values ($1, $2, 1)`,
         params: [WS_B, PLAYER_A],
       },
       {
@@ -264,6 +392,39 @@ describe('WITH CHECK on every scoped table', () => {
         table: 'workspace_member',
         sql: `insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`,
         params: [WS_B, AGENT_A],
+      },
+      {
+        table: 'bot_config',
+        sql: `insert into bot_config (workspace_id, is_provisioned) values ($1, false)`,
+        params: [WS_B],
+      },
+      {
+        table: 'change_log',
+        sql: `insert into change_log (workspace_id, entity_type, entity_id, field, before_value, after_value, actor_id)
+              values ($1, 'bot_config', $1, 'is_provisioned', null, 'true'::jsonb, $2)`,
+        params: [WS_B, AGENT_A],
+      },
+      {
+        table: 'form',
+        sql: `insert into form (workspace_id, name) values ($1, 'Smuggled')`,
+        params: [WS_B],
+      },
+      {
+        table: 'form_version',
+        sql: `insert into form_version (workspace_id, form_id, version) values ($1, $2, 2)`,
+        params: [WS_B, formAId],
+      },
+      {
+        table: 'form_submission',
+        sql: `insert into form_submission (workspace_id, conversation_id, form_id, form_version)
+              values ($1, $2, $3, 1)`,
+        params: [WS_B, conversationAId, formAId],
+      },
+      {
+        table: 'form_answer',
+        sql: `insert into form_answer (workspace_id, form_submission_id, field_key, field_type, value)
+              values ($1, $2, 'store', 'short_text', '"Other"'::jsonb)`,
+        params: [WS_B, submissionAId],
       },
     ]
 

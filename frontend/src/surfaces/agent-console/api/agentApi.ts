@@ -2,11 +2,17 @@ import type {
   AgentArticleDetail,
   AgentConversationsResponse,
   AgentMessagesResponse,
+  AgentMessageView,
   AgentArticlesResponse,
+  AgentConversationContextResponse,
+  AgentConversationDetail,
+  AskResolvedResponse,
   ClaimResponse,
   CreateIntentResponse,
   CreateSubintentResponse,
+  EscalateResponse,
   IntentsResponse,
+  UnescalateResponse,
 } from '@support/types'
 import { apiCall } from '../../../lib/httpClient.ts'
 
@@ -43,6 +49,22 @@ export function claimConversation(token: string, conversationId: string): Promis
   return apiCall(`/agent/conversations/${conversationId}/claim`, token, { method: 'POST' })
 }
 
+/**
+ * The header row for one conversation. Required, not an optimisation: an older
+ * ticket is in neither the `unassigned` nor the `mine` list and never will be,
+ * so opening one by URL yields no header data at all.
+ */
+export function fetchConversation(token: string, conversationId: string): Promise<AgentConversationDetail> {
+  return apiCall(`/agent/conversations/${conversationId}`, token)
+}
+
+export function fetchConversationContext(
+  token: string,
+  conversationId: string,
+): Promise<AgentConversationContextResponse> {
+  return apiCall(`/agent/conversations/${conversationId}/context`, token)
+}
+
 export function fetchConversationMessages(token: string, conversationId: string): Promise<AgentMessagesResponse> {
   return apiCall(`/agent/conversations/${conversationId}/messages`, token)
 }
@@ -52,7 +74,7 @@ export function sendAgentMessage(
   conversationId: string,
   body: string,
   visibility?: 'public' | 'internal',
-): Promise<{ message: unknown }> {
+): Promise<{ message: AgentMessageView }> {
   return apiCall(`/agent/messages`, token, {
     method: 'POST',
     body: JSON.stringify({ conversation_id: conversationId, body, visibility }),
@@ -107,4 +129,16 @@ export function publishArticle(token: string, id: string): Promise<AgentArticleD
 
 export function archiveArticle(token: string, id: string): Promise<AgentArticleDetail> {
   return apiCall(`/agent/articles/${id}/archive`, token, { method: 'POST' })
+}
+
+export function askResolved(token: string, conversationId: string): Promise<AskResolvedResponse> {
+  return apiCall(`/agent/conversations/${conversationId}/ask-resolved`, token, { method: 'POST' })
+}
+
+export function escalateConversation(token: string, conversationId: string): Promise<EscalateResponse> {
+  return apiCall(`/agent/conversations/${conversationId}/escalate`, token, { method: 'POST' })
+}
+
+export function unescalateConversation(token: string, conversationId: string): Promise<UnescalateResponse> {
+  return apiCall(`/agent/conversations/${conversationId}/unescalate`, token, { method: 'POST' })
 }

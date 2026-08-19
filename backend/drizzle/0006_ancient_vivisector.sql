@@ -1,0 +1,2 @@
+ALTER TABLE "message" ADD COLUMN "article_id" uuid;--> statement-breakpoint
+ALTER TABLE "message" ADD CONSTRAINT "message_article_id_article_id_fk" FOREIGN KEY ("article_id") REFERENCES "public"."article"("id") ON DELETE restrict ON UPDATE no action;

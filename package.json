@@ -11,11 +11,14 @@
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "db:setup": "pnpm --filter @support/api db:setup",
+    "db:generate": "pnpm --filter @support/api db:generate",
+    "db:baseline": "pnpm --filter @support/api db:baseline",
     "db:seed": "pnpm --filter @support/api db:seed",
     "repomix": "repomix --compress",
     "repomix:watch": "repomix --watch --compress"
   },
   "devDependencies": {
+    "http-proxy": "^1.18.1",
     "repomix": "^1.18.0"
   }
 }

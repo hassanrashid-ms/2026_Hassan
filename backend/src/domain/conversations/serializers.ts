@@ -18,6 +18,7 @@ export function toPlayerView(row: PostedMessageRow): PlayerMessageView | null {
     delivery_state: row.deliveryState,
     read_at: row.readAt ? row.readAt.toISOString() : null,
     created_at: row.createdAt.toISOString(),
+    article_id: row.articleId,
   }
 }
 
@@ -33,5 +34,6 @@ export function toAgentView(row: PostedMessageRow): AgentMessageView {
     delivery_state: row.deliveryState,
     read_at: row.readAt ? row.readAt.toISOString() : null,
     created_at: row.createdAt.toISOString(),
+    article_id: row.articleId,
   }
 }

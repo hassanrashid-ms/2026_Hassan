@@ -12,10 +12,23 @@ additive unique key on `conversation`, two grant revokes.
 The storage shape the bot orchestrator reads and writes when it offers a form and when it decides
 whether to run at all. Nothing else.
 
-Forms are **structured, Google-Form-style UIs opened in a modal** — not questions asked
-turn-by-turn in the thread. That supersession is recorded in `docs/project-overview.md`
-(2026-08-10) and is the premise for everything below; the conversational design in
-`docs/specs/2026-08-04-database-and-schema-design.md` §Forms is history.
+Forms were originally specified as **structured, Google-Form-style UIs opened in a modal** — a
+supersession recorded in `docs/project-overview.md` on 2026-08-10. **That premise is reverted by
+`docs/specs/2026-08-17-player-side-forms-design.md`:** the questions are asked one at a time, in a
+card pinned above the composer, not in a modal and not as conversation turns.
+
+**Nothing below changes.** Append-only `form_answer` rows keyed by `field_key`, each snapshotting its
+`field_type`, is a better fit for one-at-a-time than for a modal — a modal submits once and could
+have been a single row, whereas one-at-a-time writes a row per step and needs exactly the durability
+this shape already provides. Every column, constraint, composite FK and design rationale in this
+document stands as written; read "the modal" below as "the pinned card". The conversational design in
+`docs/specs/2026-08-04-database-and-schema-design.md` §Forms remains history — it modelled fields as
+`form_field` rows, which is the part that did not come back.
+
+Two other things in this document are amended by the 2026-08-17 design, both without a schema change:
+`form_status` is **derived from the answer rows** rather than from which button was pressed (§1.3
+there), and `time` is declared but must never be offered by the form-builder or used by a seeded form
+(§1.4 there).
 
 ### In scope
 
@@ -24,13 +37,14 @@ turn-by-turn in the thread. That supersession is recorded in `docs/project-overv
 | `form`, `form_version` | The questions, versioned, so old answers stay readable |
 | `form_submission` | One offer of one form on one conversation, and its outcome |
 | `form_answer` | Append-only answers |
-| `bot_config` | What the orchestrator gates on (`is_provisioned`) and the prompt it sends |
+| `bot_config` | What the orchestrator gates on (`is_provisioned`), plus the `prompt` and `rules` it joins into the system prompt |
 | `change_log` | Full audit: who changed which field, when, from what to what |
 | `subintent.form_id` → real FK | The column already exists as a bare uuid; the parent table now exists |
 | `conversation` UNIQUE (`workspace_id`, `id`) | Composite-FK parent key, additive only |
 | `form_field_type`, `form_status` enums | Closed sets |
 | `@support/types` field + answer-value schemas | The SDK↔server contract for the modal |
-| `DEFAULT_BOT_PROMPT` | The fallback `bot_config.prompt` resolves to |
+| `DEFAULT_BOT_PROMPT` / `DEFAULT_BOT_RULES` | The fallbacks `bot_config.prompt` and `.rules` resolve to |
+| `buildSystemPrompt` | The single join site: two stored fields → one system prompt |
 | `appendChangeLog` | The single choke point that writes audit rows |
 | `REVOKE UPDATE, DELETE` on `form_answer` and `change_log` | Append-only, enforced not conventional |
 
@@ -277,9 +291,22 @@ mechanism, not an error.
 workspace_id    uuid pk -> workspace(id) restrict
 is_provisioned  boolean not null default false
 prompt          text null
+rules           text null
 created_at      timestamptz not null default now()
 updated_at      timestamptz not null default now()
 ```
+
+**`prompt` and `rules` are two stored columns and one sent string.** They are stored apart so an
+admin can rewrite the bot's persona without touching the safety rules, and so "who changed the
+rules" is a separately auditable question from "who changed the prompt" — two `change_log` fields,
+not one. They are joined only at send time, by `buildSystemPrompt(prompt, rules)` in
+`backend/src/domain/bot/defaultPrompt.ts`, which is the single place the order and the `Rules:`
+heading are decided. Never concatenate them before storage: a merged column cannot be edited or
+audited as two fields again.
+
+Both carry identical NULL semantics: NULL means never customized and resolves to `DEFAULT_BOT_PROMPT`
+/ `DEFAULT_BOT_RULES` respectively. `DEFAULT_BOT_PROMPT` therefore carries **no** rules block of its
+own — it lives in `DEFAULT_BOT_RULES`, or the join would ship the default rules twice.
 
 `workspace_id` **is** the primary key, so one row per workspace is structural rather than a unique
 key over a surrogate `id`. It still carries a `workspace_id` column, so `002_rls.sql`'s structural
@@ -303,7 +330,7 @@ id            bigserial pk
 workspace_id  uuid not null -> workspace(id) restrict
 entity_type   text not null                 -- 'bot_config' in this slice
 entity_id     uuid not null                 -- for bot_config, the workspace_id
-field         text not null                 -- 'prompt' | 'is_provisioned'
+field         text not null                 -- 'prompt' | 'rules' | 'is_provisioned'
 before_value  jsonb null                    -- null = the field had no value before
 after_value   jsonb null                    -- null = the field was cleared
 actor_id      uuid not null -> agent(id) restrict
@@ -500,10 +527,16 @@ Missing fields are derived: the version's field keys minus the keys that have at
 One resolver, so an absent row and `is_provisioned = false` cannot diverge:
 
 ```
-row absent           -> { isProvisioned: false, prompt: DEFAULT_BOT_PROMPT }
-is_provisioned false -> { isProvisioned: false, prompt: <resolved as below> }
+row absent           -> { isProvisioned: false, prompt: DEFAULT_BOT_PROMPT, rules: DEFAULT_BOT_RULES, systemPrompt }
+is_provisioned false -> { isProvisioned: false, prompt: <resolved as below>, rules: <resolved as below>, systemPrompt }
 prompt IS NULL       -> DEFAULT_BOT_PROMPT
+rules  IS NULL       -> DEFAULT_BOT_RULES
 ```
+
+`resolveBotConfig` returns all four: the two resolved fields separately (so an admin screen can edit
+each one) plus `systemPrompt`, the `buildSystemPrompt` join, which is what actually goes to the bot.
+No caller joins them itself — one join site means the two cannot drift apart at different call sites.
+`prompt` and `rules` resolve independently: customizing one leaves the other on its default.
 
 No row exists until an admin first saves; the write is
 `INSERT … ON CONFLICT (workspace_id) DO UPDATE`. There is no backfill and no seed change, and a
@@ -512,9 +545,10 @@ workspace created by any path is automatically in the correct off state.
 `is_provisioned = false` means every message on that workspace's conversations takes the identical
 fallback path as "bot disabled" — no bot reply, straight to the human queue.
 
-`prompt IS NULL` means never customized. An empty or whitespace-only prompt is rejected at the API
-rather than stored, so null stays the only "no prompt" representation. Clearing a customized prompt
-is an explicit reset to null, and it is audited like any other change.
+`prompt IS NULL` (and `rules IS NULL`) means never customized. An empty or whitespace-only value is
+rejected — `EmptyBotPrompt`, which names the offending field so a rules edit is not reported as a
+prompt error — rather than stored, so null stays the only "no prompt" / "no rules" representation.
+Clearing a customized value is an explicit reset to null, and it is audited like any other change.
 
 ### Writing `bot_config`, and auditing it
 
@@ -551,17 +585,26 @@ row of that scan.
 every edit; that is the cost of being able to answer "what did it say before," which is the whole
 point. Prompts contain no player data, so this is not a PII surface.
 
-The audited field names are the **column** names — `prompt`, `is_provisioned` — not API field
-names, so the trail stays readable against the schema when an API shape changes.
+The audited field names are the **column** names — `prompt`, `rules`, `is_provisioned` — not API
+field names, so the trail stays readable against the schema when an API shape changes. A save that
+edits the prompt and leaves the rules alone writes one row, for `prompt` only.
 
-### `DEFAULT_BOT_PROMPT`
+### `DEFAULT_BOT_PROMPT`, `DEFAULT_BOT_RULES` and `buildSystemPrompt`
 
 `backend/src/domain/bot/defaultPrompt.ts` — the only non-schema code this slice adds.
 
-It must use the placeholder form the committed spec requires — `{{subintents}}`, `{{articles}}`,
-`{{player_level}}`, `{{spend_tier}}` — and **must never contain a hard-coded subintent or article
-name**. A default prompt that names a real subintent would ship that workspace's taxonomy into
-every other workspace's bot.
+`DEFAULT_BOT_PROMPT` must use the placeholder form the committed spec requires — `{{subintents}}`,
+`{{articles}}`, `{{player_level}}`, `{{spend_tier}}`. Both it and `DEFAULT_BOT_RULES` **must never
+contain a hard-coded subintent or article name**: a default that names a real subintent would ship
+that workspace's taxonomy into every other workspace's bot. Both are asserted against
+`SEED_TAXONOMY` in `tests/bot.config.test.ts`.
+
+`DEFAULT_BOT_PROMPT` carries the role, the placeholders and the handoff instruction; the behavioural
+constraints live in `DEFAULT_BOT_RULES`. `buildSystemPrompt(prompt, rules)` joins them — prompt
+first, rules last under the `Rules:` heading, because a constraint stated after the task it
+constrains is the one the model is most likely to still be holding when it answers. It takes the
+already-resolved values, so neither argument is ever null, and substitution of the placeholders
+happens after the join.
 
 ---
 
@@ -606,7 +649,7 @@ comments saying so must not be removed as redundant.
 4. Add the composite FK on `subintent.form_id`. Existing `subintent` rows all have
    `form_id IS NULL`, so no data fails the new constraint.
 5. Create `form_submission` (with its `UNIQUE (workspace_id, id)`), then `form_answer`.
-6. Create `bot_config`.
+6. Create `bot_config`, with `prompt` and `rules` as two separate nullable text columns.
 7. Create `change_log`, with its `CHECK`, composite index and BRIN index.
 8. `002_rls.sql` — picks up six new policies structurally, applies the `form_answer` and
    `change_log` revokes.
@@ -657,10 +700,16 @@ objects.
 
 ### `tests/bot.config.test.ts`
 
-- Absent row resolves to `{ isProvisioned: false, prompt: DEFAULT_BOT_PROMPT }`.
-- `prompt IS NULL` resolves to `DEFAULT_BOT_PROMPT`; a stored prompt is returned verbatim.
+- Absent row resolves to `{ isProvisioned: false, prompt: DEFAULT_BOT_PROMPT, rules: DEFAULT_BOT_RULES }`.
+- `prompt IS NULL` resolves to `DEFAULT_BOT_PROMPT`; a stored prompt is returned verbatim. Same for
+  `rules` / `DEFAULT_BOT_RULES`, and the two resolve **independently** — customizing one leaves the
+  other on its default.
 - `ON CONFLICT (workspace_id) DO UPDATE` upserts rather than erroring on second save.
-- `DEFAULT_BOT_PROMPT` contains no subintent or article name and does contain the placeholders.
+- Neither `DEFAULT_BOT_PROMPT` nor `DEFAULT_BOT_RULES` contains a subintent or article name; the
+  prompt does contain the placeholders, and carries no `Rules:` block of its own.
+- `buildSystemPrompt` puts the prompt first and the rules last, and leaves the placeholders intact.
+- Clearing the prompt does not clear the rules; a whitespace-only value for either is rejected with
+  `EmptyBotPrompt` naming that field.
 
 ### New `tests/changeLog.test.ts`
 

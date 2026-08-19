@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
-import request from 'supertest'
+import { req as request } from './helpers/http.ts'
 import { closeDb } from '../src/shared/db/client.ts'
 import { app, mintToken } from './helpers/app.ts'
 import { closeOwnerPool, seedPlayer, seedWorkspace, truncateAll } from './helpers/db.ts'

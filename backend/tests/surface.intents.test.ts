@@ -1,6 +1,6 @@
 import express from 'express'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
-import request from 'supertest'
+import { req as request } from './helpers/http.ts'
 import { closeDb } from '../src/shared/db/client.ts'
 import { errorMiddleware } from '../src/errors.ts'
 import { requirePlayerToken } from '../src/shared/middleware/requirePlayerToken.ts'

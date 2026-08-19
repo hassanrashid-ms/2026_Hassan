@@ -1,9 +1,10 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
-import request from 'supertest'
+import { req as request } from './helpers/http.ts'
 import { closeDb } from '../src/shared/db/client.ts'
 import { app, mintToken } from './helpers/app.ts'
 import {
   closeOwnerPool,
+  ownerPool,
   seedConversation,
   seedMessage,
   seedPlayer,
@@ -90,13 +91,20 @@ describe('GET /sdk/unread', () => {
     expect((await get(b)).body).toEqual({ unread_count: 1 })
   })
 
-  it('counts across several conversations', async () => {
+  it('counts only the current conversation, not closed history', async () => {
     const f = await fixture()
-    for (const seq of [1, 2]) {
-      const conversationId = await seedConversation({ workspaceId: f.workspaceId, playerId: f.playerId })
-      await seedMessage({ workspaceId: f.workspaceId, conversationId, seq, authorType: 'agent' })
-    }
-    expect((await get(f)).body).toEqual({ unread_count: 2 })
+    // A ticket the player deliberately ended, still holding unread agent
+    // messages, plus the fresh one they opened after it. Counting both would
+    // badge the player forever for a thread they closed.
+    const closed = await seedConversation({ workspaceId: f.workspaceId, playerId: f.playerId })
+    await seedMessage({ workspaceId: f.workspaceId, conversationId: closed, seq: 1, authorType: 'agent' })
+    await seedMessage({ workspaceId: f.workspaceId, conversationId: closed, seq: 2, authorType: 'agent' })
+    await ownerPool.query(`update conversation set status = 'closed' where id = $1`, [closed])
+
+    const current = await seedConversation({ workspaceId: f.workspaceId, playerId: f.playerId })
+    await seedMessage({ workspaceId: f.workspaceId, conversationId: current, seq: 1, authorType: 'agent' })
+
+    expect((await get(f)).body).toEqual({ unread_count: 1 })
   })
 
   it('401s without a token and 403s on a workspace mismatch', async () => {

@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
-import request from 'supertest'
+import { req as request } from './helpers/http.ts'
 import { eq } from 'drizzle-orm'
 import { DECLARED_FIELD_KEYS } from '@support/types'
 import { closeDb } from '../src/shared/db/client.ts'

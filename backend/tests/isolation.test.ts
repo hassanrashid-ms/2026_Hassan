@@ -1,6 +1,7 @@
 import { createServer } from 'node:http'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import request from 'supertest'
+import type { Test as SupertestTest } from 'supertest'
+import { req as request } from './helpers/http.ts'
 import { closeDb } from '../src/shared/db/client.ts'
 import { verifyPlayerToken } from '../src/shared/auth/playerToken.ts'
 import { signAgentSession } from '../src/shared/auth/agentSession.ts'
@@ -81,7 +82,7 @@ beforeEach(async () => {
   await seedMessage({ workspaceId: b.workspaceId, conversationId, seq: 1, authorType: 'agent' })
 })
 
-const withA = (req: request.Test) =>
+const withA = (req: SupertestTest) =>
   req.set('Authorization', `Bearer ${a.token}`).set('X-Support-Workspace', a.slug)
 
 describe('workspace A cannot reach workspace B', () => {
@@ -193,7 +194,43 @@ describe('workspace A cannot reach workspace B', () => {
     await withA(request(app).post('/surface/messages')).send({ body: 'hello' }).expect(200)
     const after = await rowCounts()
     expect(after.conversation).toBe(before.conversation + 1)
-    expect(after.message).toBe(before.message + 1)
+    // A's workspace has no bot_config row, so the new conversation's first
+    // message resolves as not-provisioned and hands off inline: the player's
+    // own message plus the public system handoff message land in the same
+    // transaction.
+    expect(after.message).toBe(before.message + 2)
+  })
+
+  it('POST /surface/messages with B\'s session_id writes no cross-tenant foreign key', async () => {
+    const before = await rowCounts()
+    await withA(request(app).post('/surface/messages')).send({ body: 'hello', session_id: B_SESSION }).expect(200)
+    const after = await rowCounts()
+
+    // The send still succeeds — an unverifiable session degrades to a null
+    // stamp, it never fails a player's message.
+    expect(after.conversation).toBe(before.conversation + 1)
+    expect(after.session).toBe(before.session)
+
+    const { rows } = await ownerPool.query<{ n: number }>(
+      `select count(*)::int as n from event where session_id = $1 or conversation_id in
+         (select id from conversation where session_id = $1 and workspace_id = $2)`,
+      [B_SESSION, a.workspaceId],
+    )
+    expect(rows[0]!.n).toBe(0)
+
+    const { rows: convRows } = await ownerPool.query<{ n: number }>(
+      `select count(*)::int as n from conversation where workspace_id = $1 and session_id is not null`,
+      [a.workspaceId],
+    )
+    expect(convRows[0]!.n).toBe(0)
+  })
+
+  it('GET /surface/messages with B\'s session_id returns A\'s own thread, never B\'s', async () => {
+    const conversationId = await seedConversation({ workspaceId: a.workspaceId, playerId: a.playerId })
+    const res = await withA(request(app).get('/surface/messages')).query({ session_id: B_SESSION }).expect(200)
+
+    expect(res.body.conversation_id).toBe(conversationId)
+    expect(res.body.messages).toEqual([])
   })
 
   it('GET /agent/conversations/:id/messages on B\'s conversation is 404 for an A agent', async () => {
