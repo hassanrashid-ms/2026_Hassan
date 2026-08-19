@@ -597,7 +597,7 @@ registry.registerPath({
   path: '/agent/conversations/{id}/ask-resolved',
   summary: 'Agent Ask If Resolved',
   description:
-    'Asks the player "Did this solve it?" and sets confirm_phase = agent_ask. Requires status open or awaiting_player, confirm_phase none, and either ownership or an unassigned conversation. There is no agent-side resolve: only the player\'s answer moves the status.',
+    'Asks the player "Did this solve it?" and sets confirm_phase = agent_ask. Requires status open or awaiting_player, confirm_phase none, and either ownership or an unassigned conversation. There is no agent-side resolve: only the player\'s answer moves the status. The inactivity clock sets confirm_phase = inactivity_ask on the same conversation shape after 24h of silence; the two are distinguished so the resolution can be attributed to `agent` or `player_confirmed`.',
   security: [{ [bearerAgentJwt.name]: [] }],
   request: { params: z.object({ id: z.uuid() }) },
   responses: {
@@ -932,7 +932,7 @@ registry.registerPath({
   path: '/surface/resolution-answer',
   summary: 'Player Answer Resolution Check',
   description:
-    "The banner's Yes/No, for both sources. Yes resolves the conversation (source bot or agent, per confirm_phase); No hands off to a human on bot_article, and only clears the phase on agent_ask. 409 when no check is pending.",
+    "The banner's Yes/No, for all three sources. Yes resolves the conversation — source `bot` on bot_article, `agent` on agent_ask, `player_confirmed` on inactivity_ask. No hands off to a human on bot_article, and only clears the phase on agent_ask and inactivity_ask (which restarts the inactivity clock). 409 when no check is pending.",
   security: [{ [bearerPlayerJwt.name]: [] }],
   request: { body: { content: { 'application/json': { schema: ResolutionAnswerBody } } } },
   responses: {

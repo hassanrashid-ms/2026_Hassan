@@ -37,6 +37,8 @@ rule and why the nulls are deliberate.
 | `awaiting_player` → `open` | Player replies. Assignment is **preserved** — the agent who asked stays owner | `surface/services/messagesService.ts:118-132` | `conversation_player_replied` |
 | `resolved` / `closed` → `open` | Player replies. Also clears `assigned_agent_id`, so it lands back in Unassigned. No time limit | `surface/services/messagesService.ts:100-114` | `conversation_reopened` |
 | `bot_active` → `open` | Bot hands off, or the bot is unavailable. Also sets `assigned_agent_id` from `assignOnHandoff` | `domain/bot/applyBotTurn.ts:56-71`, `96-111` | `bot_handoff` / `bot_unavailable` |
+| `open` / `awaiting_player` → `resolved` | The inactivity clock times out after a second silent window, **or** the player answers Yes to the clock's own ask | `shared/jobs/inactivityClock.ts:187` (`resolution_source = 'timed_out'`), `domain/conversations/resolutionAnswer.ts:81` (`resolution_source = 'player_confirmed'`) | `conversation_resolved` |
+| `resolved` → `closed` | Auto-close window elapses (`workspace.auto_close_days`) | `shared/jobs/autoClose.ts` | `conversation_closed` (`payload.reason = 'auto_close'`) |
 
 The three status flips emit `emitInboxChanged(...)` after commit so the agent console inbox
 refetches; so does creation.
@@ -64,8 +66,7 @@ from `escalated`, and the lifecycle-event / session-stamping suite),
 | `bot_active` → `resolved` | Player confirms the bot's answer solved it | No bot resolve path, no confirmation turn | Bot runtime |
 | `bot_active` → `open` | **Form submitted or skipped** only — the handoff / error / disabled triggers are implemented, see the Implemented table | No form runtime. Note `claimConversation` (`agent/services/conversationsService.ts:45-70`) still sets `assigned_agent_id` only and deliberately leaves status alone — it appends `conversation_assigned`, not a status event | Forms (`docs/specs/2026-08-11-forms-and-bot-config-data-model-design.md`) |
 | `open` ↔ `escalated` | Handed to engineering and returned | No route, no service, no event. Enum value exists (`shared/db/schema/enums.ts:12`), nothing writes it. Reminder: `escalated` is never surfaced to the player, and the agent stays owner | Escalation slice |
-| `open` / `awaiting_player` → `resolved` | Agent resolves, **or** the inactivity clock times out | No agent resolve action, and no inactivity clock at all: `inactivity_due_at` is not a column, and `backend/src/jobs/` does not exist yet despite being in the CLAUDE.md folder map. Both clock stages (24 h → bot asks; +24 h → timed out) are unbuilt, as is the "support owed the reply" failure flag | Resolution slice + BullMQ worker |
-| `resolved` → `closed` | Auto-close window elapses (7 days, per-workspace setting) | No worker, and no per-workspace setting column. Nothing ever writes `closed` — it is only ever read, as a reopen source | Same worker as above |
+| `open` / `awaiting_player` → `resolved` | Agent resolves | No agent-initiated resolve action — only the inactivity clock and the player's own answer move to `resolved`; see the Implemented table | Resolution slice |
 
 Also deferred with the resolution work: the `resolution_cycle` table and true resolution-cycle
 metrics. Today's `resolved` would be a bare `conversation.status` write
