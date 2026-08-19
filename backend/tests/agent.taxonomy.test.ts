@@ -63,10 +63,15 @@ describe('GET /intents', () => {
     const res = await request(app).get('/intents').set('Authorization', `Bearer ${token}`).expect(200)
 
     expect(res.body.intents).toHaveLength(1)
-    expect(res.body.intents[0].name).toBe('Billing')
-    expect(res.body.intents[0].subintents).toEqual([
-      { id: expect.any(String), name: 'Refunds', formId: null, archivedAt: null },
-    ])
+    expect(res.body.intents[0]).toEqual({
+      id: rows[0]!.id,
+      name: 'Billing',
+      isSystem: false,
+      archivedAt: null,
+      subintents: [
+        { id: expect.any(String), name: 'Refunds', formId: null, archivedAt: null, defaultPriority: null, mergedIntoId: null },
+      ],
+    })
   })
 })
 

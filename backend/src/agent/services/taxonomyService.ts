@@ -6,7 +6,10 @@ import type { AgentContext } from '../../shared/middleware/requireAgentSession.t
 
 export async function listIntents(ctx: AgentContext): Promise<IntentsResponse> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
-    const intents = await tx.select({ id: intent.id, name: intent.name }).from(intent).orderBy(asc(intent.name))
+    const intents = await tx
+      .select({ id: intent.id, name: intent.name, isSystem: intent.isSystem, archivedAt: intent.archivedAt })
+      .from(intent)
+      .orderBy(asc(intent.name))
     const subintents = await tx
       .select({
         id: subintent.id,
@@ -14,6 +17,8 @@ export async function listIntents(ctx: AgentContext): Promise<IntentsResponse> {
         intentId: subintent.intentId,
         formId: subintent.formId,
         archivedAt: subintent.archivedAt,
+        defaultPriority: subintent.defaultPriority,
+        mergedIntoId: subintent.mergedIntoId,
       })
       .from(subintent)
       .orderBy(asc(subintent.name))
@@ -21,6 +26,8 @@ export async function listIntents(ctx: AgentContext): Promise<IntentsResponse> {
       intents: intents.map((i) => ({
         id: i.id,
         name: i.name,
+        isSystem: i.isSystem,
+        archivedAt: i.archivedAt ? i.archivedAt.toISOString() : null,
         subintents: subintents
           .filter((s) => s.intentId === i.id)
           .map((s) => ({
@@ -28,6 +35,8 @@ export async function listIntents(ctx: AgentContext): Promise<IntentsResponse> {
             name: s.name,
             formId: s.formId,
             archivedAt: s.archivedAt ? s.archivedAt.toISOString() : null,
+            defaultPriority: s.defaultPriority,
+            mergedIntoId: s.mergedIntoId,
           })),
       })),
     }
