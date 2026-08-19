@@ -816,6 +816,23 @@ registry.registerPath({
 })
 
 registry.registerPath({
+  method: 'post',
+  path: '/agent/subintents/{id}/move',
+  summary: 'Agent Move Subintent',
+  description: 'Moves a subintent to a different intent. Admin-only.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: {
+    params: z.object({ id: z.uuid() }),
+    body: { content: { 'application/json': { schema: z.object({ intentId: z.uuid() }) } } },
+  },
+  responses: {
+    200: { description: 'Subintent moved' },
+    403: { description: 'Forbidden — admin role required' },
+    404: { description: 'Subintent or target intent not found (or target is archived)' },
+  },
+})
+
+registry.registerPath({
   method: 'get',
   path: '/agent/articles',
   summary: 'Agent List Articles',

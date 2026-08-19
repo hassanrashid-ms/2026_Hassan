@@ -289,3 +289,49 @@ describe('POST /subintents/:id/archive', () => {
     await request(app).post(`/subintents/${otherSubintentId}/archive`).set('Authorization', `Bearer ${token}`).expect(409)
   })
 })
+
+describe('POST /subintents/:id/move', () => {
+  it('moves a subintent to a new intent', async () => {
+    const workspaceId = await seedWorkspace()
+    const billingId = await seedIntent(workspaceId, 'Billing')
+    const accountId = await seedIntent(workspaceId, 'Account Access')
+    const subintentId = await seedSubintent({ workspaceId, intentId: billingId, name: 'Refunds' })
+    const { token } = await seedAgentWithRole(workspaceId, 'admin')
+
+    const res = await request(app)
+      .post(`/subintents/${subintentId}/move`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ intentId: accountId })
+      .expect(200)
+
+    expect(res.body).toEqual({ id: subintentId, name: 'Refunds', intentId: accountId })
+  })
+
+  it('404s when the target intent is archived', async () => {
+    const workspaceId = await seedWorkspace()
+    const billingId = await seedIntent(workspaceId, 'Billing')
+    const archivedIntentId = await seedIntent(workspaceId, 'Old Category')
+    await ownerPool.query(`update intent set archived_at = now() where id = $1`, [archivedIntentId])
+    const subintentId = await seedSubintent({ workspaceId, intentId: billingId, name: 'Refunds' })
+    const { token } = await seedAgentWithRole(workspaceId, 'admin')
+
+    await request(app)
+      .post(`/subintents/${subintentId}/move`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ intentId: archivedIntentId })
+      .expect(404)
+  })
+
+  it('404s when the target intent does not exist', async () => {
+    const workspaceId = await seedWorkspace()
+    const billingId = await seedIntent(workspaceId, 'Billing')
+    const subintentId = await seedSubintent({ workspaceId, intentId: billingId, name: 'Refunds' })
+    const { token } = await seedAgentWithRole(workspaceId, 'admin')
+
+    await request(app)
+      .post(`/subintents/${subintentId}/move`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ intentId: randomUUID() })
+      .expect(404)
+  })
+})

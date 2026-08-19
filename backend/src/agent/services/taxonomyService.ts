@@ -6,6 +6,7 @@ import type {
   CreateIntentResponse,
   CreateSubintentResponse,
   IntentsResponse,
+  MoveSubintentResponse,
   RenameIntentResponse,
   RenameSubintentResponse,
 } from '@support/types'
@@ -240,5 +241,41 @@ export async function archiveSubintent(ctx: AgentContext, id: string): Promise<A
       changes: [{ field: 'archived_at', before: current.archivedAt, after: row!.archivedAt }],
     })
     return { ok: true, subintent: { id: row!.id, name: row!.name, archivedAt: row!.archivedAt!.toISOString() } }
+  })
+}
+
+export type MoveSubintentResult =
+  | { ok: true; subintent: MoveSubintentResponse }
+  | { ok: false; reason: 'not_found' | 'target_not_found' }
+
+export async function moveSubintent(ctx: AgentContext, id: string, targetIntentId: string): Promise<MoveSubintentResult> {
+  return withWorkspace(ctx.workspaceId, async (tx) => {
+    const [current] = await tx
+      .select({ id: subintent.id, name: subintent.name, intentId: subintent.intentId })
+      .from(subintent)
+      .where(eq(subintent.id, id))
+      .limit(1)
+    if (!current) return { ok: false, reason: 'not_found' }
+
+    const [target] = await tx
+      .select({ id: intent.id })
+      .from(intent)
+      .where(and(eq(intent.id, targetIntentId), isNull(intent.archivedAt)))
+      .limit(1)
+    if (!target) return { ok: false, reason: 'target_not_found' }
+
+    const [row] = await tx
+      .update(subintent)
+      .set({ intentId: targetIntentId })
+      .where(eq(subintent.id, id))
+      .returning({ id: subintent.id, name: subintent.name, intentId: subintent.intentId })
+    await appendChangeLog(tx, {
+      workspaceId: ctx.workspaceId,
+      entityType: 'subintent',
+      entityId: id,
+      actorId: ctx.agentId,
+      changes: [{ field: 'intent_id', before: current.intentId, after: row!.intentId }],
+    })
+    return { ok: true, subintent: row! }
   })
 }

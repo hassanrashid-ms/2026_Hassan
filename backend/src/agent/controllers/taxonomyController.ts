@@ -1,6 +1,6 @@
 import type { RequestHandler } from 'express'
 import { z } from 'zod'
-import { CreateIntentBody, CreateSubintentBody, RenameIntentBody, RenameSubintentBody } from '@support/types'
+import { CreateIntentBody, CreateSubintentBody, MoveSubintentBody, RenameIntentBody, RenameSubintentBody } from '@support/types'
 import { sendError } from '../../errors.ts'
 import {
   archiveIntent,
@@ -8,6 +8,7 @@ import {
   createIntent,
   createSubintent,
   listIntents,
+  moveSubintent,
   renameIntent,
   renameSubintent,
 } from '../services/taxonomyService.ts'
@@ -120,6 +121,21 @@ export const archiveSubintentHandler: RequestHandler = async (req, res) => {
       return
     }
     sendError(res, 409, 'not_archivable', 'The "Other" subintent can never be archived.')
+    return
+  }
+  res.status(200).json(result.subintent)
+}
+
+export const moveSubintentHandler: RequestHandler = async (req, res) => {
+  const params = SubintentIdParams.safeParse(req.params)
+  const body = MoveSubintentBody.safeParse(req.body)
+  if (!params.success || !body.success) {
+    sendError(res, 422, 'invalid_request', 'A valid subintent id and target intent id are required.')
+    return
+  }
+  const result = await moveSubintent(req.agent!, params.data.id, body.data.intentId)
+  if (!result.ok) {
+    sendError(res, 404, result.reason === 'not_found' ? 'not_found' : 'not_found', 'Subintent or target intent not found.')
     return
   }
   res.status(200).json(result.subintent)

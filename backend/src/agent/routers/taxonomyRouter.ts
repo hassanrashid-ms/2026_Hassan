@@ -6,6 +6,7 @@ import {
   createIntentHandler,
   createSubintentHandler,
   listIntentsHandler,
+  moveSubintentHandler,
   renameIntentHandler,
   renameSubintentHandler,
 } from '../controllers/taxonomyController.ts'
@@ -18,3 +19,4 @@ taxonomyRouter.post('/intents/:id/archive', requireAdminRole, archiveIntentHandl
 taxonomyRouter.post('/intents/:id/subintents', requireAdminRole, createSubintentHandler)
 taxonomyRouter.patch('/subintents/:id', requireAdminRole, renameSubintentHandler)
 taxonomyRouter.post('/subintents/:id/archive', requireAdminRole, archiveSubintentHandler)
+taxonomyRouter.post('/subintents/:id/move', requireAdminRole, moveSubintentHandler)
