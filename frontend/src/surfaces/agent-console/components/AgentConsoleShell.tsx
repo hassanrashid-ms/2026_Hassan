@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { Inbox as InboxIcon, BookOpen, ClipboardList, LogOut } from 'lucide-react'
+import { Inbox as InboxIcon, BookOpen, ClipboardList, LogOut, Tags } from 'lucide-react'
 // agent-console.css is imported HERE and nowhere else — never from main.tsx or
 // any statically-reachable module, so its Tailwind preflight never leaks into
 // the webview surface (mirrors WebviewShell.tsx's isolation of webview.css).
@@ -14,6 +14,7 @@ import { cn } from '../lib/cn.ts'
 const NAV_ITEMS = [
   { to: '/inbox', label: 'Inbox', icon: InboxIcon },
   { to: '/articles', label: 'Knowledge Base', icon: BookOpen },
+  { to: '/taxonomy', label: 'Taxonomy', icon: Tags },
 ]
 
 // Team Lead + Admin only — an Agent would 403 at the API anyway

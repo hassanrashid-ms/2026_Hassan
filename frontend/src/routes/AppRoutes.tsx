@@ -22,6 +22,9 @@ const KnowledgeBase = lazy(async () => ({
 const Forms = lazy(async () => ({
   default: (await import('../surfaces/agent-console/pages/Forms/Forms.tsx')).Forms,
 }))
+const Taxonomy = lazy(async () => ({
+  default: (await import('../surfaces/agent-console/pages/Taxonomy/Taxonomy.tsx')).Taxonomy,
+}))
 
 export function AppRoutes() {
   return (
@@ -42,6 +45,7 @@ export function AppRoutes() {
         <Route path="articles/:id" element={<KnowledgeBase />} />
         <Route path="forms" element={<Forms />} />
         <Route path="forms/:id" element={<Forms />} />
+        <Route path="taxonomy" element={<Taxonomy />} />
       </Route>
     </Routes>
   )
