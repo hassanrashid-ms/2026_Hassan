@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { createServer } from 'node:http'
 import express from 'express'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
@@ -8,7 +9,7 @@ import { requireAgentSession } from '../src/shared/middleware/requireAgentSessio
 import { signAgentSession } from '../src/shared/auth/agentSession.ts'
 import { closeSocketServer, createSocketServer } from '../src/shared/realtime/socketServer.ts'
 import { taxonomyRouter } from '../src/agent/routers/taxonomyRouter.ts'
-import { closeOwnerPool, ownerPool, seedWorkspace, truncateAll } from './helpers/db.ts'
+import { closeOwnerPool, ownerPool, seedArticle, seedIntent, seedSubintent, seedWorkspace, truncateAll } from './helpers/db.ts'
 
 // Standalone app carrying just this router, gated by the real
 // requireAgentSession/requireAdminRole middleware — mirrors
@@ -129,5 +130,96 @@ describe('POST /intents/:id/subintents', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ name: 'Refunds' })
       .expect(404)
+  })
+})
+
+describe('PATCH /intents/:id', () => {
+  it('renames an intent for an admin', async () => {
+    const workspaceId = await seedWorkspace()
+    const intentId = await seedIntent(workspaceId, 'Billing')
+    const { token } = await seedAgentWithRole(workspaceId, 'admin')
+
+    const res = await request(app)
+      .patch(`/intents/${intentId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Payments' })
+      .expect(200)
+
+    expect(res.body).toEqual({ id: intentId, name: 'Payments' })
+  })
+
+  it('409s on a name collision with another intent in the workspace', async () => {
+    const workspaceId = await seedWorkspace()
+    await seedIntent(workspaceId, 'Payments')
+    const intentId = await seedIntent(workspaceId, 'Billing')
+    const { token } = await seedAgentWithRole(workspaceId, 'admin')
+
+    await request(app)
+      .patch(`/intents/${intentId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Payments' })
+      .expect(409)
+  })
+
+  it('refuses a non-admin agent with 403', async () => {
+    const workspaceId = await seedWorkspace()
+    const intentId = await seedIntent(workspaceId, 'Billing')
+    const { token } = await seedAgentWithRole(workspaceId, 'agent')
+
+    await request(app)
+      .patch(`/intents/${intentId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Payments' })
+      .expect(403)
+  })
+
+  it('404s for an unknown intent id', async () => {
+    const workspaceId = await seedWorkspace()
+    const { token } = await seedAgentWithRole(workspaceId, 'admin')
+
+    await request(app)
+      .patch(`/intents/${randomUUID()}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Payments' })
+      .expect(404)
+  })
+})
+
+describe('POST /intents/:id/archive', () => {
+  it('archives an intent with no active subintents or published articles', async () => {
+    const workspaceId = await seedWorkspace()
+    const intentId = await seedIntent(workspaceId, 'Billing')
+    const { token } = await seedAgentWithRole(workspaceId, 'admin')
+
+    const res = await request(app).post(`/intents/${intentId}/archive`).set('Authorization', `Bearer ${token}`).expect(200)
+
+    expect(res.body).toEqual({ id: intentId, name: 'Billing', archivedAt: expect.any(String) })
+  })
+
+  it('409s for the isSystem intent', async () => {
+    const workspaceId = await seedWorkspace()
+    const intentId = await seedIntent(workspaceId, 'Other', true)
+    const { token } = await seedAgentWithRole(workspaceId, 'admin')
+
+    await request(app).post(`/intents/${intentId}/archive`).set('Authorization', `Bearer ${token}`).expect(409)
+  })
+
+  it('409s while a non-archived subintent still points at it', async () => {
+    const workspaceId = await seedWorkspace()
+    const intentId = await seedIntent(workspaceId, 'Billing')
+    await seedSubintent({ workspaceId, intentId, name: 'Refunds' })
+    const { token } = await seedAgentWithRole(workspaceId, 'admin')
+
+    await request(app).post(`/intents/${intentId}/archive`).set('Authorization', `Bearer ${token}`).expect(409)
+  })
+
+  it('409s while a published article still points at it', async () => {
+    const workspaceId = await seedWorkspace()
+    const intentId = await seedIntent(workspaceId, 'Billing')
+    const { agentId, token } = await seedAgentWithRole(workspaceId, 'admin')
+    const articleId = await seedArticle({ workspaceId, createdBy: agentId, title: 'Refund policy' })
+    await ownerPool.query(`update article set intent_id = $1, state = 'published' where id = $2`, [intentId, articleId])
+
+    await request(app).post(`/intents/${intentId}/archive`).set('Authorization', `Bearer ${token}`).expect(409)
   })
 })

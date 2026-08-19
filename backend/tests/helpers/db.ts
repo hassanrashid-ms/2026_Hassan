@@ -195,9 +195,18 @@ export async function seedWorkspaceMember(args: {
   return id
 }
 
-export async function seedIntent(workspaceId: string, name = `Intent ${randomUUID().slice(0, 8)}`): Promise<string> {
+export async function seedIntent(
+  workspaceId: string,
+  name = `Intent ${randomUUID().slice(0, 8)}`,
+  isSystem = false,
+): Promise<string> {
   const id = randomUUID()
-  await ownerPool.query(`insert into intent (id, workspace_id, name) values ($1, $2, $3)`, [id, workspaceId, name])
+  await ownerPool.query(`insert into intent (id, workspace_id, name, is_system) values ($1, $2, $3, $4)`, [
+    id,
+    workspaceId,
+    name,
+    isSystem,
+  ])
   return id
 }
 

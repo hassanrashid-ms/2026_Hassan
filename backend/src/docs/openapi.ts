@@ -744,6 +744,39 @@ registry.registerPath({
 })
 
 registry.registerPath({
+  method: 'patch',
+  path: '/agent/intents/{id}',
+  summary: 'Agent Rename Intent',
+  description: 'Renames an intent. Admin-only.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: {
+    params: z.object({ id: z.uuid() }),
+    body: { content: { 'application/json': { schema: z.object({ name: z.string().min(1).max(120) }) } } },
+  },
+  responses: {
+    200: { description: 'Intent renamed' },
+    403: { description: 'Forbidden — admin role required' },
+    404: { description: 'Intent not found' },
+    409: { description: 'Another intent already has this name' },
+  },
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/agent/intents/{id}/archive',
+  summary: 'Agent Archive Intent',
+  description: 'Archives an intent. Admin-only. Blocked while active subintents or published articles reference it.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: { params: z.object({ id: z.uuid() }) },
+  responses: {
+    200: { description: 'Intent archived' },
+    403: { description: 'Forbidden — admin role required' },
+    404: { description: 'Intent not found' },
+    409: { description: 'Not archivable — is the system intent, or still referenced' },
+  },
+})
+
+registry.registerPath({
   method: 'get',
   path: '/agent/articles',
   summary: 'Agent List Articles',

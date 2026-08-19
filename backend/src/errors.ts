@@ -19,6 +19,8 @@ export type ErrorCode =
   | 'unknown_field'
   | 'invalid_value'
   | 'unsupported_field_type'
+  | 'name_taken'
+  | 'not_archivable'
 
 export function sendError(res: Response, status: number, code: ErrorCode, message: string): void {
   res.status(status).json({ error: { code, message } })
