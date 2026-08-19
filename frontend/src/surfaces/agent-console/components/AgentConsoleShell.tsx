@@ -1,11 +1,11 @@
 import { useEffect } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { Inbox as InboxIcon, BookOpen, LogOut } from 'lucide-react'
+import { Inbox as InboxIcon, BookOpen, ClipboardList, LogOut } from 'lucide-react'
 // agent-console.css is imported HERE and nowhere else — never from main.tsx or
 // any statically-reachable module, so its Tailwind preflight never leaks into
 // the webview surface (mirrors WebviewShell.tsx's isolation of webview.css).
 import '@/agent-console.css'
-import { clearAgentSession, loadAgentSession } from '../lib/agentSession.ts'
+import { canBuildForms, clearAgentSession, loadAgentSession } from '../lib/agentSession.ts'
 import { Avatar, AvatarFallback } from './ui/avatar.tsx'
 import { Button } from './ui/button.tsx'
 import { Separator } from './ui/separator.tsx'
@@ -16,6 +16,11 @@ const NAV_ITEMS = [
   { to: '/articles', label: 'Knowledge Base', icon: BookOpen },
 ]
 
+// Team Lead + Admin only — an Agent would 403 at the API anyway
+// (requireWorkspaceRole('team_lead', 'admin') on formsRouter), so hiding the
+// link here is UX, not the enforcement point.
+const FORMS_NAV_ITEM = { to: '/forms', label: 'Forms', icon: ClipboardList }
+
 export function AgentConsoleShell() {
   const navigate = useNavigate()
   const session = loadAgentSession()
@@ -25,6 +30,8 @@ export function AgentConsoleShell() {
   }, [session, navigate])
 
   if (!session) return null
+
+  const navItems = canBuildForms(session) ? [...NAV_ITEMS, FORMS_NAV_ITEM] : NAV_ITEMS
 
   const initials = session.displayName
     .split(' ')
@@ -39,7 +46,7 @@ export function AgentConsoleShell() {
         <div className="px-4 py-4 text-sm font-semibold">Support Console</div>
         <Separator />
         <nav className="flex flex-col gap-1 p-2">
-          {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
+          {navItems.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
               to={to}

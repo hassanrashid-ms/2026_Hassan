@@ -837,6 +837,122 @@ registry.registerPath({
   responses: { 200: { description: 'Article archived' }, 404: { description: 'Not found' } },
 })
 
+// --- 5b. AGENT FORMS ENDPOINTS ---
+// PATCH routes from the design doc fall back to POST-with-verb-suffix here:
+// app.ts's CORS allows only GET and POST (see botConfigRouter's own note).
+const FormFieldSchema = z.object({
+  key: z.string().min(1).max(64),
+  label: z.string().min(1).max(200),
+  type: z.enum(['short_text', 'long_text', 'number', 'date', 'choice']),
+  isRequired: z.boolean(),
+  position: z.number().int().nonnegative(),
+  options: z.array(z.string().min(1)).min(2).optional(),
+  placeholder: z.string().min(1).max(200).optional(),
+  helperText: z.string().min(1).max(300).optional(),
+})
+
+registry.registerPath({
+  method: 'get',
+  path: '/agent/forms',
+  summary: 'Agent List Forms',
+  description: 'Lists all forms in the workspace with mapping/publish/draft status. Team Lead or Admin.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  responses: { 200: { description: 'Forms list' }, 403: { description: 'Forbidden' } },
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/agent/forms',
+  summary: 'Agent Create Form',
+  description: 'Creates a form and its v1 empty draft. Team Lead or Admin.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: { body: { content: { 'application/json': { schema: z.object({ name: z.string().min(1).max(200) }) } } } },
+  responses: { 201: { description: 'Form created' }, 403: { description: 'Forbidden' } },
+})
+
+registry.registerPath({
+  method: 'get',
+  path: '/agent/forms/{id}',
+  summary: 'Agent Get Form',
+  description: 'Fetches one form: draft fields, published fields, and mapped subintents. Team Lead or Admin.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: { params: z.object({ id: z.uuid() }) },
+  responses: { 200: { description: 'Form detail' }, 403: { description: 'Forbidden' }, 404: { description: 'Not found' } },
+})
+
+registry.registerPath({
+  method: 'patch',
+  path: '/agent/forms/{id}',
+  summary: 'Agent Update Form',
+  description:
+    'Edits name and/or fields. Editing a draft edits it in place; editing a published form auto-forks a new draft version. Rejects attachment/time field types. Team Lead or Admin.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: {
+    params: z.object({ id: z.uuid() }),
+    body: {
+      content: {
+        'application/json': {
+          schema: z.object({ name: z.string().min(1).max(200).optional(), fields: z.array(FormFieldSchema).optional() }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: { description: 'Form updated' },
+    403: { description: 'Forbidden' },
+    404: { description: 'Not found' },
+    422: { description: 'Invalid fields, or attachment/time field type used' },
+  },
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/agent/forms/{id}/publish',
+  summary: 'Agent Publish Form',
+  description: 'Publishes the current draft; rejects if there is no draft or the draft is empty. Admin-only.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: { params: z.object({ id: z.uuid() }) },
+  responses: {
+    200: { description: 'Form published' },
+    403: { description: 'Forbidden — admin role required' },
+    404: { description: 'Not found' },
+    409: { description: 'No draft, or draft has zero fields' },
+  },
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/agent/forms/{id}/archive',
+  summary: 'Agent Archive Form',
+  description: 'Archives a form. Idempotent — archiving twice succeeds. No cascade to mapped subintents. Admin-only.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: { params: z.object({ id: z.uuid() }) },
+  responses: {
+    200: { description: 'Form archived' },
+    403: { description: 'Forbidden — admin role required' },
+    404: { description: 'Not found' },
+  },
+})
+
+registry.registerPath({
+  method: 'patch',
+  path: '/agent/forms/{id}/subintents',
+  summary: 'Agent Set Form Subintents',
+  description:
+    'Full set-replacement of which subintents map to this form. Client-supplied ids are verified in-workspace and non-archived first. Team Lead or Admin.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: {
+    params: z.object({ id: z.uuid() }),
+    body: { content: { 'application/json': { schema: z.object({ subintentIds: z.array(z.uuid()) }) } } },
+  },
+  responses: {
+    200: { description: 'Mapping replaced' },
+    403: { description: 'Forbidden' },
+    404: { description: 'Not found' },
+    422: { description: 'One or more subintent ids are unknown, archived, or cross-workspace' },
+  },
+})
+
 registry.registerPath({
   method: 'get',
   path: '/agent/bot-config',

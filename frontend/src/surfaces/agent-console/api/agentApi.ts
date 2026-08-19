@@ -8,9 +8,13 @@ import type {
   AgentConversationDetail,
   AskResolvedResponse,
   ClaimResponse,
+  CreateFormResponse,
   CreateIntentResponse,
   CreateSubintentResponse,
   EscalateResponse,
+  FormDetail,
+  FormField,
+  FormsListResponse,
   IntentsResponse,
   UnescalateResponse,
 } from '@support/types'
@@ -129,6 +133,41 @@ export function publishArticle(token: string, id: string): Promise<AgentArticleD
 
 export function archiveArticle(token: string, id: string): Promise<AgentArticleDetail> {
   return apiCall(`/agent/articles/${id}/archive`, token, { method: 'POST' })
+}
+
+export function fetchForms(token: string): Promise<FormsListResponse> {
+  return apiCall('/agent/forms', token)
+}
+
+export function fetchForm(token: string, id: string): Promise<FormDetail> {
+  return apiCall(`/agent/forms/${id}`, token)
+}
+
+export function createForm(token: string, name: string): Promise<CreateFormResponse> {
+  return apiCall('/agent/forms', token, { method: 'POST', body: JSON.stringify({ name }) })
+}
+
+export function updateForm(
+  token: string,
+  id: string,
+  patch: { name?: string; fields?: FormField[] },
+): Promise<FormDetail> {
+  return apiCall(`/agent/forms/${id}`, token, { method: 'PATCH', body: JSON.stringify(patch) })
+}
+
+export function publishForm(token: string, id: string): Promise<FormDetail> {
+  return apiCall(`/agent/forms/${id}/publish`, token, { method: 'POST' })
+}
+
+export function archiveForm(token: string, id: string): Promise<FormDetail> {
+  return apiCall(`/agent/forms/${id}/archive`, token, { method: 'POST' })
+}
+
+export function setFormSubintents(token: string, id: string, subintentIds: string[]): Promise<FormDetail> {
+  return apiCall(`/agent/forms/${id}/subintents`, token, {
+    method: 'PATCH',
+    body: JSON.stringify({ subintentIds }),
+  })
 }
 
 export function askResolved(token: string, conversationId: string): Promise<AskResolvedResponse> {

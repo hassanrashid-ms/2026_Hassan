@@ -19,6 +19,9 @@ const Inbox = lazy(async () => ({ default: (await import('../surfaces/agent-cons
 const KnowledgeBase = lazy(async () => ({
   default: (await import('../surfaces/agent-console/pages/KnowledgeBase/KnowledgeBase.tsx')).KnowledgeBase,
 }))
+const Forms = lazy(async () => ({
+  default: (await import('../surfaces/agent-console/pages/Forms/Forms.tsx')).Forms,
+}))
 
 export function AppRoutes() {
   return (
@@ -37,6 +40,8 @@ export function AppRoutes() {
         <Route path="inbox/:conversationId" element={<Inbox />} />
         <Route path="articles" element={<KnowledgeBase />} />
         <Route path="articles/:id" element={<KnowledgeBase />} />
+        <Route path="forms" element={<Forms />} />
+        <Route path="forms/:id" element={<Forms />} />
       </Route>
     </Routes>
   )

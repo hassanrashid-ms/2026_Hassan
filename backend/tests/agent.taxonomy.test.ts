@@ -64,7 +64,9 @@ describe('GET /intents', () => {
 
     expect(res.body.intents).toHaveLength(1)
     expect(res.body.intents[0].name).toBe('Billing')
-    expect(res.body.intents[0].subintents).toEqual([{ id: expect.any(String), name: 'Refunds' }])
+    expect(res.body.intents[0].subintents).toEqual([
+      { id: expect.any(String), name: 'Refunds', formId: null, archivedAt: null },
+    ])
   })
 })
 

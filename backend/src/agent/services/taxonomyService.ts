@@ -8,14 +8,27 @@ export async function listIntents(ctx: AgentContext): Promise<IntentsResponse> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
     const intents = await tx.select({ id: intent.id, name: intent.name }).from(intent).orderBy(asc(intent.name))
     const subintents = await tx
-      .select({ id: subintent.id, name: subintent.name, intentId: subintent.intentId })
+      .select({
+        id: subintent.id,
+        name: subintent.name,
+        intentId: subintent.intentId,
+        formId: subintent.formId,
+        archivedAt: subintent.archivedAt,
+      })
       .from(subintent)
       .orderBy(asc(subintent.name))
     return {
       intents: intents.map((i) => ({
         id: i.id,
         name: i.name,
-        subintents: subintents.filter((s) => s.intentId === i.id).map((s) => ({ id: s.id, name: s.name })),
+        subintents: subintents
+          .filter((s) => s.intentId === i.id)
+          .map((s) => ({
+            id: s.id,
+            name: s.name,
+            formId: s.formId,
+            archivedAt: s.archivedAt ? s.archivedAt.toISOString() : null,
+          })),
       })),
     }
   })
