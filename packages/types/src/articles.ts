@@ -7,6 +7,19 @@ import { z } from 'zod'
 export const CreateIntentBody = z.object({ name: z.string().min(1).max(120) })
 export const CreateSubintentBody = z.object({ name: z.string().min(1).max(120) })
 
+export type ConversationPriority = 'p1' | 'p2' | 'p3' | 'p4'
+
+export const RenameIntentBody = z.object({ name: z.string().min(1).max(120) })
+export const RenameSubintentBody = z.object({
+  name: z.string().min(1).max(120).optional(),
+  defaultPriority: z.enum(['p1', 'p2', 'p3', 'p4']).optional(),
+})
+// Deliberately a shape regex, not `z.uuid()`: zod 4's `z.uuid()` enforces the
+// RFC variant nibble, which rejects the all-ones ids the tests and seeds use.
+const uuidShape = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/
+export const MoveSubintentBody = z.object({ intentId: z.string().regex(uuidShape) })
+export const MergeSubintentBody = z.object({ intoId: z.string().regex(uuidShape) })
+
 export const CreateArticleBody = z.object({
   title: z.string().min(1).max(200),
   body: z.string().min(1),
@@ -28,11 +41,25 @@ export const PublicArticleListQuery = z.object({
 
 export type ArticleStateValue = 'draft' | 'published' | 'archived'
 
-export type IntentSubintentView = { id: string; name: string; formId: string | null; archivedAt: string | null }
-export type IntentView = { id: string; name: string; subintents: IntentSubintentView[] }
+export type IntentSubintentView = {
+  id: string
+  name: string
+  formId: string | null
+  archivedAt: string | null
+  defaultPriority: ConversationPriority | null
+  mergedIntoId: string | null
+}
+export type IntentView = { id: string; name: string; isSystem: boolean; archivedAt: string | null; subintents: IntentSubintentView[] }
 export type IntentsResponse = { intents: IntentView[] }
 export type CreateIntentResponse = { id: string; name: string }
 export type CreateSubintentResponse = { id: string; name: string; intent_id: string }
+
+export type RenameIntentResponse = { id: string; name: string }
+export type ArchiveIntentResponse = { id: string; name: string; archivedAt: string }
+export type RenameSubintentResponse = { id: string; name: string; defaultPriority: ConversationPriority | null }
+export type ArchiveSubintentResponse = { id: string; name: string; archivedAt: string }
+export type MoveSubintentResponse = { id: string; name: string; intentId: string }
+export type MergeSubintentResponse = { id: string; name: string; archivedAt: string; mergedIntoId: string }
 
 export type AgentArticleSummary = {
   id: string
