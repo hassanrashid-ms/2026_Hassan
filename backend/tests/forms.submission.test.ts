@@ -1,7 +1,7 @@
 import { createServer } from 'node:http'
 import express from 'express'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import { eq } from 'drizzle-orm'
+import { eq, asc } from 'drizzle-orm'
 import type { FormField } from '@support/types'
 import { req as request } from './helpers/http.ts'
 import { closeDb } from '../src/shared/db/client.ts'
@@ -202,7 +202,7 @@ describe('completeFormAndHandoff', () => {
     })
   })
 
-  it('posts exactly one non-empty summary card and no other message', async () => {
+  it('posts exactly one non-empty summary card and no other message when skipped without answers', async () => {
     const f = await offered([])
     await terminate(f, 'skip')
     const rows = await withWorkspace(f.workspaceId, (tx) =>
@@ -212,6 +212,26 @@ describe('completeFormAndHandoff', () => {
     expect(rows[0]!.authorType).toBe('system')
     expect(rows[0]!.visibility).toBe('public')
     expect(rows[0]!.body.trim().length).toBeGreaterThan(0)
+  })
+
+  it('posts an internal system message with the answers when fields are answered', async () => {
+    const f = await offered(['a', 'b'])
+    await terminate(f, 'submit')
+    const rows = await withWorkspace(f.workspaceId, (tx) =>
+      tx.select().from(message)
+        .where(eq(message.conversationId, f.conversationId))
+        .orderBy(asc(message.createdAt), asc(message.id)),
+    )
+    expect(rows).toHaveLength(2)
+    // First message should be the public summary
+    expect(rows[0]!.authorType).toBe('system')
+    expect(rows[0]!.visibility).toBe('public')
+    // Second message should be the internal answers
+    expect(rows[1]!.authorType).toBe('system')
+    expect(rows[1]!.visibility).toBe('internal')
+    expect(rows[1]!.body).toContain('Form Submitted')
+    expect(rows[1]!.body).toContain('A') // Field label A
+    expect(rows[1]!.body).toContain('B') // Field label B
   })
 
   it('returns null on a second call and writes nothing the second time', async () => {
