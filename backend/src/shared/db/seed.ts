@@ -23,6 +23,7 @@ const { SEED_TAXONOMY } = await import('./seedTaxonomy.ts')
 const { SEED_FORMS, seedForms } = await import('./seedForms.ts')
 const { upsertArticleObject } = await import('../weaviate/articlesIndex.ts')
 const { OTHER_INTENT_NAME, OTHER_SUBINTENT_NAME } = await import('../../domain/bot/fallbackSubintent.ts')
+const { seedBotConfig } = await import('../../domain/bot/botConfig.ts')
 
 const SLUG = process.env.SEED_WORKSPACE_SLUG ?? 'demo-workspace'
 const ADMIN_EMAIL = process.env.SEED_ADMIN_EMAIL ?? 'admin@example.test'
@@ -104,6 +105,10 @@ export async function seed(): Promise<void> {
       .insert(workspaceMember)
       .values({ workspaceId, agentId: samId, role: 'agent' })
       .onConflictDoNothing()
+
+    // "Version 1" — every seeded workspace gets a real bot_config baseline row,
+    // same as production provisioning (domain/bot/botConfig.ts seedBotConfig).
+    await seedBotConfig(tx, workspaceId)
 
     for (const field of DECLARED_FIELD_SEED) {
       await tx

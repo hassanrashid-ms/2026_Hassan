@@ -1066,7 +1066,7 @@ registry.registerPath({
   path: '/agent/bot-config',
   summary: 'Agent Get Bot Config',
   description:
-    'The resolved bot config for this workspace: is_provisioned, prompt, rules, the joined system_prompt, and which of the two text fields is customised. An absent row resolves to the off state on the defaults. Team Lead or Admin.',
+    'The resolved bot config for this workspace: is_provisioned, prompt, the toggleable rules catalog (with derived enforcement), tools_config, enabled_tools, limits_config, resolved_limits, the joined system_prompt, and which fields are customised relative to the catalog baseline. An absent row resolves to the off state on the catalog baseline. Team Lead or Admin.',
   security: [{ [bearerAgentJwt.name]: [] }],
   responses: {
     200: { description: 'Resolved bot config' },
@@ -1079,7 +1079,7 @@ registry.registerPath({
   path: '/agent/bot-config',
   summary: 'Agent Save Bot Config',
   description:
-    'Partial upsert of this workspace bot config, audited field-by-field into change_log in the same transaction. An omitted key is left alone; an explicit null on prompt or rules resets it to the default. An empty or whitespace-only value is refused. Admin-only.',
+    'Partial upsert of this workspace bot config, audited field-by-field into change_log in the same transaction. An omitted key is left alone; an explicit null on prompt, rules, tools_config or limits_config resets it to the catalog baseline. Locked rules cannot be disabled or removed, every builtin rule key must be present, at least one rule must stay enabled, tools_config must name every catalog tool, and limits_config must name every catalog limit with a value inside its min/max bound. Admin-only.',
   security: [{ [bearerAgentJwt.name]: [] }],
   request: {
     body: {
@@ -1088,7 +1088,34 @@ registry.registerPath({
           schema: z.object({
             is_provisioned: z.boolean().optional().openapi({ example: true }),
             prompt: z.string().nullable().optional().openapi({ example: 'You are the first-line support assistant…' }),
-            rules: z.string().nullable().optional().openapi({ example: 'Never promise a refund.' }),
+            rules: z
+              .array(
+                z.object({
+                  key: z.string(),
+                  text: z.string(),
+                  enabled: z.boolean(),
+                  locked: z.boolean(),
+                  source: z.enum(['builtin', 'custom']),
+                }),
+              )
+              .nullable()
+              .optional(),
+            tools_config: z
+              .array(z.object({ tool: z.string(), enabled: z.boolean() }))
+              .nullable()
+              .optional(),
+            limits_config: z
+              .array(z.object({ key: z.string(), value: z.number().int().positive() }))
+              .nullable()
+              .optional()
+              .openapi({
+                example: [
+                  { key: 'max_bot_messages', value: 8 },
+                  { key: 'max_tool_calls_per_turn', value: 6 },
+                  { key: 'max_articles_per_turn', value: 3 },
+                  { key: 'max_unhelped_replies', value: 3 },
+                ],
+              }),
           }),
         },
       },
@@ -1097,7 +1124,7 @@ registry.registerPath({
   responses: {
     200: { description: 'Resolved bot config after the save' },
     403: { description: 'Forbidden — admin role required' },
-    422: { description: 'Nothing to change, an unknown field, or an empty prompt/rules value' },
+    422: { description: 'Nothing to change, an unknown field, an empty prompt, or an invalid rules/tools_config/limits_config payload' },
   },
 })
 
@@ -1106,18 +1133,47 @@ registry.registerPath({
   path: '/agent/bot-config/history',
   summary: 'Agent Get Bot Config Audit Trail',
   description:
-    'This workspace bot-config change_log rows, newest first, cursor-paged. `field` is the database column name. `before_value` null means the field had no value before; `after_value` null means it was reset to the default. Team Lead or Admin.',
+    'This workspace bot-config change_log rows, newest first, cursor-paged, optionally filtered to one field. `field` on the query string narrows the page; `field` on each entry is the database column name. `before_value` null means the field had no value before; `after_value` null means it was reset to the catalog baseline. Team Lead or Admin.',
   security: [{ [bearerAgentJwt.name]: [] }],
   request: {
     query: z.object({
       limit: z.coerce.number().int().min(1).max(200).optional().openapi({ example: 50 }),
       cursor: z.string().optional().openapi({ description: 'Opaque next_cursor from the previous page' }),
+      field: z.enum(['prompt', 'rules', 'tools_config', 'limits_config', 'is_provisioned']).optional(),
     }),
   },
   responses: {
     200: { description: 'Audit trail page' },
     403: { description: 'Forbidden — Team Lead or Admin role required' },
-    422: { description: 'Invalid limit or cursor' },
+    422: { description: 'Invalid limit, cursor or field' },
+  },
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/agent/bot-config/rollback',
+  summary: 'Agent Rollback Bot Config Field',
+  description:
+    'Restores a prior change_log value for one field as the new current value. This is itself a new, audited save — history is never mutated. Admin-only.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: z.object({
+            field: z.enum(['prompt', 'rules', 'tools_config', 'limits_config']),
+            change_log_id: z.string(),
+            side: z.enum(['before', 'after']),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: { description: 'Resolved bot config after the rollback' },
+    403: { description: 'Forbidden — admin role required' },
+    404: { description: 'No matching change_log entry for this workspace' },
+    422: { description: 'change_log_id does not belong to the requested field, or the restored value fails validation' },
   },
 })
 
