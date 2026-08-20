@@ -4,6 +4,7 @@ import { requireWorkspaceRole } from '../../shared/middleware/requireWorkspaceRo
 import {
   getBotConfigHandler,
   getBotConfigHistoryHandler,
+  rollbackBotConfigHandler,
   saveBotConfigHandler,
 } from '../controllers/botConfigController.ts'
 
@@ -32,3 +33,4 @@ botConfigRouter.post('/bot-config', requireAdminRole, saveBotConfigHandler)
 // constant rather than a second requireWorkspaceRole(...) call, so the two reads
 // cannot drift apart.
 botConfigRouter.get('/bot-config/history', canSeeBotConfig, getBotConfigHistoryHandler)
+botConfigRouter.post('/bot-config/rollback', requireAdminRole, rollbackBotConfigHandler)
