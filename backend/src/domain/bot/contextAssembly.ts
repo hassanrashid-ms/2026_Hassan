@@ -4,6 +4,7 @@ import type { Tx } from '../../shared/db/withWorkspace.ts'
 import type { BotTurnInput } from './botTurn.ts'
 import { resolveBotConfig } from './botConfig.ts'
 import { article, event, intent, message, subintent } from '../../shared/db/schema/index.ts'
+import type { LimitKey } from '@support/types'
 
 export type ChatRole = 'system' | 'user' | 'assistant'
 export type ChatMessage = { role: ChatRole; content: string }
@@ -14,6 +15,10 @@ export type BuildMessagesResult = {
   subintentOptions: SubintentOption[]
   /** Article ids the player-visible catalogue names — for logging/debug only, never used to validate answer_from_article (that's this turn's search results, see tools.ts). */
   catalogueArticleCount: number
+  /** What toolsForPhase filters against — carried out so toolLoop doesn't re-resolve config. */
+  enabledTools: ReadonlySet<string>
+  /** Per-workspace numeric ceilings — carried out so toolLoop doesn't re-resolve config. */
+  resolvedLimits: Record<LimitKey, number>
 }
 
 export const MAX_HISTORY_MESSAGES = 20
@@ -155,5 +160,11 @@ export async function buildMessages(tx: Tx, input: BotTurnInput): Promise<BuildM
   if (droppedCount > 0) messages.push({ role: 'user', content: `[${droppedCount} messages elided]` })
   for (const m of windowed) messages.push({ role: m.role, content: m.body })
 
-  return { messages, subintentOptions, catalogueArticleCount: catalogue.count }
+  return {
+    messages,
+    subintentOptions,
+    catalogueArticleCount: catalogue.count,
+    enabledTools: config.enabledTools,
+    resolvedLimits: config.resolvedLimits,
+  }
 }

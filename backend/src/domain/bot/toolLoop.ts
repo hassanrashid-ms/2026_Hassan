@@ -8,7 +8,6 @@ import { isGrounded, MIN_GROUNDED_FRACTION, scoreGrounding } from './grounding.t
 import {
   ANSWER_FROM_ARTICLE_TOOL_NAME,
   CONFIRM_RESOLUTION_TOOL_NAME,
-  MAX_ARTICLES_PER_TURN,
   resolveClassifyIndex,
   searchArticles,
   toolsForPhase,
@@ -26,13 +25,11 @@ import { resolveFallbackSubintent } from './fallbackSubintent.ts'
  * an article would have answered. Observed on a purchase question that had a
  * published article behind it.
  *
- * Still a hard runaway guard, and still well under `MAX_ARTICLES_PER_TURN * 2`:
+ * Still a hard runaway guard, and still well under `resolvedLimits.max_articles_per_turn * 2`:
  * the point is to bound a loop, not to force the model to be economical. The
- * `bot.tool` log line records `n/6` per call, so a turn that exhausts this is
- * visible rather than inferred.
+ * `bot.tool` log line records `n/<max_tool_calls_per_turn>` per call, so a turn
+ * that exhausts this is visible rather than inferred.
  */
-export const MAX_TOOL_CALLS_PER_TURN = 6
-export const MAX_BOT_MESSAGES = 8
 
 const MODEL_HANDOFF_REASONS: ReadonlySet<string> = new Set(['asked_for_person', 'no_article', 'sensitive'])
 
@@ -60,10 +57,6 @@ function parseToolCall(raw: { id: string; name: string; arguments: string }): Pa
  * it again, per spec's Control flow section).
  */
 export const toolLoopDecider: BotDecider = async (input) => {
-  if (input.botMessageCount >= MAX_BOT_MESSAGES) {
-    return { kind: 'handoff', reason: 'turn_cap', subintentId: null }
-  }
-
   // Declared outside the try so the catch below can still attach whatever
   // retrieval happened before the model refused or returned something
   // unparseable. A turn that searched and *then* failed is the case where
@@ -72,7 +65,17 @@ export const toolLoopDecider: BotDecider = async (input) => {
 
   try {
     const decision = await withWorkspace(input.workspaceId, async (tx): Promise<BotTurnDecision> => {
-      const { messages, subintentOptions } = await buildMessages(tx, input)
+      const { messages, subintentOptions, enabledTools, resolvedLimits } = await buildMessages(tx, input)
+
+      // Evaluated before the turn_cap check — whichever ceiling is lower fires
+      // first, and max_unhelped_replies defaults lower (3) than max_bot_messages
+      // (8), so it is expected to fire first under default config.
+      if (input.unhelpedReplyCount >= resolvedLimits.max_unhelped_replies) {
+        return { kind: 'handoff', reason: 'unhelped_cap', subintentId: null }
+      }
+      if (input.botMessageCount >= resolvedLimits.max_bot_messages) {
+        return { kind: 'handoff', reason: 'turn_cap', subintentId: null }
+      }
 
       let classifiedSubintentId = input.subintentId
       // Keyed by id and holding the text, not just the ids: answering from an
@@ -89,8 +92,8 @@ export const toolLoopDecider: BotDecider = async (input) => {
       let toolCallCount = 0
       const conversationMessages: ChatMessage[] = [...messages]
 
-      while (toolCallCount < MAX_TOOL_CALLS_PER_TURN) {
-        const response = await callModel(conversationMessages, toolsForPhase(input.confirmPhase))
+      while (toolCallCount < resolvedLimits.max_tool_calls_per_turn) {
+        const response = await callModel(conversationMessages, toolsForPhase(input.confirmPhase, enabledTools))
 
         if (response.toolCalls.length === 0) {
           // No tool call and nothing to say is not an answer — it is the model
@@ -106,7 +109,7 @@ export const toolLoopDecider: BotDecider = async (input) => {
         }
 
         for (const raw of response.toolCalls) {
-          if (toolCallCount >= MAX_TOOL_CALLS_PER_TURN) {
+          if (toolCallCount >= resolvedLimits.max_tool_calls_per_turn) {
             return { kind: 'handoff', reason: 'unsure', subintentId: classifiedSubintentId }
           }
           toolCallCount++
@@ -120,13 +123,13 @@ export const toolLoopDecider: BotDecider = async (input) => {
           logger.info('bot.tool', call.name, {
             workspaceId: input.workspaceId,
             conversationId: input.conversationId,
-            call: `${toolCallCount}/${MAX_TOOL_CALLS_PER_TURN}`,
+            call: `${toolCallCount}/${resolvedLimits.max_tool_calls_per_turn}`,
             args: call.args,
           })
 
           if (call.name === 'search_articles') {
             searchCallCount++
-            if (searchCallCount > MAX_ARTICLES_PER_TURN) {
+            if (searchCallCount > resolvedLimits.max_articles_per_turn) {
               conversationMessages.push({ role: 'user', content: '[search_articles limit reached this turn]' })
               continue
             }
