@@ -27,6 +27,7 @@ function baseInput(overrides: Partial<BotTurnInput> & { workspaceId: string; con
     subintentId: null,
     confirmPhase: 'none',
     botMessageCount: 0,
+    unhelpedReplyCount: 0,
     lastPlayerMessageAt: null,
     history: [],
     ...overrides,

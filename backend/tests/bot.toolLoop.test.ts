@@ -17,9 +17,14 @@ vi.mock('../src/shared/weaviate/articlesIndex.ts', () => ({
 
 import { closeDb } from '../src/shared/db/client.ts'
 import type { BotTurnInput } from '../src/domain/bot/botTurn.ts'
-import { toolLoopDecider, MAX_TOOL_CALLS_PER_TURN, MAX_BOT_MESSAGES } from '../src/domain/bot/toolLoop.ts'
-import { MAX_ARTICLES_PER_TURN } from '../src/domain/bot/tools.ts'
+import { toolLoopDecider } from '../src/domain/bot/toolLoop.ts'
 import { ModelRefusalError, ModelTimeoutError } from '../src/domain/bot/openaiClient.ts'
+import { LIMIT_CATALOG } from '../src/domain/bot/limitsCatalog.ts'
+
+const byKey = new Map(LIMIT_CATALOG.map((l) => [l.key, l.defaultValue]))
+const MAX_TOOL_CALLS_PER_TURN = byKey.get('max_tool_calls_per_turn')!
+const MAX_BOT_MESSAGES = byKey.get('max_bot_messages')!
+const MAX_ARTICLES_PER_TURN = byKey.get('max_articles_per_turn')!
 import { closeOwnerPool, ownerPool, seedConversation, seedIntent, seedPlayer, seedSubintent, seedWorkspace, truncateAll } from './helpers/db.ts'
 
 afterAll(async () => {
@@ -39,6 +44,7 @@ function baseInput(overrides: Partial<BotTurnInput> & { workspaceId: string; con
     subintentId: null,
     confirmPhase: 'none',
     botMessageCount: 0,
+    unhelpedReplyCount: 0,
     lastPlayerMessageAt: null,
     history: [],
     ...overrides,

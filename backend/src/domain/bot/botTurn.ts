@@ -8,7 +8,14 @@ import type { ConfirmPhaseValue, PlayerMessageView } from '@support/types'
  * from `confirm_resolution(false)`), or forced by a budget with no model call
  * involved at all (`unsure`, `turn_cap`).
  */
-export type HandoffReason = 'asked_for_person' | 'article_rejected' | 'no_article' | 'sensitive' | 'unsure' | 'turn_cap'
+export type HandoffReason =
+  | 'asked_for_person'
+  | 'article_rejected'
+  | 'no_article'
+  | 'sensitive'
+  | 'unsure'
+  | 'turn_cap'
+  | 'unhelped_cap'
 
 export type UnavailableReason =
   | 'not_provisioned' // admin has the bot switched off
@@ -55,8 +62,10 @@ export type BotTurnInput = {
   subintentId: string | null
   /** Guards whether confirm_resolution is offered to the model this turn. */
   confirmPhase: ConfirmPhaseValue
-  /** Bot-authored messages so far, in this conversation. Drives MAX_BOT_MESSAGES. */
+  /** Bot-authored messages so far, in this conversation. Drives resolvedLimits.max_bot_messages. */
   botMessageCount: number
+  /** Bot-authored messages since the last conversation_resolved event (or all of them, if there is none). Drives resolvedLimits.max_unhelped_replies. */
+  unhelpedReplyCount: number
   /** Null if the player has never sent a message (should not happen once a turn runs). */
   lastPlayerMessageAt: Date | null
   history: PlayerMessageView[]

@@ -1,9 +1,9 @@
-import { asc, eq } from 'drizzle-orm'
+import { and, asc, desc, eq } from 'drizzle-orm'
 import type { Server } from 'socket.io'
 import { applyBotTurn } from './applyBotTurn.ts'
 import type { BotDecider, BotTurnDecision, BotTurnInput } from './botTurn.ts'
 import { toAgentView, toPlayerView, type PostedMessageRow } from '../conversations/index.ts'
-import { conversation, message } from '../../shared/db/schema/index.ts'
+import { conversation, event, message } from '../../shared/db/schema/index.ts'
 import { withWorkspace, type Tx } from '../../shared/db/withWorkspace.ts'
 import { emitInboxChanged, emitMessageToRooms, emitPhaseChanged } from '../../shared/realtime/emit.ts'
 import { getIo } from '../../shared/realtime/socketServer.ts'
@@ -21,7 +21,13 @@ type GatherResult = {
 async function gather(
   tx: Tx,
   conversationId: string,
-): Promise<{ conv: GatherResult; history: PlayerMessageView[]; botMessageCount: number; lastPlayerMessageAt: Date | null }> {
+): Promise<{
+  conv: GatherResult
+  history: PlayerMessageView[]
+  botMessageCount: number
+  unhelpedReplyCount: number
+  lastPlayerMessageAt: Date | null
+}> {
   const [conv] = await tx
     .select({ status: conversation.status, subintentId: conversation.subintentId, confirmPhase: conversation.confirmPhase })
     .from(conversation)
@@ -38,7 +44,19 @@ async function gather(
   const botMessageCount = rows.filter((r) => r.authorType === 'bot').length
   const lastPlayer = rows.filter((r) => r.authorType === 'player').at(-1)
 
-  return { conv: conv ?? null, history, botMessageCount, lastPlayerMessageAt: lastPlayer?.createdAt ?? null }
+  // "Unhelped" resets at the conversation's most recent conversation_resolved
+  // event — no new stored counter, derived the same way botMessageCount is.
+  const [lastResolved] = await tx
+    .select({ occurredAt: event.occurredAt })
+    .from(event)
+    .where(and(eq(event.conversationId, conversationId), eq(event.type, 'conversation_resolved')))
+    .orderBy(desc(event.occurredAt))
+    .limit(1)
+  const unhelpedReplyCount = rows.filter(
+    (r) => r.authorType === 'bot' && (!lastResolved || r.createdAt > lastResolved.occurredAt),
+  ).length
+
+  return { conv: conv ?? null, history, botMessageCount, unhelpedReplyCount, lastPlayerMessageAt: lastPlayer?.createdAt ?? null }
 }
 
 /**
@@ -142,7 +160,9 @@ export async function applyDecisionIfBotActive(
  * authoritative guard.
  */
 export async function runBotTurn(workspaceId: string, conversationId: string, decider: BotDecider): Promise<void> {
-  const { conv, history, botMessageCount, lastPlayerMessageAt } = await withWorkspace(workspaceId, (tx) => gather(tx, conversationId))
+  const { conv, history, botMessageCount, unhelpedReplyCount, lastPlayerMessageAt } = await withWorkspace(workspaceId, (tx) =>
+    gather(tx, conversationId),
+  )
 
   if (!conv || conv.status !== 'bot_active') return
 
@@ -152,6 +172,7 @@ export async function runBotTurn(workspaceId: string, conversationId: string, de
     subintentId: conv.subintentId,
     confirmPhase: conv.confirmPhase,
     botMessageCount,
+    unhelpedReplyCount,
     lastPlayerMessageAt,
     history,
   })

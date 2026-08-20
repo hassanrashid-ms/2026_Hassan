@@ -25,7 +25,6 @@ export const CONFIRM_RESOLUTION_TOOL_NAME = 'confirm_resolution'
  * article is still what is being offered — only the form changed.
  */
 export const ANSWER_FROM_ARTICLE_TOOL_NAME = 'answer_from_article'
-const MAX_ARTICLES_PER_TURN = 3
 
 const ALWAYS_AVAILABLE_TOOLS = [
   {
@@ -141,8 +140,6 @@ export function toolsForPhase(phase: ToolPhase, enabledTools: ReadonlySet<string
   const base = phase === 'bot_article' ? [...ALWAYS_AVAILABLE_TOOLS, CONFIRM_RESOLUTION_TOOL] : [...ALWAYS_AVAILABLE_TOOLS]
   return base.filter((t) => t.function.name === 'handoff' || enabledTools.has(t.function.name))
 }
-
-export { MAX_ARTICLES_PER_TURN }
 
 export type SearchArticlesResult = { id: string; title: string; body: string }[]
 
