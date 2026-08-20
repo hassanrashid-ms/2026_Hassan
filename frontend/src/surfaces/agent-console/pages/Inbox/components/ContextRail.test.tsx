@@ -38,6 +38,7 @@ function contextResponse(playerState: AgentPlayerStateView): AgentConversationCo
     tickets: [],
     summary: { total_tickets: 0, total_reopened: 0, first_contact_at: '2026-04-12T00:00:00Z' },
     form: null,
+    tags: [],
   }
 }
 

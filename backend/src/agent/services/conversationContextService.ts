@@ -26,6 +26,7 @@ import {
 import { withWorkspace } from '../../shared/db/withWorkspace.ts'
 import type { Tx } from '../../shared/db/withWorkspace.ts'
 import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts'
+import { getConversationTags } from './tagsService.ts'
 
 /**
  * One conversation's header row, by id.
@@ -266,6 +267,7 @@ export async function getConversationContext(
       currentConversationId: conversationId,
     })
     const formView = await getFormView(tx, conversationId)
+    const tags = await getConversationTags(tx, conversationId)
 
     return {
       player_state: playerState,
@@ -276,6 +278,7 @@ export async function getConversationContext(
         first_contact_at: current.firstSeenAt.toISOString(),
       },
       form: formView,
+      tags,
     }
   })
 }

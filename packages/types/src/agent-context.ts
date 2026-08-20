@@ -1,6 +1,7 @@
 import type { ConversationStatusValue } from './chat.ts'
 import type { FormFieldType, FormSubmissionStatus } from './forms.ts'
 import type { DeclaredFieldType } from './player-state.ts'
+import type { TagView } from './tags.ts'
 
 /** The resolving side. Mirrors the `resolution_source` pg enum. */
 export type ResolutionSourceValue = 'bot' | 'agent' | 'player_confirmed' | 'timed_out'
@@ -126,4 +127,6 @@ export type AgentConversationContextResponse = {
    * empty object: the rail omits the section entirely.
    */
   form: AgentFormView | null
+  /** Currently-attached (non-removed) tags for this conversation. */
+  tags: TagView[]
 }

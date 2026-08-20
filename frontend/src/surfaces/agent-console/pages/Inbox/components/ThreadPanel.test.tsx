@@ -6,7 +6,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { AgentMessageView } from '@support/types'
 import { ThreadPanel } from './ThreadPanel.tsx'
 import {
+  detachTag,
   escalateConversation,
+  fetchConversationContext,
   fetchConversationMessages,
   markAgentMessagesRead,
   sendAgentMessage,
@@ -88,9 +90,21 @@ const RESOLVED: PanelProps = {
   openedAt: '2026-06-02T09:00:00.000Z',
 }
 
+function conversationContext(overrides: Record<string, unknown> = {}) {
+  return {
+    player_state: { status: 'no_session' },
+    tickets: [],
+    summary: { total_tickets: 0, total_reopened: 0, first_contact_at: '2026-06-02T09:00:00.000Z' },
+    form: null,
+    tags: [],
+    ...overrides,
+  }
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(markAgentMessagesRead).mockResolvedValue({ ok: true } as never)
+  vi.mocked(fetchConversationContext).mockResolvedValue(conversationContext() as never)
 })
 
 describe('ThreadPanel room membership', () => {
@@ -355,5 +369,86 @@ describe('ThreadPanel read receipts', () => {
 
     const link = await screen.findByRole('link', { name: 'Read more' })
     expect(link).toHaveAttribute('href', '/articles/art-1')
+  })
+})
+
+describe('ThreadPanel tags and subintent', () => {
+  it('renders the subintent badge from the context query, with no dedicated fetch', async () => {
+    fakeSocket()
+    vi.mocked(fetchConversationMessages).mockResolvedValue({ messages: [] } as never)
+    vi.mocked(fetchConversationContext).mockResolvedValue(
+      conversationContext({
+        tickets: [
+          {
+            id: 'c1',
+            number: 1,
+            created_at: '2026-08-13T11:00:00.000Z',
+            status: 'open',
+            subintent: { intent_name: 'Billing', subintent_name: 'Refund' },
+            resolution_source: null,
+            resolved_by_agent_name: null,
+            reopen_count: 0,
+          },
+        ],
+      }) as never,
+    )
+
+    renderPanel()
+
+    expect(await screen.findByText('Billing · Refund')).toBeInTheDocument()
+    expect(fetchConversationContext).toHaveBeenCalledTimes(1)
+  })
+
+  it('renders one badge per attached tag', async () => {
+    fakeSocket()
+    vi.mocked(fetchConversationMessages).mockResolvedValue({ messages: [] } as never)
+    vi.mocked(fetchConversationContext).mockResolvedValue(
+      conversationContext({
+        tags: [
+          { id: 'tag-1', name: 'Billing', colorIndex: 0 },
+          { id: 'tag-2', name: 'Bug', colorIndex: 1 },
+        ],
+      }) as never,
+    )
+
+    renderPanel()
+
+    expect(await screen.findByText('Billing')).toBeInTheDocument()
+    expect(screen.getByText('Bug')).toBeInTheDocument()
+  })
+
+  it('detaches a tag when its badge × is clicked', async () => {
+    fakeSocket()
+    vi.mocked(fetchConversationMessages).mockResolvedValue({ messages: [] } as never)
+    vi.mocked(fetchConversationContext).mockResolvedValue(
+      conversationContext({ tags: [{ id: 'tag-1', name: 'Billing', colorIndex: 0 }] }) as never,
+    )
+    vi.mocked(detachTag).mockResolvedValue({ ok: true } as never)
+
+    renderPanel()
+    await screen.findByText('Billing')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Remove tag' }))
+
+    await waitFor(() => expect(detachTag).toHaveBeenCalledWith('t', 'c1', 'tag-1'))
+  })
+
+  it('gives the same tag id the same badge color across remounts', async () => {
+    fakeSocket()
+    vi.mocked(fetchConversationMessages).mockResolvedValue({ messages: [] } as never)
+    vi.mocked(fetchConversationContext).mockResolvedValue(
+      conversationContext({ tags: [{ id: 'tag-1', name: 'Billing', colorIndex: 3 }] }) as never,
+    )
+
+    const first = renderPanel()
+    const firstBadge = await first.findByText('Billing')
+    const firstClassName = firstBadge.closest('span')?.className
+    first.unmount()
+
+    const second = renderPanel()
+    const secondBadge = await second.findByText('Billing')
+    const secondClassName = secondBadge.closest('span')?.className
+
+    expect(secondClassName).toBe(firstClassName)
   })
 })

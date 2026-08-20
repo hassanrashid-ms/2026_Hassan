@@ -9,6 +9,7 @@ import type {
   ArchiveIntentResponse,
   ArchiveSubintentResponse,
   AskResolvedResponse,
+  AttachTagResponse,
   BotConfigView,
   ChangeLogHistoryResponse,
   ClaimResponse,
@@ -17,6 +18,8 @@ import type {
   CreateFormResponse,
   CreateIntentResponse,
   CreateSubintentResponse,
+  CreateTagResponse,
+  DetachTagResponse,
   EscalateResponse,
   FormDetail,
   FormField,
@@ -28,6 +31,7 @@ import type {
   RenameSubintentResponse,
   RollbackBotConfigBodyValue,
   SaveBotConfigBodyValue,
+  TagView,
   UnescalateResponse,
 } from '@support/types'
 import { apiCall } from '../../../lib/httpClient.ts'
@@ -112,6 +116,26 @@ export function markAgentMessagesRead(token: string, conversationId: string, upT
 
 export function fetchIntents(token: string): Promise<IntentsResponse> {
   return apiCall('/agent/intents', token)
+}
+
+export function fetchTags(token: string, query?: string): Promise<TagView[]> {
+  const qs = query ? `?query=${encodeURIComponent(query)}` : ''
+  return apiCall(`/agent/tags${qs}`, token)
+}
+
+export function createTag(token: string, name: string): Promise<CreateTagResponse> {
+  return apiCall('/agent/tags', token, { method: 'POST', body: JSON.stringify({ name }) })
+}
+
+export function attachTag(token: string, conversationId: string, tagId: string): Promise<AttachTagResponse> {
+  return apiCall(`/agent/conversations/${conversationId}/tags`, token, {
+    method: 'POST',
+    body: JSON.stringify({ tagId }),
+  })
+}
+
+export function detachTag(token: string, conversationId: string, tagId: string): Promise<DetachTagResponse> {
+  return apiCall(`/agent/conversations/${conversationId}/tags/${tagId}`, token, { method: 'DELETE' })
 }
 
 export function createIntent(token: string, name: string): Promise<CreateIntentResponse> {

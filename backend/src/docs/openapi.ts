@@ -864,6 +864,86 @@ registry.registerPath({
 
 registry.registerPath({
   method: 'get',
+  path: '/agent/tags',
+  summary: 'Agent List Tags',
+  description: 'Searches active (non-archived) workspace tags by normalizedName prefix. Empty query returns all, alphabetical.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: { query: z.object({ query: z.string().optional() }) },
+  responses: { 200: { description: 'Tags list' } },
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/agent/tags',
+  summary: 'Agent Create Tag',
+  description:
+    'Normalizes name and creates a tag. Idempotent: returns the existing active tag if one matches, or un-archives and returns a matching archived tag.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: { body: { content: { 'application/json': { schema: z.object({ name: z.string().min(1).max(120) }) } } } },
+  responses: {
+    200: { description: 'Existing tag returned (reuse or revival), no-op create' },
+    201: { description: 'Tag created' },
+  },
+})
+
+registry.registerPath({
+  method: 'patch',
+  path: '/agent/tags/{id}',
+  summary: 'Agent Rename Tag',
+  description: 'Renames a tag.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: {
+    params: z.object({ id: z.uuid() }),
+    body: { content: { 'application/json': { schema: z.object({ name: z.string().min(1).max(120) }) } } },
+  },
+  responses: {
+    200: { description: 'Tag renamed' },
+    404: { description: 'Tag not found' },
+    409: { description: 'Another active tag already has this name' },
+  },
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/agent/tags/{id}/archive',
+  summary: 'Agent Archive Tag',
+  description: 'Archives a tag. No preconditions — a tag can be archived while still attached to conversations.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: { params: z.object({ id: z.uuid() }) },
+  responses: {
+    200: { description: 'Tag archived' },
+    404: { description: 'Tag not found' },
+  },
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/agent/conversations/{id}/tags',
+  summary: 'Agent Attach Tag',
+  description: 'Attaches a tag to a conversation. Idempotent. tagId is confirmed visible in-workspace before use.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: {
+    params: z.object({ id: z.uuid() }),
+    body: { content: { 'application/json': { schema: z.object({ tagId: z.uuid() }) } } },
+  },
+  responses: {
+    200: { description: 'Tag attached' },
+    404: { description: 'Tag not found in this workspace' },
+  },
+})
+
+registry.registerPath({
+  method: 'delete',
+  path: '/agent/conversations/{id}/tags/{tagId}',
+  summary: 'Agent Detach Tag',
+  description: 'Detaches a tag from a conversation (soft removal). No-op if not currently attached.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: { params: z.object({ id: z.uuid(), tagId: z.uuid() }) },
+  responses: { 200: { description: 'Tag detached (or was already detached)' } },
+})
+
+registry.registerPath({
+  method: 'get',
   path: '/agent/articles',
   summary: 'Agent List Articles',
   description: 'Lists articles in all states for this workspace.',

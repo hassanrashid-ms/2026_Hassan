@@ -6,16 +6,19 @@ import type {
   ResolutionSourceValue,
 } from '@support/types'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Archive, Clock, MessageSquare, PanelRight } from 'lucide-react'
+import { ArrowLeft, Archive, Clock, MessageSquare, PanelRight, X } from 'lucide-react'
 import {
   askResolved,
+  detachTag,
   escalateConversation,
+  fetchConversationContext,
   fetchConversationMessages,
   markAgentMessagesRead,
   sendAgentMessage,
   takeOverConversation,
   claimConversation,
 } from '../../../api/agentApi.ts'
+import { TagPicker } from './TagPicker.tsx'
 import { createSocket } from '../../../../../features/chat/api/socket.ts'
 import { handleSessionExpired } from '../../../lib/authErrorHandling.ts'
 import { ChatThread } from '../../../../../features/chat/components/ChatThread.tsx'
@@ -38,6 +41,24 @@ function toChatMessage(m: AgentMessageView): ChatMessage {
     visibility: m.visibility,
     articleId: m.article_id,
   }
+}
+
+/** Stable, hash-independent palette lookup: same colorIndex always renders the same classes. */
+const TAG_BADGE_CLASSES: string[] = [
+  'border-transparent bg-rose-100 text-rose-800',
+  'border-transparent bg-orange-100 text-orange-800',
+  'border-transparent bg-amber-100 text-amber-800',
+  'border-transparent bg-lime-100 text-lime-800',
+  'border-transparent bg-emerald-100 text-emerald-800',
+  'border-transparent bg-teal-100 text-teal-800',
+  'border-transparent bg-sky-100 text-sky-800',
+  'border-transparent bg-indigo-100 text-indigo-800',
+  'border-transparent bg-violet-100 text-violet-800',
+  'border-transparent bg-pink-100 text-pink-800',
+]
+
+function tagBadgeClassName(colorIndex: number): string {
+  return TAG_BADGE_CLASSES[((colorIndex % TAG_BADGE_CLASSES.length) + TAG_BADGE_CLASSES.length) % TAG_BADGE_CLASSES.length]!
 }
 
 function formatTicketDate(iso: string): string {
@@ -93,6 +114,27 @@ export function ThreadPanel({
     queryKey: ['conversation', conversationId, 'messages'],
     queryFn: () => fetchConversationMessages(token, conversationId!),
     enabled: conversationId !== null,
+  })
+
+  // Same cache key ContextRail uses, so this dedupes against its query rather
+  // than fetching the context payload twice.
+  const contextQuery = useQuery({
+    queryKey: ['conversation', conversationId, 'context'],
+    queryFn: () => fetchConversationContext(token, conversationId!),
+    enabled: conversationId !== null,
+    staleTime: 5 * 60_000,
+  })
+  // The context payload has no top-level subintent — the rail's `tickets` list
+  // includes the current conversation's own row (see AgentConversationContextResponse),
+  // so that's where this conversation's subintent comes from.
+  const subintent = contextQuery.data?.tickets.find((t) => t.id === conversationId)?.subintent
+  const tags = contextQuery.data?.tags ?? []
+
+  const detach = useMutation({
+    mutationFn: (tagId: string) => detachTag(token, conversationId!, tagId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['conversation', conversationId, 'context'] })
+    },
   })
 
   const send = useMutation({
@@ -263,6 +305,25 @@ export function ThreadPanel({
         )}
         <span className="text-sm font-medium">{playerExternalId}</span>
         {status && <Badge variant={STATUS_BADGE_VARIANT[status]}>{status}</Badge>}
+        {subintent && (
+          <Badge variant="outline">
+            {subintent.intent_name} · {subintent.subintent_name}
+          </Badge>
+        )}
+        {tags.map((tag) => (
+          <Badge key={tag.id} className={tagBadgeClassName(tag.colorIndex)}>
+            {tag.name}
+            <button
+              type="button"
+              aria-label="Remove tag"
+              disabled={detach.isPending}
+              onClick={() => detach.mutate(tag.id)}
+            >
+              <X className="size-3" />
+            </button>
+          </Badge>
+        ))}
+        {conversationId && <TagPicker token={token} conversationId={conversationId} attachedTagIds={tags.map((t) => t.id)} />}
         <div className="ml-auto flex items-center gap-2">
           {takeOverAvailable && (
             <Button type="button" size="sm" disabled={takeOver.isPending} onClick={() => takeOver.mutate()}>
