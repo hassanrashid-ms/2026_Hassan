@@ -107,3 +107,50 @@ export async function readChangeLog(tx: Tx, input: ReadChangeLogInput): Promise<
 
   return { rows, nextCursor }
 }
+
+/**
+ * A single audit row by id, scoped to workspace + entity — the rollback
+ * endpoint's lookup. Returns null both for a genuinely unknown id and for one
+ * belonging to another workspace: under RLS those are indistinguishable from
+ * inside a scoped transaction, matching this codebase's "expect 404 not 403"
+ * convention (see CLAUDE.md Tenancy).
+ */
+export async function getChangeLogEntryById(
+  tx: Tx,
+  input: { workspaceId: string; entityType: string; entityId: string; id: string },
+): Promise<ChangeLogRow | null> {
+  if (!/^\d{1,19}$/.test(input.id)) return null
+
+  const [row] = await tx
+    .select({
+      id: changeLog.id,
+      field: changeLog.field,
+      beforeValue: changeLog.beforeValue,
+      afterValue: changeLog.afterValue,
+      changedAt: changeLog.changedAt,
+      actorId: agent.id,
+      actorDisplayName: agent.displayName,
+      actorEmail: agent.email,
+    })
+    .from(changeLog)
+    .innerJoin(agent, eq(agent.id, changeLog.actorId))
+    .where(
+      and(
+        eq(changeLog.workspaceId, input.workspaceId),
+        eq(changeLog.entityType, input.entityType),
+        eq(changeLog.entityId, input.entityId),
+        eq(changeLog.id, sql`${input.id}::bigint`),
+      ),
+    )
+    .limit(1)
+
+  if (!row) return null
+  return {
+    id: String(row.id),
+    field: row.field,
+    beforeValue: row.beforeValue,
+    afterValue: row.afterValue,
+    changedAt: row.changedAt,
+    actor: { id: row.actorId, displayName: row.actorDisplayName, email: row.actorEmail },
+  }
+}
