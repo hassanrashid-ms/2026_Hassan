@@ -9,6 +9,8 @@ import type {
   ArchiveIntentResponse,
   ArchiveSubintentResponse,
   AskResolvedResponse,
+  BotConfigView,
+  ChangeLogHistoryResponse,
   ClaimResponse,
   ConversationPriority,
   CreateFormResponse,
@@ -23,6 +25,8 @@ import type {
   MoveSubintentResponse,
   RenameIntentResponse,
   RenameSubintentResponse,
+  RollbackBotConfigBodyValue,
+  SaveBotConfigBodyValue,
   UnescalateResponse,
 } from '@support/types'
 import { apiCall } from '../../../lib/httpClient.ts'
@@ -215,4 +219,28 @@ export function escalateConversation(token: string, conversationId: string): Pro
 
 export function unescalateConversation(token: string, conversationId: string): Promise<UnescalateResponse> {
   return apiCall(`/agent/conversations/${conversationId}/unescalate`, token, { method: 'POST' })
+}
+
+export function fetchBotConfig(token: string): Promise<BotConfigView> {
+  return apiCall('/agent/bot-config', token)
+}
+
+export function saveBotConfig(token: string, patch: SaveBotConfigBodyValue): Promise<BotConfigView> {
+  return apiCall('/agent/bot-config', token, { method: 'POST', body: JSON.stringify(patch) })
+}
+
+export function fetchBotConfigHistory(
+  token: string,
+  opts: { field?: 'prompt' | 'rules' | 'tools_config' | 'limits_config'; limit?: number; cursor?: string } = {},
+): Promise<ChangeLogHistoryResponse> {
+  const params = new URLSearchParams()
+  if (opts.field) params.set('field', opts.field)
+  if (opts.limit) params.set('limit', String(opts.limit))
+  if (opts.cursor) params.set('cursor', opts.cursor)
+  const query = params.toString()
+  return apiCall(`/agent/bot-config/history${query ? `?${query}` : ''}`, token)
+}
+
+export function rollbackBotConfig(token: string, input: RollbackBotConfigBodyValue): Promise<BotConfigView> {
+  return apiCall('/agent/bot-config/rollback', token, { method: 'POST', body: JSON.stringify(input) })
 }

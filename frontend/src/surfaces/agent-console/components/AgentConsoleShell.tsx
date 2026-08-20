@@ -1,11 +1,11 @@
 import { useEffect } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { Inbox as InboxIcon, BookOpen, ClipboardList, LogOut, Tags } from 'lucide-react'
+import { Inbox as InboxIcon, BookOpen, ClipboardList, LogOut, Settings, Tags } from 'lucide-react'
 // agent-console.css is imported HERE and nowhere else — never from main.tsx or
 // any statically-reachable module, so its Tailwind preflight never leaks into
 // the webview surface (mirrors WebviewShell.tsx's isolation of webview.css).
 import '@/agent-console.css'
-import { canBuildForms, clearAgentSession, loadAgentSession } from '../lib/agentSession.ts'
+import { canBuildForms, clearAgentSession, isAdmin, loadAgentSession } from '../lib/agentSession.ts'
 import { Avatar, AvatarFallback } from './ui/avatar.tsx'
 import { Button } from './ui/button.tsx'
 import { Separator } from './ui/separator.tsx'
@@ -22,6 +22,11 @@ const NAV_ITEMS = [
 // link here is UX, not the enforcement point.
 const FORMS_NAV_ITEM = { to: '/forms', label: 'Forms', icon: ClipboardList }
 
+// Admin-only in the permission matrix ("Edit bot prompt or rules" is Admin).
+// Hiding the link here is UX, not the enforcement point — the API still
+// requires admin on POST/rollback.
+const BOT_CONFIG_NAV_ITEM = { to: '/bot-config', label: 'Bot Config', icon: Settings }
+
 export function AgentConsoleShell() {
   const navigate = useNavigate()
   const session = loadAgentSession()
@@ -32,7 +37,10 @@ export function AgentConsoleShell() {
 
   if (!session) return null
 
-  const navItems = canBuildForms(session) ? [...NAV_ITEMS, FORMS_NAV_ITEM] : NAV_ITEMS
+  const navItems = [
+    ...(canBuildForms(session) ? [...NAV_ITEMS, FORMS_NAV_ITEM] : NAV_ITEMS),
+    ...(isAdmin(session) ? [BOT_CONFIG_NAV_ITEM] : []),
+  ]
 
   const initials = session.displayName
     .split(' ')
