@@ -162,12 +162,14 @@ export const toolLoopDecider: BotDecider = async (input) => {
           if (call.name === 'classify') {
             const index = call.args.subintent_index
             if (typeof index !== 'number') throw new InvalidResponseError('classify missing subintent_index')
+            conversationMessages.push({ role: 'assistant', content: `[classify(${index})]` })
             if (classifiedSubintentId === null) {
               const resolved = resolveClassifyIndex(subintentOptions, index)
               classifiedSubintentId = resolved ? resolved.subintentId : await resolveFallbackSubintent(tx, input.workspaceId)
+              conversationMessages.push({ role: 'user', content: '[acknowledged]' })
+            } else {
+              conversationMessages.push({ role: 'user', content: '[rejected: already classified this conversation — classify is write-once, do not call it again]' })
             }
-            conversationMessages.push({ role: 'assistant', content: `[classify(${index})]` })
-            conversationMessages.push({ role: 'user', content: '[acknowledged]' })
             continue
           }
 
