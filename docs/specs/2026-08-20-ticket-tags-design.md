@@ -168,5 +168,10 @@ same pattern the rest of the console already follows.
   which doesn't exist yet.
 - Any admin screen for managing the workspace's tag list (rename/archive exist as API endpoints
   now so nothing blocks adding that screen later, but there's no UI for it in this pass).
+  **Archiving is therefore unreachable in v1** — nothing in the header calls
+  `POST /agent/tags/:id/archive`; the `×` on a badge only detaches that one conversation
+  (`DELETE /agent/conversations/:id/tags/:tagId`), it never archives the tag itself. Confirmed
+  as acceptable: the endpoint exists so a future management screen needs no backend work, but nothing
+  wires it up yet.
 - Merge ("combine these two tags into one") — not requested; add if duplicate-but-differently-typed
   tags turn out to be a real problem despite normalization.
