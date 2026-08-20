@@ -1,6 +1,6 @@
-import { and, desc, eq } from 'drizzle-orm'
+import { and, desc, eq, asc } from 'drizzle-orm'
 import type { Tx } from '../../shared/db/withWorkspace.ts'
-import { conversation, event, formAnswer, formSubmission, formVersion } from '../../shared/db/schema/index.ts'
+import { conversation, event, form, formAnswer, formSubmission, formVersion } from '../../shared/db/schema/index.ts'
 import { appendEvent } from '../../shared/events/appendEvent.ts'
 import { assignOnHandoff } from '../bot/assignOnHandoff.ts'
 import { postMessage, type PostedMessageRow } from '../conversations/postMessage.ts'
@@ -55,10 +55,12 @@ export async function completeFormAndHandoff(
       status: formSubmission.status,
       formId: formSubmission.formId,
       formVersion: formSubmission.formVersion,
+      formName: form.name,
     })
     .from(formSubmission)
+    .innerJoin(form, eq(form.id, formSubmission.formId))
     .where(and(eq(formSubmission.id, ctx.submissionId), eq(formSubmission.conversationId, ctx.conversationId)))
-    .for('update')
+    .for('update', { of: formSubmission })
     .limit(1)
 
   if (!submission || submission.status !== 'in_progress') return null
@@ -138,5 +140,48 @@ export async function completeFormAndHandoff(
     visibility: 'public',
   })
 
+  if (answeredCount > 0) {
+    const answerRows = await tx
+      .select({
+        fieldKey: formAnswer.fieldKey,
+        value: formAnswer.value,
+      })
+      .from(formAnswer)
+      .where(eq(formAnswer.formSubmissionId, submission.id))
+      .orderBy(asc(formAnswer.createdAt), asc(formAnswer.id))
+    
+    // Last row per key wins
+    const latestAnswers = new Map<string, any>()
+    for (const row of answerRows) {
+      latestAnswers.set(row.fieldKey, row.value)
+    }
+
+    const orderedFields = [...(version?.fields ?? [])].sort((a, b) => a.position - b.position)
+    
+    await postMessage(tx, {
+      workspaceId: ctx.workspaceId,
+      conversationId: ctx.conversationId,
+      authorType: 'system',
+      actorId: null,
+      body: formatFormAnswers(submission.formName, orderedFields, latestAnswers),
+      visibility: 'internal',
+    })
+  }
+
   return { conversationId: ctx.conversationId, formStatus, answeredCount, fieldCount, assignedAgentId, posted }
+}
+
+function formatFormAnswers(formName: string, orderedFields: any[], latestAnswers: Map<string, any>): string {
+  const lines: string[] = [`**Form Submitted:** ${formName}`, '']
+  for (const field of orderedFields) {
+    const val = latestAnswers.get(field.key)
+    const displayVal = Array.isArray(val) ? val.join(', ') : val
+    const isEmptyArray = Array.isArray(val) && val.length === 0
+    if (val !== undefined && val !== null && val !== '' && !isEmptyArray) {
+      lines.push(`• **${field.label}**: ${displayVal}`)
+    } else {
+      lines.push(`• **${field.label}**: *(Not answered)*`)
+    }
+  }
+  return lines.join('\n')
 }
