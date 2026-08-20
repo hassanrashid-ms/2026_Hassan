@@ -5,6 +5,13 @@ import type { ChatMessage } from './contextAssembly.ts'
 
 export type ToolCall = { id: string; name: string; arguments: string }
 export type ModelResponse = { toolCalls: ToolCall[]; text: string | null }
+export type ModelTraceContext = {
+  workspaceId: string
+  conversationId: string
+  confirmPhase: string
+  iteration: number
+  enabledToolNames: string[]
+}
 
 export class ModelTimeoutError extends Error {
   constructor() {
@@ -23,9 +30,30 @@ export class ModelRefusalError extends Error {
 const CALL_TIMEOUT_MS = 15_000
 
 let client: OpenAI | undefined
-function getClient(): OpenAI {
-  client ??= observeOpenAI(new OpenAI({ apiKey: getEnv().OPENAI_APIKEY })) as unknown as OpenAI
-  return client
+function getClient(trace?: ModelTraceContext): OpenAI {
+  // The Langfuse wrapper takes its trace configuration when it is created. A
+  // short-lived proxy around the shared OpenAI client means every generation
+  // keeps the SDK's automatic token/cost capture but is labelled with the
+  // product operation that caused it rather than the generic `openai.chat`.
+  client ??= new OpenAI({ apiKey: getEnv().OPENAI_APIKEY })
+  return observeOpenAI(
+    client,
+    trace
+      ? {
+          traceName: 'bot-turn',
+          generationName: `bot.decide.${trace.confirmPhase}`,
+          sessionId: trace.conversationId,
+          tags: ['bot', `phase:${trace.confirmPhase}`],
+          generationMetadata: {
+            feature: 'bot_turn',
+            workspace_id: trace.workspaceId,
+            conversation_id: trace.conversationId,
+            iteration: trace.iteration,
+            enabled_tools: trace.enabledToolNames,
+          },
+        }
+      : { traceName: 'bot-turn', generationName: 'bot.decide' },
+  ) as unknown as OpenAI
 }
 
 function withTimeout<T>(promise: Promise<T>): Promise<T> {
@@ -49,9 +77,9 @@ function withTimeout<T>(promise: Promise<T>): Promise<T> {
  * throws a typed error — `toolLoop` maps errors to reasons and never
  * inspects an SDK exception shape directly.
  */
-export async function callModel(messages: ChatMessage[], tools: unknown[]): Promise<ModelResponse> {
+export async function callModel(messages: ChatMessage[], tools: unknown[], trace?: ModelTraceContext): Promise<ModelResponse> {
   const response = await withTimeout(
-    getClient().chat.completions.create({
+    getClient(trace).chat.completions.create({
       model: getEnv().OPENAI_MODEL,
       temperature: 0,
       messages: messages as never,

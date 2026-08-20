@@ -48,6 +48,7 @@ const AgentMessageViewSchema = z.object({
   seq: z.number().int().nonnegative(),
   author_type: z.enum(['player', 'agent', 'bot', 'system']),
   author_agent_id: z.uuid().nullable(),
+  author_name: z.string().openapi({ description: 'Per-message author display name; resolved from author_agent_id, never the conversation assignee.' }),
   body: z.string(),
   visibility: z.enum(['public', 'internal']),
   delivery_state: z.enum(['sending', 'sent', 'delivered', 'read', 'failed']),
@@ -438,7 +439,7 @@ registry.registerPath({
   description: 'Lists open/unassigned conversations for the agent.',
   security: [{ [bearerAgentJwt.name]: [] }],
   request: {
-    query: z.object({ status: z.enum(['unassigned', 'mine', 'all']).optional() }),
+    query: z.object({ status: z.enum(['unassigned', 'mine', 'agentAssigned', 'botHandling']) }),
   },
   responses: {
     200: { description: 'Conversations list' },
@@ -478,6 +479,16 @@ registry.registerPath({
     },
     404: { description: 'Not found, or not in this workspace' },
   },
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/agent/conversations/{id}/take-over',
+  summary: 'Agent Take Over Bot Conversation',
+  description: 'Atomically assigns a bot_active conversation to the acting agent and transitions it to open.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: { params: z.object({ id: z.uuid() }) },
+  responses: { 200: { description: 'Take-over result', content: { 'application/json': { schema: z.object({ taken_over: z.boolean() }) } } } },
 })
 
 const AgentPlayerStateSchema = z.union([

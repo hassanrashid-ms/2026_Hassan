@@ -21,6 +21,7 @@ import {
   formSubmission,
   formVersion,
   message,
+  player,
   session,
 } from '../../shared/db/schema/index.ts'
 import { withWorkspace, type Tx } from '../../shared/db/withWorkspace.ts'
@@ -285,7 +286,28 @@ export async function getPlayerMessages(
     // the same rule for the same reason.
     if (!found) return { conversation_id: null, messages: [], confirm_phase: 'none', form: null }
 
-    const rows = await tx.select().from(message).where(eq(message.conversationId, found.id)).orderBy(message.seq)
+    const rows = await tx
+      .select({
+        id: message.id,
+        conversationId: message.conversationId,
+        seq: message.seq,
+        authorType: message.authorType,
+        authorAgentId: message.authorAgentId,
+        body: message.body,
+        articleId: message.articleId,
+        visibility: message.visibility,
+        deliveryState: message.deliveryState,
+        readAt: message.readAt,
+        createdAt: message.createdAt,
+        authorAgentName: agent.displayName,
+        authorPlayerName: player.externalId,
+      })
+      .from(message)
+      .innerJoin(conversation, eq(conversation.id, message.conversationId))
+      .innerJoin(player, eq(player.id, conversation.playerId))
+      .leftJoin(agent, eq(agent.id, message.authorAgentId))
+      .where(eq(message.conversationId, found.id))
+      .orderBy(message.seq)
     const messages = rows.map(toPlayerView).filter((m): m is PlayerMessageView => m !== null)
     return {
       conversation_id: found.id,

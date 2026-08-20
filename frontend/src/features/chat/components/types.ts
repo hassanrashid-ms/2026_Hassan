@@ -9,6 +9,7 @@ export type ChatAuthorType = 'player' | 'agent' | 'bot' | 'system'
 export type ChatMessage = {
   id: string
   authorType: ChatAuthorType
+  authorName?: string
   body: string
   createdAt: string
   deliveryState?: 'sending' | 'sent' | 'delivered' | 'read' | 'failed'

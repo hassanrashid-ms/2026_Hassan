@@ -7,6 +7,7 @@ import {
   getConversationDetailHandler,
   getConversationMessagesHandler,
   listConversationsHandler,
+  takeOverConversationHandler,
   unescalateConversationHandler,
 } from '../controllers/conversationsController.ts'
 
@@ -15,6 +16,7 @@ conversationsRouter.get('/conversations', listConversationsHandler)
 conversationsRouter.get('/conversations/:id', getConversationDetailHandler)
 conversationsRouter.get('/conversations/:id/context', getConversationContextHandler)
 conversationsRouter.post('/conversations/:id/claim', claimConversationHandler)
+conversationsRouter.post('/conversations/:id/take-over', takeOverConversationHandler)
 conversationsRouter.get('/conversations/:id/messages', getConversationMessagesHandler)
 conversationsRouter.post('/conversations/:id/ask-resolved', askResolvedHandler)
 conversationsRouter.post('/conversations/:id/escalate', escalateConversationHandler)

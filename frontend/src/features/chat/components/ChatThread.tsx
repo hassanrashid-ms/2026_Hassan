@@ -1,6 +1,6 @@
 import { Suspense } from 'react'
 import { Virtuoso } from 'react-virtuoso'
-import { ArrowDown } from 'lucide-react'
+import { ArrowDown, Bot, CircleUserRound, Headset } from 'lucide-react'
 import { DeliveryTicks } from './DeliveryTicks.tsx'
 import { MessageBody } from './MessageBody.tsx'
 import { useJumpToLatest } from '../hooks/useJumpToLatest.ts'
@@ -80,7 +80,7 @@ export function ChatThread({ messages, currentAuthorType, onRetry, playerLabel }
         itemContent={(_index, chatMessage) => {
           const isOwn = chatMessage.authorType === currentAuthorType
           const isInternal = chatMessage.visibility === 'internal'
-          const isBot = chatMessage.authorType === 'bot'
+          const isBot = chatMessage.authorType === 'bot' || chatMessage.authorType === 'system'
 
           // The bot answers on support's behalf, so to an agent it is not the
           // other party — it is their own side of the thread, and reading it
@@ -91,24 +91,6 @@ export function ChatThread({ messages, currentAuthorType, onRetry, playerLabel }
           // receipt below; only the side is widened.
           const onOwnSide = isOwn || (isBot && currentAuthorType === 'agent')
 
-          // A third state, not a variant of the other two: a system message has no
-          // side of the conversation to sit on, and rendering it as "not own" made
-          // "Did this solve it?" indistinguishable from something the player
-          // typed. Centred and unbubbled, so it reads as the transcript narrating
-          // itself.
-          if (chatMessage.authorType === 'system') {
-            return (
-              <div className="flex justify-center px-3 py-2" data-system="true">
-                <p className="m-0 rounded-full border border-muted/20 bg-muted/10 px-3 py-1 text-center text-xs text-muted">
-                  {chatMessage.body}
-                  <time dateTime={chatMessage.createdAt} className="ml-2 opacity-70">
-                    {new Date(chatMessage.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </time>
-                </p>
-              </div>
-            )
-          }
-
           return (
             // Only the gap between bubbles moves to the wrapper, and only as
             // padding — that is the whole of what Virtuoso mismeasures. The
@@ -118,54 +100,54 @@ export function ChatThread({ messages, currentAuthorType, onRetry, playerLabel }
             // instead would silently switch that to shrink-to-fit, so short
             // messages would stop matching long ones. Horizontal margins don't
             // affect item height, so they can stay exactly where they were.
-            <div className="py-1">
-              <div
-                className={[
-                  'mx-3 max-w-[82%] rounded-2xl px-3 py-2 text-sm leading-snug break-words shadow-sm',
-                  // Side is "whose side of the conversation", not "who typed it"
-                  // — kept separate from the colour below so the bot can sit on
-                  // support's side without also borrowing the agent's styling.
-                  onOwnSide ? 'ml-auto rounded-br-sm' : 'mr-auto rounded-bl-sm',
-                  isOwn ? 'bg-accent text-accent-fg' : 'border border-muted/20 bg-accent-soft text-text',
-                  // The bot shares a side with the agent now, so the label is no
-                  // longer the only thing separating them — this keeps them
-                  // distinguishable at a glance, without reading.
-                  isBot ? 'border-dashed border-muted/50 bg-muted/10' : null,
-                  isInternal ? 'border border-amber-500 bg-amber-100 text-amber-900' : null,
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
-                data-own={isOwn}
-                data-own-side={onOwnSide}
-                data-author={chatMessage.authorType}
-              >
-                {/* Both counterparts are labelled, not just the bot: labelling
-                    only one makes the other's meaning depend on an absence, and
-                    an agent scanning a thread should never have to infer "no
-                    badge here, so a human must have said it". */}
-                {!isOwn && (
-                  // `normal-case`, not the uppercase the other labels use: a
-                  // player id is data, and upper-casing it misrepresents an
-                  // identifier that may well be case-sensitive.
+            <div className={['flex w-full px-3 py-1', onOwnSide ? 'justify-end' : 'justify-start'].join(' ')}>
+              <div className={['flex max-w-[82%] gap-2 items-start', onOwnSide ? 'flex-row-reverse' : 'flex-row'].join(' ')}>
+                <div className="flex shrink-0 items-center justify-center mt-6">
                   <span
                     className={[
-                      'mb-1 block text-xs font-semibold tracking-wide opacity-70',
-                      isBot || chatMessage.authorType === 'agent' ? 'uppercase' : 'break-all normal-case',
+                      'flex size-8 items-center justify-center rounded-full',
+                      isBot ? 'bg-muted/20' : chatMessage.authorType === 'agent' ? 'bg-accent-deep/20' : 'bg-muted/20',
                     ].join(' ')}
+                    aria-hidden="true"
                   >
-                    {isBot ? 'Bot' : chatMessage.authorType === 'agent' ? 'Agent' : (playerLabel ?? 'Player')}
+                    {isBot ? <Bot className="size-5" /> : chatMessage.authorType === 'agent' ? <Headset className="size-5" /> : <CircleUserRound className="size-5" />}
                   </span>
-                )}
-                {/* `agent` renders as markdown too, so article steps an agent
-                    pasted read exactly like the bot's own answer. */}
-                <div className="m-0">
-                  {/* dark only for a genuinely-own bubble: that's the only one styled
-                      bg-accent text-accent-fg above. The bot's own-side bubble stays on
-                      the light bg-muted/10 and keeps the default dark article text. */}
-                  <MessageBody authorType={chatMessage.authorType} body={chatMessage.body} dark={isOwn} />
                 </div>
-                <time dateTime={chatMessage.createdAt} className="mt-1 block text-xs opacity-80">
-                  {new Date(chatMessage.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                <div
+                  className={[
+                    'rounded-2xl px-3 py-2 text-sm leading-snug break-words shadow-sm',
+                    // Side is "whose side of the conversation", not "who typed it"
+                    // — kept separate from the colour below so the bot can sit on
+                    // support's side without also borrowing the agent's styling.
+                    onOwnSide ? 'rounded-br-sm' : 'rounded-bl-sm',
+                    isOwn ? 'bg-accent text-accent-fg' : 'border border-muted/20 bg-accent-soft text-text',
+                    // The bot shares a side with the agent now, so the label is no
+                    // longer the only thing separating them — this keeps them
+                    // distinguishable at a glance, without reading.
+                    isBot ? 'border-dashed border-muted/50 bg-muted/10' : null,
+                    isInternal ? 'border border-amber-500 bg-amber-100 text-amber-900' : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  data-own={isOwn}
+                  data-own-side={onOwnSide}
+                  data-author={chatMessage.authorType}
+                >
+                  <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold opacity-75">
+                    <span className={chatMessage.authorType === 'player' ? 'break-all normal-case' : 'uppercase'}>
+                      {chatMessage.authorType === 'system' ? 'Support Bot' : (chatMessage.authorName ?? (isBot ? 'Support Bot' : chatMessage.authorType === 'agent' ? 'Agent' : (playerLabel ?? 'Player')))}
+                    </span>
+                  </div>
+                  {/* `agent` renders as markdown too, so article steps an agent
+                      pasted read exactly like the bot's own answer. */}
+                  <div className="m-0">
+                    {/* dark only for a genuinely-own bubble: that's the only one styled
+                        bg-accent text-accent-fg above. The bot's own-side bubble stays on
+                        the light bg-muted/10 and keeps the default dark article text. */}
+                    <MessageBody authorType={chatMessage.authorType} body={chatMessage.body} dark={isOwn} />
+                  </div>
+                  <time dateTime={chatMessage.createdAt} className="mt-1 block text-xs opacity-80">
+                    {new Date(chatMessage.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </time>
                 {/*
                   A plain anchor in a new tab, not in-app navigation: routing the
@@ -204,6 +186,7 @@ export function ChatThread({ messages, currentAuthorType, onRetry, playerLabel }
                     </button>
                   </span>
                 )}
+                </div>
               </div>
             </div>
           )

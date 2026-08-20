@@ -12,6 +12,7 @@ import type {
   BotConfigView,
   ChangeLogHistoryResponse,
   ClaimResponse,
+  TakeOverResponse,
   ConversationPriority,
   CreateFormResponse,
   CreateIntentResponse,
@@ -56,8 +57,14 @@ export async function devLogin(agentId: string): Promise<DevLoginResponse> {
   return (await res.json()) as DevLoginResponse
 }
 
-export function fetchInbox(token: string, status: 'unassigned' | 'mine'): Promise<AgentConversationsResponse> {
+export type ConversationListFilter = 'unassigned' | 'mine' | 'agentAssigned' | 'botHandling' | 'escalated'
+
+export function fetchInbox(token: string, status: ConversationListFilter): Promise<AgentConversationsResponse> {
   return apiCall(`/agent/conversations?status=${status}`, token)
+}
+
+export function takeOverConversation(token: string, conversationId: string): Promise<TakeOverResponse> {
+  return apiCall(`/agent/conversations/${conversationId}/take-over`, token, { method: 'POST' })
 }
 
 export function claimConversation(token: string, conversationId: string): Promise<ClaimResponse> {

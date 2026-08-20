@@ -9,7 +9,6 @@ function renderTopBar(value: SupportContextValue) {
   return render(
     <MemoryRouter>
       <SupportContextProvider value={value}>
-        <TopBar variant="home" onOpenDebug={vi.fn()} />
       </SupportContextProvider>
     </MemoryRouter>,
   )

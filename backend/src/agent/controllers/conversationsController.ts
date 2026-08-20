@@ -4,23 +4,35 @@ import { sendError } from '../../errors.ts'
 import { getIo } from '../../shared/realtime/socketServer.ts'
 import { emitInboxChanged, emitMessageToRooms, emitPhaseChanged } from '../../shared/realtime/emit.ts'
 import { toAgentView, toPlayerView } from '../../domain/conversations/index.ts'
-import { claimConversation, getAgentConversationMessages, listConversations } from '../services/conversationsService.ts'
+import { claimConversation, getAgentConversationMessages, listConversations, takeOverConversation } from '../services/conversationsService.ts'
 import { askResolved } from '../services/resolutionService.ts'
 import { escalateConversation, unescalateConversation } from '../services/escalationService.ts'
 import { getConversationContext, getConversationDetail } from '../services/conversationContextService.ts'
 
-const ConversationsQuery = z.object({ status: z.enum(['unassigned', 'mine']) })
+const ConversationsQuery = z.object({ status: z.enum(['unassigned', 'mine', 'agentAssigned', 'botHandling', 'escalated']) })
 const ConversationIdParams = z.object({ id: z.uuid() })
 
 export const listConversationsHandler: RequestHandler = async (req, res) => {
   const ctx = req.agent!
   const query = ConversationsQuery.safeParse(req.query)
   if (!query.success) {
-    sendError(res, 422, 'invalid_request', 'status must be "unassigned" or "mine".')
+    sendError(res, 422, 'invalid_request', 'status must be a supported conversation filter.')
     return
   }
   const conversations = await listConversations(ctx, query.data.status)
   res.status(200).json({ conversations })
+}
+
+export const takeOverConversationHandler: RequestHandler = async (req, res) => {
+  const ctx = req.agent!
+  const params = ConversationIdParams.safeParse(req.params)
+  if (!params.success) {
+    sendError(res, 422, 'invalid_request', 'id must be a uuid.')
+    return
+  }
+  const result = await takeOverConversation(ctx, params.data.id)
+  if (result.claimed && result.status) emitInboxChanged(getIo(), ctx.workspaceId, params.data.id, result.status)
+  res.status(200).json({ taken_over: result.claimed })
 }
 
 export const claimConversationHandler: RequestHandler = async (req, res) => {

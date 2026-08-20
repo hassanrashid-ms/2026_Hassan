@@ -16,6 +16,7 @@ const AgentConsoleShell = lazy(async () => ({
   default: (await import('../surfaces/agent-console/components/AgentConsoleShell.tsx')).AgentConsoleShell,
 }))
 const Inbox = lazy(async () => ({ default: (await import('../surfaces/agent-console/pages/Inbox/Inbox.tsx')).Inbox }))
+const Tickets = lazy(async () => ({ default: (await import('../surfaces/agent-console/pages/Tickets/Tickets.tsx')).Tickets }))
 const KnowledgeBase = lazy(async () => ({
   default: (await import('../surfaces/agent-console/pages/KnowledgeBase/KnowledgeBase.tsx')).KnowledgeBase,
 }))
@@ -44,6 +45,8 @@ export function AppRoutes() {
       >
         <Route path="inbox" element={<Inbox />} />
         <Route path="inbox/:conversationId" element={<Inbox />} />
+        <Route path="tickets" element={<Tickets />} />
+        <Route path="tickets/:conversationId" element={<Tickets />} />
         <Route path="articles" element={<KnowledgeBase />} />
         <Route path="articles/:id" element={<KnowledgeBase />} />
         <Route path="forms" element={<Forms />} />

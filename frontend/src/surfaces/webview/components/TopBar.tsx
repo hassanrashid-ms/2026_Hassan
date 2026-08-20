@@ -12,10 +12,7 @@ export type TopBarVariant =
   | { variant: 'chat' }
   | { variant: 'article'; title: string }
 
-type TopBarProps = TopBarVariant & {
-  /** Opens the debug dialog. The ⋯ is rendered on every screen; see below. */
-  onOpenDebug: () => void
-}
+type TopBarProps = TopBarVariant
 
 function IconButton({
   label,
@@ -45,25 +42,6 @@ function IconButton({
 }
 
 /**
- * Rendered on every screen, in production, at low contrast and small size.
- * A dev-only debug affordance is useless exactly when it is needed: a player is
- * on a device we do not have, and the fastest route to their session id is
- * asking them to tap something that is actually there.
- */
-function DebugButton({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      aria-label="Session details"
-      onClick={onClick}
-      className="inline-flex size-11 shrink-0 items-center justify-center rounded-full text-accent-fg transition-colors active:bg-white/20 outline-none"
-    >
-      <MoreHorizontal size={24} />
-    </button>
-  )
-}
-
-/**
  * One top bar, four variants. Fixed height, never scrolls, sits above whichever
  * region the screen designates as scrollable.
  */
@@ -78,9 +56,6 @@ export function TopBar(props: TopBarProps) {
   if (props.variant === 'search') {
     return (
       <div className={frame}>
-        {/* The search bar has no left action — Cancel is the way out — so the
-            debug ⋯ takes the otherwise empty corner. */}
-        <DebugButton onClick={props.onOpenDebug} />
         <Input
           type="search"
           autoFocus
@@ -136,7 +111,6 @@ export function TopBar(props: TopBarProps) {
               </span>
             )}
           </IconButton>
-          <DebugButton onClick={props.onOpenDebug} />
         </div>
       </div>
     )
@@ -156,9 +130,7 @@ export function TopBar(props: TopBarProps) {
         {title}
       </h1>
       
-      <div className="flex items-center relative z-10">
-        <DebugButton onClick={props.onOpenDebug} />
-      </div>
+      <div className="flex items-center relative z-10 w-11" />
     </div>
   )
 }

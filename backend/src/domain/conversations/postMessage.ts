@@ -47,6 +47,10 @@ export type PostedMessageRow = {
   seq: number
   authorType: ChatAuthorType
   authorAgentId: string | null
+  /** Populated by message-list joins; absent on the immediate insert result. */
+  authorAgentName?: string | null
+  /** The conversation player's external id, populated by message-list joins. */
+  authorPlayerName?: string | null
   body: string
   articleId: string | null
   visibility: 'public' | 'internal'

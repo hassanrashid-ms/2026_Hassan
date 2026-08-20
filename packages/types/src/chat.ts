@@ -44,6 +44,8 @@ export type PlayerMessageView = {
   id: string
   seq: number
   author_type: ChatAuthorType
+  /** Display identity resolved from this message's author fields, never the ticket assignee. */
+  author_name?: string
   body: string
   delivery_state: ChatDeliveryState
   /** ISO 8601, or null until the other side reads it. Additive — the frozen contract permits new response fields. */
@@ -80,6 +82,7 @@ export type PlayerMessagesResponse = {
 }
 export type AgentMessagesResponse = { messages: AgentMessageView[] }
 export type ClaimResponse = { claimed: boolean }
+export type TakeOverResponse = { taken_over: boolean }
 
 export type AgentConversationSummary = {
   id: string

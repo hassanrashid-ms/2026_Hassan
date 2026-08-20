@@ -124,6 +124,23 @@ describe('FormCard', () => {
     expect(screen.getByPlaceholderText('e.g. GPA.1234-5678')).toBeInTheDocument()
   })
 
+  it('uses the field label when a text placeholder is missing', () => {
+    setup({
+      ...FORM,
+      fields: [
+        {
+          key: 'details',
+          label: 'Purchase details',
+          type: 'long_text',
+          isRequired: false,
+          position: 0,
+        },
+      ],
+    })
+
+    expect(screen.getByPlaceholderText('Purchase details')).toBeInTheDocument()
+  })
+
   it('shows helper text under the question when the field has one', () => {
     setup()
     fireEvent.click(screen.getByRole('button', { name: /^next$/i }))

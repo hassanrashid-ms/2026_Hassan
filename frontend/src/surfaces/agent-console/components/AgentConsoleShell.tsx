@@ -13,6 +13,7 @@ import { cn } from '../lib/cn.ts'
 
 const NAV_ITEMS = [
   { to: '/inbox', label: 'Inbox', icon: InboxIcon },
+  { to: '/tickets', label: 'Tickets', icon: ClipboardList },
   { to: '/articles', label: 'Knowledge Base', icon: BookOpen },
   { to: '/taxonomy', label: 'Taxonomy', icon: Tags },
 ]

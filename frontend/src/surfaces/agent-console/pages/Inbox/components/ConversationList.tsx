@@ -1,10 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import type { AgentConversationsResponse, ConversationStatusValue } from '@support/types'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { claimConversation, fetchInbox } from '../../../api/agentApi.ts'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { fetchInbox } from '../../../api/agentApi.ts'
 import { createSocket } from '../../../../../features/chat/api/socket.ts'
 import { handleSessionExpired } from '../../../lib/authErrorHandling.ts'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../components/ui/tabs.tsx'
 import { ScrollArea } from '../../../components/ui/scroll-area.tsx'
 import { ConversationRow } from './ConversationRow.tsx'
 
@@ -18,23 +17,13 @@ export function ConversationList({
   onSelect: (id: string) => void
 }) {
   const queryClient = useQueryClient()
-  const [claimNotice, setClaimNotice] = useState<string | null>(null)
-
-  const unassigned = useQuery({
-    queryKey: ['inbox', 'unassigned'],
-    queryFn: () => fetchInbox(token, 'unassigned'),
-  })
   const mine = useQuery({
     queryKey: ['inbox', 'mine'],
     queryFn: () => fetchInbox(token, 'mine'),
   })
-
-  const claim = useMutation({
-    mutationFn: (conversationId: string) => claimConversation(token, conversationId),
-    onSuccess: (result) => {
-      setClaimNotice(result.claimed ? null : 'Already claimed by someone else.')
-      void queryClient.invalidateQueries({ queryKey: ['inbox'] })
-    },
+  const escalated = useQuery({
+    queryKey: ['inbox', 'escalated'],
+    queryFn: () => fetchInbox(token, 'escalated'),
   })
 
   useEffect(() => {
@@ -69,7 +58,7 @@ export function ConversationList({
       }
 
       let patched = false
-      for (const key of [['inbox', 'unassigned'], ['inbox', 'mine']]) {
+      for (const key of [['inbox', 'mine'], ['inbox', 'escalated']]) {
         queryClient.setQueryData<AgentConversationsResponse>(key, (current) => {
           if (!current) return current
           const index = current.conversations.findIndex((c) => c.id === id)
@@ -99,37 +88,24 @@ export function ConversationList({
   }, [token, queryClient])
 
   return (
-    <Tabs defaultValue="unassigned" className="flex h-full min-h-0 flex-col gap-0">
-      <div className="p-2">
-        <TabsList className="w-full">
-          <TabsTrigger value="unassigned">Unassigned</TabsTrigger>
-          <TabsTrigger value="mine">Mine</TabsTrigger>
-        </TabsList>
-      </div>
-      {claimNotice && <p className="px-4 pb-2 text-xs text-amber-700">{claimNotice}</p>}
+    <div className="flex h-full min-h-0 flex-col">
+      <ScrollArea className="min-h-0 flex-1">
+        <div className="p-3 text-sm font-semibold">My tickets</div>
+        {mine.data?.conversations.map((c) => (
+          <ConversationRow key={c.id} conversation={c} selected={c.id === selectedId} onSelect={() => onSelect(c.id)} />
+        ))}
+        {mine.data?.conversations.length === 0 && (
+          <div className="px-3 pb-3 text-sm text-muted">No open tickets.</div>
+        )}
 
-      <TabsContent value="unassigned" className="min-h-0 flex-1">
-        <ScrollArea className="h-full">
-          {unassigned.data?.conversations.map((c) => (
-            <ConversationRow
-              key={c.id}
-              conversation={c}
-              selected={c.id === selectedId}
-              onSelect={() => onSelect(c.id)}
-              onClaim={() => claim.mutate(c.id)}
-              claiming={claim.isPending}
-            />
-          ))}
-        </ScrollArea>
-      </TabsContent>
-
-      <TabsContent value="mine" className="min-h-0 flex-1">
-        <ScrollArea className="h-full">
-          {mine.data?.conversations.map((c) => (
-            <ConversationRow key={c.id} conversation={c} selected={c.id === selectedId} onSelect={() => onSelect(c.id)} />
-          ))}
-        </ScrollArea>
-      </TabsContent>
-    </Tabs>
+        <div className="p-3 text-sm font-semibold">Escalated tickets</div>
+        {escalated.data?.conversations.map((c) => (
+          <ConversationRow key={c.id} conversation={c} selected={c.id === selectedId} onSelect={() => onSelect(c.id)} />
+        ))}
+        {escalated.data?.conversations.length === 0 && (
+          <div className="px-3 pb-3 text-sm text-muted">No escalated tickets.</div>
+        )}
+      </ScrollArea>
+    </div>
   )
 }

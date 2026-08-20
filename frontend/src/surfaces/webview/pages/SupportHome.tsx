@@ -7,7 +7,6 @@ import { SupportHero } from '@/surfaces/webview/components/SupportHero'
 import { CategoryTabs } from '@/surfaces/webview/components/CategoryTabs'
 import { ArticleCard } from '@/surfaces/webview/components/ArticleCard'
 import { ArticleSheet } from '@/surfaces/webview/components/ArticleSheet'
-import { DebugDialog } from '@/surfaces/webview/components/DebugDialog'
 import { SupportButton } from '@/surfaces/webview/components/SupportButton'
 import { ArticleListSkeleton, BootstrapFailedScreen, EmptyState } from '@/surfaces/webview/components/StateScreens'
 import { useGameName, useSupport } from '@/surfaces/webview/components/SupportContext'
@@ -32,7 +31,7 @@ export function SupportHome() {
   const closeSheet = useCloseOverlay('/embed/support')
 
   const [intentId, setIntentId] = useState<string | null>(null)
-  const [debugOpen, setDebugOpen] = useState(false)
+  const [visibleCount, setVisibleCount] = useState(5)
 
   const intentsQuery = useQuery({
     queryKey: ['surfaceIntents', boot?.token],
@@ -57,9 +56,8 @@ export function SupportHome() {
   if (error !== null && boot !== null) {
     return (
       <>
-        <TopBar variant="home" onOpenDebug={() => setDebugOpen(true)} />
+        <TopBar variant="home" />
         <BootstrapFailedScreen message={error} onRetry={retry} />
-        <DebugDialog open={debugOpen} onOpenChange={setDebugOpen} />
       </>
     )
   }
@@ -67,9 +65,9 @@ export function SupportHome() {
   return (
     <>
       {articleId === null ? (
-        <TopBar variant="home" onOpenDebug={() => setDebugOpen(true)} />
+        <TopBar variant="home" />
       ) : (
-        <TopBar variant="article" title={deepLinked.data?.title ?? 'Article'} onOpenDebug={() => setDebugOpen(true)} />
+        <TopBar variant="article" title={deepLinked.data?.title ?? 'Article'} />
       )}
 
       {/* The one scroll region on this screen. The shell frame is overflow-hidden. */}
@@ -81,7 +79,10 @@ export function SupportHome() {
             <CategoryTabs
               intents={intentsQuery.data.intents}
               intentId={intentId}
-              onIntentChange={setIntentId}
+              onIntentChange={(newIntent) => {
+                setIntentId(newIntent)
+                setVisibleCount(5)
+              }}
             />
           )}
 
@@ -96,7 +97,7 @@ export function SupportHome() {
                 BM25 ranking, reconstructed server-side; sorting or filtering this
                 array here would discard relevance and look like nothing is wrong.
               */}
-              {articles.map((article) => (
+              {articles.slice(0, visibleCount).map((article) => (
                 <ArticleCard
                   key={article.id}
                   title={article.title}
@@ -104,24 +105,28 @@ export function SupportHome() {
                   onOpen={() => navigate(`/embed/support/articles/${article.id}`)}
                 />
               ))}
+              {articles.length > visibleCount && (
+                <SupportButton variant="soft" onClick={() => setVisibleCount((c) => c + 5)}>
+                  Show more
+                </SupportButton>
+              )}
             </div>
           )}
-
-          {/* No dead ends: whatever the articles did or didn't answer, a person is
-              always one tap away from here. */}
-          <div className="mt-2 flex flex-col gap-2 rounded-card bg-surface p-5">
-            <p className="text-base font-semibold text-text">Still need help?</p>
-            <p className="text-sm text-muted">Send us a message and someone will get back to you.</p>
-            <SupportButton className="mt-2" onClick={() => navigate('/embed/support/chat')}>
-              <MessageCircle className="size-5" />
-              Talk to a person
-            </SupportButton>
-          </div>
         </div>
       </div>
 
+      <div className="shrink-0 border-t border-muted/15 bg-bg p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <div className="flex flex-col gap-1.5 text-center mb-3">
+          <p className="text-sm font-semibold text-text">Still need help?</p>
+          <p className="text-xs text-muted">Send us a message and our support bot will help you right away.</p>
+        </div>
+        <SupportButton className="w-full" onClick={() => navigate('/embed/support/chat')}>
+          <MessageCircle className="size-5" />
+          Talk to Support
+        </SupportButton>
+      </div>
+
       <ArticleSheet articleId={articleId} onClose={closeSheet} />
-      <DebugDialog open={debugOpen} onOpenChange={setDebugOpen} />
     </>
   )
 }

@@ -1,6 +1,6 @@
 import { Suspense } from 'react'
 import { Virtuoso } from 'react-virtuoso'
-import { AlertCircle, ArrowDown } from 'lucide-react'
+import { AlertCircle, ArrowDown, Bot, CircleUserRound, Headset } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { DeliveryTicks } from '@/features/chat/components/DeliveryTicks'
 import { useJumpToLatest } from '@/features/chat/hooks/useJumpToLatest'
@@ -93,25 +93,47 @@ export function ChatBubbles({
 function ChatBubble({ message, onRetry }: { message: ChatMessage; onRetry: (message: ChatMessage) => void }) {
   const own = message.authorType === 'player'
   const failed = message.deliveryState === 'failed'
+  const isBot = message.authorType === 'bot' || message.authorType === 'system'
 
   return (
     <div className={cn('flex w-full px-4 py-1.5', own ? 'justify-end' : 'justify-start')}>
-      <div className={cn('flex max-w-[80%] flex-col gap-1', own ? 'items-end' : 'items-start')}>
-        <div
-          className={cn(
-            'rounded-card px-4 py-3 text-base leading-relaxed break-words',
-            own
-              ? 'rounded-br-sm bg-accent text-accent-fg'
-              : 'rounded-bl-sm bg-surface text-text [&_code]:bg-bg [&_pre]:bg-bg',
-            // A failed send stays legible rather than turning red-on-red; the
-            // status line below carries the actual signal.
-            failed && 'opacity-60',
-            message.deliveryState === 'sending' && 'opacity-70',
+      <div className={cn('flex max-w-[85%] gap-2 items-start', own ? 'flex-row-reverse' : 'flex-row')}>
+        {!own && (
+          <div className="flex shrink-0 items-center justify-center mt-6">
+            <span
+              className={cn(
+                'flex size-8 items-center justify-center rounded-full',
+                isBot ? 'bg-muted/20' : message.authorType === 'agent' ? 'bg-accent/20' : 'bg-muted/20',
+              )}
+              aria-hidden="true"
+            >
+              {isBot ? <Bot className="size-5" /> : message.authorType === 'agent' ? <Headset className="size-5" /> : <CircleUserRound className="size-5" />}
+            </span>
+          </div>
+        )}
+        <div className={cn('flex flex-col gap-1', own ? 'items-end' : 'items-start')}>
+          {!own && (
+            <div className="mb-0.5 flex items-center gap-1.5 px-1 text-xs font-semibold opacity-75">
+              <span className={message.authorType === 'player' ? 'break-all normal-case' : 'uppercase'}>
+                {message.authorType === 'system' ? 'Support Bot' : (message.authorName ?? (isBot ? 'Support Bot' : message.authorType === 'agent' ? 'Agent' : 'You'))}
+              </span>
+            </div>
           )}
-        >
-          <MessageBody authorType={message.authorType} body={message.body} />
+          <div
+            className={cn(
+              'rounded-card px-4 py-3 text-base leading-relaxed break-words',
+              own
+                ? 'rounded-br-sm bg-accent text-accent-fg'
+                : 'rounded-bl-sm bg-surface text-text [&_code]:bg-bg [&_pre]:bg-bg',
+              // A failed send stays legible rather than turning red-on-red; the
+              // status line below carries the actual signal.
+              failed && 'opacity-60',
+              message.deliveryState === 'sending' && 'opacity-70',
+            )}
+          >
+            <MessageBody authorType={message.authorType} body={message.body} />
 
-          {/*
+            {/*
             Inside the same bubble, not a sibling block: a sibling with its own
             background reads as a second message. Client-appended, always —
             never model output. A prompt that asks for the link produces prose
@@ -148,6 +170,7 @@ function ChatBubble({ message, onRetry }: { message: ChatMessage; onRetry: (mess
               </button>
             </span>
           )}
+        </div>
         </div>
       </div>
     </div>

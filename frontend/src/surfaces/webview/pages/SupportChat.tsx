@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { TopBar } from '@/surfaces/webview/components/TopBar'
-import { DebugDialog } from '@/surfaces/webview/components/DebugDialog'
 import { ChatBubbles } from '@/surfaces/webview/components/chat/ChatBubbles'
 import { ChatComposer } from '@/surfaces/webview/components/chat/ChatComposer'
 import { SupportButton } from '@/surfaces/webview/components/SupportButton'
@@ -29,6 +28,7 @@ import type { ChatMessage } from '@/features/chat/components/types'
 function toChatMessage(m: {
   id: string
   author_type: ChatMessage['authorType']
+  author_name?: string
   body: string
   created_at: string
   delivery_state: NonNullable<ChatMessage['deliveryState']>
@@ -38,6 +38,7 @@ function toChatMessage(m: {
   return {
     id: m.id,
     authorType: m.author_type,
+    authorName: m.author_name,
     body: m.body,
     createdAt: m.created_at,
     deliveryState: m.delivery_state,
@@ -74,7 +75,6 @@ export function SupportChat() {
   const { boot, error, retry } = useSupport()
   const queryClient = useQueryClient()
   const [pending, setPending] = useState<PendingMessage[]>([])
-  const [debugOpen, setDebugOpen] = useState(false)
 
   /*
    * The article sheet is a route, not state, so Android's back button closes it —
@@ -255,18 +255,17 @@ export function SupportChat() {
       <>
         {/* The bar stays: closing the webview is the player's other way out of
             this, and it is the one action that still works with no backend. */}
-        <TopBar variant="chat" onOpenDebug={() => setDebugOpen(true)} />
+        <TopBar variant="chat" />
         <div className="flex min-h-0 flex-1 flex-col">
           <BootstrapFailedScreen message={unreachableMessage} onRetry={onRetryConnection} />
         </div>
-        <DebugDialog open={debugOpen} onOpenChange={setDebugOpen} />
       </>
     )
   }
 
   return (
     <>
-      <TopBar variant="chat" onOpenDebug={() => setDebugOpen(true)} />
+      <TopBar variant="chat" />
 
       {/* min-h-0 is load-bearing: without it a flex child refuses to shrink below
           its content and the composer is pushed off the bottom of the viewport. */}
@@ -358,7 +357,6 @@ export function SupportChat() {
         disabled={send.isPending || confirmPending || activeForm !== null || settled}
       />
 
-      <DebugDialog open={debugOpen} onOpenChange={setDebugOpen} />
 
       {/* ArticleSheet fires its own once-per-session reportArticleRead and
           `article_read` bridge post. Correct: a player reading from a bot answer

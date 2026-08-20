@@ -22,7 +22,7 @@ export function ArticleCard({ title, read, onOpen }: ArticleCardProps) {
     >
       <span className="flex min-w-0 flex-1 flex-col gap-2">
         <span className="flex items-start gap-2">
-          <span className={cn('flex-1 text-lg leading-snug font-semibold', read ? 'text-muted' : 'text-text')}>
+          <span className={cn('flex-1 text-base leading-snug font-medium', read ? 'text-muted' : 'text-text')}>
             {title}
           </span>
           {read && (

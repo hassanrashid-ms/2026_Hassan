@@ -13,6 +13,8 @@ import {
   fetchConversationMessages,
   markAgentMessagesRead,
   sendAgentMessage,
+  takeOverConversation,
+  claimConversation,
 } from '../../../api/agentApi.ts'
 import { createSocket } from '../../../../../features/chat/api/socket.ts'
 import { handleSessionExpired } from '../../../lib/authErrorHandling.ts'
@@ -28,6 +30,7 @@ function toChatMessage(m: AgentMessageView): ChatMessage {
   return {
     id: m.id,
     authorType: m.author_type,
+    authorName: m.author_name,
     body: m.body,
     createdAt: m.created_at,
     deliveryState: m.delivery_state,
@@ -64,6 +67,8 @@ export function ThreadPanel({
   railOpen = false,
   onToggleRail,
   onBack,
+  takeOverAvailable = false,
+  claimAvailable = false,
 }: {
   token: string
   conversationId: string | null
@@ -78,6 +83,8 @@ export function ThreadPanel({
   railOpen?: boolean
   onToggleRail?: () => void
   onBack?: () => void
+  takeOverAvailable?: boolean
+  claimAvailable?: boolean
 }) {
   const queryClient = useQueryClient()
   const [pending, setPending] = useState<PendingMessage[]>([])
@@ -150,6 +157,24 @@ export function ThreadPanel({
   const escalate = useMutation({
     mutationFn: () => escalateConversation(token, conversationId!),
     onSuccess: invalidateAfterEscalationChange,
+  })
+
+  const takeOver = useMutation({
+    mutationFn: () => takeOverConversation(token, conversationId!),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['conversation', conversationId, 'detail'] })
+      void queryClient.invalidateQueries({ queryKey: ['tickets'] })
+      void queryClient.invalidateQueries({ queryKey: ['inbox', 'mine'] })
+    },
+  })
+
+  const claim = useMutation({
+    mutationFn: () => claimConversation(token, conversationId!),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['conversation', conversationId, 'detail'] })
+      void queryClient.invalidateQueries({ queryKey: ['tickets'] })
+      void queryClient.invalidateQueries({ queryKey: ['inbox', 'mine'] })
+    },
   })
 
   // Escalated can only move forward to resolved — asking is the only path there, since there is
@@ -239,6 +264,16 @@ export function ThreadPanel({
         <span className="text-sm font-medium">{playerExternalId}</span>
         {status && <Badge variant={STATUS_BADGE_VARIANT[status]}>{status}</Badge>}
         <div className="ml-auto flex items-center gap-2">
+          {takeOverAvailable && (
+            <Button type="button" size="sm" disabled={takeOver.isPending} onClick={() => takeOver.mutate()}>
+              Take over
+            </Button>
+          )}
+          {claimAvailable && (
+            <Button type="button" size="sm" disabled={claim.isPending} onClick={() => claim.mutate()}>
+              Take over
+            </Button>
+          )}
           {/* Hidden outright when read-only: a disabled control here explains nothing. */}
           {!readOnly && (askable || waiting) && (
             <Button
@@ -326,8 +361,8 @@ export function ThreadPanel({
       <Composer
         onSend={(body, visibility) => send.mutate({ body, visibility })}
         allowVisibilityToggle
-        disabled={readOnly}
-        placeholder={readOnly ? resolverLabel(resolutionSource, resolvedByAgentName) : undefined}
+        disabled={!status || readOnly || takeOverAvailable || claimAvailable}
+        placeholder={!status ? 'Loading...' : readOnly ? resolverLabel(resolutionSource, resolvedByAgentName) : (takeOverAvailable || claimAvailable) ? 'Take over to send a message' : undefined}
       />
     </div>
   )

@@ -93,7 +93,16 @@ export const toolLoopDecider: BotDecider = async (input) => {
       const conversationMessages: ChatMessage[] = [...messages]
 
       while (toolCallCount < resolvedLimits.max_tool_calls_per_turn) {
-        const response = await callModel(conversationMessages, toolsForPhase(input.confirmPhase, enabledTools))
+        const availableTools = toolsForPhase(input.confirmPhase, enabledTools)
+        const response = await callModel(conversationMessages, availableTools, {
+          workspaceId: input.workspaceId,
+          conversationId: input.conversationId,
+          confirmPhase: input.confirmPhase,
+          iteration: toolCallCount + 1,
+          // Tool definitions are deliberately not sent as metadata: they contain
+          // verbose schemas and are already captured with the generation input.
+          enabledToolNames: [...enabledTools].sort(),
+        })
 
         if (response.toolCalls.length === 0) {
           // No tool call and nothing to say is not an answer — it is the model

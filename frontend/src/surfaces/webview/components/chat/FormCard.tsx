@@ -154,6 +154,10 @@ function FieldInput({
   onChange: (next: unknown) => void
   disabled: boolean
 }) {
+  // Older form versions may not include a placeholder. Keep those inputs
+  // actionable by using the field label as a frontend-only fallback.
+  const placeholder = field.placeholder ?? field.label
+
   const inputClass = cn(
     'min-h-11 w-full rounded-card bg-surface px-4 py-3 text-base text-text placeholder:text-muted',
     'border border-muted/30 focus:border-accent outline-none disabled:opacity-60',
@@ -185,7 +189,7 @@ function FieldInput({
         <textarea
           rows={3}
           aria-label={field.label}
-          placeholder={field.placeholder}
+          placeholder={placeholder}
           disabled={disabled}
           value={typeof value === 'string' ? value : ''}
           onChange={(e) => onChange(e.target.value)}
@@ -198,7 +202,7 @@ function FieldInput({
           type="number"
           inputMode="decimal"
           aria-label={field.label}
-          placeholder={field.placeholder}
+          placeholder={placeholder}
           disabled={disabled}
           value={typeof value === 'number' ? String(value) : ''}
           onChange={(e) => onChange(e.target.value === '' ? undefined : Number(e.target.value))}
@@ -242,7 +246,7 @@ function FieldInput({
         <input
           type="text"
           aria-label={field.label}
-          placeholder={field.placeholder}
+          placeholder={placeholder}
           disabled={disabled}
           value={typeof value === 'string' ? value : ''}
           onChange={(e) => onChange(e.target.value)}

@@ -4,7 +4,6 @@ import { useQuery } from '@tanstack/react-query'
 import { Search } from 'lucide-react'
 import { TopBar } from '@/surfaces/webview/components/TopBar'
 import { ArticleCard } from '@/surfaces/webview/components/ArticleCard'
-import { DebugDialog } from '@/surfaces/webview/components/DebugDialog'
 import { ArticleListSkeleton, EmptyState } from '@/surfaces/webview/components/StateScreens'
 import { useSupport } from '@/surfaces/webview/components/SupportContext'
 import { useReadArticles } from '@/surfaces/webview/hooks/useReadArticles'
@@ -19,7 +18,6 @@ export function SupportSearch() {
   const navigate = useNavigate()
   const { boot } = useSupport()
   const isRead = useReadArticles()
-  const [debugOpen, setDebugOpen] = useState(false)
 
   /*
    * The query lives in the URL, not in component state. Opening an article is a
@@ -53,7 +51,7 @@ export function SupportSearch() {
         variant="search"
         value={query}
         onValueChange={(value) => setParams(value ? { q: value } : {}, { replace: true })}
-        onOpenDebug={() => setDebugOpen(true)}
+       
       />
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-2 pb-8">
@@ -86,7 +84,6 @@ export function SupportSearch() {
         )}
       </div>
 
-      <DebugDialog open={debugOpen} onOpenChange={setDebugOpen} />
     </>
   )
 }

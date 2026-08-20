@@ -1,6 +1,13 @@
 import type { AgentMessageView, PlayerMessageView } from '@support/types'
 import type { PostedMessageRow } from './postMessage.ts'
 
+function authorName(row: PostedMessageRow): string {
+  if (row.authorType === 'bot') return 'Support Bot'
+  if (row.authorType === 'system') return 'System'
+  if (row.authorType === 'agent') return row.authorAgentName ?? 'Agent'
+  return row.authorPlayerName ?? 'Player'
+}
+
 /**
  * Explicit whitelist: returns null for any row whose visibility is not
  * 'public'. The caller (a player-facing service) must filter the nulls out —
@@ -14,6 +21,7 @@ export function toPlayerView(row: PostedMessageRow): PlayerMessageView | null {
     id: row.id,
     seq: row.seq,
     author_type: row.authorType,
+    author_name: authorName(row),
     body: row.body,
     delivery_state: row.deliveryState,
     read_at: row.readAt ? row.readAt.toISOString() : null,
@@ -28,6 +36,7 @@ export function toAgentView(row: PostedMessageRow): AgentMessageView {
     id: row.id,
     seq: row.seq,
     author_type: row.authorType,
+    author_name: authorName(row),
     author_agent_id: row.authorAgentId,
     body: row.body,
     visibility: row.visibility,

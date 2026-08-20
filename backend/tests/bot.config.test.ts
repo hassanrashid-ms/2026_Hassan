@@ -95,6 +95,22 @@ describe('DEFAULT_BOT_PROMPT', () => {
   })
 
   /**
+   * Regression guard. `classify` is registered and write-once (tools.ts), and
+   * applyBotTurn writes subintent_id whenever a decision carries one — but the
+   * prompt only ever mentioned "classify" negatively, in the greeting carve-out
+   * ("Do not search, classify, or hand off for any of these"). With no positive
+   * instruction telling the model to call it, real conversations went through
+   * search → answer/handoff with subintent_id left null the entire time — every
+   * conversation is supposed to get classified (product spec), and none did.
+   * The prompt must tell the model to call classify once it can point at one
+   * specific row, not just describe the taxonomy block and leave the tool call
+   * implicit.
+   */
+  it('instructs the model to call classify once it can point at a specific row', () => {
+    expect(DEFAULT_BOT_PROMPT).toMatch(/call classify/)
+  })
+
+  /**
    * The prompt has to ask for the article's substance, not a pointer to it.
    * `offer_article` used to post a fixed "Here's an article that might help."
    * while nothing carried the article to the player — they were promised a

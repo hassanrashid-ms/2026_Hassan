@@ -1,17 +1,18 @@
-import { and, desc, eq, isNull, notInArray } from 'drizzle-orm'
+import { and, desc, eq, inArray, isNull, isNotNull } from 'drizzle-orm'
 import type { AgentConversationSummary, AgentMessageView } from '@support/types'
 import { toAgentView } from '../../domain/conversations/index.ts'
 import { appendEvent } from '../../shared/events/appendEvent.ts'
-import { conversation, message, player } from '../../shared/db/schema/index.ts'
+import { agent, conversation, message, player } from '../../shared/db/schema/index.ts'
 import { withWorkspace } from '../../shared/db/withWorkspace.ts'
 import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts'
 
-export type ConversationsFilter = 'unassigned' | 'mine'
+export type ConversationsFilter = 'unassigned' | 'mine' | 'agentAssigned' | 'botHandling' | 'escalated'
 
 // The inbox is a work queue, not an archive — a finished ticket is noise there,
 // and its history stays reachable through the context rail. A reopen flips the
 // status back to `open`, so it returns to the queue on its own.
-const FINISHED_STATUSES: (typeof conversation.status.enumValues)[number][] = ['resolved', 'closed']
+const ACTIVE_AGENT_STATUSES: (typeof conversation.status.enumValues)[number][] = ['open', 'awaiting_player', 'escalated']
+const UNASSIGNED_STATUSES: (typeof conversation.status.enumValues)[number][] = ['open', 'escalated']
 
 export async function listConversations(ctx: AgentContext, filter: ConversationsFilter): Promise<AgentConversationSummary[]> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
@@ -21,11 +22,18 @@ export async function listConversations(ctx: AgentContext, filter: Conversations
       .innerJoin(player, eq(player.id, conversation.playerId))
       .where(
         and(
-          filter === 'unassigned' ? isNull(conversation.assignedAgentId) : eq(conversation.assignedAgentId, ctx.agentId),
-          notInArray(conversation.status, FINISHED_STATUSES),
+          filter === 'mine'
+            ? and(eq(conversation.assignedAgentId, ctx.agentId), inArray(conversation.status, ACTIVE_AGENT_STATUSES))
+            : filter === 'agentAssigned'
+              ? and(isNotNull(conversation.assignedAgentId), inArray(conversation.status, ACTIVE_AGENT_STATUSES))
+              : filter === 'botHandling'
+                ? eq(conversation.status, 'bot_active')
+                : filter === 'escalated'
+                  ? eq(conversation.status, 'escalated')
+                  : and(isNull(conversation.assignedAgentId), inArray(conversation.status, UNASSIGNED_STATUSES)),
         ),
       )
-      .orderBy(desc(conversation.createdAt))
+      .orderBy(conversation.priority, conversation.createdAt)
 
     // One extra query per row for the last-message preview. Fine at this
     // slice's inbox size; a lateral join is the fix if the inbox ever grows
@@ -61,7 +69,7 @@ export async function claimConversation(ctx: AgentContext, conversationId: strin
       .set({ assignedAgentId: ctx.agentId })
       // Status guard lives in the UPDATE's where, not a pre-check: a separate
       // read could be resolved out from under the write.
-      .where(and(eq(conversation.id, conversationId), isNull(conversation.assignedAgentId), notInArray(conversation.status, FINISHED_STATUSES)))
+      .where(and(eq(conversation.id, conversationId), inArray(conversation.status, ACTIVE_AGENT_STATUSES)))
       .returning({ id: conversation.id, status: conversation.status })
     const [row] = claimed
     if (!row) return { claimed: false, status: null }
@@ -82,12 +90,55 @@ export async function claimConversation(ctx: AgentContext, conversationId: strin
   })
 }
 
+/** Atomically moves a bot-owned ticket into the acting agent's queue. */
+export async function takeOverConversation(ctx: AgentContext, conversationId: string): Promise<ClaimResult> {
+  return withWorkspace(ctx.workspaceId, async (tx) => {
+    const [row] = await tx
+      .update(conversation)
+      .set({ assignedAgentId: ctx.agentId, status: 'open', confirmPhase: 'none' })
+      .where(and(eq(conversation.id, conversationId), isNull(conversation.assignedAgentId), eq(conversation.status, 'bot_active')))
+      .returning({ id: conversation.id, status: conversation.status })
+    if (!row) return { claimed: false, status: null }
+
+    await appendEvent(tx, {
+      workspaceId: ctx.workspaceId,
+      type: 'conversation_taken_over',
+      conversationId,
+      actorId: ctx.agentId,
+      actorType: 'agent',
+      payload: { agent_id: ctx.agentId, from_status: 'bot_active', to_status: 'open' },
+    })
+    return { claimed: true, status: row.status }
+  })
+}
+
 export async function getAgentConversationMessages(ctx: AgentContext, conversationId: string): Promise<AgentMessageView[] | null> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
     const [found] = await tx.select({ id: conversation.id }).from(conversation).where(eq(conversation.id, conversationId)).limit(1)
     if (!found) return null
 
-    const rows = await tx.select().from(message).where(eq(message.conversationId, conversationId)).orderBy(message.seq)
+    const rows = await tx
+      .select({
+        id: message.id,
+        conversationId: message.conversationId,
+        seq: message.seq,
+        authorType: message.authorType,
+        authorAgentId: message.authorAgentId,
+        body: message.body,
+        articleId: message.articleId,
+        visibility: message.visibility,
+        deliveryState: message.deliveryState,
+        readAt: message.readAt,
+        createdAt: message.createdAt,
+        authorAgentName: agent.displayName,
+        authorPlayerName: player.externalId,
+      })
+      .from(message)
+      .innerJoin(conversation, eq(conversation.id, message.conversationId))
+      .innerJoin(player, eq(player.id, conversation.playerId))
+      .leftJoin(agent, eq(agent.id, message.authorAgentId))
+      .where(eq(message.conversationId, conversationId))
+      .orderBy(message.seq)
     return rows.map(toAgentView)
   })
 }

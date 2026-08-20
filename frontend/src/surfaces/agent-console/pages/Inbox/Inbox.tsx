@@ -26,18 +26,21 @@ export function Inbox() {
     queryFn: () => fetchInbox(session!.token, 'mine'),
     enabled: session !== null,
   })
+  const escalated = useQuery({
+    queryKey: ['inbox', 'escalated'],
+    queryFn: () => fetchInbox(session!.token, 'escalated'),
+    enabled: session !== null,
+  })
 
   const selected = useMemo(() => {
     if (!conversationId) return undefined
-    return (
-      unassigned.data?.conversations.find((c) => c.id === conversationId) ??
-      mine.data?.conversations.find((c) => c.id === conversationId)
-    )
-  }, [conversationId, unassigned.data, mine.data])
+    const mineFound = mine.data?.conversations.find((c) => c.id === conversationId)
+    if (mineFound) return { summary: mineFound, filter: 'mine' }
+    const escalatedFound = escalated.data?.conversations.find((c) => c.id === conversationId)
+    if (escalatedFound) return { summary: escalatedFound, filter: 'escalated' }
+    return undefined
+  }, [conversationId, mine.data, escalated.data])
 
-  // Required, not an optimisation: an older ticket — resolved, owned by another
-  // agent — is in neither list above and never will be, so opening one by URL
-  // otherwise yields no header data at all.
   const detail = useQuery({
     queryKey: ['conversation', conversationId, 'detail'],
     queryFn: () => fetchConversation(session!.token, conversationId!),
@@ -47,7 +50,7 @@ export function Inbox() {
   if (!session) return null
 
   const selectedId = conversationId ?? null
-  const status = selected?.status ?? detail.data?.status
+  const status = selected?.summary.status ?? detail.data?.status
   const readOnly = status === 'resolved' || status === 'closed'
 
   const toggleRail = () => {
@@ -62,6 +65,10 @@ export function Inbox() {
     setRailOpen(open)
   }
 
+  let isOwnedByMe = false
+  if (selected?.filter === 'mine') isOwnedByMe = true
+  else if (detail.isSuccess) isOwnedByMe = detail.data?.assigned_agent?.id === session.agentId
+
   return (
     <div className="flex h-full min-h-0">
       {/* Below the md breakpoint, a selected conversation replaces the list
@@ -74,9 +81,9 @@ export function Inbox() {
         <ThreadPanel
           token={session.token}
           conversationId={selectedId}
-          playerExternalId={selected?.player.external_player_id ?? detail.data?.player.external_player_id}
+          playerExternalId={selected?.summary.player.external_player_id ?? detail.data?.player.external_player_id}
           status={status}
-          confirmPhase={selected?.confirm_phase}
+          confirmPhase={selected?.summary.confirm_phase}
           readOnly={readOnly}
           ticketNumber={detail.data?.number}
           resolutionSource={detail.data?.resolution_source}
@@ -86,6 +93,14 @@ export function Inbox() {
           railOpen={railOpen}
           onToggleRail={toggleRail}
           onBack={() => navigate('/inbox')}
+          takeOverAvailable={status === 'bot_active'}
+          claimAvailable={
+            !!status &&
+            status !== 'resolved' &&
+            status !== 'closed' &&
+            status !== 'bot_active' &&
+            !isOwnedByMe
+          }
         />
       </div>
       {/* Slides in over the content — the layout above is untouched. */}
