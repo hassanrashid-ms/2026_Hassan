@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import express from 'express'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { req as request } from './helpers/http.ts'
@@ -79,5 +80,31 @@ describe('POST /admin/workspaces', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ name: 'Nope', slug: 'nope' })
       .expect(403)
+  })
+})
+
+describe('PATCH /admin/workspaces/:id', () => {
+  it('renames a workspace, leaving its slug untouched', async () => {
+    const workspaceId = await seedWorkspace({ name: 'Old Name', slug: 'stays-put' })
+    const token = await adminToken(workspaceId)
+
+    const res = await request(app)
+      .patch(`/admin/workspaces/${workspaceId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'New Name' })
+      .expect(200)
+
+    expect(res.body).toMatchObject({ name: 'New Name', slug: 'stays-put' })
+  })
+
+  it('returns 404 for an unknown workspace id', async () => {
+    const workspaceId = await seedWorkspace()
+    const token = await adminToken(workspaceId)
+
+    await request(app)
+      .patch(`/admin/workspaces/${randomUUID()}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'New Name' })
+      .expect(404)
   })
 })

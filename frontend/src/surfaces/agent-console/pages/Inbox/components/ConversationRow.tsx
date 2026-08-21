@@ -17,11 +17,11 @@ export const STATUS_BADGE_VARIANT: Record<
   closed: 'secondary',
 }
 
-export const PRIORITY_BADGE_VARIANT: Record<ConversationPriorityValue, 'default' | 'secondary' | 'warning' | 'destructive'> = {
+export const PRIORITY_BADGE_VARIANT: Record<ConversationPriorityValue, 'default' | 'secondary' | 'warning' | 'destructive' | 'info' | 'success'> = {
   p1: 'destructive',
   p2: 'warning',
-  p3: 'secondary',
-  p4: 'secondary',
+  p3: 'info',
+  p4: 'success',
 }
 
 export function formatStatus(status: ConversationStatusValue): string {

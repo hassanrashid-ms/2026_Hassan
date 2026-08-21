@@ -75,10 +75,10 @@ export type TicketsQueryFilters = {
 function buildTicketsQuery(status: ConversationListFilter, filters?: TicketsQueryFilters): string {
   const params = new URLSearchParams({ status })
   if (filters?.q) params.set('q', filters.q)
-  if (filters?.priority?.length) params.set('priority', filters.priority.join(','))
-  if (filters?.labelIds?.length) params.set('labelIds', filters.labelIds.join(','))
-  if (filters?.subintentIds?.length) params.set('subintentIds', filters.subintentIds.join(','))
-  if (filters?.assigneeIds?.length) params.set('assigneeIds', filters.assigneeIds.join(','))
+  if (filters?.priority?.length) filters.priority.forEach(p => params.append('priority', p))
+  if (filters?.labelIds?.length) filters.labelIds.forEach(l => params.append('labelIds', l))
+  if (filters?.subintentIds?.length) filters.subintentIds.forEach(s => params.append('subintentIds', s))
+  if (filters?.assigneeIds?.length) filters.assigneeIds.forEach(a => params.append('assigneeIds', a))
   if (filters?.olderThanHours) params.set('olderThanHours', String(filters.olderThanHours))
   return params.toString()
 }

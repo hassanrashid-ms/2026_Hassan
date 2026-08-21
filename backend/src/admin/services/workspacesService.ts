@@ -57,3 +57,18 @@ export async function createWorkspace(args: { name: string; slug: string }): Pro
     throw error
   }
 }
+
+export async function renameWorkspace(id: string, name: string): Promise<WorkspaceSummary | null> {
+  const [row] = await adminDb
+    .update(workspace)
+    .set({ name })
+    .where(eq(workspace.id, id))
+    .returning({ id: workspace.id, name: workspace.name, slug: workspace.slug, createdAt: workspace.createdAt })
+  if (!row) return null
+
+  const [{ memberCount }] = await adminDb
+    .select({ memberCount: count(workspaceMember.id) })
+    .from(workspaceMember)
+    .where(eq(workspaceMember.workspaceId, id))
+  return { ...row, member_count: memberCount }
+}
