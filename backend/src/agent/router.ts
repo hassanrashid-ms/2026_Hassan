@@ -8,6 +8,7 @@ import { tagsRouter } from './routers/tagsRouter.ts'
 import { articlesRouter } from './routers/articlesRouter.ts'
 import { botConfigRouter } from './routers/botConfigRouter.ts'
 import { formsRouter } from './routers/formsRouter.ts'
+import { agentsRouter } from './routers/agentsRouter.ts'
 
 export const agentRouter = Router()
 
@@ -22,3 +23,4 @@ agentRouter.use(botConfigRouter)
 agentRouter.use(formsRouter)
 agentRouter.use(conversationsRouter)
 agentRouter.use(messagesRouter)
+agentRouter.use(agentsRouter)

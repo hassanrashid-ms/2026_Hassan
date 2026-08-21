@@ -434,12 +434,31 @@ registry.registerPath({
 // --- 4. AGENT ENDPOINTS ---
 registry.registerPath({
   method: 'get',
+  path: '/agent/agents',
+  summary: 'List agents',
+  description: 'Lists all agents in the workspace.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  responses: {
+    200: { description: 'Agents list' },
+  },
+})
+
+registry.registerPath({
+  method: 'get',
   path: '/agent/conversations',
   summary: 'Agent List Conversations',
   description: 'Lists open/unassigned conversations for the agent.',
   security: [{ [bearerAgentJwt.name]: [] }],
   request: {
-    query: z.object({ status: z.enum(['unassigned', 'mine', 'agentAssigned', 'botHandling']) }),
+    query: z.object({
+      status: z.enum(['unassigned', 'mine', 'agentAssigned', 'botHandling', 'escalated']),
+      priority: z.union([z.enum(['p1', 'p2', 'p3', 'p4']), z.array(z.enum(['p1', 'p2', 'p3', 'p4']))]).optional(),
+      labelIds: z.union([z.string().uuid(), z.array(z.string().uuid())]).optional(),
+      subintentIds: z.union([z.string().uuid(), z.array(z.string().uuid())]).optional(),
+      assigneeIds: z.union([z.string().uuid(), z.array(z.string().uuid())]).optional(),
+      olderThanHours: z.coerce.number().optional(),
+      q: z.string().optional()
+    }),
   },
   responses: {
     200: { description: 'Conversations list' },

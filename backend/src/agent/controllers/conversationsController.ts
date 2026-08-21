@@ -9,17 +9,26 @@ import { askResolved } from '../services/resolutionService.ts'
 import { escalateConversation, unescalateConversation } from '../services/escalationService.ts'
 import { getConversationContext, getConversationDetail } from '../services/conversationContextService.ts'
 
-const ConversationsQuery = z.object({ status: z.enum(['unassigned', 'mine', 'agentAssigned', 'botHandling', 'escalated']) })
+const ConversationsQuery = z.object({
+  status: z.enum(['unassigned', 'mine', 'agentAssigned', 'botHandling', 'escalated']),
+  priority: z.union([z.enum(['p1', 'p2', 'p3', 'p4']), z.array(z.enum(['p1', 'p2', 'p3', 'p4']))]).optional().transform(v => v ? (Array.isArray(v) ? v : [v]) : undefined),
+  labelIds: z.union([z.string().uuid(), z.array(z.string().uuid())]).optional().transform(v => v ? (Array.isArray(v) ? v : [v]) : undefined),
+  subintentIds: z.union([z.string().uuid(), z.array(z.string().uuid())]).optional().transform(v => v ? (Array.isArray(v) ? v : [v]) : undefined),
+  assigneeIds: z.union([z.string().uuid(), z.array(z.string().uuid())]).optional().transform(v => v ? (Array.isArray(v) ? v : [v]) : undefined),
+  olderThanHours: z.coerce.number().optional(),
+  q: z.string().optional()
+})
 const ConversationIdParams = z.object({ id: z.uuid() })
 
 export const listConversationsHandler: RequestHandler = async (req, res) => {
   const ctx = req.agent!
   const query = ConversationsQuery.safeParse(req.query)
   if (!query.success) {
-    sendError(res, 422, 'invalid_request', 'status must be a supported conversation filter.')
+    sendError(res, 422, 'invalid_request', 'Invalid query parameters.')
     return
   }
-  const conversations = await listConversations(ctx, query.data.status)
+  const { status, ...extra } = query.data
+  const conversations = await listConversations(ctx, status, extra)
   res.status(200).json({ conversations })
 }
 

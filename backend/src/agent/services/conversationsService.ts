@@ -1,21 +1,57 @@
-import { and, desc, eq, inArray, isNull, isNotNull } from 'drizzle-orm'
+import { and, desc, eq, exists, ilike, inArray, isNull, isNotNull, or, sql } from 'drizzle-orm'
 import type { AgentConversationSummary, AgentMessageView } from '@support/types'
 import { postMessage, toAgentView, type PostedMessageRow } from '../../domain/conversations/index.ts'
 import { appendEvent } from '../../shared/events/appendEvent.ts'
-import { agent, conversation, message, player } from '../../shared/db/schema/index.ts'
+import { agent, conversation, conversationTag, message, player, subintent } from '../../shared/db/schema/index.ts'
 import { withWorkspace, type Tx } from '../../shared/db/withWorkspace.ts'
 import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts'
 import { getConversationTags } from './tagsService.ts'
 
 export type ConversationsFilter = 'unassigned' | 'mine' | 'agentAssigned' | 'botHandling' | 'escalated'
 
-// The inbox is a work queue, not an archive — a finished ticket is noise there,
-// and its history stays reachable through the context rail. A reopen flips the
-// status back to `open`, so it returns to the queue on its own.
+export type ConversationsListFilters = {
+  priority?: (typeof conversation.priority.enumValues)[number][]
+  labelIds?: string[]
+  subintentIds?: string[]
+  assigneeIds?: string[]
+  olderThanHours?: number
+  q?: string
+}
+
 const ACTIVE_AGENT_STATUSES: (typeof conversation.status.enumValues)[number][] = ['open', 'awaiting_player', 'escalated']
 const UNASSIGNED_STATUSES: (typeof conversation.status.enumValues)[number][] = ['open', 'escalated']
 
-export async function listConversations(ctx: AgentContext, filter: ConversationsFilter): Promise<AgentConversationSummary[]> {
+function extraFilterConditions(extra: ConversationsListFilters) {
+  const conditions = []
+  if (extra.priority?.length) conditions.push(inArray(conversation.priority, extra.priority))
+  if (extra.subintentIds?.length) conditions.push(inArray(conversation.subintentId, extra.subintentIds))
+  if (extra.assigneeIds?.length) conditions.push(inArray(conversation.assignedAgentId, extra.assigneeIds))
+  if (extra.labelIds?.length) {
+    conditions.push(
+      exists(
+        sql`(select 1 from ${conversationTag} where ${conversationTag.conversationId} = ${conversation.id} and ${conversationTag.removedAt} is null and ${conversationTag.tagId} in ${extra.labelIds})`,
+      ),
+    )
+  }
+  if (extra.q) {
+    const term = `%${extra.q}%`
+    const qNum = parseInt(extra.q, 10)
+    const numMatch = !isNaN(qNum) ? eq(conversation.number, qNum) : undefined
+    const qCond = or(
+      numMatch,
+      ilike(player.externalId, term),
+      ilike(subintent.name, term)
+    )
+    if (qCond) conditions.push(qCond)
+  }
+  return conditions
+}
+
+export async function listConversations(
+  ctx: AgentContext,
+  filter: ConversationsFilter,
+  extra: ConversationsListFilters = {},
+): Promise<AgentConversationSummary[]> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
     const rows = await tx
       .select({
@@ -30,6 +66,7 @@ export async function listConversations(ctx: AgentContext, filter: Conversations
       .from(conversation)
       .innerJoin(player, eq(player.id, conversation.playerId))
       .leftJoin(agent, eq(agent.id, conversation.assignedAgentId))
+      .leftJoin(subintent, eq(subintent.id, conversation.subintentId))
       .where(
         and(
           filter === 'mine'
@@ -41,13 +78,11 @@ export async function listConversations(ctx: AgentContext, filter: Conversations
                 : filter === 'escalated'
                   ? eq(conversation.status, 'escalated')
                   : and(isNull(conversation.assignedAgentId), inArray(conversation.status, UNASSIGNED_STATUSES)),
+          ...extraFilterConditions(extra),
         ),
       )
       .orderBy(conversation.priority, conversation.createdAt)
 
-    // One extra query per row for the last-message preview. Fine at this
-    // slice's inbox size; a lateral join is the fix if the inbox ever grows
-    // large enough for this to matter.
     const summaries: AgentConversationSummary[] = []
     for (const row of rows) {
       const [last] = await tx
@@ -71,6 +106,11 @@ export async function listConversations(ctx: AgentContext, filter: Conversations
         tags,
       })
     }
+
+    if (extra.olderThanHours !== undefined) {
+      const cutoff = Date.now() - extra.olderThanHours * 60 * 60 * 1000
+      return summaries.filter((s) => s.last_message_at !== null && new Date(s.last_message_at).getTime() < cutoff)
+    }
     return summaries
   })
 }
@@ -78,13 +118,6 @@ export async function listConversations(ctx: AgentContext, filter: Conversations
 export type ClaimResult = { claimed: boolean; status: string | null; posted: PostedMessageRow | null }
 export type TakeOverResult = ClaimResult
 
-// Shared by claimConversation and takeOverConversation: both are the same
-// player-invisible fact ("this ticket now belongs to a different agent, or an
-// agent at all"), regardless of whether the previous owner was the bot,
-// nobody, or another agent — a second agent who already has the ticket open
-// only learns about the reassignment through this message, since neither
-// `conversation:changed` nor the status prop reaches an already-open thread
-// panel.
 async function postTakenOverNotice(tx: Tx, ctx: AgentContext, conversationId: string): Promise<PostedMessageRow> {
   const [actor] = await tx.select({ displayName: agent.displayName }).from(agent).where(eq(agent.id, ctx.agentId)).limit(1)
   return postMessage(tx, {
@@ -102,17 +135,11 @@ export async function claimConversation(ctx: AgentContext, conversationId: strin
     const claimed = await tx
       .update(conversation)
       .set({ assignedAgentId: ctx.agentId })
-      // Status guard lives in the UPDATE's where, not a pre-check: a separate
-      // read could be resolved out from under the write.
-      .where(and(eq(conversation.id, conversationId), inArray(conversation.status, ACTIVE_AGENT_STATUSES)))
+      .where(and(eq(conversation.id, conversationId), isNull(conversation.assignedAgentId), inArray(conversation.status, ACTIVE_AGENT_STATUSES)))
       .returning({ id: conversation.id, status: conversation.status })
     const [row] = claimed
     if (!row) return { claimed: false, status: null, posted: null }
 
-    // Guarded by the same `claimed` check as the update, so a losing racer
-    // writes nothing. `via` leaves room for a future auto-assignment path to
-    // write this same type rather than a second one. No session_id: this is an
-    // agent-console request, with no player session behind it.
     await appendEvent(tx, {
       workspaceId: ctx.workspaceId,
       type: 'conversation_assigned',
@@ -126,7 +153,6 @@ export async function claimConversation(ctx: AgentContext, conversationId: strin
   })
 }
 
-/** Atomically moves a bot-owned ticket into the acting agent's queue. */
 export async function takeOverConversation(ctx: AgentContext, conversationId: string): Promise<TakeOverResult> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
     const [row] = await tx

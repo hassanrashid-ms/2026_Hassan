@@ -125,6 +125,8 @@ export async function seedConversation(args: {
   confirmPhase?: 'none' | 'bot_article' | 'agent_ask' | 'form' | 'inactivity_ask'
   assignedAgentId?: string | null
   resolutionSource?: 'bot' | 'agent' | 'player_confirmed' | 'timed_out' | null
+  priority?: 'p1' | 'p2' | 'p3' | 'p4'
+  subintentId?: string | null
 }): Promise<string> {
   const id = randomUUID()
   // Bumped the same way the request path bumps it, so a test that seeds three
@@ -136,8 +138,8 @@ export async function seedConversation(args: {
   const number = rows[0]!.ticket_seq
   await ownerPool.query(
     `insert into conversation
-       (id, workspace_id, player_id, session_id, number, created_at, status, confirm_phase, assigned_agent_id, resolution_source)
-     values ($1, $2, $3, $4, $5, coalesce($6, now()), coalesce($7::conversation_status, 'bot_active'), coalesce($8::confirm_phase, 'none'), $9, $10::resolution_source)`,
+       (id, workspace_id, player_id, session_id, number, created_at, status, confirm_phase, assigned_agent_id, resolution_source, priority, subintent_id)
+     values ($1, $2, $3, $4, $5, coalesce($6, now()), coalesce($7::conversation_status, 'bot_active'), coalesce($8::confirm_phase, 'none'), $9, $10::resolution_source, coalesce($11::conversation_priority, 'p3'), $12)`,
     [
       id,
       args.workspaceId,
@@ -149,6 +151,8 @@ export async function seedConversation(args: {
       args.confirmPhase ?? null,
       args.assignedAgentId ?? null,
       args.resolutionSource ?? null,
+      args.priority ?? null,
+      args.subintentId ?? null,
     ],
   )
   return id
@@ -162,11 +166,12 @@ export async function seedMessage(args: {
   visibility?: 'public' | 'internal'
   deliveryState?: 'sending' | 'sent' | 'delivered' | 'read' | 'failed'
   body?: string
+  createdAt?: Date
 }): Promise<string> {
   const id = randomUUID()
   await ownerPool.query(
-    `insert into message (id, workspace_id, conversation_id, seq, author_type, visibility, delivery_state, body)
-     values ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    `insert into message (id, workspace_id, conversation_id, seq, author_type, visibility, delivery_state, body, created_at)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, coalesce($9, now()))`,
     [
       id,
       args.workspaceId,
@@ -176,6 +181,7 @@ export async function seedMessage(args: {
       args.visibility ?? 'public',
       args.deliveryState ?? 'sent',
       args.body ?? 'test message',
+      args.createdAt ?? null,
     ],
   )
   return id

@@ -16,6 +16,9 @@ import {
   seedPlayer,
   seedWorkspace,
   truncateAll,
+  seedIntent,
+  seedSubintent,
+  seedAgent,
 } from './helpers/db.ts'
 
 // A standalone app carrying just this router, gated by the real
@@ -62,7 +65,7 @@ describe('GET /agent/conversations', () => {
   it('lists unassigned conversations with a last-message preview', async () => {
     const workspaceId = await seedWorkspace()
     const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
+    const conversationId = await seedConversation({ workspaceId, playerId, status: 'open' })
     await seedMessage({ workspaceId, conversationId, seq: 1, authorType: 'player', body: 'help please' })
     const { token } = await setupAgent(workspaceId)
 
@@ -79,7 +82,7 @@ describe('GET /agent/conversations', () => {
   it('lists confirm_phase per conversation', async () => {
     const workspaceId = await seedWorkspace()
     const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
+    const conversationId = await seedConversation({ workspaceId, playerId, status: 'open' })
     const { agentId, token } = await setupAgent(workspaceId)
     await ownerPool.query(`update conversation set assigned_agent_id = $2 where id = $1`, [conversationId, agentId])
     await ownerPool.query(`update conversation set confirm_phase = 'agent_ask' where id = $1`, [conversationId])
@@ -92,8 +95,8 @@ describe('GET /agent/conversations', () => {
   it('omits a resolved conversation from the unassigned list', async () => {
     const workspaceId = await seedWorkspace()
     const playerId = await seedPlayer(workspaceId)
-    const resolvedId = await seedConversation({ workspaceId, playerId })
-    const openId = await seedConversation({ workspaceId, playerId })
+    const resolvedId = await seedConversation({ workspaceId, playerId, status: 'open' })
+    const openId = await seedConversation({ workspaceId, playerId, status: 'open' })
     await ownerPool.query(`update conversation set status = 'resolved' where id = $1`, [resolvedId])
     const { token } = await setupAgent(workspaceId)
 
@@ -109,8 +112,8 @@ describe('GET /agent/conversations', () => {
   it('omits a closed conversation from the mine list', async () => {
     const workspaceId = await seedWorkspace()
     const playerId = await seedPlayer(workspaceId)
-    const closedId = await seedConversation({ workspaceId, playerId })
-    const openId = await seedConversation({ workspaceId, playerId })
+    const closedId = await seedConversation({ workspaceId, playerId, status: 'open' })
+    const openId = await seedConversation({ workspaceId, playerId, status: 'open' })
     const { agentId, token } = await setupAgent(workspaceId)
     await ownerPool.query(`update conversation set assigned_agent_id = $2 where id = any($1::uuid[])`, [
       [closedId, openId],
@@ -124,11 +127,202 @@ describe('GET /agent/conversations', () => {
   })
 })
 
+describe('GET /agent/conversations filters', () => {
+  it('filters by priority', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const { token } = await setupAgent(workspaceId)
+    const highId = await seedConversation({ workspaceId, playerId, priority: 'p1', status: 'open' })
+    const lowId = await seedConversation({ workspaceId, playerId, priority: 'p4', status: 'open' })
+
+    const dbRow = await ownerPool.query(`select id, workspace_id, status, priority, assigned_agent_id from conversation where id = $1`, [highId])
+
+    const res = await request(app)
+      .get('/conversations')
+      .query({ status: 'unassigned', priority: 'p1' })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+
+    expect(res.body.conversations.map((c: any) => c.id)).toEqual([highId])
+  })
+
+  it('filters by subintentIds', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const { token } = await setupAgent(workspaceId)
+    const intentId = await seedIntent(workspaceId)
+    const subintentId = await seedSubintent({ workspaceId, intentId })
+    const matchId = await seedConversation({ workspaceId, playerId, subintentId, status: 'open' })
+    const noMatchId = await seedConversation({ workspaceId, playerId, status: 'open' })
+
+    const res = await request(app)
+      .get('/conversations')
+      .query({ status: 'unassigned', subintentIds: subintentId })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+
+    expect(res.body.conversations.map((c: any) => c.id)).toEqual([matchId])
+  })
+
+  it('filters by assigneeIds', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const { agentId, token } = await setupAgent(workspaceId)
+    const agent2 = await seedAgent('agent2@example.test')
+    const matchId = await seedConversation({ workspaceId, playerId, assignedAgentId: agentId, status: 'open' })
+    const noMatchId = await seedConversation({ workspaceId, playerId, assignedAgentId: agent2, status: 'open' })
+
+    const res = await request(app)
+      .get('/conversations')
+      .query({ status: 'agentAssigned', assigneeIds: agentId })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+
+    expect(res.body.conversations.map((c: any) => c.id)).toEqual([matchId])
+  })
+
+  it('filters by labelIds', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const { token } = await setupAgent(workspaceId)
+    const matchId = await seedConversation({ workspaceId, playerId, status: 'open' })
+    const noMatchId = await seedConversation({ workspaceId, playerId, status: 'open' })
+
+    const { rows: tagRows } = await ownerPool.query<{ id: string }>(
+      `insert into tag (workspace_id, name, normalized_name, color_index) values ($1, 'Bug', 'bug', 1) returning id`,
+      [workspaceId]
+    )
+    const tagId = tagRows[0]!.id
+
+    await ownerPool.query(
+      `insert into conversation_tag (workspace_id, conversation_id, tag_id) values ($1, $2, $3)`,
+      [workspaceId, matchId, tagId]
+    )
+
+    const res = await request(app)
+      .get('/conversations')
+      .query({ status: 'unassigned', labelIds: tagId })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+
+    expect(res.body.conversations.map((c: any) => c.id)).toEqual([matchId])
+  })
+
+  it('filters by olderThanHours', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const { token } = await setupAgent(workspaceId)
+    const oldId = await seedConversation({ workspaceId, playerId, status: 'open' })
+    const newId = await seedConversation({ workspaceId, playerId, status: 'open' })
+
+    const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000)
+    await seedMessage({ workspaceId, conversationId: oldId, seq: 1, authorType: 'player', createdAt: threeHoursAgo })
+    await seedMessage({ workspaceId, conversationId: newId, seq: 1, authorType: 'player' }) // now
+
+    const res = await request(app)
+      .get('/conversations')
+      .query({ status: 'unassigned', olderThanHours: 2 })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+
+    expect(res.body.conversations.map((c: any) => c.id)).toEqual([oldId])
+  })
+
+  it('combines multiple filters', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const { token } = await setupAgent(workspaceId)
+    const matchId = await seedConversation({ workspaceId, playerId, priority: 'p1', status: 'open' })
+    const noMatchId = await seedConversation({ workspaceId, playerId, priority: 'p1', status: 'open' })
+    const diffPriorityId = await seedConversation({ workspaceId, playerId, priority: 'p4', status: 'open' })
+
+    const { rows: tagRows } = await ownerPool.query<{ id: string }>(
+      `insert into tag (workspace_id, name, normalized_name, color_index) values ($1, 'Vip', 'vip', 2) returning id`,
+      [workspaceId]
+    )
+    const tagId = tagRows[0]!.id
+
+    await ownerPool.query(
+      `insert into conversation_tag (workspace_id, conversation_id, tag_id) values ($1, $2, $3)`,
+      [workspaceId, matchId, tagId]
+    )
+    await ownerPool.query(
+      `insert into conversation_tag (workspace_id, conversation_id, tag_id) values ($1, $2, $3)`,
+      [workspaceId, diffPriorityId, tagId]
+    )
+
+    const res = await request(app)
+      .get('/conversations')
+      .query({ status: 'unassigned', priority: 'p1', labelIds: tagId })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+
+    expect(res.body.conversations.map((c: any) => c.id)).toEqual([matchId])
+  })
+
+  it('searches by q (ticket number)', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const { token } = await setupAgent(workspaceId)
+    const c1 = await seedConversation({ workspaceId, playerId, status: 'open' })
+    
+    const { rows } = await ownerPool.query<{ number: number }>(`select number from conversation where id = $1`, [c1])
+    const ticketNum = rows[0]!.number
+
+    const c2 = await seedConversation({ workspaceId, playerId, status: 'open' })
+
+    const res = await request(app)
+      .get('/conversations')
+      .query({ status: 'unassigned', q: ticketNum.toString() })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+
+    expect(res.body.conversations.map((c: any) => c.id)).toEqual([c1])
+  })
+
+  it('searches by q (player external id)', async () => {
+    const workspaceId = await seedWorkspace()
+    const p1 = await seedPlayer(workspaceId, 'ext-abc-123')
+    const p2 = await seedPlayer(workspaceId, 'ext-xyz-987')
+    const { token } = await setupAgent(workspaceId)
+    const c1 = await seedConversation({ workspaceId, playerId: p1, status: 'open' })
+    const c2 = await seedConversation({ workspaceId, playerId: p2, status: 'open' })
+
+    const res = await request(app)
+      .get('/conversations')
+      .query({ status: 'unassigned', q: 'abc-12' })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+
+    expect(res.body.conversations.map((c: any) => c.id)).toEqual([c1])
+  })
+
+  it('searches by q (subintent name)', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const { token } = await setupAgent(workspaceId)
+    const intentId = await seedIntent(workspaceId)
+    const sub1 = await seedSubintent({ workspaceId, intentId, name: 'Billing Issue' })
+    const sub2 = await seedSubintent({ workspaceId, intentId, name: 'Login Problem' })
+    
+    const c1 = await seedConversation({ workspaceId, playerId, subintentId: sub1, status: 'open' })
+    const c2 = await seedConversation({ workspaceId, playerId, subintentId: sub2, status: 'open' })
+
+    const res = await request(app)
+      .get('/conversations')
+      .query({ status: 'unassigned', q: 'billing' })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+
+    expect(res.body.conversations.map((c: any) => c.id)).toEqual([c1])
+  })
+})
+
 describe('POST /agent/conversations/:id/claim', () => {
   it('claims an unassigned conversation', async () => {
     const workspaceId = await seedWorkspace()
     const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
+    const conversationId = await seedConversation({ workspaceId, playerId, status: 'open' })
     const { token } = await setupAgent(workspaceId)
 
     const res = await request(app)
@@ -141,7 +335,7 @@ describe('POST /agent/conversations/:id/claim', () => {
   it('writes exactly one conversation_assigned event for a successful claim', async () => {
     const workspaceId = await seedWorkspace()
     const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
+    const conversationId = await seedConversation({ workspaceId, playerId, status: 'open' })
     const { agentId, token } = await setupAgent(workspaceId)
 
     await request(app).post(`/conversations/${conversationId}/claim`).set('Authorization', `Bearer ${token}`).expect(200)
@@ -162,7 +356,7 @@ describe('POST /agent/conversations/:id/claim', () => {
   it('a losing claim on an already-claimed conversation writes no extra event', async () => {
     const workspaceId = await seedWorkspace()
     const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
+    const conversationId = await seedConversation({ workspaceId, playerId, status: 'open' })
     const agentA = await setupAgent(workspaceId)
     const { rows: agentBRows } = await ownerPool.query<{ id: string }>(
       `insert into agent (email, display_name) values ('agent2@example.test', 'Agent Two') returning id`,
@@ -197,7 +391,7 @@ describe('POST /agent/conversations/:id/claim', () => {
   it('a claim race: exactly one of two concurrent claims succeeds', async () => {
     const workspaceId = await seedWorkspace()
     const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
+    const conversationId = await seedConversation({ workspaceId, playerId, status: 'open' })
     const agentA = await setupAgent(workspaceId)
     const { rows } = await ownerPool.query<{ id: string }>(
       `insert into agent (email, display_name) values ('agent2@example.test', 'Agent Two') returning id`,
@@ -220,7 +414,7 @@ describe('POST /agent/conversations/:id/claim', () => {
   it('refuses to claim a resolved conversation and leaves it unassigned', async () => {
     const workspaceId = await seedWorkspace()
     const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
+    const conversationId = await seedConversation({ workspaceId, playerId, status: 'open' })
     await ownerPool.query(`update conversation set status = 'resolved' where id = $1`, [conversationId])
     const { token } = await setupAgent(workspaceId)
 
@@ -240,7 +434,7 @@ describe('POST /agent/conversations/:id/claim', () => {
   it('a refused claim on a closed conversation writes no conversation_assigned event', async () => {
     const workspaceId = await seedWorkspace()
     const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
+    const conversationId = await seedConversation({ workspaceId, playerId, status: 'open' })
     await ownerPool.query(`update conversation set status = 'closed' where id = $1`, [conversationId])
     const { token } = await setupAgent(workspaceId)
 
@@ -256,7 +450,7 @@ describe('POST /agent/conversations/:id/claim', () => {
   it('an open unassigned conversation is still listed and still claimable', async () => {
     const workspaceId = await seedWorkspace()
     const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
+    const conversationId = await seedConversation({ workspaceId, playerId, status: 'open' })
     const { agentId, token } = await setupAgent(workspaceId)
 
     const list = await request(app)
