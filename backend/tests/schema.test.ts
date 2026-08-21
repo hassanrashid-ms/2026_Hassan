@@ -24,6 +24,7 @@ const EXPECTED_TABLES = [
   'subintent',
   'workspace',
   'workspace_member',
+  'workspace_secret',
 ]
 
 async function columns(table: string): Promise<Map<string, { type: string; nullable: boolean; hasDefault: boolean }>> {
@@ -66,10 +67,17 @@ describe('schema', () => {
     expect(cols.get('entry_point')?.nullable).toBe(false)
   })
 
-  it('carries the two columns the wire contract adds to workspace', async () => {
+  it('carries the disabled_at column the wire contract adds to workspace', async () => {
     const cols = await columns('workspace')
-    expect(cols.get('secret_hash')?.nullable).toBe(false)
     expect(cols.get('disabled_at')?.nullable).toBe(true)
+    expect(cols.get('secret_hash')).toBeUndefined()
+  })
+
+  it('gives workspace_secret a nullable expiry and revocation, non-null hash', async () => {
+    const cols = await columns('workspace_secret')
+    expect(cols.get('secret_hash')?.nullable).toBe(false)
+    expect(cols.get('expires_at')?.nullable).toBe(true)
+    expect(cols.get('revoked_at')?.nullable).toBe(true)
   })
 
   it('gives agent the two global admin flags, both defaulting false', async () => {

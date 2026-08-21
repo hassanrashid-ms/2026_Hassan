@@ -12,8 +12,7 @@ export const workspace = pgTable('workspace', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
   slug: text('slug').notNull().unique(),
-  /** sha256 of the random half of the workspace secret. See auth/workspaceSecret.ts. */
-  secretHash: text('secret_hash').notNull(),
+  // secretHash removed — see workspaceSecret below.
   /**
    * The per-workspace ticket counter. Bumped inside the conversation-insert
    * transaction by allocateTicketNumber(), exactly as message_seq is bumped by
@@ -71,3 +70,21 @@ export const workspaceMember = pgTable(
   },
   (t) => [uniqueIndex('workspace_member_workspace_agent_uk').on(t.workspaceId, t.agentId)],
 )
+
+/**
+ * Replaces the single `workspace.secret_hash`. Rotation inserts a new row rather
+ * than overwriting one, so the previous secret can keep working for a grace
+ * window while a game studio redeploys with the new one. See auth/workspaceSecret.ts.
+ */
+export const workspaceSecret = pgTable('workspace_secret', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  workspaceId: uuid('workspace_id')
+    .notNull()
+    .references(() => workspace.id, { onDelete: 'restrict' }),
+  secretHash: text('secret_hash').notNull(),
+  createdAt: timestamp('created_at', tz).notNull().defaultNow(),
+  /** Null = no expiry (the current active secret). Set on rotation for the row it replaces. */
+  expiresAt: timestamp('expires_at', tz),
+  /** Set only if an admin manually revokes ahead of expiry. */
+  revokedAt: timestamp('revoked_at', tz),
+})
