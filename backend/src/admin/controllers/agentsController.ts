@@ -17,7 +17,7 @@ export const setAdminHandler: RequestHandler = async (req, res) => {
   }
   try {
     const updated = await setAdminFlag({
-      targetAgentId: req.params.id!,
+      targetAgentId: req.params.id as string,
       callerAgentId: req.agent!.agentId,
       isAdmin: body.data.is_admin,
     })
@@ -39,7 +39,7 @@ export const setSuperAdminHandler: RequestHandler = async (req, res) => {
   }
   try {
     const updated = await setSuperAdminFlag({
-      targetAgentId: req.params.id!,
+      targetAgentId: req.params.id as string,
       callerAgentId: req.agent!.agentId,
       isSuperAdmin: body.data.is_super_admin,
     })

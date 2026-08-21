@@ -82,11 +82,11 @@ export async function setSuperAdminFlag(args: {
     throw new SelfDemotion()
   }
   if (!args.isSuperAdmin) {
-    const [{ remaining }] = await adminDb
+    const result = await adminDb
       .select({ remaining: count() })
       .from(agent)
       .where(eq(agent.isSuperAdmin, true))
-    if (remaining <= 1) throw new LastSuperAdmin()
+    if (result[0]!.remaining <= 1) throw new LastSuperAdmin()
   }
   const [row] = await adminDb
     .update(agent)

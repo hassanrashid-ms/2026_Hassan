@@ -4,7 +4,7 @@ import { sendError } from '../../errors.ts'
 import { addMember, listMembers, updateMember } from '../services/membersService.ts'
 
 export const listMembersHandler: RequestHandler = async (req, res) => {
-  const members = await listMembers(req.params.id!)
+  const members = await listMembers(req.params.id as string)
   res.status(200).json({ members })
 }
 
@@ -19,7 +19,7 @@ export const addMemberHandler: RequestHandler = async (req, res) => {
     sendError(res, 422, 'invalid_request', 'email or role is missing or malformed.')
     return
   }
-  const member = await addMember({ workspaceId: req.params.id!, email: body.data.email, role: body.data.role })
+  const member = await addMember({ workspaceId: req.params.id as string, email: body.data.email, role: body.data.role })
   res.status(201).json(member)
 }
 
@@ -35,8 +35,8 @@ export const updateMemberHandler: RequestHandler = async (req, res) => {
     return
   }
   const result = await updateMember({
-    workspaceId: req.params.id!,
-    agentId: req.params.agentId!,
+    workspaceId: req.params.id as string,
+    agentId: req.params.agentId as string,
     role: body.data.role,
     remove: body.data.remove,
   })

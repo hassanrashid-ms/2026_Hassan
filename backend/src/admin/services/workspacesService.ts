@@ -43,7 +43,7 @@ export async function createWorkspace(args: { name: string; slug: string }): Pro
       .values({ name: args.name, slug: args.slug })
       .returning({ id: workspace.id, name: workspace.name, slug: workspace.slug, createdAt: workspace.createdAt })
     if (!row) throw new Error('workspace insert returned nothing')
-    return { ...row, member_count: 0 }
+    return { id: row.id, name: row.name, slug: row.slug, created_at: row.createdAt, member_count: 0 }
   } catch (error) {
     // Postgres unique_violation
     if (error && typeof error === 'object') {
@@ -66,9 +66,9 @@ export async function renameWorkspace(id: string, name: string): Promise<Workspa
     .returning({ id: workspace.id, name: workspace.name, slug: workspace.slug, createdAt: workspace.createdAt })
   if (!row) return null
 
-  const [{ memberCount }] = await adminDb
+  const result = await adminDb
     .select({ memberCount: count(workspaceMember.id) })
     .from(workspaceMember)
     .where(eq(workspaceMember.workspaceId, id))
-  return { ...row, member_count: memberCount }
+  return { id: row.id, name: row.name, slug: row.slug, created_at: row.createdAt, member_count: result[0]!.memberCount }
 }

@@ -43,7 +43,7 @@ export const renameWorkspaceHandler: RequestHandler = async (req, res) => {
     sendError(res, 422, 'invalid_request', 'name is missing or malformed.')
     return
   }
-  const updated = await renameWorkspace(req.params.id!, body.data.name)
+  const updated = await renameWorkspace(req.params.id as string, body.data.name)
   if (!updated) {
     sendError(res, 404, 'not_found', 'Workspace not found.')
     return

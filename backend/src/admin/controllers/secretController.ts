@@ -6,16 +6,16 @@ import { workspace } from '../../shared/db/schema/index.ts'
 import { getSecretMetadata, rotateSecret } from '../services/secretService.ts'
 
 export const getSecretHandler: RequestHandler = async (req, res) => {
-  const metadata = await getSecretMetadata(req.params.id!)
+  const metadata = await getSecretMetadata(req.params.id as string)
   res.status(200).json({ secrets: metadata })
 }
 
 export const rotateSecretHandler: RequestHandler = async (req, res) => {
-  const [ws] = await adminDb.select({ slug: workspace.slug }).from(workspace).where(eq(workspace.id, req.params.id!)).limit(1)
+  const [ws] = await adminDb.select({ slug: workspace.slug }).from(workspace).where(eq(workspace.id, req.params.id as string)).limit(1)
   if (!ws) {
     sendError(res, 404, 'not_found', 'Workspace not found.')
     return
   }
-  const rotated = await rotateSecret(req.params.id!, ws.slug)
+  const rotated = await rotateSecret(req.params.id as string, ws.slug)
   res.status(201).json(rotated)
 }
