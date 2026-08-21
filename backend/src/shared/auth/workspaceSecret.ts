@@ -44,3 +44,8 @@ export function secretMatches(raw: string, storedHash: string): boolean {
   if (candidate.length !== stored.length) return false
   return timingSafeEqual(candidate, stored)
 }
+
+/** True if `raw` matches ANY of the given hashes — used when a grace-window rotation leaves two active secrets. */
+export function secretMatchesAny(raw: string, hashes: readonly string[]): boolean {
+  return hashes.some((hash) => secretMatches(raw, hash))
+}

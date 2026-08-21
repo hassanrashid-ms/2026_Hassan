@@ -1,12 +1,12 @@
 import { Router } from 'express'
 import { PlayerTokenRequest, type PlayerTokenResponse } from '@support/types'
-import { and, eq, sql } from 'drizzle-orm'
+import { and, eq, gt, isNull, or, sql } from 'drizzle-orm'
 import { getEnv } from '../../env.ts'
 import { sendError } from '../../errors.ts'
-import { player, workspace } from '../db/schema/index.ts'
+import { player, workspace, workspaceSecret } from '../db/schema/index.ts'
 import { withWorkspace, withoutWorkspace } from '../db/withWorkspace.ts'
 import { signPlayerToken } from './playerToken.ts'
-import { parseWorkspaceSecret, secretMatches } from './workspaceSecret.ts'
+import { parseWorkspaceSecret, secretMatchesAny } from './workspaceSecret.ts'
 
 export const playerTokenRouter = Router()
 
@@ -33,17 +33,34 @@ playerTokenRouter.post('/player-token', async (req, res) => {
 
   const [found] = await withoutWorkspace(async (tx) =>
     tx
-      .select({ id: workspace.id, secretHash: workspace.secretHash, disabledAt: workspace.disabledAt })
+      .select({ id: workspace.id, disabledAt: workspace.disabledAt })
       .from(workspace)
       .where(eq(workspace.slug, parsed.slug))
       .limit(1),
   )
 
+  const activeHashes = found
+    ? (
+        await withWorkspace(found.id, (tx) =>
+          tx
+            .select({ secretHash: workspaceSecret.secretHash })
+            .from(workspaceSecret)
+            .where(
+              and(
+                eq(workspaceSecret.workspaceId, found.id),
+                isNull(workspaceSecret.revokedAt),
+                or(isNull(workspaceSecret.expiresAt), gt(workspaceSecret.expiresAt, new Date())),
+              ),
+            ),
+        )
+      ).map((row) => row.secretHash)
+    : []
+
   // Unknown and disabled are both 404, per the wire contract. The slug itself is not
   // a secret — it travels in the X-Support-Workspace header on every SDK request —
   // so a 404 revealing "no such slug" is accepted deliberately: a game backend
   // operator needs 404 to mean "you typed the slug wrong".
-  if (!found || !secretMatches(parsed.raw, found.secretHash)) {
+  if (!found || !secretMatchesAny(parsed.raw, activeHashes)) {
     sendError(
       res,
       found ? 401 : 404,

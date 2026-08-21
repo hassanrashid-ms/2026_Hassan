@@ -7,7 +7,7 @@ import { withWorkspace } from '../src/shared/db/withWorkspace.ts'
 import { player } from '../src/shared/db/schema/index.ts'
 import { generateWorkspaceSecret } from '../src/shared/auth/workspaceSecret.ts'
 import { verifyPlayerToken } from '../src/shared/auth/playerToken.ts'
-import { closeOwnerPool, seedWorkspace, truncateAll } from './helpers/db.ts'
+import { closeOwnerPool, seedWorkspace, seedWorkspaceSecret, truncateAll } from './helpers/db.ts'
 
 const app = createApp()
 
@@ -20,7 +20,8 @@ beforeEach(truncateAll)
 
 async function workspaceWithSecret(slug = 'demo-game', disabledAt: Date | null = null) {
   const { secret, secretHash } = generateWorkspaceSecret(slug)
-  const id = await seedWorkspace({ slug, secretHash, disabledAt })
+  const id = await seedWorkspace({ slug, disabledAt })
+  await seedWorkspaceSecret({ workspaceId: id, secretHash })
   return { id, secret }
 }
 
