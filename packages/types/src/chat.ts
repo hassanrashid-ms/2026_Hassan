@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { PlayerFormView } from './forms.ts'
+import type { TagView } from './tags.ts'
 
 /**
  * NOT part of the frozen SDK contract — this ships with the server, same as
@@ -39,6 +40,7 @@ export type ConversationStatusValue =
   | 'escalated'
   | 'resolved'
   | 'closed'
+export type ConversationPriorityValue = 'p1' | 'p2' | 'p3' | 'p4'
 
 export type PlayerMessageView = {
   id: string
@@ -91,6 +93,17 @@ export type AgentConversationSummary = {
   confirm_phase: ConfirmPhaseValue
   last_message_preview: string | null
   last_message_at: string | null
+  /**
+   * Null for unassigned/bot-handled rows. Needed because "agentAssigned" is
+   * every agent's queue, not the viewer's own — a row appearing there says
+   * nothing about who owns it, so ownership can't be inferred from which
+   * queue bucket a row came from.
+   */
+  assigned_agent_id: string | null
+  /** Null alongside assigned_agent_id when unassigned or bot-handled. */
+  assigned_agent_name: string | null
+  priority: ConversationPriorityValue
+  tags: TagView[]
 }
 export type AgentConversationsResponse = { conversations: AgentConversationSummary[] }
 

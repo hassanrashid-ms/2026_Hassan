@@ -1,10 +1,11 @@
 import { and, desc, eq, inArray, isNull, isNotNull } from 'drizzle-orm'
 import type { AgentConversationSummary, AgentMessageView } from '@support/types'
-import { toAgentView } from '../../domain/conversations/index.ts'
+import { postMessage, toAgentView, type PostedMessageRow } from '../../domain/conversations/index.ts'
 import { appendEvent } from '../../shared/events/appendEvent.ts'
 import { agent, conversation, message, player } from '../../shared/db/schema/index.ts'
-import { withWorkspace } from '../../shared/db/withWorkspace.ts'
+import { withWorkspace, type Tx } from '../../shared/db/withWorkspace.ts'
 import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts'
+import { getConversationTags } from './tagsService.ts'
 
 export type ConversationsFilter = 'unassigned' | 'mine' | 'agentAssigned' | 'botHandling' | 'escalated'
 
@@ -17,9 +18,18 @@ const UNASSIGNED_STATUSES: (typeof conversation.status.enumValues)[number][] = [
 export async function listConversations(ctx: AgentContext, filter: ConversationsFilter): Promise<AgentConversationSummary[]> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
     const rows = await tx
-      .select({ id: conversation.id, status: conversation.status, externalPlayerId: player.externalId, confirmPhase: conversation.confirmPhase })
+      .select({
+        id: conversation.id,
+        status: conversation.status,
+        externalPlayerId: player.externalId,
+        confirmPhase: conversation.confirmPhase,
+        assignedAgentId: conversation.assignedAgentId,
+        assignedAgentName: agent.displayName,
+        priority: conversation.priority,
+      })
       .from(conversation)
       .innerJoin(player, eq(player.id, conversation.playerId))
+      .leftJoin(agent, eq(agent.id, conversation.assignedAgentId))
       .where(
         and(
           filter === 'mine'
@@ -46,6 +56,7 @@ export async function listConversations(ctx: AgentContext, filter: Conversations
         .where(eq(message.conversationId, row.id))
         .orderBy(desc(message.seq))
         .limit(1)
+      const tags = await getConversationTags(tx, row.id)
 
       summaries.push({
         id: row.id,
@@ -54,13 +65,37 @@ export async function listConversations(ctx: AgentContext, filter: Conversations
         confirm_phase: row.confirmPhase,
         last_message_preview: last?.body ?? null,
         last_message_at: last?.createdAt.toISOString() ?? null,
+        assigned_agent_id: row.assignedAgentId,
+        assigned_agent_name: row.assignedAgentName,
+        priority: row.priority,
+        tags,
       })
     }
     return summaries
   })
 }
 
-export type ClaimResult = { claimed: boolean; status: string | null }
+export type ClaimResult = { claimed: boolean; status: string | null; posted: PostedMessageRow | null }
+export type TakeOverResult = ClaimResult
+
+// Shared by claimConversation and takeOverConversation: both are the same
+// player-invisible fact ("this ticket now belongs to a different agent, or an
+// agent at all"), regardless of whether the previous owner was the bot,
+// nobody, or another agent — a second agent who already has the ticket open
+// only learns about the reassignment through this message, since neither
+// `conversation:changed` nor the status prop reaches an already-open thread
+// panel.
+async function postTakenOverNotice(tx: Tx, ctx: AgentContext, conversationId: string): Promise<PostedMessageRow> {
+  const [actor] = await tx.select({ displayName: agent.displayName }).from(agent).where(eq(agent.id, ctx.agentId)).limit(1)
+  return postMessage(tx, {
+    workspaceId: ctx.workspaceId,
+    conversationId,
+    authorType: 'system',
+    actorId: null,
+    body: `Chat taken over by ${actor?.displayName ?? 'an agent'}.`,
+    visibility: 'internal',
+  })
+}
 
 export async function claimConversation(ctx: AgentContext, conversationId: string): Promise<ClaimResult> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
@@ -72,7 +107,7 @@ export async function claimConversation(ctx: AgentContext, conversationId: strin
       .where(and(eq(conversation.id, conversationId), inArray(conversation.status, ACTIVE_AGENT_STATUSES)))
       .returning({ id: conversation.id, status: conversation.status })
     const [row] = claimed
-    if (!row) return { claimed: false, status: null }
+    if (!row) return { claimed: false, status: null, posted: null }
 
     // Guarded by the same `claimed` check as the update, so a losing racer
     // writes nothing. `via` leaves room for a future auto-assignment path to
@@ -86,19 +121,20 @@ export async function claimConversation(ctx: AgentContext, conversationId: strin
       actorType: 'agent',
       payload: { agent_id: ctx.agentId, via: 'claim' },
     })
-    return { claimed: true, status: row.status }
+    const posted = await postTakenOverNotice(tx, ctx, conversationId)
+    return { claimed: true, status: row.status, posted }
   })
 }
 
 /** Atomically moves a bot-owned ticket into the acting agent's queue. */
-export async function takeOverConversation(ctx: AgentContext, conversationId: string): Promise<ClaimResult> {
+export async function takeOverConversation(ctx: AgentContext, conversationId: string): Promise<TakeOverResult> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
     const [row] = await tx
       .update(conversation)
       .set({ assignedAgentId: ctx.agentId, status: 'open', confirmPhase: 'none' })
       .where(and(eq(conversation.id, conversationId), isNull(conversation.assignedAgentId), eq(conversation.status, 'bot_active')))
       .returning({ id: conversation.id, status: conversation.status })
-    if (!row) return { claimed: false, status: null }
+    if (!row) return { claimed: false, status: null, posted: null }
 
     await appendEvent(tx, {
       workspaceId: ctx.workspaceId,
@@ -108,7 +144,9 @@ export async function takeOverConversation(ctx: AgentContext, conversationId: st
       actorType: 'agent',
       payload: { agent_id: ctx.agentId, from_status: 'bot_active', to_status: 'open' },
     })
-    return { claimed: true, status: row.status }
+
+    const posted = await postTakenOverNotice(tx, ctx, conversationId)
+    return { claimed: true, status: row.status, posted }
   })
 }
 

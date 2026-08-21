@@ -31,7 +31,16 @@ export const takeOverConversationHandler: RequestHandler = async (req, res) => {
     return
   }
   const result = await takeOverConversation(ctx, params.data.id)
-  if (result.claimed && result.status) emitInboxChanged(getIo(), ctx.workspaceId, params.data.id, result.status)
+  if (result.claimed && result.status) {
+    emitInboxChanged(getIo(), ctx.workspaceId, params.data.id, result.status)
+    // toPlayerView returns null for an internal message — this never reaches the player room.
+    if (result.posted) emitMessageToRooms(getIo(), params.data.id, toPlayerView(result.posted), toAgentView(result.posted))
+    // takeOverConversation always resets confirmPhase to 'none', including out from
+    // under a pending bot_article banner — without this, the player's client keeps
+    // showing "Is your issue resolved?" from stale cache, and tapping Yes/No 409s
+    // (no_check_pending) against the DB's already-'none' phase instead of clearing.
+    emitPhaseChanged(getIo(), params.data.id, { conversation_id: params.data.id, confirm_phase: 'none' })
+  }
   res.status(200).json({ taken_over: result.claimed })
 }
 
@@ -45,6 +54,8 @@ export const claimConversationHandler: RequestHandler = async (req, res) => {
   const result = await claimConversation(ctx, params.data.id)
   if (result.claimed && result.status) {
     emitInboxChanged(getIo(), ctx.workspaceId, params.data.id, result.status)
+    // toPlayerView returns null for an internal message — this never reaches the player room.
+    if (result.posted) emitMessageToRooms(getIo(), params.data.id, toPlayerView(result.posted), toAgentView(result.posted))
   }
   res.status(200).json({ claimed: result.claimed })
 }

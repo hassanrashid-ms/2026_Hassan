@@ -42,6 +42,10 @@ const UNASSIGNED_CONVERSATION = {
   confirm_phase: 'none' as const,
   last_message_preview: 'Help, my purchase failed',
   last_message_at: '2026-08-10T12:00:00Z',
+  assigned_agent_id: null,
+  assigned_agent_name: null,
+  priority: 'p3' as const,
+  tags: [],
 }
 
 beforeEach(() => {

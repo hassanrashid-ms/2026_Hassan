@@ -1,13 +1,13 @@
-import { useEffect, useMemo } from 'react'
-import type { AgentConversationsResponse, ConversationStatusValue } from '@support/types'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect } from 'react'
+import type { ConversationStatusValue } from '@support/types'
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
-import { claimConversation, fetchConversation, fetchInbox, type ConversationListFilter } from '../../api/agentApi.ts'
+import { claimConversation, fetchInbox, type ConversationListFilter } from '../../api/agentApi.ts'
 import { loadAgentSession } from '../../lib/agentSession.ts'
 import { createSocket } from '../../../../features/chat/api/socket.ts'
 import { handleSessionExpired } from '../../lib/authErrorHandling.ts'
+import { ConversationDetailPane } from '../../components/ConversationDetailPane.tsx'
 import { ConversationRow } from '../Inbox/components/ConversationRow.tsx'
-import { ThreadPanel } from '../Inbox/components/ThreadPanel.tsx'
 
 const COLUMNS: { title: string; filter: ConversationListFilter; claimable?: boolean }[] = [
   { title: 'Unassigned', filter: 'unassigned', claimable: true },
@@ -23,6 +23,7 @@ function QueueColumn({ token, title, filter, claimable = false, onSelect }: { to
     mutationFn: (conversationId: string) => claimConversation(token, conversationId),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['tickets'] }),
   })
+  if (queue.data && queue.data.conversations.length === 0) return null
   return (
     <section className="flex h-[calc(100vh-12rem)] min-h-0 flex-col rounded-card border border-slate-200 bg-surface">
       <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-3 py-2">
@@ -51,11 +52,6 @@ export function Tickets() {
   const navigate = useNavigate()
   const session = loadAgentSession()
   const queryClient = useQueryClient()
-  const detail = useQuery({
-    queryKey: ['conversation', conversationId, 'detail'],
-    queryFn: () => fetchConversation(session!.token, conversationId!),
-    enabled: session !== null && conversationId != null,
-  })
 
   useEffect(() => {
     if (!session) return
@@ -63,56 +59,52 @@ export function Tickets() {
     socket.on('connect_error', (error) => {
       if (error.message === 'unauthorized') handleSessionExpired()
     })
-    socket.on('conversation:changed', (payload: { status?: unknown }) => {
+    socket.on('conversation:changed', (payload: { conversation_id?: unknown; status?: unknown }) => {
       const status = payload.status as ConversationStatusValue | undefined
       const filters: ConversationListFilter[] = status === 'bot_active' ? ['botHandling'] : ['unassigned', 'agentAssigned', 'escalated']
       for (const filter of filters) void queryClient.invalidateQueries({ queryKey: ['tickets', filter] })
+      // The moved conversation's own detail query — read by ConversationDetailPane
+      // whenever the row is no longer in any of the four queue columns (eg. taken
+      // over into "mine", which has no column here) — must also refresh, or a
+      // second agent already looking at this exact ticket never sees the
+      // take-over without a reload.
+      const changedId = payload.conversation_id
+      if (typeof changedId === 'string') void queryClient.invalidateQueries({ queryKey: ['conversation', changedId, 'detail'] })
     })
     return () => {
       socket.close()
     }
   }, [session, queryClient])
 
-  const selected = useMemo(() => {
+  // Reactive, unlike a one-shot `queryClient.getQueryData` read: each column's
+  // own useQuery below shares this cache entry, so a socket-driven
+  // invalidate-and-refetch above needs `summary` to recompute when that data
+  // changes, not just when `conversationId` changes.
+  const queueQueries = useQueries({
+    queries: COLUMNS.map(({ filter }) => ({
+      queryKey: ['tickets', filter],
+      queryFn: () => fetchInbox(session!.token, filter),
+      enabled: session !== null,
+    })),
+  })
+
+  const summary = (() => {
     if (!conversationId) return undefined
-    for (const { filter } of COLUMNS) {
-      const data = queryClient.getQueryData<AgentConversationsResponse>(['tickets', filter])
-      const found = data?.conversations.find((conversation) => conversation.id === conversationId)
-      if (found) return { summary: found, filter }
+    for (const query of queueQueries) {
+      const found = query.data?.conversations.find((conversation) => conversation.id === conversationId)
+      if (found) return found
     }
     return undefined
-  }, [conversationId, queryClient])
+  })()
 
   if (!session) return null
   if (conversationId) {
-    const status = selected?.summary.status ?? detail.data?.status
-    
-    // Determine ownership immediately if we found it in a strictly filtered queue
-    let isOwnedByMe = false
-    if (selected?.filter === 'mine') isOwnedByMe = true
-    else if (selected?.filter === 'unassigned' || selected?.filter === 'agentAssigned' || selected?.filter === 'botHandling') isOwnedByMe = false
-    else if (detail.isSuccess) isOwnedByMe = detail.data?.assigned_agent?.id === session.agentId
-
     return (
-      <ThreadPanel
+      <ConversationDetailPane
         token={session.token}
+        agentId={session.agentId}
         conversationId={conversationId}
-        playerExternalId={selected?.summary.player.external_player_id ?? detail.data?.player.external_player_id}
-        status={status}
-        confirmPhase={selected?.summary.confirm_phase}
-        readOnly={status === 'resolved' || status === 'closed'}
-        ticketNumber={detail.data?.number}
-        resolutionSource={detail.data?.resolution_source}
-        resolvedByAgentName={detail.data?.resolved_by_agent_name}
-        openedAt={detail.data?.created_at}
-        takeOverAvailable={status === 'bot_active'}
-        claimAvailable={
-          !!status &&
-          status !== 'resolved' &&
-          status !== 'closed' &&
-          status !== 'bot_active' &&
-          !isOwnedByMe
-        }
+        summary={summary}
         onBack={() => navigate('/tickets')}
       />
     )
@@ -124,7 +116,7 @@ export function Tickets() {
         <h1 className="text-lg font-semibold">Tickets</h1>
         <p className="text-sm text-muted">All active queues at a glance</p>
       </div>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {COLUMNS.map(({ title, filter, claimable }) => (
           <QueueColumn key={filter} token={session.token} title={title} filter={filter} claimable={claimable} onSelect={(id) => navigate(`/tickets/${id}`)} />
         ))}

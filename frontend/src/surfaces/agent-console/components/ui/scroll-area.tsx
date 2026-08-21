@@ -5,7 +5,16 @@ import { cn } from '../../lib/cn.ts'
 function ScrollArea({ className, children, ...props }: React.ComponentProps<typeof ScrollAreaPrimitive.Root>) {
   return (
     <ScrollAreaPrimitive.Root className={cn('relative overflow-hidden', className)} {...props}>
-      <ScrollAreaPrimitive.Viewport className="size-full rounded-[inherit]">{children}</ScrollAreaPrimitive.Viewport>
+      {/* Radix injects an internal div with `display: table; min-width: 100%`
+          around children to measure content size for the scrollbar thumb.
+          Table layout shrink-to-fits, so non-shrinking content (e.g. a
+          `shrink-0` badge cluster) stretches that wrapper wider than the
+          viewport instead of wrapping/truncating, and with only a vertical
+          scrollbar rendered the excess width is silently clipped. Forcing it
+          back to block layout restores normal width constraints. */}
+      <ScrollAreaPrimitive.Viewport className="size-full rounded-[inherit] [&>div]:!block">
+        {children}
+      </ScrollAreaPrimitive.Viewport>
       <ScrollBar />
       <ScrollAreaPrimitive.Corner />
     </ScrollAreaPrimitive.Root>

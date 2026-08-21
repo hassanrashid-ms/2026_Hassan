@@ -36,6 +36,9 @@ export function TagPicker({
 
   const invalidateContext = () => {
     void queryClient.invalidateQueries({ queryKey: ['conversation', conversationId, 'context'] })
+    // Tag attach has no socket event (unlike status changes), so the inbox
+    // row's tags are otherwise only refreshed by a full page reload.
+    void queryClient.invalidateQueries({ queryKey: ['inbox'] })
   }
 
   const attach = useMutation({

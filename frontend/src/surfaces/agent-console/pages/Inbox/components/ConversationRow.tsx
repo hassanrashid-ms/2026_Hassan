@@ -1,7 +1,8 @@
-import type { AgentConversationSummary, ConversationStatusValue } from '@support/types'
+import type { AgentConversationSummary, ConversationPriorityValue, ConversationStatusValue } from '@support/types'
 import { Badge } from '../../../components/ui/badge.tsx'
 import { Button } from '../../../components/ui/button.tsx'
 import { cn } from '../../../lib/cn.ts'
+import { tagBadgeClassName } from '../../../lib/tagBadge.ts'
 
 export const STATUS_BADGE_VARIANT: Record<
   ConversationStatusValue,
@@ -15,6 +16,25 @@ export const STATUS_BADGE_VARIANT: Record<
   resolved: 'success',
   closed: 'secondary',
 }
+
+export const PRIORITY_BADGE_VARIANT: Record<ConversationPriorityValue, 'default' | 'secondary' | 'warning' | 'destructive'> = {
+  p1: 'destructive',
+  p2: 'warning',
+  p3: 'secondary',
+  p4: 'secondary',
+}
+
+export function formatStatus(status: ConversationStatusValue): string {
+  return status
+    .split('_')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
+}
+
+// A queue row is a glance, not the full header — only the first few tags fit
+// before they crowd out the message preview, and the rest are one click away
+// in the conversation detail view.
+const MAX_VISIBLE_TAGS = 3
 
 function relativeTime(iso: string | null): string {
   if (!iso) return ''
@@ -54,21 +74,41 @@ export function ConversationRow({
         selected ? 'bg-accent-soft' : 'hover:bg-accent-soft/50',
       )}
     >
-      <div className="flex items-center justify-between gap-2">
-        <span className="truncate text-sm font-medium">{conversation.player.external_player_id}</span>
-        <span className="flex shrink-0 items-center gap-1.5">
+      <div className="flex items-start justify-between gap-2">
+        <span className="min-w-0 flex-1 truncate text-sm font-medium">{conversation.player.external_player_id}</span>
+        <span className="flex max-w-[70%] flex-none flex-wrap items-center justify-end gap-1.5 overflow-hidden">
           {/* No new data: confirm_phase already rides on the summary. A
               bot_active ticket sits in the unassigned queue, so without this a
               half-filled form reads as a stuck ticket. */}
           {conversation.confirm_phase === 'form' && (
-            <span className="text-xs text-muted">Answering questions</span>
+            <span className="max-w-[110px] truncate text-xs text-muted">Answering questions</span>
           )}
-          <Badge variant={STATUS_BADGE_VARIANT[conversation.status]}>{conversation.status}</Badge>
+          <Badge variant={PRIORITY_BADGE_VARIANT[conversation.priority]} className="max-w-16 truncate">
+            {conversation.priority.toUpperCase()}
+          </Badge>
+          <Badge variant={STATUS_BADGE_VARIANT[conversation.status]} className="max-w-28 truncate">
+            {formatStatus(conversation.status)}
+          </Badge>
         </span>
       </div>
       <div className="flex items-center justify-between gap-2">
-        <span className="truncate text-xs text-muted">{conversation.last_message_preview ?? '(no messages)'}</span>
+        <span className="min-w-0 flex-1 truncate text-xs text-muted">{conversation.last_message_preview ?? '(no messages)'}</span>
         <span className="shrink-0 text-xs text-muted">{relativeTime(conversation.last_message_at)}</span>
+      </div>
+      <div className="flex items-start justify-between gap-2">
+        <span className="min-w-0 flex-1 truncate text-xs text-muted">{conversation.assigned_agent_name ?? 'Unassigned'}</span>
+        {conversation.tags.length > 0 && (
+          <span className="flex max-w-[70%] flex-none flex-wrap items-center justify-end gap-1 overflow-hidden">
+            {conversation.tags.slice(0, MAX_VISIBLE_TAGS).map((tag) => (
+              <Badge key={tag.id} className={cn("max-w-20 truncate", tagBadgeClassName(tag.colorIndex))}>
+                {tag.name}
+              </Badge>
+            ))}
+            {conversation.tags.length > MAX_VISIBLE_TAGS && (
+              <span className="text-xs text-muted shrink-0">+{conversation.tags.length - MAX_VISIBLE_TAGS}</span>
+            )}
+          </span>
+        )}
       </div>
       {onClaim && (
         <Button
