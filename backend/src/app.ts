@@ -9,6 +9,7 @@ import swaggerUi from 'swagger-ui-express'
 import { openApiDocument } from './docs/openapi.ts'
 import { sdkRouter } from './sdk/router.ts'
 import { surfaceRouter } from './surface/router.ts'
+import { adminRouter } from './admin/router.ts'
 
 export function createApp(): express.Express {
   const app = express()
@@ -47,6 +48,7 @@ export function createApp(): express.Express {
   app.use('/sdk', sdkRouter)
   app.use('/surface', surfaceRouter)
   app.use('/agent', agentRouter)
+  app.use('/admin', adminRouter)
 
   app.use(errorMiddleware)
   return app

@@ -95,6 +95,66 @@ const SdkHeadersSchema = z.object({
   'idempotency-key': z.string().optional().openapi({ description: 'Idempotency UUID' }),
 })
 
+// Admin Schemas
+const WorkspaceSummarySchema = z.object({
+  id: z.uuid(),
+  name: z.string(),
+  slug: z.string(),
+  member_count: z.number().int().nonnegative(),
+  created_at: z.string(),
+})
+
+const CreateWorkspaceBodySchema = z.object({
+  name: z.string().min(1).max(200).openapi({ example: 'My New Game' }),
+  slug: z.string().min(1).max(63).openapi({ example: 'my-new-game' }),
+})
+
+const RenameWorkspaceBodySchema = z.object({ name: z.string().min(1).max(200) })
+
+const MemberSummarySchema = z.object({
+  agent_id: z.uuid(),
+  email: z.string(),
+  display_name: z.string(),
+  status: z.enum(['active', 'on_leave', 'deactivated', 'invited']),
+  role: z.enum(['agent', 'team_lead']),
+})
+
+const AddMemberBodySchema = z.object({
+  email: z.email().openapi({ example: 'new-hire@mindstormstudios.com' }),
+  role: z.enum(['agent', 'team_lead']),
+})
+
+const UpdateMemberBodySchema = z.object({
+  role: z.enum(['agent', 'team_lead']).optional(),
+  remove: z.boolean().optional(),
+})
+
+const SecretMetadataSchema = z.object({
+  created_at: z.string(),
+  expires_at: z.string().nullable(),
+})
+
+const RotatedSecretSchema = z.object({
+  secret: z.string().openapi({ description: 'Raw secret — shown exactly once.' }),
+  created_at: z.string(),
+})
+
+const AgentSummarySchema = z.object({
+  id: z.uuid(),
+  email: z.string(),
+  display_name: z.string(),
+  status: z.enum(['active', 'on_leave', 'deactivated', 'invited']),
+  is_admin: z.boolean(),
+  is_super_admin: z.boolean(),
+})
+
+const bearerAgentSession = registry.registerComponent('securitySchemes', 'AgentSessionAuth', {
+  type: 'http',
+  scheme: 'bearer',
+  bearerFormat: 'JWT',
+  description: 'Agent session JWT — the caller must additionally have agent.is_admin = true for every /admin/* route.',
+})
+
 // --- 1. AUTH ROUTES ---
 registry.registerPath({
   method: 'post',
@@ -1418,6 +1478,113 @@ registry.registerPath({
     404: { description: 'No conversation for this player' },
     409: { description: 'The current conversation is still open' },
   },
+})
+
+registry.registerPath({
+  method: 'get',
+  path: '/admin/workspaces',
+  summary: 'List All Workspaces',
+  security: [{ [bearerAgentSession.name]: [] }],
+  responses: {
+    200: {
+      description: 'Every workspace with its member count',
+      content: { 'application/json': { schema: z.object({ workspaces: z.array(WorkspaceSummarySchema) }) } },
+    },
+  },
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/admin/workspaces',
+  summary: 'Create Workspace',
+  security: [{ [bearerAgentSession.name]: [] }],
+  request: { body: { content: { 'application/json': { schema: CreateWorkspaceBodySchema } } } },
+  responses: { 201: { description: 'Workspace created', content: { 'application/json': { schema: WorkspaceSummarySchema } } } },
+})
+
+registry.registerPath({
+  method: 'patch',
+  path: '/admin/workspaces/{id}',
+  summary: 'Rename Workspace',
+  security: [{ [bearerAgentSession.name]: [] }],
+  request: { params: z.object({ id: z.uuid() }), body: { content: { 'application/json': { schema: RenameWorkspaceBodySchema } } } },
+  responses: { 200: { description: 'Workspace renamed', content: { 'application/json': { schema: WorkspaceSummarySchema } } } },
+})
+
+registry.registerPath({
+  method: 'get',
+  path: '/admin/workspaces/{id}/members',
+  summary: 'List Workspace Members',
+  security: [{ [bearerAgentSession.name]: [] }],
+  request: { params: z.object({ id: z.uuid() }) },
+  responses: { 200: { description: 'Active members', content: { 'application/json': { schema: z.object({ members: z.array(MemberSummarySchema) }) } } } },
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/admin/workspaces/{id}/members',
+  summary: 'Grant Workspace Access',
+  security: [{ [bearerAgentSession.name]: [] }],
+  request: { params: z.object({ id: z.uuid() }), body: { content: { 'application/json': { schema: AddMemberBodySchema } } } },
+  responses: { 201: { description: 'Member granted', content: { 'application/json': { schema: MemberSummarySchema } } } },
+})
+
+registry.registerPath({
+  method: 'patch',
+  path: '/admin/workspaces/{id}/members/{agentId}',
+  summary: 'Change Or Remove Member Access',
+  security: [{ [bearerAgentSession.name]: [] }],
+  request: {
+    params: z.object({ id: z.uuid(), agentId: z.uuid() }),
+    body: { content: { 'application/json': { schema: UpdateMemberBodySchema } } },
+  },
+  responses: { 200: { description: 'Member updated or removed', content: { 'application/json': { schema: MemberSummarySchema } } } },
+})
+
+registry.registerPath({
+  method: 'get',
+  path: '/admin/workspaces/{id}/secret',
+  summary: 'Get Workspace Secret Metadata',
+  security: [{ [bearerAgentSession.name]: [] }],
+  request: { params: z.object({ id: z.uuid() }) },
+  responses: { 200: { description: 'Metadata only — never the raw secret', content: { 'application/json': { schema: z.object({ secrets: z.array(SecretMetadataSchema) }) } } } },
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/admin/workspaces/{id}/secret/rotate',
+  summary: 'Rotate Workspace Secret',
+  description: 'The old secret keeps working for a 24h grace window. The raw new secret is returned exactly once, here.',
+  security: [{ [bearerAgentSession.name]: [] }],
+  request: { params: z.object({ id: z.uuid() }) },
+  responses: { 201: { description: 'New secret minted', content: { 'application/json': { schema: RotatedSecretSchema } } } },
+})
+
+registry.registerPath({
+  method: 'get',
+  path: '/admin/agents',
+  summary: 'Agent Directory',
+  security: [{ [bearerAgentSession.name]: [] }],
+  request: { query: z.object({ q: z.string().optional() }) },
+  responses: { 200: { description: 'Every agent, admin flags included', content: { 'application/json': { schema: z.object({ agents: z.array(AgentSummarySchema) }) } } } },
+})
+
+registry.registerPath({
+  method: 'patch',
+  path: '/admin/agents/{id}/admin',
+  summary: 'Grant Or Revoke Admin (super admin only)',
+  security: [{ [bearerAgentSession.name]: [] }],
+  request: { params: z.object({ id: z.uuid() }), body: { content: { 'application/json': { schema: z.object({ is_admin: z.boolean() }) } } } },
+  responses: { 200: { description: 'Flag updated', content: { 'application/json': { schema: AgentSummarySchema } } } },
+})
+
+registry.registerPath({
+  method: 'patch',
+  path: '/admin/agents/{id}/super-admin',
+  summary: 'Grant Or Revoke Super Admin (super admin only)',
+  security: [{ [bearerAgentSession.name]: [] }],
+  request: { params: z.object({ id: z.uuid() }), body: { content: { 'application/json': { schema: z.object({ is_super_admin: z.boolean() }) } } } },
+  responses: { 200: { description: 'Flag updated', content: { 'application/json': { schema: AgentSummarySchema } } } },
 })
 
 // Build Document
