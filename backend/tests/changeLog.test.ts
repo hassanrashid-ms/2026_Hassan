@@ -269,7 +269,7 @@ describe('saveBotConfig writes its own audit trail', () => {
     )
     const written = await rows()
     expect(written.map((r) => r.field)).toEqual(['is_provisioned', 'prompt', 'rules'])
-    expect(written.map((r) => r.before_value)).toEqual([false, null, null])
+    expect(written.map((r) => r.before_value)).toEqual([false, DEFAULT_BOT_PROMPT, buildBaselineRules()])
     expect(written[0]?.after_value).toBe(true)
     expect(written[1]?.after_value).toBe('be helpful')
     expect(written[2]?.after_value).toEqual(rulesWithFirstTextChangedTo('be careful'))
