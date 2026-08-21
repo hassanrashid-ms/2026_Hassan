@@ -43,7 +43,6 @@ export function TicketsFilterBar({
     if (searchInput === filters.q) return
     const timer = setTimeout(() => onChange({ q: searchInput }), SEARCH_DEBOUNCE_MS)
     return () => clearTimeout(timer)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchInput])
 
   const tagsQuery = useQuery({ queryKey: ['tags', ''], queryFn: () => fetchTags(token) })

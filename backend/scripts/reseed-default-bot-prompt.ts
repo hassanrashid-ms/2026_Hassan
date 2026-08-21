@@ -105,7 +105,7 @@ async function main() {
     for (const { id: workspaceId } of workspaces) {
       await withWorkspace(workspaceId, async (tx) => {
         const [row] = await tx.select({ prompt: botConfig.prompt }).from(botConfig).where(eq(botConfig.workspaceId, workspaceId)).limit(1)
-        if (!row || row.prompt !== OLD_DEFAULT_BOT_PROMPT || row.prompt === DEFAULT_BOT_PROMPT) return
+        if (!row || row.prompt !== OLD_DEFAULT_BOT_PROMPT) return
 
         staleCount++
         const actorId = await getOrCreateSystemActor(tx)

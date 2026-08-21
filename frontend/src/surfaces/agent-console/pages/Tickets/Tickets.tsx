@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ConversationStatusValue } from '@support/types'
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
@@ -59,9 +59,29 @@ function QueueColumn({
     mutationFn: (conversationId: string) => claimConversation(token, conversationId),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['tickets'] }),
   })
+  
+  const sectionRef = useRef<HTMLElement>(null)
+  const [height] = useState(() => localStorage.getItem(`queueHeight_${filter}`) || '400px')
+
+  useEffect(() => {
+    const el = sectionRef.current
+    if (!el) return
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        localStorage.setItem(`queueHeight_${filter}`, `${entry.contentRect.height}px`)
+      }
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [filter])
+
   if (queue.data && queue.data.conversations.length === 0 && !filtersActive) return null
   return (
-    <section className="flex h-[calc(100vh-12rem)] min-h-0 flex-col rounded-card border border-slate-200 bg-surface">
+    <section 
+      ref={sectionRef}
+      style={{ height }}
+      className="flex min-h-0 flex-col rounded-card border border-slate-200 bg-surface resize-y overflow-hidden pb-1"
+    >
       <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-3 py-2">
         <h2 className="text-sm font-semibold">{title}</h2>
         <span className="text-xs text-muted">{queue.data?.conversations.length ?? 0}</span>
