@@ -1,0 +1,48 @@
+import { describe, expect, it, vi } from 'vitest'
+import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { TicketsFilterBar } from './TicketsFilterBar.tsx'
+import * as agentApi from '../../api/agentApi.ts'
+
+vi.mock('../../api/agentApi.ts')
+
+const EMPTY_FILTERS = { q: '', priority: [], labelIds: [], subintentIds: [], assigneeIds: [], olderThanHours: '' }
+
+function renderBar(onChange = vi.fn()) {
+  vi.mocked(agentApi.fetchTags).mockResolvedValue([])
+  vi.mocked(agentApi.fetchIntents).mockResolvedValue({ intents: [] })
+  vi.mocked(agentApi.fetchWorkspaceAgents).mockResolvedValue({ agents: [] })
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return {
+    onChange,
+    ...render(
+      <QueryClientProvider client={queryClient}>
+        <TicketsFilterBar token="t" filters={EMPTY_FILTERS} onChange={onChange} />
+      </QueryClientProvider>,
+    ),
+  }
+}
+
+describe('TicketsFilterBar', () => {
+  it('renders a Priority filter control', () => {
+    renderBar()
+    expect(screen.getByRole('button', { name: /Priority/ })).toBeInTheDocument()
+  })
+
+  it('debounces search input before calling onChange', async () => {
+    const { onChange } = renderBar()
+    await userEvent.type(screen.getByPlaceholderText(/Search/i), 'refund')
+
+    expect(onChange).not.toHaveBeenCalled()
+    await waitFor(() => expect(onChange).toHaveBeenCalledWith({ q: 'refund' }), { timeout: 1000 })
+  })
+
+  it('toggling the Priority p1 option calls onChange with the selection', async () => {
+    const { onChange } = renderBar()
+    await userEvent.click(screen.getByRole('button', { name: /Priority/ }))
+    await userEvent.click(await screen.findByText('P1'))
+
+    expect(onChange).toHaveBeenCalledWith({ priority: ['p1'] })
+  })
+})
