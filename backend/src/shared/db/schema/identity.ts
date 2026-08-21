@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm'
-import { customType, integer, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
+import { boolean, customType, integer, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
 import { agentStatus, workspaceRole } from './enums.ts'
 
 /** Case-insensitive email, per the schema spec. Requires the citext extension. */
@@ -47,6 +47,10 @@ export const agent = pgTable('agent', {
   googleSubject: text('google_subject').unique(),
   displayName: text('display_name').notNull(),
   status: agentStatus('status').notNull().default('active'),
+  /** Global: grants access to every workspace. Only a super admin may toggle this. See requireAdminRole. */
+  isAdmin: boolean('is_admin').notNull().default(false),
+  /** Global: may toggle isAdmin/isSuperAdmin on any agent. */
+  isSuperAdmin: boolean('is_super_admin').notNull().default(false),
   createdAt: timestamp('created_at', tz).notNull().defaultNow(),
 })
 

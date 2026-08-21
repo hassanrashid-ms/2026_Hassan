@@ -72,6 +72,12 @@ describe('schema', () => {
     expect(cols.get('disabled_at')?.nullable).toBe(true)
   })
 
+  it('gives agent the two global admin flags, both defaulting false', async () => {
+    const cols = await columns('agent')
+    expect(cols.get('is_admin')?.nullable).toBe(false)
+    expect(cols.get('is_super_admin')?.nullable).toBe(false)
+  })
+
   it('stores the snapshot split as two jsonb columns keyed to the session', async () => {
     const cols = await columns('player_state_snapshot')
     expect(cols.get('declared')?.type).toBe('jsonb')
