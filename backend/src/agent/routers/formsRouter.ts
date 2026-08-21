@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { requireAdminRole } from '../../shared/middleware/requireAdminRole.ts'
-import { requireWorkspaceRole } from '../../shared/middleware/requireWorkspaceRole.ts'
+import { requireTeamLeadOrAdmin } from '../../shared/middleware/requireTeamLeadOrAdmin.ts'
 import {
   archiveFormHandler,
   createFormHandler,
@@ -11,7 +11,7 @@ import {
   updateFormHandler,
 } from '../controllers/formsController.ts'
 
-const canBuildForms = requireWorkspaceRole('team_lead', 'admin')
+const canBuildForms = requireTeamLeadOrAdmin
 
 export const formsRouter = Router()
 formsRouter.get('/forms', canBuildForms, listFormsHandler)

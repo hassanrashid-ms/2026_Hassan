@@ -4,7 +4,7 @@ import { sendError } from '../../errors.ts'
 import { workspaceMember } from '../db/schema/index.ts'
 import { withWorkspace } from '../db/withWorkspace.ts'
 
-export type WorkspaceRole = 'agent' | 'team_lead' | 'admin'
+export type WorkspaceRole = 'agent' | 'team_lead'
 
 /**
  * Gates a route on a SET of workspace roles, per the permission matrix in

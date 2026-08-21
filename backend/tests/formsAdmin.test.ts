@@ -51,15 +51,17 @@ async function seedAgentWithRole(
   role: 'agent' | 'team_lead' | 'admin',
 ): Promise<{ agentId: string; token: string; ctx: AgentContext }> {
   const { rows } = await ownerPool.query<{ id: string }>(
-    `insert into agent (email, display_name) values ($1, 'Test Agent') returning id`,
-    [`${role}-${Math.random().toString(36).slice(2)}@example.test`],
+    `insert into agent (email, display_name, is_admin) values ($1, 'Test Agent', $2) returning id`,
+    [`${role}-${Math.random().toString(36).slice(2)}@example.test`, role === 'admin'],
   )
   const agentId = rows[0]!.id
-  await ownerPool.query(`insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, $3)`, [
-    workspaceId,
-    agentId,
-    role,
-  ])
+  if (role !== 'admin') {
+    await ownerPool.query(`insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, $3)`, [
+      workspaceId,
+      agentId,
+      role,
+    ])
+  }
   const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId })
   return { agentId, token, ctx: { agentId, workspaceId } }
 }

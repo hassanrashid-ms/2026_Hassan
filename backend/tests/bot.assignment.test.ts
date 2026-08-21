@@ -79,13 +79,23 @@ describe('assignOnHandoff', () => {
     expect(result).toBe(active)
   })
 
-  it('includes admins and team leads', async () => {
+  it('includes team leads', async () => {
     const workspaceId = await seedWorkspace()
-    const admin = await seedAgent()
-    await seedWorkspaceMember({ workspaceId, agentId: admin, role: 'admin' })
+    const lead = await seedAgent()
+    await seedWorkspaceMember({ workspaceId, agentId: lead, role: 'team_lead' })
 
     const result = await withWorkspace(workspaceId, (tx) => assignOnHandoff(tx, workspaceId))
-    expect(result).toBe(admin)
+    expect(result).toBe(lead)
+  })
+
+  it('never assigns a global admin, who holds no workspace_member row', async () => {
+    const workspaceId = await seedWorkspace()
+    const admin = await seedAgent(undefined, { isAdmin: true })
+    const active = await seedAgent()
+    await seedWorkspaceMember({ workspaceId, agentId: active })
+
+    const result = await withWorkspace(workspaceId, (tx) => assignOnHandoff(tx, workspaceId))
+    expect(result).toBe(active)
   })
 
   it('returns null, not an error, when no active agent exists', async () => {

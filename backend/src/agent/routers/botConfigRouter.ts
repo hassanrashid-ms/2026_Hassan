@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { requireAdminRole } from '../../shared/middleware/requireAdminRole.ts'
-import { requireWorkspaceRole } from '../../shared/middleware/requireWorkspaceRole.ts'
+import { requireTeamLeadOrAdmin } from '../../shared/middleware/requireTeamLeadOrAdmin.ts'
 import {
   getBotConfigHandler,
   getBotConfigHistoryHandler,
@@ -22,7 +22,7 @@ import {
  * Save is POST, not PUT/PATCH: app.ts's CORS allows only GET and POST, and the
  * console is a browser client.
  */
-const canSeeBotConfig = requireWorkspaceRole('team_lead', 'admin')
+const canSeeBotConfig = requireTeamLeadOrAdmin
 
 export const botConfigRouter = Router()
 botConfigRouter.get('/bot-config', canSeeBotConfig, getBotConfigHandler)
