@@ -92,6 +92,13 @@
       "when": 1787297689300,
       "tag": "0012_busy_blazing_skull",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1787297770376,
+      "tag": "0013_migrate_admin_role",
+      "breakpoints": true
     }
   ]
 }

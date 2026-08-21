@@ -2,7 +2,7 @@ import { pgEnum } from 'drizzle-orm/pg-core'
 
 // Closed sets, per the schema spec: "an invalid status becomes impossible, not merely untested".
 export const agentStatus = pgEnum('agent_status', ['active', 'on_leave', 'deactivated', 'invited'])
-export const workspaceRole = pgEnum('workspace_role', ['agent', 'team_lead', 'admin'])
+export const workspaceRole = pgEnum('workspace_role', ['agent', 'team_lead'])
 export const sessionEndReason = pgEnum('session_end_reason', ['client', 'timeout'])
 export const conversationStatus = pgEnum('conversation_status', [
   'new',
