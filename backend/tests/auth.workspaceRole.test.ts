@@ -7,11 +7,11 @@ import { requireAgentSession } from '../src/shared/middleware/requireAgentSessio
 import { requireWorkspaceRole } from '../src/shared/middleware/requireWorkspaceRole.ts'
 import { requireAdminRole } from '../src/shared/middleware/requireAdminRole.ts'
 import { signAgentSession } from '../src/shared/auth/agentSession.ts'
-import { closeOwnerPool, ownerPool, seedWorkspace, truncateAll } from './helpers/db.ts'
+import { closeOwnerPool, ownerPool, seedAgent, seedWorkspace, truncateAll } from './helpers/db.ts'
 
 const app = express()
 app.use(express.json())
-app.use('/leads-and-admins', requireAgentSession, requireWorkspaceRole('team_lead', 'admin'), (_req, res) => {
+app.use('/leads-and-admins', requireAgentSession, requireWorkspaceRole('team_lead'), (_req, res) => {
   res.status(200).json({ ok: true })
 })
 app.use('/admins-only', requireAgentSession, requireAdminRole, (_req, res) => {
@@ -28,7 +28,7 @@ beforeEach(truncateAll)
 
 async function tokenForRole(
   workspaceId: string,
-  role: 'agent' | 'team_lead' | 'admin',
+  role: 'agent' | 'team_lead',
   options: { deactivated?: boolean } = {},
 ): Promise<string> {
   const { rows } = await ownerPool.query<{ id: string }>(
@@ -45,7 +45,7 @@ async function tokenForRole(
 describe('requireWorkspaceRole', () => {
   it('admits every role in the set', async () => {
     const workspaceId = await seedWorkspace()
-    for (const role of ['team_lead', 'admin'] as const) {
+    for (const role of ['team_lead'] as const) {
       const token = await tokenForRole(workspaceId, role)
       await request(app).get('/leads-and-admins').set('Authorization', `Bearer ${token}`).expect(200)
     }
@@ -57,26 +57,10 @@ describe('requireWorkspaceRole', () => {
     await request(app).get('/leads-and-admins').set('Authorization', `Bearer ${token}`).expect(403)
   })
 
-  it('refuses an agent with no membership row in this workspace', async () => {
-    const workspaceA = await seedWorkspace()
-    const workspaceB = await seedWorkspace()
-    const token = await tokenForRole(workspaceB, 'admin')
-    const { rows } = await ownerPool.query<{ agent_id: string }>(`select agent_id from workspace_member`)
-    await ownerPool.query(`insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`, [
-      workspaceA,
-      rows[0]!.agent_id,
-    ])
-    // The session names workspaceB, where they are admin; the route is mounted on
-    // whichever workspace the token claims, so this asserts the role is read for
-    // the session's workspace and not "any workspace they are an admin of".
-    await request(app).get('/admins-only').set('Authorization', `Bearer ${token}`).expect(200)
-  })
-
-  it('refuses a deactivated member regardless of role', async () => {
+  it('refuses a deactivated team lead', async () => {
     const workspaceId = await seedWorkspace()
-    const token = await tokenForRole(workspaceId, 'admin', { deactivated: true })
+    const token = await tokenForRole(workspaceId, 'team_lead', { deactivated: true })
     await request(app).get('/leads-and-admins').set('Authorization', `Bearer ${token}`).expect(403)
-    await request(app).get('/admins-only').set('Authorization', `Bearer ${token}`).expect(403)
   })
 
   it('requires authentication before it can check a role', async () => {
@@ -84,13 +68,25 @@ describe('requireWorkspaceRole', () => {
   })
 })
 
-describe('requireAdminRole', () => {
-  it('still admits only admin — a team lead is refused', async () => {
-    const workspaceId = await seedWorkspace()
-    const lead = await tokenForRole(workspaceId, 'team_lead')
-    const admin = await tokenForRole(workspaceId, 'admin')
+describe('requireAdminRole (global)', () => {
+  it('admits a globally is_admin agent regardless of which workspace their session names', async () => {
+    const workspaceA = await seedWorkspace()
+    const workspaceB = await seedWorkspace()
+    const adminId = await seedAgent(undefined, { isAdmin: true })
+    // Session names workspace A; is_admin is global, so this must still pass —
+    // unlike the old per-workspace admin, no workspace_member row exists at all.
+    const token = await signAgentSession({ agent_id: adminId, workspace_id: workspaceA })
+    await request(app).get('/admins-only').set('Authorization', `Bearer ${token}`).expect(200)
+    // Same agent, session naming the OTHER workspace — still admitted, because
+    // the flag is global, not tied to either workspace.
+    const tokenB = await signAgentSession({ agent_id: adminId, workspace_id: workspaceB })
+    await request(app).get('/admins-only').set('Authorization', `Bearer ${tokenB}`).expect(200)
+  })
 
-    await request(app).get('/admins-only').set('Authorization', `Bearer ${lead}`).expect(403)
-    await request(app).get('/admins-only').set('Authorization', `Bearer ${admin}`).expect(200)
+  it('refuses a non-admin agent', async () => {
+    const workspaceId = await seedWorkspace()
+    const agentId = await seedAgent()
+    const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId })
+    await request(app).get('/admins-only').set('Authorization', `Bearer ${token}`).expect(403)
   })
 })
