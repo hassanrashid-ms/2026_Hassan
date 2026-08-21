@@ -105,6 +105,7 @@ GRANT UPDATE (ticket_seq) ON workspace TO support_app;
 -- workspace_secret — that is the whole point of the admin dashboard's
 -- create-workspace and rotate-secret endpoints. No narrowing here, unlike the
 -- REVOKE above for support_app.
+GRANT DELETE ON workspace_member TO crm_admin;
 
 -- 3 - One identical policy per scoped table. "Scoped" is defined structurally
 -- — any base table in public with a workspace_id column — rather than as a
