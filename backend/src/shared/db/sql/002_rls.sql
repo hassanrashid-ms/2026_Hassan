@@ -28,9 +28,35 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
   GRANT USAGE, SELECT ON SEQUENCES TO support_app;
 
+-- 1b - The admin-dashboard role. BYPASSRLS is scoped to exactly this role, and
+-- application code may only select it after confirming agent.is_admin — see
+-- requireAdminAccess.ts. It still respects table-level grants (BYPASSRLS
+-- bypasses row policies, not GRANT/REVOKE), which is why the append-only
+-- revokes below are re-applied to it too.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'crm_admin') THEN
+    CREATE ROLE crm_admin LOGIN PASSWORD 'crm_admin' BYPASSRLS;
+  END IF;
+END $$;
+
+ALTER ROLE crm_admin LOGIN PASSWORD 'crm_admin' BYPASSRLS;
+
+REVOKE ALL ON SCHEMA public FROM crm_admin;
+GRANT USAGE ON SCHEMA public TO crm_admin;
+
+GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public TO crm_admin;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO crm_admin;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+  GRANT SELECT, INSERT, UPDATE ON TABLES TO crm_admin;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+  GRANT USAGE, SELECT ON SEQUENCES TO crm_admin;
+
 -- 2 - The event spine is append-only. Enforced, not conventional.
 REVOKE UPDATE, DELETE ON event FROM support_app;
 REVOKE UPDATE, DELETE ON event FROM PUBLIC;
+REVOKE UPDATE, DELETE ON event FROM crm_admin;
 
 -- 2a - change_log is the audit trail. An editable audit trail is not one, so
 -- UPDATE and DELETE come straight back off after the blanket GRANT above.
@@ -40,12 +66,14 @@ REVOKE UPDATE, DELETE ON event FROM PUBLIC;
 -- the second save on every workspace. Do not "tidy" these two into symmetry.
 REVOKE UPDATE, DELETE ON change_log FROM support_app;
 REVOKE UPDATE, DELETE ON change_log FROM PUBLIC;
+REVOKE UPDATE, DELETE ON change_log FROM crm_admin;
 
 -- 2c - form_answer is append-only: a correction is a NEW row for the same
 -- field_key and the newest created_at wins on read.
 -- DELETE is already granted nowhere, but revoked here too.
 REVOKE UPDATE, DELETE ON form_answer FROM support_app;
 REVOKE UPDATE, DELETE ON form_answer FROM PUBLIC;
+REVOKE UPDATE, DELETE ON form_answer FROM crm_admin;
 
 -- 2b - workspace and agent are the two unscoped tables, but they are NOT
 -- treated identically, and that asymmetry is intentional — do not "tidy" it
@@ -63,6 +91,7 @@ REVOKE UPDATE, DELETE ON form_answer FROM PUBLIC;
 --   so support_app must keep INSERT and UPDATE here — narrowing this to
 --   column-scoped grants is future work once the console ships, not now.
 REVOKE INSERT, UPDATE ON workspace FROM support_app;
+REVOKE INSERT, UPDATE ON workspace_secret FROM support_app;
 
 -- ...with one column-scoped exception. conversation.number is allocated on the
 -- request path (allocateTicketNumber), which needs to bump this counter and
@@ -71,6 +100,11 @@ REVOKE INSERT, UPDATE ON workspace FROM support_app;
 -- REVOKE above. This is the same narrowing named as future work for `agent`,
 -- applied one table over.
 GRANT UPDATE (ticket_seq) ON workspace TO support_app;
+
+-- crm_admin is exactly the role that IS allowed to write workspace and
+-- workspace_secret — that is the whole point of the admin dashboard's
+-- create-workspace and rotate-secret endpoints. No narrowing here, unlike the
+-- REVOKE above for support_app.
 
 -- 3 - One identical policy per scoped table. "Scoped" is defined structurally
 -- — any base table in public with a workspace_id column — rather than as a
