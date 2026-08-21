@@ -45,13 +45,24 @@ export async function seed(): Promise<void> {
   let workspaceId: string
   try {
     const { rows } = await owner.query<{ id: string }>(
-      `insert into workspace (id, name, slug, secret_hash) values ($1, 'Demo Game', $2, $3)
-         on conflict (slug) do update set secret_hash = excluded.secret_hash
-       returning id`,
-      [randomUUID(), SLUG, secretHash],
+      `insert into workspace (id, name, slug) values ($1, 'Demo Game', $2)
+         on conflict (slug) do nothing
+         returning id`,
+      [randomUUID(), SLUG],
     )
-    if (!rows[0]) throw new Error('workspace upsert returned nothing')
-    workspaceId = rows[0].id
+    if (rows[0]) {
+      workspaceId = rows[0].id
+    } else {
+      const { rows: existing } = await owner.query<{ id: string }>(`select id from workspace where slug = $1`, [SLUG])
+      if (!existing[0]) throw new Error('workspace lookup returned nothing')
+      workspaceId = existing[0].id
+    }
+    await owner.query(
+      `insert into workspace_secret (workspace_id, secret_hash)
+         select id, $2 from workspace where slug = $1
+         on conflict do nothing`,
+      [SLUG, secretHash],
+    )
   } finally {
     await owner.end()
   }
@@ -64,8 +75,8 @@ export async function seed(): Promise<void> {
     // org. google_subject stays null until this person's first real login.
     const [admin] = await tx
       .insert(agent)
-      .values({ email: ADMIN_EMAIL, displayName: 'Seed Admin' })
-      .onConflictDoUpdate({ target: agent.email, set: { displayName: 'Seed Admin' } })
+      .values({ email: ADMIN_EMAIL, displayName: 'Seed Admin', isAdmin: true })
+      .onConflictDoUpdate({ target: agent.email, set: { displayName: 'Seed Admin', isAdmin: true } })
       .returning({ id: agent.id })
     if (!admin) throw new Error('agent upsert returned nothing')
 
@@ -93,10 +104,6 @@ export async function seed(): Promise<void> {
   let subintentsMapped = 0
   await withWorkspace(workspaceId, async (tx) => {
     const now = new Date()
-    await tx
-      .insert(workspaceMember)
-      .values({ workspaceId, agentId: adminId, role: 'admin' })
-      .onConflictDoNothing()
     await tx
       .insert(workspaceMember)
       .values({ workspaceId, agentId: alexId, role: 'agent' })
