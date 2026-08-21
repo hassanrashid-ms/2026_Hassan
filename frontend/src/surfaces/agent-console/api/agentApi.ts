@@ -63,8 +63,32 @@ export async function devLogin(agentId: string): Promise<DevLoginResponse> {
 
 export type ConversationListFilter = 'unassigned' | 'mine' | 'agentAssigned' | 'botHandling' | 'escalated'
 
-export function fetchInbox(token: string, status: ConversationListFilter): Promise<AgentConversationsResponse> {
-  return apiCall(`/agent/conversations?status=${status}`, token)
+export type TicketsQueryFilters = {
+  q?: string
+  priority?: string[]
+  labelIds?: string[]
+  subintentIds?: string[]
+  assigneeIds?: string[]
+  olderThanHours?: number
+}
+
+function buildTicketsQuery(status: ConversationListFilter, filters?: TicketsQueryFilters): string {
+  const params = new URLSearchParams({ status })
+  if (filters?.q) params.set('q', filters.q)
+  if (filters?.priority?.length) params.set('priority', filters.priority.join(','))
+  if (filters?.labelIds?.length) params.set('labelIds', filters.labelIds.join(','))
+  if (filters?.subintentIds?.length) params.set('subintentIds', filters.subintentIds.join(','))
+  if (filters?.assigneeIds?.length) params.set('assigneeIds', filters.assigneeIds.join(','))
+  if (filters?.olderThanHours) params.set('olderThanHours', String(filters.olderThanHours))
+  return params.toString()
+}
+
+export function fetchInbox(
+  token: string,
+  status: ConversationListFilter,
+  filters?: TicketsQueryFilters,
+): Promise<AgentConversationsResponse> {
+  return apiCall(`/agent/conversations?${buildTicketsQuery(status, filters)}`, token)
 }
 
 export function takeOverConversation(token: string, conversationId: string): Promise<TakeOverResponse> {
@@ -116,6 +140,12 @@ export function markAgentMessagesRead(token: string, conversationId: string, upT
 
 export function fetchIntents(token: string): Promise<IntentsResponse> {
   return apiCall('/agent/intents', token)
+}
+
+export type WorkspaceAgentOption = { id: string; display_name: string }
+
+export function fetchWorkspaceAgents(token: string): Promise<{ agents: WorkspaceAgentOption[] }> {
+  return apiCall('/agent/agents', token)
 }
 
 export function fetchTags(token: string, query?: string): Promise<TagView[]> {
