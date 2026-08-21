@@ -66,14 +66,14 @@ describe('ticket number schema', () => {
     ).rejects.toThrow(/not-null/i)
   })
 
-  it('grants support_app UPDATE on ticket_seq but not on secret_hash', async () => {
+  it('grants support_app UPDATE on ticket_seq, and no write access to workspace_secret', async () => {
     const { rows: allowed } = await ownerPool.query<{ ok: boolean }>(
       `select has_column_privilege('support_app', 'workspace', 'ticket_seq', 'UPDATE') as ok`,
     )
     expect(allowed[0]!.ok).toBe(true)
 
     const { rows: denied } = await ownerPool.query<{ ok: boolean }>(
-      `select has_column_privilege('support_app', 'workspace', 'secret_hash', 'UPDATE') as ok`,
+      `select has_table_privilege('support_app', 'workspace_secret', 'INSERT') as ok`,
     )
     expect(denied[0]!.ok).toBe(false)
   })

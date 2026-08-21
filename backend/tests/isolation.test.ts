@@ -148,11 +148,11 @@ describe('workspace A cannot reach workspace B', () => {
     // Give both workspaces genuine secrets, then present A's against B's slug.
     const aSecret = generateWorkspaceSecret('game-a')
     const bSecret = generateWorkspaceSecret('game-b')
-    await ownerPool.query(`update workspace set secret_hash = $2 where id = $1`, [
+    await ownerPool.query(`insert into workspace_secret (workspace_id, secret_hash) values ($1, $2)`, [
       a.workspaceId,
       aSecret.secretHash,
     ])
-    await ownerPool.query(`update workspace set secret_hash = $2 where id = $1`, [
+    await ownerPool.query(`insert into workspace_secret (workspace_id, secret_hash) values ($1, $2)`, [
       b.workspaceId,
       bSecret.secretHash,
     ])

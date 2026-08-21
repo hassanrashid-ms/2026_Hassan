@@ -44,7 +44,7 @@ beforeEach(async () => {
   await truncateAll()
   for (const [id, slug] of [[WS_A, 'game-a'], [WS_B, 'game-b']] as const) {
     await ownerPool.query(
-      `insert into workspace (id, name, slug, secret_hash) values ($1, $2, $3, 'x')`,
+      `insert into workspace (id, name, slug) values ($1, $2, $3)`,
       [id, slug, slug],
     )
   }

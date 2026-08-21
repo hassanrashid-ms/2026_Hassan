@@ -31,6 +31,7 @@ const SCOPED_TABLES = [
   'declared_field',
   'session',
   'player',
+  'workspace_secret',
   'workspace_member',
   'agent',
   'workspace',
@@ -49,7 +50,6 @@ export async function seedWorkspace(
     id?: string
     slug?: string
     name?: string
-    secretHash?: string
     disabledAt?: Date | null
     autoCloseDays?: number
   } = {},
@@ -57,18 +57,35 @@ export async function seedWorkspace(
   const id = overrides.id ?? randomUUID()
   const slug = overrides.slug ?? `ws-${id.slice(0, 8)}`
   await ownerPool.query(
-    `insert into workspace (id, name, slug, secret_hash, disabled_at, auto_close_days)
-     values ($1, $2, $3, $4, $5, $6)`,
-    [id, overrides.name ?? slug, slug, overrides.secretHash ?? 'unset', overrides.disabledAt ?? null, overrides.autoCloseDays ?? 7],
+    `insert into workspace (id, name, slug, disabled_at, auto_close_days)
+     values ($1, $2, $3, $4, $5)`,
+    [id, overrides.name ?? slug, slug, overrides.disabledAt ?? null, overrides.autoCloseDays ?? 7],
   )
   return id
 }
 
-export async function seedAgent(email = `a-${randomUUID().slice(0, 8)}@example.test`): Promise<string> {
+export async function seedWorkspaceSecret(args: {
+  workspaceId: string
+  secretHash: string
+  expiresAt?: Date | null
+  revokedAt?: Date | null
+}): Promise<string> {
   const id = randomUUID()
   await ownerPool.query(
-    `insert into agent (id, email, display_name) values ($1, $2, 'Test Agent')`,
-    [id, email],
+    `insert into workspace_secret (id, workspace_id, secret_hash, expires_at, revoked_at) values ($1, $2, $3, $4, $5)`,
+    [id, args.workspaceId, args.secretHash, args.expiresAt ?? null, args.revokedAt ?? null],
+  )
+  return id
+}
+
+export async function seedAgent(
+  email = `a-${randomUUID().slice(0, 8)}@example.test`,
+  options: { isAdmin?: boolean; isSuperAdmin?: boolean } = {},
+): Promise<string> {
+  const id = randomUUID()
+  await ownerPool.query(
+    `insert into agent (id, email, display_name, is_admin, is_super_admin) values ($1, $2, 'Test Agent', $3, $4)`,
+    [id, email, options.isAdmin ?? false, options.isSuperAdmin ?? false],
   )
   return id
 }
@@ -190,7 +207,7 @@ export async function seedMessage(args: {
 export async function seedWorkspaceMember(args: {
   workspaceId: string
   agentId: string
-  role?: 'agent' | 'team_lead' | 'admin'
+  role?: 'agent' | 'team_lead'
   deactivatedAt?: Date | null
 }): Promise<string> {
   const id = randomUUID()
