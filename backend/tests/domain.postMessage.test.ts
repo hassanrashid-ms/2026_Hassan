@@ -248,8 +248,8 @@ describe('attachment table', () => {
     const workspaceId = await seedWorkspace();
     await expect(
       ownerPool.query(
-        `insert into attachment (workspace_id, message_id, storage_key, mime_type, byte_size)
-         values ($1, $2, 'ws/x/attachments/y.png', 'image/png', 10)`,
+        `insert into attachment (workspace_id, message_id, storage_key, filename, mime_type, byte_size)
+         values ($1, $2, 'ws/x/attachments/y.png', 'test.png', 'image/png', 10)`,
         [workspaceId, randomUUID()],
       ),
     ).rejects.toThrow();

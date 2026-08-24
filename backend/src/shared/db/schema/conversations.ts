@@ -148,6 +148,8 @@ export const attachment = pgTable('attachment', {
     .references(() => message.id, { onDelete: 'restrict' }),
   /** `ws/{workspaceId}/attachments/{uuid}.{ext}` once claimed. Never a URL — reads sign this fresh. */
   storageKey: text('storage_key').notNull(),
+  /** The real, client-declared original filename — used for display only, never trusted for content type or size. */
+  filename: text('filename').notNull(),
   /** Verified via HEAD at claim time, never the client-declared value. */
   mimeType: text('mime_type').notNull(),
   /** Verified via HEAD at claim time, never the client-declared value. */

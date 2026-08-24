@@ -79,6 +79,7 @@ export async function sendAgentMessage(
           workspaceId: ctx.workspaceId,
           messageId: posted.id,
           storageKey: claimedDestKey,
+          filename: body.attachment.filename,
           mimeType: body.attachment.mime_type,
           byteSize: body.attachment.byte_size,
         })

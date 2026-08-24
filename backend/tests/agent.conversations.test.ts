@@ -655,4 +655,44 @@ describe('GET /agent/conversations/:id/messages with an attachment', () => {
     const getRes = await fetch(withAttachment.attachment.url);
     expect(getRes.status).toBe(200);
   });
+
+  it('returns the real filename, not the typed caption, when a message has both text and an attachment', async () => {
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
+    const { agentId, token } = await setupAssignedAgent(workspaceId, conversationId);
+
+    const key = `pending/${workspaceId}/${agentId}/${crypto.randomUUID()}.png`;
+    const fileBody = Buffer.from('fake-png-bytes');
+    const { url: putUrl } = await presignPutObject({
+      key,
+      contentType: 'image/png',
+      contentLength: fileBody.length,
+    });
+    await fetch(putUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'image/png', 'Content-Length': String(fileBody.length) },
+      body: fileBody,
+    });
+
+    await request(messagesApp)
+      .post('/messages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        conversation_id: conversationId,
+        body: 'here is a screenshot',
+        attachment: { key, filename: 'shot.png', mime_type: 'image/png', byte_size: fileBody.length },
+      })
+      .expect(200);
+
+    const res = await request(app)
+      .get(`/conversations/${conversationId}/messages`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
+    const withAttachment = res.body.messages.find((m: { attachment: unknown }) => m.attachment);
+    expect(withAttachment.body).toBe('here is a screenshot');
+    expect(withAttachment.attachment.filename).toBe('shot.png');
+    expect(withAttachment.attachment.filename).not.toBe('here is a screenshot');
+  });
 });

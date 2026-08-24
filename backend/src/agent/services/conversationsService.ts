@@ -519,6 +519,7 @@ export async function getAgentConversationMessages(
         authorPlayerName: player.externalId,
         attachmentId: attachment.id,
         attachmentStorageKey: attachment.storageKey,
+        attachmentFilename: attachment.filename,
         attachmentMimeType: attachment.mimeType,
         attachmentByteSize: attachment.byteSize,
       })
@@ -533,12 +534,6 @@ export async function getAgentConversationMessages(
 
   if (rows === null) return null;
 
-  // Filenames aren't stored on `attachment` (see design doc §4 — only
-  // storage_key/mime_type/byte_size), so the list view reads the filename off
-  // the message body: the send response (Task 4) is the only place the real
-  // filename is known, from the client's own request, and it already becomes
-  // the message body there.
-  //
   // storageKey is looked up from `rows` by message id rather than carried on
   // `view` itself, because AgentMessageView's `attachment` shape (Task 4 Step
   // 1) has no storageKey field on the wire — it is signing-internal, never
@@ -546,7 +541,7 @@ export async function getAgentConversationMessages(
   const storageKeyByMessageId = new Map(
     rows.filter((r) => r.attachmentStorageKey).map((r) => [r.id, r.attachmentStorageKey!]),
   );
-  const views = rows.map((row) => toAgentView({ ...row, attachmentFilename: row.body }));
+  const views = rows.map((row) => toAgentView(row));
 
   return Promise.all(
     views.map(async (view) => {
