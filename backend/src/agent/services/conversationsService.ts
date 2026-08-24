@@ -20,6 +20,8 @@ import {
 import { withWorkspace, type Tx } from '../../shared/db/withWorkspace.ts';
 import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts';
 import { getConversationTags } from './tagsService.ts';
+import { getPresenceStatusBatch } from '../../shared/realtime/presence.ts';
+import { logger } from '../../shared/logging/logger.ts';
 
 export type ConversationsFilter =
   'unassigned' | 'mine' | 'agentAssigned' | 'botHandling' | 'escalated';
@@ -389,6 +391,7 @@ export type WorkspaceWorkloadAgent = {
   agentName: string;
   openCount: number;
   resolved7d: number;
+  status: 'online' | 'away' | 'offline' | 'on_leave';
 };
 
 export type WorkspaceWorkload = { agents: WorkspaceWorkloadAgent[] };
@@ -425,7 +428,11 @@ export async function getWorkspaceWorkload(ctx: AgentContext): Promise<Workspace
       .groupBy(conversation.assignedAgentId);
 
     const roster = await tx
-      .select({ agentId: workspaceMember.agentId, agentName: agent.displayName })
+      .select({
+        agentId: workspaceMember.agentId,
+        agentName: agent.displayName,
+        agentStatus: agent.status,
+      })
       .from(workspaceMember)
       .innerJoin(agent, eq(agent.id, workspaceMember.agentId))
       .where(
@@ -441,11 +448,34 @@ export async function getWorkspaceWorkload(ctx: AgentContext): Promise<Workspace
       resolvedRows.map((r) => [r.agentId as string, Number(r.count)]),
     );
 
+    let presenceByAgent: Map<string, 'online' | 'away' | 'offline'>;
+    try {
+      presenceByAgent = await getPresenceStatusBatch(roster.map((member) => member.agentId));
+    } catch (error) {
+      // Presence is a display nicety on this page, not load-bearing: the
+      // open/resolved counts must still render even if Redis is unreachable.
+      // Every row falls back to offline rather than failing the whole request.
+      logger.error(
+        'workload',
+        `presence batch read failed, falling back to offline: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      presenceByAgent = new Map();
+    }
+
     const agents: WorkspaceWorkloadAgent[] = roster.map((member) => ({
       agentId: member.agentId,
       agentName: member.agentName,
       openCount: openByAgent.get(member.agentId) ?? 0,
       resolved7d: resolvedByAgent.get(member.agentId) ?? 0,
+      // on_leave (account-level, admin-managed) overrides live presence
+      // unconditionally; otherwise fall through to Redis presence, defaulting
+      // to offline when absent (including on a Redis-read failure above).
+      status:
+        member.agentStatus === 'on_leave'
+          ? 'on_leave'
+          : presenceByAgent.get(member.agentId) ?? 'offline',
     }));
 
     return { agents };

@@ -1,6 +1,6 @@
 import { createServer } from 'node:http';
 import express from 'express';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { req as request } from './helpers/http.ts';
 import { closeDb } from '../src/shared/db/client.ts';
 import { requireAgentSession } from '../src/shared/middleware/requireAgentSession.ts';
@@ -8,6 +8,8 @@ import { errorMiddleware } from '../src/errors.ts';
 import { signAgentSession } from '../src/shared/auth/agentSession.ts';
 import { closeSocketServer, createSocketServer } from '../src/shared/realtime/socketServer.ts';
 import { conversationsRouter } from '../src/agent/routers/conversationsRouter.ts';
+import { incrementPresence, closePresenceRedis } from '../src/shared/realtime/presence.ts';
+import * as presence from '../src/shared/realtime/presence.ts';
 import {
   closeOwnerPool,
   ownerPool,
@@ -31,11 +33,15 @@ beforeAll(() => {
 
 afterAll(async () => {
   await closeSocketServer();
+  await closePresenceRedis();
   await closeDb();
   await closeOwnerPool();
 });
 
 beforeEach(truncateAll);
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 async function seedAgentWithRole(
   workspaceId: string,
@@ -235,5 +241,67 @@ describe('GET /agent/workload', () => {
       .get('/workload')
       .set('Authorization', `Bearer ${agentToken}`)
       .expect(403);
+  });
+
+  it('reports offline by default, online once connected, and away once set', async () => {
+    const workspaceId = await seedWorkspace();
+    const { token: teamLeadToken } = await seedAgentWithRole(workspaceId, 'team_lead');
+    const offlineAgentId = await seedAgent('offline@example.test');
+    const onlineAgentId = await seedAgent('online@example.test');
+    await seedWorkspaceMember({ workspaceId, agentId: offlineAgentId, role: 'agent' });
+    await seedWorkspaceMember({ workspaceId, agentId: onlineAgentId, role: 'agent' });
+    await incrementPresence(onlineAgentId);
+
+    const res = await request(app)
+      .get('/workload')
+      .set('Authorization', `Bearer ${teamLeadToken}`)
+      .expect(200);
+
+    const offlineRow = res.body.agents.find(
+      (a: { agentId: string }) => a.agentId === offlineAgentId,
+    );
+    const onlineRow = res.body.agents.find(
+      (a: { agentId: string }) => a.agentId === onlineAgentId,
+    );
+    expect(offlineRow.status).toBe('offline');
+    expect(onlineRow.status).toBe('online');
+  });
+
+  it('on_leave overrides live presence, connected or not', async () => {
+    const workspaceId = await seedWorkspace();
+    const { token: teamLeadToken } = await seedAgentWithRole(workspaceId, 'team_lead');
+    const onLeaveAgentId = await seedAgent('on-leave@example.test');
+    await seedWorkspaceMember({ workspaceId, agentId: onLeaveAgentId, role: 'agent' });
+    await ownerPool.query(`update agent set status = 'on_leave' where id = $1`, [onLeaveAgentId]);
+    // Connected, but on_leave must still win — a disconnected agent on leave
+    // and a connected one both show on_leave per the design's precedence.
+    await incrementPresence(onLeaveAgentId);
+
+    const res = await request(app)
+      .get('/workload')
+      .set('Authorization', `Bearer ${teamLeadToken}`)
+      .expect(200);
+
+    const row = res.body.agents.find((a: { agentId: string }) => a.agentId === onLeaveAgentId);
+    expect(row.status).toBe('on_leave');
+  });
+
+  it('falls back to offline for every row when the presence read fails, without failing the request', async () => {
+    const workspaceId = await seedWorkspace();
+    const { token: teamLeadToken } = await seedAgentWithRole(workspaceId, 'team_lead');
+    const workerAgentId = await seedAgent('worker@example.test');
+    await seedWorkspaceMember({ workspaceId, agentId: workerAgentId, role: 'agent' });
+    await incrementPresence(workerAgentId);
+
+    vi.spyOn(presence, 'getPresenceStatusBatch').mockRejectedValueOnce(new Error('redis down'));
+
+    const res = await request(app)
+      .get('/workload')
+      .set('Authorization', `Bearer ${teamLeadToken}`)
+      .expect(200);
+
+    const row = res.body.agents.find((a: { agentId: string }) => a.agentId === workerAgentId);
+    expect(row.status).toBe('offline');
+    expect(row.openCount).toBe(0);
   });
 });

@@ -554,9 +554,15 @@ const AgentWorkspaceWorkloadSchema = z.object({
       agentName: z.string(),
       openCount: z.number().int(),
       resolved7d: z.number().int(),
+      status: z.enum(['online', 'away', 'offline', 'on_leave']).openapi({
+        description:
+          'on_leave overrides live presence unconditionally; otherwise online/away from Redis while connected, offline otherwise (including when Redis is unreachable).',
+      }),
     }),
   ),
 });
+
+const PresenceStatusBodySchema = z.object({ status: z.enum(['online', 'away']) });
 
 registry.registerPath({
   method: 'get',
@@ -571,6 +577,71 @@ registry.registerPath({
       content: { 'application/json': { schema: AgentWorkspaceWorkloadSchema } },
     },
     403: { description: 'Forbidden — team lead or admin role required' },
+  },
+});
+
+registry.registerPath({
+  method: 'patch',
+  path: '/agent/presence',
+  summary: 'Agent Set Own Presence',
+  description:
+    "Sets the caller's live presence to online or away. Self only. Requires the connection counter to be > 0 (there must be an open socket) — 409 if fully disconnected. Emits presence_changed to the calling agent's workspace inbox room.",
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: {
+    body: { content: { 'application/json': { schema: PresenceStatusBodySchema } } },
+  },
+  responses: {
+    200: {
+      description: 'Presence set',
+      content: { 'application/json': { schema: PresenceStatusBodySchema } },
+    },
+    400: { description: "Unrecognized status — must be 'online' or 'away'" },
+    409: { description: 'No open socket (connection counter is 0)' },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/agent/presence',
+  summary: 'Agent Get Own Presence',
+  description:
+    'Returns the live presence for the calling agent — online/away/offline, read from Redis. Does not fold in on_leave, which is a display-layer concern applied by /agent/workload instead.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  responses: {
+    200: {
+      description: 'Current presence',
+      content: {
+        'application/json': {
+          schema: z.object({ status: z.enum(['online', 'away', 'offline']) }),
+        },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'patch',
+  path: '/agent/agents/{agentId}/leave',
+  summary: 'Set Agent Leave Status',
+  description:
+    "Team lead/admin toggle of the on_leave account flag for another agent in the workspace. Restricted to the active <-> on_leave transition; 409 if the target is deactivated or invited. Emits presence_changed with the resulting display status (on_leave, or the target's live presence if leave is cleared).",
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: {
+    params: z.object({ agentId: z.uuid() }),
+    body: { content: { 'application/json': { schema: z.object({ onLeave: z.boolean() }) } } },
+  },
+  responses: {
+    200: {
+      description: 'Leave status updated',
+      content: {
+        'application/json': {
+          schema: z.object({ status: z.enum(['online', 'away', 'offline', 'on_leave']) }),
+        },
+      },
+    },
+    403: { description: 'Forbidden — team lead or admin role required' },
+    404: { description: 'Agent not found in this workspace' },
+    409: { description: 'Agent is deactivated or invited; leave status cannot be changed' },
   },
 });
 

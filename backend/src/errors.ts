@@ -24,7 +24,8 @@ export type ErrorCode =
   | 'invalid_status'
   | 'agent_not_found'
   | 'agent_not_active'
-  | 'invalid_subintent';
+  | 'invalid_subintent'
+  | 'not_connected';
 
 export function sendError(res: Response, status: number, code: ErrorCode, message: string): void {
   res.status(status).json({ error: { code, message } });

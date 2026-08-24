@@ -200,11 +200,15 @@ export function markAgentMessagesRead(
  * `/agent/workload` is a local frontend-side contract, not sourced from
  * `@support/types`, since that package is the SDK↔server wire contract.
  */
+export type PresenceStatus = 'online' | 'away' | 'offline';
+export type DisplayStatus = PresenceStatus | 'on_leave';
+
 export type AgentWorkloadEntry = {
   agentId: string;
   agentName: string;
   openCount: number;
   resolved7d: number;
+  status: DisplayStatus;
 };
 
 export type AgentWorkloadResponse = {
@@ -213,6 +217,31 @@ export type AgentWorkloadResponse = {
 
 export function fetchWorkload(token: string): Promise<AgentWorkloadResponse> {
   return call('/agent/workload', token);
+}
+
+export function fetchPresence(token: string): Promise<{ status: PresenceStatus }> {
+  return call('/agent/presence', token);
+}
+
+export function updatePresence(
+  token: string,
+  status: 'online' | 'away',
+): Promise<void> {
+  return call('/agent/presence', token, {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
+  });
+}
+
+export function setAgentLeave(
+  token: string,
+  agentId: string,
+  onLeave: boolean,
+): Promise<{ status: DisplayStatus }> {
+  return call(`/agent/agents/${agentId}/leave`, token, {
+    method: 'PATCH',
+    body: JSON.stringify({ onLeave }),
+  });
 }
 
 export function fetchIntents(token: string): Promise<IntentsResponse> {

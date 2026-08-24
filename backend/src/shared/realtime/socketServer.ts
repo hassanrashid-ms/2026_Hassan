@@ -10,6 +10,8 @@ import { z } from 'zod';
 import { conversation, workspace } from '../db/schema/index.ts';
 import { withoutWorkspace, withWorkspace } from '../db/withWorkspace.ts';
 import { agentRoom, inboxRoom, playerRoom } from './rooms.ts';
+import { decrementPresence, incrementPresence } from './presence.ts';
+import { logger } from '../logging/logger.ts';
 
 const uuidSchema = z.uuid();
 
@@ -19,6 +21,14 @@ export type SocketData = PlayerSocketData | AgentSocketData;
 
 let ioInstance: Server | undefined;
 let redisClients: IORedis[] = [];
+// Set true at the start of closeSocketServer, before its adapter's Redis
+// clients are quit. Presence bookkeeping runs as fire-and-forget work off a
+// socket connect/disconnect and can still be in flight when the server closes
+// (this happens routinely in tests that close the server right after a
+// socket event); checking this flag before emitting on the now-closing
+// adapter avoids publishing over an already-quit Redis connection, which
+// ioredis surfaces as an unhandled rejection rather than a catchable error.
+let closing = false;
 
 function redisConnection(): IORedis {
   const client = new IORedis(getEnv().REDIS_URL, { maxRetriesPerRequest: null });
@@ -46,6 +56,7 @@ async function canJoinConversation(data: SocketData, conversationId: string): Pr
  * JWT or agent-session token already used for REST, verified once here.
  */
 export function createSocketServer(httpServer: HttpServer): Server {
+  closing = false;
   const pubClient = redisConnection();
   const subClient = pubClient.duplicate();
 
@@ -122,6 +133,50 @@ export function createSocketServer(httpServer: HttpServer): Server {
     const data = socket.data as SocketData;
     if (data.role === 'agent') {
       socket.join(inboxRoom(data.workspaceId));
+      // Reconnecting always lands back on online, never restores a prior
+      // away — a fresh session defaults to present.
+      void incrementPresence(data.agentId)
+        .then(({ wasFirstConnection }) => {
+          if (wasFirstConnection && !closing) {
+            io.to(inboxRoom(data.workspaceId)).emit('presence_changed', {
+              agentId: data.agentId,
+              status: 'online',
+            });
+          }
+        })
+        // Fire-and-forget: a socket connect must never crash on a Redis blip,
+        // and by the time this settles the process may already be mid-teardown
+        // (e.g. test suites closing the socket/Redis connections right after a
+        // socket disconnects) — surfacing that as an unhandled rejection is
+        // strictly worse than logging and moving on.
+        .catch((error) => {
+          logger.error(
+            'presence',
+            `incrementPresence failed for agent ${data.agentId}: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
+        });
+
+      socket.on('disconnect', () => {
+        void decrementPresence(data.agentId)
+          .then(({ wasLastConnection }) => {
+            if (wasLastConnection && !closing) {
+              io.to(inboxRoom(data.workspaceId)).emit('presence_changed', {
+                agentId: data.agentId,
+                status: 'offline',
+              });
+            }
+          })
+          .catch((error) => {
+            logger.error(
+              'presence',
+              `decrementPresence failed for agent ${data.agentId}: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+            );
+          });
+      });
     }
 
     socket.on(
@@ -168,6 +223,7 @@ export function getIo(): Server {
  * rest of the run and destabilises unrelated later tests.
  */
 export async function closeSocketServer(): Promise<void> {
+  closing = true;
   if (ioInstance) {
     await new Promise<void>((resolve) => ioInstance!.close(() => resolve()));
     ioInstance = undefined;

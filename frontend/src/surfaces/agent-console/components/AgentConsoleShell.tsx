@@ -4,6 +4,7 @@ import {
   Inbox as InboxIcon,
   BookOpen,
   ClipboardList,
+  ChevronDown,
   LogOut,
   Settings,
   Tags,
@@ -22,10 +23,24 @@ import {
   loadAgentSession,
   saveAgentSession,
 } from '../lib/agentSession.ts';
+import { fetchPresence, updatePresence, type DisplayStatus } from '../api/agentApi.ts';
+import { createSocket } from '../../../features/chat/api/socket.ts';
 import { Avatar, AvatarFallback } from './ui/avatar.tsx';
 import { Button } from './ui/button.tsx';
 import { Separator } from './ui/separator.tsx';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from './ui/dropdown-menu.tsx';
+import { PresenceDot } from './PresenceDot.tsx';
 import { cn } from '../lib/cn.ts';
+
+const PRESENCE_OPTIONS: { value: 'online' | 'away'; label: string }[] = [
+  { value: 'online', label: 'Online' },
+  { value: 'away', label: 'Away' },
+];
 
 const NAV_ITEMS = [
   { to: '/inbox', label: 'Inbox', icon: InboxIcon },
@@ -41,7 +56,7 @@ const FORMS_NAV_ITEM = { to: '/forms', label: 'Forms', icon: ClipboardList };
 
 // Team Lead + Admin only, same gate as Forms above — an Agent would 403 at
 // the API anyway once /agent/workload is implemented.
-const WORKLOAD_NAV_ITEM = { to: '/workload', label: 'Workload', icon: Gauge };
+const WORKLOAD_NAV_ITEM = { to: '/workload', label: 'Team', icon: Gauge };
 
 // Admin-only in the permission matrix ("Edit bot prompt or rules" is Admin).
 // Hiding the link here is UX, not the enforcement point — the API still
@@ -56,6 +71,8 @@ export function AgentConsoleShell() {
   // removes the fragment as a side effect of the first run, so a naive
   // second run would read an already-scrubbed URL and see no boot data.
   const bootConsumedRef = useRef(false);
+  // Defaults to a neutral/offline look while GET /agent/presence is in flight.
+  const [presence, setPresence] = useState<DisplayStatus>('offline');
 
   // One effect, not two: boot consumption and the login redirect must not run
   // as independent effects on the same commit — the redirect would otherwise
@@ -81,7 +98,34 @@ export function AgentConsoleShell() {
     if (!session) navigate('/login');
   }, [session, navigate]);
 
+  useEffect(() => {
+    if (!session) return;
+    let cancelled = false;
+    void fetchPresence(session.token).then((res) => {
+      if (!cancelled) setPresence(res.status);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [session]);
+
+  useEffect(() => {
+    if (!session) return;
+    const socket = createSocket(session.token, 'agent', session.workspaceId);
+    socket.on('presence_changed', (payload: { agentId: string; status: DisplayStatus }) => {
+      if (payload.agentId === session.agentId) setPresence(payload.status);
+    });
+    return () => {
+      socket.close();
+    };
+  }, [session]);
+
   if (!session) return null;
+
+  function handlePresenceSelect(status: 'online' | 'away') {
+    setPresence(status);
+    void updatePresence(session!.token, status);
+  }
 
   const navItems = [
     ...(canBuildForms(session) ? [...NAV_ITEMS, FORMS_NAV_ITEM, WORKLOAD_NAV_ITEM] : NAV_ITEMS),
@@ -122,10 +166,33 @@ export function AgentConsoleShell() {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-14 shrink-0 items-center justify-between border-b border-slate-200 px-4">
           <div className="flex items-center gap-2">
-            <Avatar className="size-7">
-              <AvatarFallback>{initials}</AvatarFallback>
-            </Avatar>
-            <span className="text-sm font-medium">{session.displayName}</span>
+            <div className="relative">
+              <Avatar className="size-7">
+                <AvatarFallback>{initials}</AvatarFallback>
+              </Avatar>
+              <PresenceDot status={presence} className="absolute -right-0.5 -bottom-0.5" />
+            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="flex items-center gap-1 text-sm font-medium text-text"
+                >
+                  {session.displayName}
+                  <ChevronDown className="size-3.5 text-muted" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                {PRESENCE_OPTIONS.map((option) => (
+                  <DropdownMenuItem
+                    key={option.value}
+                    onSelect={() => handlePresenceSelect(option.value)}
+                  >
+                    {option.label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
           <Button
             variant="ghost"

@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Workload } from './Workload.tsx';
 import { loadAgentSession } from '../../lib/agentSession.ts';
 import * as agentApi from '../../api/agentApi.ts';
+import { createSocket } from '../../../../features/chat/api/socket.ts';
 
 vi.mock('../../lib/agentSession.ts', async () => {
   const actual = await vi.importActual<typeof import('../../lib/agentSession.ts')>(
@@ -12,6 +13,22 @@ vi.mock('../../lib/agentSession.ts', async () => {
   );
   return { ...actual, loadAgentSession: vi.fn() };
 });
+
+vi.mock('../../../../features/chat/api/socket.ts');
+
+/** Captures the handlers Workload registers so a test can fire a server event. */
+function fakeSocket() {
+  const handlers: Record<string, (payload?: unknown) => void> = {};
+  const socket = {
+    on: (event: string, handler: (payload?: unknown) => void) => {
+      handlers[event] = handler;
+    },
+    emit: vi.fn(),
+    close: vi.fn(),
+  };
+  vi.mocked(createSocket).mockReturnValue(socket as never);
+  return handlers;
+}
 
 function renderWithClient() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -24,10 +41,13 @@ function renderWithClient() {
 
 function rowNames() {
   const rows = screen.getAllByRole('row').slice(1); // drop header row
-  return rows.map((row) => within(row).getAllByRole('cell')[0]?.textContent);
+  return rows.map((row) => within(row).getByTestId('agent-name').textContent);
 }
 
+let socketHandlers: Record<string, (payload?: unknown) => void> = {};
+
 beforeEach(() => {
+  socketHandlers = fakeSocket();
   vi.mocked(loadAgentSession).mockReturnValue({
     token: 't',
     agentId: 'a1',
@@ -36,9 +56,9 @@ beforeEach(() => {
   });
   vi.spyOn(agentApi, 'fetchWorkload').mockResolvedValue({
     agents: [
-      { agentId: '1', agentName: 'Alice', openCount: 3, resolved7d: 10 },
-      { agentId: '2', agentName: 'Bob', openCount: 8, resolved7d: 2 },
-      { agentId: '3', agentName: 'Carol', openCount: 5, resolved7d: 20 },
+      { agentId: '1', agentName: 'Alice', openCount: 3, resolved7d: 10, status: 'online' },
+      { agentId: '2', agentName: 'Bob', openCount: 8, resolved7d: 2, status: 'away' },
+      { agentId: '3', agentName: 'Carol', openCount: 5, resolved7d: 20, status: 'offline' },
     ],
   });
 });
@@ -88,5 +108,36 @@ describe('Workload sorting', () => {
 
     await user.click(screen.getByRole('button', { name: /^open$/i }));
     expect(rowNames()).toEqual(['Alice', 'Carol', 'Bob']);
+  });
+});
+
+function rowStatuses() {
+  const rows = screen.getAllByRole('row').slice(1); // drop header row
+  return rows.map((row) => {
+    const cell = within(row).getAllByRole('cell')[0]!;
+    return within(cell).getByTestId('presence-dot').getAttribute('data-status');
+  });
+}
+
+describe('Workload presence', () => {
+  it('renders a status dot for each agent', async () => {
+    renderWithClient();
+
+    await screen.findByText('Alice');
+    // Default sort is Open descending: Bob, Carol, Alice.
+    expect(rowStatuses()).toEqual(['away', 'offline', 'online']);
+  });
+
+  it('patches a row in place on a presence_changed event, without refetching', async () => {
+    renderWithClient();
+
+    await screen.findByText('Alice');
+    const fetchCountAfterLoad = vi.mocked(agentApi.fetchWorkload).mock.calls.length;
+
+    socketHandlers['presence_changed']?.({ agentId: '3', status: 'online' });
+
+    await screen.findByText('Carol');
+    expect(rowStatuses()).toEqual(['away', 'online', 'online']);
+    expect(agentApi.fetchWorkload).toHaveBeenCalledTimes(fetchCountAfterLoad);
   });
 });

@@ -1,8 +1,15 @@
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowDown, ArrowUp } from 'lucide-react';
-import { fetchWorkload, type AgentWorkloadEntry } from '../../api/agentApi.ts';
+import {
+  fetchWorkload,
+  setAgentLeave,
+  type AgentWorkloadEntry,
+  type AgentWorkloadResponse,
+  type DisplayStatus,
+} from '../../api/agentApi.ts';
 import { loadAgentSession } from '../../lib/agentSession.ts';
+import { createSocket } from '../../../../features/chat/api/socket.ts';
 import {
   Table,
   TableBody,
@@ -11,6 +18,9 @@ import {
   TableHeader,
   TableRow,
 } from '../../components/ui/table.tsx';
+import { Avatar, AvatarFallback } from '../../components/ui/avatar.tsx';
+import { Button } from '../../components/ui/button.tsx';
+import { PresenceDot } from '../../components/PresenceDot.tsx';
 import { cn } from '../../lib/cn.ts';
 
 type SortColumn = 'agent' | 'open' | 'resolved7d';
@@ -21,6 +31,15 @@ const COLUMNS: { key: SortColumn; label: string }[] = [
   { key: 'open', label: 'Open' },
   { key: 'resolved7d', label: 'Resolved (7d)' },
 ];
+
+function initialsFor(name: string): string {
+  return name
+    .split(' ')
+    .map((part) => part[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+}
 
 function sortAgents(
   agents: AgentWorkloadEntry[],
@@ -39,6 +58,7 @@ function sortAgents(
 
 export function Workload() {
   const session = loadAgentSession();
+  const queryClient = useQueryClient();
   // Default sort is Open descending.
   const [sortColumn, setSortColumn] = useState<SortColumn>('open');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
@@ -48,6 +68,38 @@ export function Workload() {
     queryFn: () => fetchWorkload(session!.token),
     enabled: session !== null,
   });
+
+  useEffect(() => {
+    if (!session) return;
+    const socket = createSocket(session.token, 'agent', session.workspaceId);
+    socket.on(
+      'presence_changed',
+      (payload: { agentId: string; status: DisplayStatus }) => {
+        queryClient.setQueryData<AgentWorkloadResponse>(['workload'], (current) => {
+          if (!current) return current;
+          return {
+            agents: current.agents.map((agent) =>
+              agent.agentId === payload.agentId ? { ...agent, status: payload.status } : agent,
+            ),
+          };
+        });
+      },
+    );
+    return () => {
+      socket.close();
+    };
+  }, [session, queryClient]);
+
+  async function handleToggleLeave(agentId: string, nextOnLeave: boolean) {
+    if (!session) return;
+    const { status } = await setAgentLeave(session.token, agentId, nextOnLeave);
+    queryClient.setQueryData<AgentWorkloadResponse>(['workload'], (current) => {
+      if (!current) return current;
+      return {
+        agents: current.agents.map((a) => (a.agentId === agentId ? { ...a, status } : a)),
+      };
+    });
+  }
 
   if (!session) return null;
 
@@ -66,7 +118,7 @@ export function Workload() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="border-b border-slate-200 p-3">
-        <h1 className="text-sm font-semibold">Workload</h1>
+        <h1 className="text-sm font-semibold">Team</h1>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
         <Table>
@@ -91,19 +143,44 @@ export function Workload() {
                   </button>
                 </TableHead>
               ))}
+              <TableHead className="text-xs font-medium text-muted">Leave</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {sortedAgents.map((agent) => (
               <TableRow key={agent.agentId}>
-                <TableCell className="font-medium">{agent.agentName}</TableCell>
+                <TableCell className="font-medium">
+                  <div className="flex items-center gap-2">
+                    <div className="relative">
+                      <Avatar className="size-6">
+                        <AvatarFallback className="text-xs">
+                          {initialsFor(agent.agentName)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <PresenceDot
+                        status={agent.status}
+                        className="absolute -right-0.5 -bottom-0.5 size-2"
+                      />
+                    </div>
+                    <span data-testid="agent-name">{agent.agentName}</span>
+                  </div>
+                </TableCell>
                 <TableCell>{agent.openCount}</TableCell>
                 <TableCell>{agent.resolved7d}</TableCell>
+                <TableCell>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleToggleLeave(agent.agentId, agent.status !== 'on_leave')}
+                  >
+                    {agent.status === 'on_leave' ? 'Clear leave' : 'Set on leave'}
+                  </Button>
+                </TableCell>
               </TableRow>
             ))}
             {workload.isError && (
               <TableRow>
-                <TableCell colSpan={3} className="text-xs text-muted">
+                <TableCell colSpan={4} className="text-xs text-muted">
                   Could not load workload.
                 </TableCell>
               </TableRow>
