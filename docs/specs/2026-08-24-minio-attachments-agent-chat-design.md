@@ -15,6 +15,13 @@ attachments into the agent-console chat composer only.
   attachment answer arrives as an ordinary image message — so once the webview surface
   gets attachment-send wired onto the same `Composer`/message pipeline, the form field
   needs no separate storage of its own. That wiring is a later phase, not this one.
+- **Known limitation, shipped as-is for this phase:** because the player-facing
+  (webview) read path is exactly the deferred item above, a `public`-visibility
+  message that carries an image attachment reaches the player as a bare filename
+  with no image today — the webview read query never joins `attachment`. Agents
+  should be aware that a public image attachment is currently visible only to
+  other agents viewing the thread, not to the player, until the webview phase
+  ships. This is a deliberate product decision, not a bug to fix in this phase.
 
 ---
 
