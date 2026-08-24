@@ -173,15 +173,57 @@ export function fetchConversationMessages(
   return call(`/agent/conversations/${conversationId}/messages`, token);
 }
 
+export type RequestUploadResult = { key: string; upload_url: string; expires_at: string };
+
+export function requestUpload(
+  token: string,
+  file: { filename: string; contentType: string; byteSize: number },
+): Promise<RequestUploadResult> {
+  return call(`/agent/uploads`, token, {
+    method: 'POST',
+    body: JSON.stringify({
+      filename: file.filename,
+      content_type: file.contentType,
+      byte_size: file.byteSize,
+    }),
+  });
+}
+
+export async function putFileToUploadUrl(uploadUrl: string, file: File): Promise<void> {
+  const res = await fetch(uploadUrl, {
+    method: 'PUT',
+    headers: { 'Content-Type': file.type, 'Content-Length': String(file.size) },
+    body: file,
+  });
+  if (!res.ok) throw new Error(`Upload failed with ${res.status}`);
+}
+
+export function cancelUpload(token: string, key: string): Promise<void> {
+  return call(`/agent/uploads/${key}`, token, { method: 'DELETE' });
+}
+
 export function sendAgentMessage(
   token: string,
   conversationId: string,
   body: string,
   visibility?: 'public' | 'internal',
+  attachment?: { key: string; filename: string; mimeType: string; byteSize: number },
 ): Promise<{ message: AgentMessageView }> {
   return call(`/agent/messages`, token, {
     method: 'POST',
-    body: JSON.stringify({ conversation_id: conversationId, body, visibility }),
+    body: JSON.stringify({
+      conversation_id: conversationId,
+      body,
+      visibility,
+      attachment: attachment
+        ? {
+            key: attachment.key,
+            filename: attachment.filename,
+            mime_type: attachment.mimeType,
+            byte_size: attachment.byteSize,
+          }
+        : undefined,
+    }),
   });
 }
 

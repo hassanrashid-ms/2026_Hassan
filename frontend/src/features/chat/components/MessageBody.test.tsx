@@ -53,4 +53,26 @@ describe('MessageBody', () => {
     await waitFor(() => expect(container.textContent).toContain('<img'));
     expect(container.querySelector('img')).toBeNull();
   });
+
+  it('renders an image for a message with an attachment', () => {
+    render(
+      <MessageBody
+        authorType="agent"
+        body="screenshot.png"
+        attachment={{ id: 'a1', filename: 'screenshot.png', mimeType: 'image/png', byteSize: 3, url: 'https://example.test/x' }}
+      />,
+    );
+    expect(screen.getByAltText('screenshot.png')).toHaveAttribute('src', 'https://example.test/x');
+  });
+
+  it('renders a fallback label when the attachment has no url', () => {
+    render(
+      <MessageBody
+        authorType="agent"
+        body="screenshot.png"
+        attachment={{ id: 'a1', filename: 'screenshot.png', mimeType: 'image/png', byteSize: 3, url: null }}
+      />,
+    );
+    expect(screen.getByText(/Attachment unavailable/)).toBeInTheDocument();
+  });
 });

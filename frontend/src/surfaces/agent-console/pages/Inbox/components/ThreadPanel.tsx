@@ -17,6 +17,9 @@ import {
   sendAgentMessage,
   takeOverConversation,
   claimConversation,
+  requestUpload,
+  putFileToUploadUrl,
+  cancelUpload,
 } from '../../../api/agentApi.ts';
 import { TagPicker } from './TagPicker.tsx';
 import { AssignPicker } from './AssignPicker.tsx';
@@ -30,7 +33,7 @@ import {
   reconcilePending,
   type PendingMessage,
 } from '../../../../../features/chat/hooks/chatReconcile.ts';
-import { Composer } from '../../../../../features/chat/components/Composer.tsx';
+import { Composer, type UploadedAttachment } from '../../../../../features/chat/components/Composer.tsx';
 import type { ChatMessage } from '../../../../../features/chat/components/types.ts';
 import { Badge } from '../../../components/ui/badge.tsx';
 import { Button } from '../../../components/ui/button.tsx';
@@ -47,6 +50,15 @@ function toChatMessage(m: AgentMessageView): ChatMessage {
     readAt: m.read_at,
     visibility: m.visibility,
     articleId: m.article_id,
+    attachment: m.attachment
+      ? {
+          id: m.attachment.id,
+          filename: m.attachment.filename,
+          mimeType: m.attachment.mime_type,
+          byteSize: m.attachment.byte_size,
+          url: m.attachment.url,
+        }
+      : null,
   };
 }
 
@@ -138,8 +150,29 @@ export function ThreadPanel({
   });
 
   const send = useMutation({
-    mutationFn: ({ body, visibility }: { body: string; visibility?: 'public' | 'internal' }) =>
-      sendAgentMessage(token, conversationId!, body, visibility),
+    mutationFn: ({
+      body,
+      visibility,
+      attachment,
+    }: {
+      body: string;
+      visibility?: 'public' | 'internal';
+      attachment?: UploadedAttachment;
+    }) =>
+      sendAgentMessage(
+        token,
+        conversationId!,
+        body,
+        visibility,
+        attachment
+          ? {
+              key: attachment.key,
+              filename: attachment.filename,
+              mimeType: attachment.mimeType,
+              byteSize: attachment.byteSize,
+            }
+          : undefined,
+      ),
     // The same optimistic handling the webview has had all along. Without it the
     // composer cleared and nothing appeared until the round trip finished, so a
     // slow send looked like a message that had vanished.
@@ -479,8 +512,19 @@ export function ThreadPanel({
           was the most visible part of the lag it was meant to explain. Each
           send is independent, so a second one need not wait on the first. */}
       <Composer
-        onSend={(body, visibility) => send.mutate({ body, visibility })}
+        onSend={(body, visibility, attachment) => send.mutate({ body, visibility, attachment })}
         allowVisibilityToggle
+        allowAttachments
+        onUpload={async (file) => {
+          const { key, upload_url } = await requestUpload(token, {
+            filename: file.name,
+            contentType: file.type,
+            byteSize: file.size,
+          });
+          await putFileToUploadUrl(upload_url, file);
+          return { key, filename: file.name, mimeType: file.type, byteSize: file.size };
+        }}
+        onCancelUpload={(key) => void cancelUpload(token, key)}
         disabled={!status || readOnly || takeOverAvailable || claimAvailable}
         placeholder={
           !status

@@ -182,6 +182,7 @@ export function ChatThread({ messages, currentAuthorType, onRetry, playerLabel }
                       <MessageBody
                         authorType={chatMessage.authorType}
                         body={chatMessage.body}
+                        attachment={chatMessage.attachment}
                         dark={isOwn}
                       />
                     </div>

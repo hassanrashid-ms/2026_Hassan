@@ -1,5 +1,13 @@
 export type ChatAuthorType = 'player' | 'agent' | 'bot' | 'system';
 
+export type ChatAttachment = {
+  id: string;
+  filename: string;
+  mimeType: string;
+  byteSize: number;
+  url: string | null;
+};
+
 /**
  * Serializer-agnostic on purpose: this is not @support/types's PlayerMessageView
  * or AgentMessageView. ChatThread renders this shape regardless of which
@@ -22,4 +30,5 @@ export type ChatMessage = {
    * because a prompt asking for one produces prose describing a link instead.
    */
   articleId?: string | null;
+  attachment?: ChatAttachment | null;
 };

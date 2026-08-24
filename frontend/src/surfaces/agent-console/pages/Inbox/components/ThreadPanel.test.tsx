@@ -1,6 +1,6 @@
 import type { ComponentProps } from 'react';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { AgentMessageView } from '@support/types';
@@ -11,6 +11,8 @@ import {
   fetchConversationContext,
   fetchConversationMessages,
   markAgentMessagesRead,
+  putFileToUploadUrl,
+  requestUpload,
   sendAgentMessage,
 } from '../../../api/agentApi.ts';
 import { createSocket } from '../../../../../features/chat/api/socket.ts';
@@ -212,6 +214,56 @@ describe('ThreadPanel optimistic sends', () => {
     // the real message.
     await waitFor(() => expect(screen.queryByText('Sending…')).not.toBeInTheDocument());
     expect(screen.getAllByText('landed')).toHaveLength(1);
+  });
+
+  it('sends an attachment through the composer', async () => {
+    fakeSocket();
+    vi.mocked(fetchConversationMessages).mockResolvedValue({ messages: [] } as never);
+    vi.mocked(requestUpload).mockResolvedValue({
+      key: 'pending/ws/agent/uuid.png',
+      upload_url: 'https://example.test/put',
+      expires_at: new Date().toISOString(),
+    });
+    vi.mocked(putFileToUploadUrl).mockResolvedValue(undefined);
+    vi.mocked(sendAgentMessage).mockResolvedValue({
+      message: {
+        id: 'm1',
+        seq: 1,
+        author_type: 'agent',
+        author_name: 'Agent',
+        author_agent_id: 'a1',
+        body: 'shot.png',
+        visibility: 'public',
+        delivery_state: 'sent',
+        read_at: null,
+        created_at: new Date().toISOString(),
+        article_id: null,
+        attachment: { id: 'att1', filename: 'shot.png', mime_type: 'image/png', byte_size: 3, url: null },
+      },
+    } as never);
+
+    renderPanel();
+    await screen.findByLabelText('Message');
+
+    fireEvent.change(screen.getByLabelText('Attach image'), {
+      target: { files: [new File([new Uint8Array(3)], 'shot.png', { type: 'image/png' })] },
+    });
+    await screen.findByAltText('shot.png');
+    await userEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    // 'public', not undefined: ThreadPanel's Composer always passes
+    // allowVisibilityToggle, so the Composer's default visibility state
+    // ('public') is what onSend carries, unlike the bare-Composer unit test
+    // in Composer.test.tsx which omits the toggle entirely.
+    await waitFor(() =>
+      expect(sendAgentMessage).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(String),
+        '',
+        'public',
+        { key: 'pending/ws/agent/uuid.png', filename: 'shot.png', mimeType: 'image/png', byteSize: 3 },
+      ),
+    );
   });
 });
 

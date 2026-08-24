@@ -1,5 +1,5 @@
 import { lazy } from 'react';
-import type { ChatAuthorType } from './types.ts';
+import type { ChatAttachment, ChatAuthorType } from './types.ts';
 
 /*
  * Lazy, and lazy HERE rather than at each call site, so both surfaces share one
@@ -32,13 +32,33 @@ const MARKDOWN_AUTHORS: ReadonlySet<ChatAuthorType> = new Set(['bot', 'agent']);
 export function MessageBody({
   authorType,
   body,
+  attachment,
   dark = false,
 }: {
   authorType: ChatAuthorType;
   body: string;
+  attachment?: ChatAttachment | null;
   /** The bubble behind this body is a dark, on-brand background (e.g. the agent-console's own-message bubble) rather than the light `bg`/`surface` an article page renders on — so markdown body text should render in the light `accent-fg` colour instead of the default dark `text`. */
   dark?: boolean;
 }) {
-  if (!MARKDOWN_AUTHORS.has(authorType)) return <>{body}</>;
-  return <ArticleBody markdown={body} dark={dark} />;
+  const text = !MARKDOWN_AUTHORS.has(authorType) ? <>{body}</> : <ArticleBody markdown={body} dark={dark} />;
+
+  if (!attachment) return text;
+
+  return (
+    <div className="flex flex-col gap-1">
+      {attachment.url ? (
+        <img
+          src={attachment.url}
+          alt={attachment.filename}
+          className="max-h-64 max-w-full rounded-md object-contain"
+          onError={(event) => {
+            (event.currentTarget as HTMLImageElement).style.display = 'none';
+          }}
+        />
+      ) : (
+        <span className="text-xs italic opacity-75">Attachment unavailable — {attachment.filename}</span>
+      )}
+    </div>
+  );
 }
