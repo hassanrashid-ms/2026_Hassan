@@ -683,6 +683,31 @@ registry.registerPath({
 })
 
 registry.registerPath({
+  method: 'patch',
+  path: '/agent/conversations/{id}/assign',
+  summary: 'Agent Reassign Conversation',
+  description: 'Reassigns an active conversation to a different agent. Team lead or admin role required.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: {
+    params: z.object({ id: z.uuid() }),
+    body: { content: { 'application/json': { schema: z.object({ agentId: z.uuid() }) } } },
+  },
+  responses: {
+    200: {
+      description: 'Reassign result',
+      content: {
+        'application/json': {
+          schema: z.object({ reassigned: z.boolean() }),
+        },
+      },
+    },
+    403: { description: 'Forbidden — team lead or admin role required' },
+    404: { description: 'Conversation not found or target agent not found' },
+    409: { description: 'Conversation status invalid or target agent not active' },
+  },
+})
+
+registry.registerPath({
   method: 'post',
   path: '/agent/conversations/{id}/ask-resolved',
   summary: 'Agent Ask If Resolved',

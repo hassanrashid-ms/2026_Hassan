@@ -2,7 +2,7 @@ import { and, desc, eq, exists, ilike, inArray, isNull, isNotNull, or, sql } fro
 import type { AgentConversationSummary, AgentMessageView } from '@support/types'
 import { postMessage, toAgentView, type PostedMessageRow } from '../../domain/conversations/index.ts'
 import { appendEvent } from '../../shared/events/appendEvent.ts'
-import { agent, conversation, conversationTag, message, player, subintent } from '../../shared/db/schema/index.ts'
+import { agent, conversation, conversationTag, message, player, subintent, workspaceMember } from '../../shared/db/schema/index.ts'
 import { withWorkspace, type Tx } from '../../shared/db/withWorkspace.ts'
 import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts'
 import { getConversationTags } from './tagsService.ts'
@@ -173,6 +173,62 @@ export async function takeOverConversation(ctx: AgentContext, conversationId: st
 
     const posted = await postTakenOverNotice(tx, ctx, conversationId)
     return { claimed: true, status: row.status, posted }
+  })
+}
+
+export type ReassignResult =
+  | { ok: true; status: string; posted: PostedMessageRow }
+  | { ok: false; reason: 'not_found' | 'invalid_status' | 'agent_not_found' | 'agent_not_active' }
+
+async function postReassignedNotice(tx: Tx, ctx: AgentContext, conversationId: string, targetAgentId: string): Promise<PostedMessageRow> {
+  const [actor] = await tx.select({ displayName: agent.displayName }).from(agent).where(eq(agent.id, ctx.agentId)).limit(1)
+  const [target] = await tx.select({ displayName: agent.displayName }).from(agent).where(eq(agent.id, targetAgentId)).limit(1)
+  return postMessage(tx, {
+    workspaceId: ctx.workspaceId,
+    conversationId,
+    authorType: 'system',
+    actorId: null,
+    body: `Reassigned to ${target?.displayName ?? 'an agent'} by ${actor?.displayName ?? 'an agent'}.`,
+    visibility: 'internal',
+  })
+}
+
+export async function reassignConversation(ctx: AgentContext, conversationId: string, targetAgentId: string): Promise<ReassignResult> {
+  return withWorkspace(ctx.workspaceId, async (tx) => {
+    const [conv] = await tx
+      .select({ id: conversation.id, status: conversation.status })
+      .from(conversation)
+      .where(eq(conversation.id, conversationId))
+      .limit(1)
+    if (!conv) return { ok: false, reason: 'not_found' }
+    if (!ACTIVE_AGENT_STATUSES.includes(conv.status)) return { ok: false, reason: 'invalid_status' }
+
+    const [member] = await tx
+      .select({ id: workspaceMember.id })
+      .from(workspaceMember)
+      .where(and(eq(workspaceMember.workspaceId, ctx.workspaceId), eq(workspaceMember.agentId, targetAgentId), isNull(workspaceMember.deactivatedAt)))
+      .limit(1)
+    if (!member) return { ok: false, reason: 'agent_not_found' }
+
+    const [targetAgent] = await tx.select({ status: agent.status }).from(agent).where(eq(agent.id, targetAgentId)).limit(1)
+    if (!targetAgent || targetAgent.status !== 'active') return { ok: false, reason: 'agent_not_active' }
+
+    const [row] = await tx
+      .update(conversation)
+      .set({ assignedAgentId: targetAgentId })
+      .where(eq(conversation.id, conversationId))
+      .returning({ id: conversation.id, status: conversation.status })
+
+    await appendEvent(tx, {
+      workspaceId: ctx.workspaceId,
+      type: 'conversation_reassigned',
+      conversationId,
+      actorId: ctx.agentId,
+      actorType: 'agent',
+      payload: { agent_id: targetAgentId, reassigned_by: ctx.agentId, via: 'reassign' },
+    })
+    const posted = await postReassignedNotice(tx, ctx, conversationId, targetAgentId)
+    return { ok: true, status: row!.status, posted }
   })
 }
 

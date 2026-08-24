@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { requireTeamLeadOrAdmin } from '../../shared/middleware/requireTeamLeadOrAdmin.ts'
 import {
   askResolvedHandler,
   claimConversationHandler,
@@ -7,6 +8,7 @@ import {
   getConversationDetailHandler,
   getConversationMessagesHandler,
   listConversationsHandler,
+  reassignConversationHandler,
   takeOverConversationHandler,
   unescalateConversationHandler,
 } from '../controllers/conversationsController.ts'
@@ -21,3 +23,4 @@ conversationsRouter.get('/conversations/:id/messages', getConversationMessagesHa
 conversationsRouter.post('/conversations/:id/ask-resolved', askResolvedHandler)
 conversationsRouter.post('/conversations/:id/escalate', escalateConversationHandler)
 conversationsRouter.post('/conversations/:id/unescalate', unescalateConversationHandler)
+conversationsRouter.patch('/conversations/:id/assign', requireTeamLeadOrAdmin, reassignConversationHandler)

@@ -4,7 +4,7 @@ import { sendError } from '../../errors.ts'
 import { getIo } from '../../shared/realtime/socketServer.ts'
 import { emitInboxChanged, emitMessageToRooms, emitPhaseChanged } from '../../shared/realtime/emit.ts'
 import { toAgentView, toPlayerView } from '../../domain/conversations/index.ts'
-import { claimConversation, getAgentConversationMessages, listConversations, takeOverConversation } from '../services/conversationsService.ts'
+import { claimConversation, getAgentConversationMessages, listConversations, reassignConversation, takeOverConversation } from '../services/conversationsService.ts'
 import { askResolved } from '../services/resolutionService.ts'
 import { escalateConversation, unescalateConversation } from '../services/escalationService.ts'
 import { getConversationContext, getConversationDetail } from '../services/conversationContextService.ts'
@@ -67,6 +67,34 @@ export const claimConversationHandler: RequestHandler = async (req, res) => {
     if (result.posted) emitMessageToRooms(getIo(), params.data.id, toPlayerView(result.posted), toAgentView(result.posted))
   }
   res.status(200).json({ claimed: result.claimed })
+}
+
+const ReassignBody = z.object({ agentId: z.uuid() })
+
+const REASSIGN_ERRORS = {
+  not_found: [404, 'Conversation not found.'],
+  invalid_status: [409, 'Conversation cannot be reassigned in its current status.'],
+  agent_not_found: [404, 'Target agent is not an active member of this workspace.'],
+  agent_not_active: [409, 'Target agent is not active.'],
+} as const
+
+export const reassignConversationHandler: RequestHandler = async (req, res) => {
+  const ctx = req.agent!
+  const params = ConversationIdParams.safeParse(req.params)
+  const body = ReassignBody.safeParse(req.body)
+  if (!params.success || !body.success) {
+    sendError(res, 422, 'invalid_request', 'id must be a uuid, body must be { agentId: uuid }.')
+    return
+  }
+  const result = await reassignConversation(ctx, params.data.id, body.data.agentId)
+  if (!result.ok) {
+    const [status, message] = REASSIGN_ERRORS[result.reason]
+    sendError(res, status, result.reason, message)
+    return
+  }
+  emitInboxChanged(getIo(), ctx.workspaceId, params.data.id, result.status)
+  emitMessageToRooms(getIo(), params.data.id, toPlayerView(result.posted), toAgentView(result.posted))
+  res.status(200).json({ reassigned: true })
 }
 
 export const getConversationMessagesHandler: RequestHandler = async (req, res) => {
