@@ -20,6 +20,7 @@ import {
 } from '../../../api/agentApi.ts'
 import { TagPicker } from './TagPicker.tsx'
 import { AssignPicker } from './AssignPicker.tsx'
+import { SubintentPicker } from './SubintentPicker.tsx'
 import { loadAgentSession, canBuildForms } from '../../../lib/agentSession.ts'
 import { createSocket } from '../../../../../features/chat/api/socket.ts'
 import { handleSessionExpired } from '../../../lib/authErrorHandling.ts'
@@ -294,10 +295,13 @@ export function ThreadPanel({
         )}
         <span className="text-sm font-medium">{playerExternalId}</span>
         {status && <Badge variant={STATUS_BADGE_VARIANT[status]}>{formatStatus(status)}</Badge>}
-        {subintent && (
-          <Badge variant="outline">
-            {subintent.intent_name} · {subintent.subintent_name}
-          </Badge>
+        {conversationId && (
+          <SubintentPicker
+            token={token}
+            conversationId={conversationId}
+            currentSubintentId={subintent?.subintent_id}
+            currentSubintentName={subintent ? { intent_name: subintent.intent_name, subintent_name: subintent.subintent_name } : null}
+          />
         )}
         {tags.map((tag) => (
           <Badge key={tag.id} className={tagBadgeClassName(tag.colorIndex)}>

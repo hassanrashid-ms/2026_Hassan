@@ -19,7 +19,7 @@ export type AgentConversationDetail = {
   number: number
   player: { id: string; external_player_id: string }
   status: ConversationStatusValue
-  subintent: { intent_name: string; subintent_name: string } | null
+  subintent: { intent_name: string; subintent_name: string; subintent_id: string | null } | null
   assigned_agent: { id: string; display_name: string } | null
   resolution_source: ResolutionSourceValue | null
   /**
@@ -56,7 +56,7 @@ export type AgentTicketSummary = {
   number: number
   created_at: string
   status: ConversationStatusValue
-  subintent: { intent_name: string; subintent_name: string } | null
+  subintent: { intent_name: string; subintent_name: string; subintent_id: string | null } | null
   resolution_source: ResolutionSourceValue | null
   resolved_by_agent_name: string | null
   reopen_count: number

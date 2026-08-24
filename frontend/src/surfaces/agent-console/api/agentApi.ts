@@ -126,6 +126,13 @@ export function reassignConversation(token: string, conversationId: string, agen
   })
 }
 
+export function reclassifyConversation(token: string, conversationId: string, subintentId: string): Promise<{ reclassified: boolean }> {
+  return call(`/agent/conversations/${conversationId}/subintent`, token, {
+    method: 'PATCH',
+    body: JSON.stringify({ subintentId }),
+  })
+}
+
 /**
  * The header row for one conversation. Required, not an optimisation: an older
  * ticket is in neither the `unassigned` nor the `mine` list and never will be,

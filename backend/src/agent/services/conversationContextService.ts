@@ -51,6 +51,7 @@ export async function getConversationDetail(
         externalPlayerId: player.externalId,
         intentName: intent.name,
         subintentName: subintent.name,
+        subintentId: subintent.id,
         assignedAgentId: agent.id,
         assignedAgentName: agent.displayName,
       })
@@ -71,7 +72,7 @@ export async function getConversationDetail(
       status: row.status,
       subintent:
         row.subintentName && row.intentName
-          ? { intent_name: row.intentName, subintent_name: row.subintentName }
+          ? { intent_name: row.intentName, subintent_name: row.subintentName, subintent_id: row.subintentId }
           : null,
       assigned_agent:
         row.assignedAgentId && row.assignedAgentName
@@ -186,6 +187,7 @@ export async function getTicketHistory(
       resolutionSource: conversation.resolutionSource,
       intentName: intent.name,
       subintentName: subintent.name,
+      subintentId: subintent.id,
       assignedAgentName: agent.displayName,
       totalCount: sql<number>`count(*) over ()`.mapWith(Number),
     })
@@ -221,7 +223,7 @@ export async function getTicketHistory(
     status: row.status,
     subintent:
       row.subintentName && row.intentName
-        ? { intent_name: row.intentName, subintent_name: row.subintentName }
+        ? { intent_name: row.intentName, subintent_name: row.subintentName, subintent_id: row.subintentId }
         : null,
     resolution_source: row.resolutionSource,
     resolved_by_agent_name: row.resolutionSource === 'agent' ? row.assignedAgentName : null,
