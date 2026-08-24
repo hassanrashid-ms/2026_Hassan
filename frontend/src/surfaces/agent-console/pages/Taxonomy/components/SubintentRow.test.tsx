@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SubintentRow } from './SubintentRow.tsx';
 import * as agentApi from '../../../api/agentApi.ts';
@@ -106,7 +107,9 @@ describe('SubintentRow', () => {
       />,
     );
 
-    screen.getByText('Archive').click();
+    const user = userEvent.setup();
+    await user.click(screen.getByText('Archive'));
+    await user.click((await screen.findAllByText('Archive')).at(-1)!);
 
     await waitFor(() => expect(spy).toHaveBeenCalledWith('t', 's1'));
   });

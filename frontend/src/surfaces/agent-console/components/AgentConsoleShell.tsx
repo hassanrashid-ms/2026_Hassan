@@ -7,6 +7,7 @@ import {
   ChevronDown,
   LogOut,
   Settings,
+  SlidersHorizontal,
   Tags,
   Gauge,
 } from 'lucide-react';
@@ -62,6 +63,15 @@ const WORKLOAD_NAV_ITEM = { to: '/workload', label: 'Team', icon: Gauge };
 // Hiding the link here is UX, not the enforcement point — the API still
 // requires admin on POST/rollback.
 const BOT_CONFIG_NAV_ITEM = { to: '/bot-config', label: 'Bot Config', icon: Settings };
+
+// Team Lead + Admin can read (GET /agent/workspace-settings), same gate as
+// Forms/Workload above — only Admin can write, enforced client-side inside
+// the page itself and again by the API on POST.
+const WORKSPACE_SETTINGS_NAV_ITEM = {
+  to: '/workspace-settings',
+  label: 'Workspace Settings',
+  icon: SlidersHorizontal,
+};
 
 export function AgentConsoleShell() {
   const navigate = useNavigate();
@@ -128,7 +138,9 @@ export function AgentConsoleShell() {
   }
 
   const navItems = [
-    ...(canBuildForms(session) ? [...NAV_ITEMS, FORMS_NAV_ITEM, WORKLOAD_NAV_ITEM] : NAV_ITEMS),
+    ...(canBuildForms(session)
+      ? [...NAV_ITEMS, FORMS_NAV_ITEM, WORKLOAD_NAV_ITEM, WORKSPACE_SETTINGS_NAV_ITEM]
+      : NAV_ITEMS),
     ...(isAdmin(session) ? [BOT_CONFIG_NAV_ITEM] : []),
   ];
 

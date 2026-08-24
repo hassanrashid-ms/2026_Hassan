@@ -1,8 +1,12 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PromptTab } from './PromptTab.tsx';
 import * as agentApi from '../../../api/agentApi.ts';
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 const BASE_CONFIG = {
   is_provisioned: true,
@@ -35,7 +39,7 @@ function renderTab(config = BASE_CONFIG) {
 }
 
 describe('PromptTab', () => {
-  it('saves an edited prompt', async () => {
+  it('saves an edited prompt only after confirming', async () => {
     const saveSpy = vi
       .spyOn(agentApi, 'saveBotConfig')
       .mockResolvedValue({ ...BASE_CONFIG, prompt: 'Edited', is_prompt_customized: true });
@@ -43,6 +47,10 @@ describe('PromptTab', () => {
 
     const textarea = screen.getByLabelText('Prompt');
     fireEvent.change(textarea, { target: { value: 'Edited' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(saveSpy).not.toHaveBeenCalled();
+
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() => expect(saveSpy).toHaveBeenCalledWith('t', { prompt: 'Edited' }));
@@ -56,11 +64,15 @@ describe('PromptTab', () => {
     expect(screen.getByRole('button', { name: 'Reset to default' })).toBeInTheDocument();
   });
 
-  it('resets by saving prompt: null', async () => {
+  it('resets by saving prompt: null only after confirming', async () => {
     const saveSpy = vi.spyOn(agentApi, 'saveBotConfig').mockResolvedValue(BASE_CONFIG);
     renderTab({ ...BASE_CONFIG, is_prompt_customized: true });
 
     fireEvent.click(screen.getByRole('button', { name: 'Reset to default' }));
+    expect(saveSpy).not.toHaveBeenCalled();
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Reset' })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Reset' }));
 
     await waitFor(() => expect(saveSpy).toHaveBeenCalledWith('t', { prompt: null }));
   });

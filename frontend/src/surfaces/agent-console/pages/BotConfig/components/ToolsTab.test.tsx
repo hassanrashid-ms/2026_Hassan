@@ -1,9 +1,13 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { BotConfigView } from '@support/types';
 import { ToolsTab } from './ToolsTab.tsx';
 import * as agentApi from '../../../api/agentApi.ts';
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 const CONFIG: BotConfigView = {
   is_provisioned: true,
@@ -67,11 +71,16 @@ describe('ToolsTab', () => {
     expect(screen.getByText(/Bot can never look anything up/)).toBeInTheDocument();
   });
 
-  it('toggling a tool saves the updated tools_config array', async () => {
+  it('toggling a tool stages the change, saving only after confirmation', async () => {
     const saveSpy = vi.spyOn(agentApi, 'saveBotConfig').mockResolvedValue(CONFIG);
     renderTab();
 
     fireEvent.click(screen.getAllByRole('switch')[0]!);
+    expect(saveSpy).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Save changes' })[0]!);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() =>
       expect(saveSpy).toHaveBeenCalledWith('t', {
@@ -89,13 +98,17 @@ describe('ToolsTab', () => {
     expect(screen.getByLabelText('Max article searches per turn')).toHaveValue(3);
   });
 
-  it('saves a changed limit on blur, sending the full limits_config array', async () => {
+  it('stages a changed limit and saves the full limits_config array only after confirmation', async () => {
     const saveSpy = vi.spyOn(agentApi, 'saveBotConfig').mockResolvedValue(CONFIG);
     renderTab();
 
     const input = screen.getByLabelText('Max unhelped replies before handoff');
     fireEvent.change(input, { target: { value: '5' } });
-    fireEvent.blur(input);
+    expect(saveSpy).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Save changes' })[1]!);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() =>
       expect(saveSpy).toHaveBeenCalledWith('t', {
@@ -117,7 +130,9 @@ describe('ToolsTab', () => {
 
     const input = screen.getByLabelText('Max bot messages per conversation');
     fireEvent.change(input, { target: { value: '999' } });
-    fireEvent.blur(input);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Save changes' })[1]!);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() => expect(screen.getByText(/must be between 3 and 20/)).toBeInTheDocument());
   });

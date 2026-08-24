@@ -39,6 +39,11 @@ const Workload = lazy(async () => ({
 const BotConfigPage = lazy(async () => ({
   default: (await import('../surfaces/agent-console/pages/BotConfig/BotConfig.tsx')).BotConfig,
 }));
+const WorkspaceSettingsPage = lazy(async () => ({
+  default: (
+    await import('../surfaces/agent-console/pages/WorkspaceSettings/WorkspaceSettings.tsx')
+  ).WorkspaceSettings,
+}));
 const AgentNotFound = lazy(async () => ({
   default: (await import('../surfaces/agent-console/pages/NotFound.tsx')).NotFound,
 }));
@@ -91,6 +96,7 @@ export function AppRoutes() {
         <Route path="taxonomy" element={<Taxonomy />} />
         <Route path="workload" element={<Workload />} />
         <Route path="bot-config" element={<BotConfigPage />} />
+        <Route path="workspace-settings" element={<WorkspaceSettingsPage />} />
         <Route path="*" element={<AgentNotFound />} />
       </Route>
 

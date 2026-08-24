@@ -6,6 +6,7 @@ import { isAdmin, type StoredAgentSession } from '../../../lib/agentSession.ts';
 import { Badge } from '../../../components/ui/badge.tsx';
 import { Button } from '../../../components/ui/button.tsx';
 import { Input } from '../../../components/ui/input.tsx';
+import { ConfirmDialog } from '../../../components/ConfirmDialog.tsx';
 import { SubintentRow } from './SubintentRow.tsx';
 
 export function IntentRow({
@@ -27,6 +28,7 @@ export function IntentRow({
   const [name, setName] = useState(intent.name);
   const [addingSubintent, setAddingSubintent] = useState(false);
   const [newSubintentName, setNewSubintentName] = useState('');
+  const [confirmArchive, setConfirmArchive] = useState(false);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['admin-intents'] });
 
@@ -40,7 +42,10 @@ export function IntentRow({
 
   const archive = useMutation({
     mutationFn: () => archiveIntent(token, intent.id),
-    onSuccess: () => void invalidate(),
+    onSuccess: () => {
+      setConfirmArchive(false);
+      void invalidate();
+    },
   });
 
   const addSubintent = useMutation({
@@ -105,7 +110,7 @@ export function IntentRow({
                 type="button"
                 size="sm"
                 variant="outline"
-                onClick={() => archive.mutate()}
+                onClick={() => setConfirmArchive(true)}
                 disabled={archiveDisabled || archive.isPending}
               >
                 Archive
@@ -156,6 +161,16 @@ export function IntentRow({
           ))}
         </ul>
       )}
+      <ConfirmDialog
+        open={confirmArchive}
+        onOpenChange={setConfirmArchive}
+        title="Archive this intent?"
+        description={`"${intent.name}" will stop appearing for new classification. This can be undone later, but conversations already tagged with it are unaffected.`}
+        confirmLabel="Archive"
+        variant="destructive"
+        confirming={archive.isPending}
+        onConfirm={() => archive.mutate()}
+      />
     </li>
   );
 }

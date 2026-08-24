@@ -11,6 +11,7 @@ import { isAdmin, type StoredAgentSession } from '../../../lib/agentSession.ts';
 import { Badge } from '../../../components/ui/badge.tsx';
 import { Button } from '../../../components/ui/button.tsx';
 import { Input } from '../../../components/ui/input.tsx';
+import { ConfirmDialog } from '../../../components/ConfirmDialog.tsx';
 import {
   Select,
   SelectContent,
@@ -45,6 +46,9 @@ export function SubintentRow({
   const isOther = parentIntent.isSystem && subintent.name === OTHER_NAME;
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(subintent.name);
+  const [confirmArchive, setConfirmArchive] = useState(false);
+  const [mergeTarget, setMergeTarget] = useState<{ id: string; name: string } | null>(null);
+  const [mergeSelectKey, setMergeSelectKey] = useState(0);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['admin-intents'] });
 
@@ -64,7 +68,10 @@ export function SubintentRow({
 
   const archive = useMutation({
     mutationFn: () => archiveSubintent(token, subintent.id),
-    onSuccess: () => void invalidate(),
+    onSuccess: () => {
+      setConfirmArchive(false);
+      void invalidate();
+    },
   });
 
   const move = useMutation({
@@ -74,7 +81,11 @@ export function SubintentRow({
 
   const merge = useMutation({
     mutationFn: (intoId: string) => mergeSubintent(token, subintent.id, intoId),
-    onSuccess: () => void invalidate(),
+    onSuccess: () => {
+      setMergeTarget(null);
+      setMergeSelectKey((k) => k + 1);
+      void invalidate();
+    },
   });
 
   const moveTargets = allIntents.filter((i) => i.archivedAt === null && i.id !== parentIntent.id);
@@ -158,7 +169,14 @@ export function SubintentRow({
             </span>
 
             <span title={disabledTitle}>
-              <Select disabled={isOther} onValueChange={(intoId) => merge.mutate(intoId)}>
+              <Select
+                key={mergeSelectKey}
+                disabled={isOther}
+                onValueChange={(intoId) => {
+                  const target = mergeTargets.find((s) => s.id === intoId);
+                  if (target) setMergeTarget({ id: target.id, name: target.name });
+                }}
+              >
                 <SelectTrigger className="h-7 w-32 text-xs">
                   <SelectValue placeholder="Merge into…" />
                 </SelectTrigger>
@@ -177,7 +195,7 @@ export function SubintentRow({
                 type="button"
                 size="sm"
                 variant="outline"
-                onClick={() => archive.mutate()}
+                onClick={() => setConfirmArchive(true)}
                 disabled={isOther || archive.isPending}
               >
                 Archive
@@ -194,6 +212,31 @@ export function SubintentRow({
             rename.error?.message}
         </p>
       )}
+      <ConfirmDialog
+        open={confirmArchive}
+        onOpenChange={setConfirmArchive}
+        title="Archive this subintent?"
+        description={`"${subintent.name}" will stop appearing for new classification. This can be undone later, but conversations already tagged with it are unaffected.`}
+        confirmLabel="Archive"
+        variant="destructive"
+        confirming={archive.isPending}
+        onConfirm={() => archive.mutate()}
+      />
+      <ConfirmDialog
+        open={mergeTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setMergeTarget(null);
+            setMergeSelectKey((k) => k + 1);
+          }
+        }}
+        title={`Merge "${subintent.name}" into "${mergeTarget?.name}"?`}
+        description={`Conversations tagged ${subintent.name} will be retagged ${mergeTarget?.name}.`}
+        confirmLabel="Merge"
+        variant="destructive"
+        confirming={merge.isPending}
+        onConfirm={() => mergeTarget && merge.mutate(mergeTarget.id)}
+      />
     </li>
   );
 }

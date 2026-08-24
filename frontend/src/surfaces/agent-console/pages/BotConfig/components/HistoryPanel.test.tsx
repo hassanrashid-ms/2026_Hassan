@@ -56,6 +56,9 @@ describe('HistoryPanel', () => {
     await waitFor(() => screen.getByRole('button', { name: 'Restore' }));
     fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
 
+    await waitFor(() => screen.getByRole('button', { name: 'Roll back' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Roll back' }));
+
     await waitFor(() =>
       expect(rollbackSpy).toHaveBeenCalledWith('t', {
         field: 'prompt',

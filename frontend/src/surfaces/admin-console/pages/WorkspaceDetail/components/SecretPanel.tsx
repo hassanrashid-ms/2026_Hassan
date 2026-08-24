@@ -6,6 +6,7 @@ import { fetchSecrets, rotateSecret } from '../../../api/adminApi.ts';
 import { ApiError } from '../../../../../lib/httpClient.ts';
 import { Badge } from '../../../components/ui/badge.tsx';
 import { Button } from '../../../components/ui/button.tsx';
+import { ConfirmDialog } from '../../../components/ConfirmDialog.tsx';
 import {
   Dialog,
   DialogContent,
@@ -32,6 +33,7 @@ function reportError(error: unknown) {
 export function SecretPanel({ token, workspaceId }: { token: string; workspaceId: string }) {
   const queryClient = useQueryClient();
   const [revealed, setRevealed] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const secretsQuery = useQuery({
     queryKey: ['adminSecrets', workspaceId],
@@ -41,6 +43,7 @@ export function SecretPanel({ token, workspaceId }: { token: string; workspaceId
   const rotateMutation = useMutation({
     mutationFn: () => rotateSecret(token, workspaceId),
     onSuccess: (result) => {
+      setConfirmOpen(false);
       setRevealed(result.secret);
       queryClient.invalidateQueries({ queryKey: ['adminSecrets', workspaceId] });
     },
@@ -66,15 +69,22 @@ export function SecretPanel({ token, workspaceId }: { token: string; workspaceId
           Rotating inserts a new secret immediately. The previous one keeps working for a 24-hour
           grace window so a game studio can redeploy without an outage.
         </p>
-        <Button
-          size="sm"
-          disabled={rotateMutation.isPending}
-          onClick={() => rotateMutation.mutate()}
-        >
+        <Button size="sm" disabled={rotateMutation.isPending} onClick={() => setConfirmOpen(true)}>
           <RefreshCw className="size-4" />
           Rotate secret
         </Button>
       </div>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        variant="destructive"
+        title="Rotate this workspace's secret?"
+        description="The old secret keeps working for a 24-hour grace window only. Every deployment of this game's backend using the old secret must be updated before it expires, or player-token minting will break."
+        confirmLabel="Rotate secret"
+        confirming={rotateMutation.isPending}
+        onConfirm={() => rotateMutation.mutate()}
+      />
 
       <Table>
         <TableHeader>

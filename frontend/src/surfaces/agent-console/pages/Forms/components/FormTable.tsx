@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { EllipsisVertical } from 'lucide-react';
 import { archiveForm, fetchForms } from '../../../api/agentApi.ts';
@@ -5,6 +6,7 @@ import { isAdmin, type StoredAgentSession } from '../../../lib/agentSession.ts';
 import { formStatusLabel, formStatusVariant } from '../formForm.ts';
 import { Badge } from '../../../components/ui/badge.tsx';
 import { Button } from '../../../components/ui/button.tsx';
+import { ConfirmDialog } from '../../../components/ConfirmDialog.tsx';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -37,11 +39,19 @@ export function FormTable({
   const queryClient = useQueryClient();
   const forms = useQuery({ queryKey: ['admin-forms'], queryFn: () => fetchForms(token) });
   const canArchive = isAdmin(session);
+  const [archiveTarget, setArchiveTarget] = useState<{ id: string; name: string } | null>(null);
+  const [archiving, setArchiving] = useState(false);
 
   const onArchive = async (id: string) => {
-    await archiveForm(token, id);
-    void queryClient.invalidateQueries({ queryKey: ['admin-forms'] });
-    void queryClient.invalidateQueries({ queryKey: ['admin-form', id] });
+    setArchiving(true);
+    try {
+      await archiveForm(token, id);
+      void queryClient.invalidateQueries({ queryKey: ['admin-forms'] });
+      void queryClient.invalidateQueries({ queryKey: ['admin-form', id] });
+      setArchiveTarget(null);
+    } finally {
+      setArchiving(false);
+    }
   };
 
   return (
@@ -97,7 +107,9 @@ export function FormTable({
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => void onArchive(form.id)}>
+                        <DropdownMenuItem
+                          onClick={() => setArchiveTarget({ id: form.id, name: form.name })}
+                        >
                           Archive
                         </DropdownMenuItem>
                       </DropdownMenuContent>
@@ -109,6 +121,20 @@ export function FormTable({
           </TableBody>
         </Table>
       </div>
+      <ConfirmDialog
+        open={archiveTarget !== null}
+        onOpenChange={(open) => !open && setArchiveTarget(null)}
+        title="Archive this form?"
+        description={
+          archiveTarget
+            ? `"${archiveTarget.name}" will be archived and stop being usable in new conversations.`
+            : undefined
+        }
+        confirmLabel="Archive"
+        variant="destructive"
+        confirming={archiving}
+        onConfirm={() => archiveTarget && void onArchive(archiveTarget.id)}
+      />
     </div>
   );
 }

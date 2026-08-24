@@ -30,7 +30,7 @@ beforeEach(truncateAll);
 async function seedAgentWithRole(
   workspaceId: string,
   role: 'agent' | 'team_lead' | 'admin',
-): Promise<{ token: string }> {
+): Promise<{ agentId: string; token: string }> {
   const { rows } = await ownerPool.query<{ id: string }>(
     `insert into agent (email, display_name, is_admin) values ($1, 'Test Agent', $2) returning id`,
     [`${role}-${Math.random().toString(36).slice(2)}@example.test`, role === 'admin'],
@@ -43,7 +43,7 @@ async function seedAgentWithRole(
     );
   }
   const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId });
-  return { token };
+  return { agentId, token };
 }
 
 describe('GET /workspace-settings', () => {
@@ -101,6 +101,30 @@ describe('POST /workspace-settings', () => {
       inactivity_window_hours: 48,
       form_timeout_minutes: 60,
     });
+  });
+
+  it('writes one change_log row per changed field, attributed to the acting admin', async () => {
+    const workspaceId = await seedWorkspace();
+    const { agentId, token } = await seedAgentWithRole(workspaceId, 'admin');
+
+    await request(app)
+      .post('/workspace-settings')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        max_assigned_tickets: 10,
+        auto_close_days: 7,
+        inactivity_window_hours: 24,
+        form_timeout_minutes: 30,
+      })
+      .expect(200);
+
+    const { rows } = await ownerPool.query<{ field: string; actor_id: string }>(
+      `select field, actor_id from change_log
+        where entity_type = 'workspace_settings' and entity_id = $1 order by field`,
+      [workspaceId],
+    );
+    expect(rows.map((row) => row.field)).toEqual(['max_assigned_tickets']);
+    expect(rows.every((row) => row.actor_id === agentId)).toBe(true);
   });
 
   it('forbids a team lead from writing', async () => {

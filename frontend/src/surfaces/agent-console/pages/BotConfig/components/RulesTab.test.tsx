@@ -72,11 +72,16 @@ describe('RulesTab', () => {
     expect(lockedSwitch).toBeDisabled();
   });
 
-  it('toggling an unlocked rule saves the full updated rules array', async () => {
+  it('toggling an unlocked rule stages the change without saving until confirmed', async () => {
     const saveSpy = vi.spyOn(agentApi, 'saveBotConfig').mockResolvedValue(CONFIG);
     renderTab();
 
     fireEvent.click(screen.getAllByRole('switch')[1]!);
+    expect(saveSpy).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() =>
       expect(saveSpy).toHaveBeenCalledWith('t', {
@@ -87,7 +92,7 @@ describe('RulesTab', () => {
     );
   });
 
-  it('adds a custom rule via the free-text input', async () => {
+  it('adds a custom rule via the free-text input, staged until confirmed', async () => {
     const saveSpy = vi.spyOn(agentApi, 'saveBotConfig').mockResolvedValue(CONFIG);
     renderTab();
 
@@ -95,6 +100,11 @@ describe('RulesTab', () => {
       target: { value: 'No emoji.' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    expect(saveSpy).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() => expect(saveSpy).toHaveBeenCalled());
     const call = saveSpy.mock.calls[0]![1] as { rules: { text: string; source: string }[] };

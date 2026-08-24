@@ -4,11 +4,14 @@ import type { BotConfigView } from '@support/types';
 import { saveBotConfig } from '../../../api/agentApi.ts';
 import { Button } from '../../../components/ui/button.tsx';
 import { Textarea } from '../../../components/ui/textarea.tsx';
+import { ConfirmDialog } from '../../../components/ConfirmDialog.tsx';
 import { HistoryPanel } from './HistoryPanel.tsx';
 
 export function PromptTab({ token, config }: { token: string; config: BotConfigView | undefined }) {
   const queryClient = useQueryClient();
   const [prompt, setPrompt] = useState(config?.prompt ?? '');
+  const [saveConfirmOpen, setSaveConfirmOpen] = useState(false);
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -19,7 +22,11 @@ export function PromptTab({ token, config }: { token: string; config: BotConfigV
 
   const save = useMutation({
     mutationFn: (value: string | null) => saveBotConfig(token, { prompt: value }),
-    onSuccess: () => void invalidate(),
+    onSuccess: () => {
+      setSaveConfirmOpen(false);
+      setResetConfirmOpen(false);
+      void invalidate();
+    },
   });
 
   const insertPlaceholder = (placeholder: string) => {
@@ -50,6 +57,8 @@ export function PromptTab({ token, config }: { token: string; config: BotConfigV
   ];
 
   if (!config) return null;
+
+  const isDirty = prompt !== config.prompt;
 
   return (
     <div className="flex h-full min-h-0 gap-4">
@@ -91,8 +100,8 @@ export function PromptTab({ token, config }: { token: string; config: BotConfigV
           <Button
             type="button"
             size="sm"
-            onClick={() => save.mutate(prompt)}
-            disabled={save.isPending || !prompt.trim()}
+            onClick={() => setSaveConfirmOpen(true)}
+            disabled={save.isPending || !prompt.trim() || !isDirty}
           >
             Save
           </Button>
@@ -101,7 +110,7 @@ export function PromptTab({ token, config }: { token: string; config: BotConfigV
               type="button"
               size="sm"
               variant="outline"
-              onClick={() => save.mutate(null)}
+              onClick={() => setResetConfirmOpen(true)}
               disabled={save.isPending}
             >
               Reset to default
@@ -111,6 +120,25 @@ export function PromptTab({ token, config }: { token: string; config: BotConfigV
         {save.isError && <p className="text-xs text-red-600">{save.error?.message}</p>}
       </div>
       <HistoryPanel token={token} field="prompt" onRestored={invalidate} />
+      <ConfirmDialog
+        open={saveConfirmOpen}
+        onOpenChange={setSaveConfirmOpen}
+        title="Save this prompt?"
+        description="This changes the bot's system prompt fleet-wide for this workspace."
+        confirmLabel="Save"
+        confirming={save.isPending}
+        onConfirm={() => save.mutate(prompt)}
+      />
+      <ConfirmDialog
+        open={resetConfirmOpen}
+        onOpenChange={setResetConfirmOpen}
+        title="Reset prompt to default?"
+        description="This discards your customization."
+        confirmLabel="Reset"
+        variant="destructive"
+        confirming={save.isPending}
+        onConfirm={() => save.mutate(null)}
+      />
     </div>
   );
 }

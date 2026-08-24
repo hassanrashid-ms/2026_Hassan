@@ -477,3 +477,28 @@ export function rollbackBotConfig(
 ): Promise<BotConfigView> {
   return call('/agent/bot-config/rollback', token, { method: 'POST', body: JSON.stringify(input) });
 }
+
+/**
+ * `/agent/workspace-settings` is a local frontend-side contract, not sourced
+ * from `@support/types`, mirroring AgentWorkloadResponse above.
+ */
+export type WorkspaceSettingsView = {
+  max_assigned_tickets: number;
+  auto_close_days: number;
+  inactivity_window_hours: number;
+  form_timeout_minutes: number;
+};
+
+export function fetchWorkspaceSettings(token: string): Promise<WorkspaceSettingsView> {
+  return call('/agent/workspace-settings', token);
+}
+
+export function saveWorkspaceSettings(
+  token: string,
+  patch: WorkspaceSettingsView,
+): Promise<WorkspaceSettingsView> {
+  return call('/agent/workspace-settings', token, {
+    method: 'POST',
+    body: JSON.stringify(patch),
+  });
+}

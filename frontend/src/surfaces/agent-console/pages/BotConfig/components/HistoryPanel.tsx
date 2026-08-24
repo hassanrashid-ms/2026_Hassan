@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { fetchBotConfigHistory, rollbackBotConfig } from '../../../api/agentApi.ts';
 import { Button } from '../../../components/ui/button.tsx';
 import { ScrollArea } from '../../../components/ui/scroll-area.tsx';
+import { ConfirmDialog } from '../../../components/ConfirmDialog.tsx';
 
 /**
  * "Restore" always targets the entry's `before_value` — the state right
@@ -27,9 +29,13 @@ export function HistoryPanel({
   const restore = useMutation({
     mutationFn: (changeLogId: string) =>
       rollbackBotConfig(token, { field, change_log_id: changeLogId, side: 'before' }),
-    onSuccess: () => onRestored(),
+    onSuccess: () => {
+      setRestoreTarget(null);
+      onRestored();
+    },
   });
 
+  const [restoreTarget, setRestoreTarget] = useState<string | null>(null);
   const entries = historyQuery.data?.entries ?? [];
 
   return (
@@ -48,7 +54,7 @@ export function HistoryPanel({
                 type="button"
                 size="sm"
                 variant="outline"
-                onClick={() => restore.mutate(entry.id)}
+                onClick={() => setRestoreTarget(entry.id)}
                 disabled={restore.isPending}
               >
                 Restore
@@ -59,6 +65,15 @@ export function HistoryPanel({
         </ul>
       </ScrollArea>
       {restore.isError && <p className="text-xs text-red-600">{restore.error?.message}</p>}
+      <ConfirmDialog
+        open={restoreTarget !== null}
+        onOpenChange={(open) => !open && setRestoreTarget(null)}
+        title="Roll back to this version?"
+        description="This overwrites the current value with the historical one shown here."
+        confirmLabel="Roll back"
+        confirming={restore.isPending}
+        onConfirm={() => restoreTarget && restore.mutate(restoreTarget)}
+      />
     </div>
   );
 }
