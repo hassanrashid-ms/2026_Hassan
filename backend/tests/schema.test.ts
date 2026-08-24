@@ -6,6 +6,7 @@ const EXPECTED_TABLES = [
   'agent',
   'article',
   'article_attachment',
+  'attachment',
   'bot_config',
   'change_log',
   'conversation',
