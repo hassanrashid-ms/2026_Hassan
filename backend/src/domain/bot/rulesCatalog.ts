@@ -1,22 +1,22 @@
-import { DEFAULT_BOT_RULES } from './defaultPrompt.ts'
+import { DEFAULT_BOT_RULES } from './defaultPrompt.ts';
 
-export type RuleEnforcement = 'code' | 'prompt'
+export type RuleEnforcement = 'code' | 'prompt';
 
 export type RuleEntry = {
-  key: string
-  text: string
-  enabled: boolean
-  locked: boolean
-  source: 'builtin' | 'custom'
-}
+  key: string;
+  text: string;
+  enabled: boolean;
+  locked: boolean;
+  source: 'builtin' | 'custom';
+};
 
 type CatalogRule = {
-  key: string
-  text: string
-  defaultEnabled: true
-  locked: boolean
-  enforcement: RuleEnforcement
-}
+  key: string;
+  text: string;
+  defaultEnabled: true;
+  locked: boolean;
+  enforcement: RuleEnforcement;
+};
 
 /**
  * Verbatim split of DEFAULT_BOT_RULES, in its shipped order — the doc's
@@ -80,18 +80,23 @@ export const DEFAULT_BOT_RULES_CATALOG: readonly CatalogRule[] = [
     locked: false,
     enforcement: 'prompt',
   },
-] as const
+] as const;
 
 export const LOCKED_RULE_KEYS: ReadonlySet<string> = new Set(
   DEFAULT_BOT_RULES_CATALOG.filter((r) => r.locked).map((r) => r.key),
-)
+);
 
-export const BUILTIN_RULE_KEYS: ReadonlySet<string> = new Set(DEFAULT_BOT_RULES_CATALOG.map((r) => r.key))
+export const BUILTIN_RULE_KEYS: ReadonlySet<string> = new Set(
+  DEFAULT_BOT_RULES_CATALOG.map((r) => r.key),
+);
 
 /** enforcement is display-only and never stored — always re-derived from the catalog. */
-export function deriveEnforcement(entry: { key: string; source: 'builtin' | 'custom' }): RuleEnforcement {
-  if (entry.source === 'custom') return 'prompt'
-  return DEFAULT_BOT_RULES_CATALOG.find((r) => r.key === entry.key)?.enforcement ?? 'prompt'
+export function deriveEnforcement(entry: {
+  key: string;
+  source: 'builtin' | 'custom';
+}): RuleEnforcement {
+  if (entry.source === 'custom') return 'prompt';
+  return DEFAULT_BOT_RULES_CATALOG.find((r) => r.key === entry.key)?.enforcement ?? 'prompt';
 }
 
 /** "Version 1" — what a freshly seeded or reset-to-default workspace's rules look like. */
@@ -102,5 +107,5 @@ export function buildBaselineRules(): RuleEntry[] {
     enabled: true,
     locked: r.locked,
     source: 'builtin' as const,
-  }))
+  }));
 }

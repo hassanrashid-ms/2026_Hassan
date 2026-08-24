@@ -6,8 +6,8 @@
 endpoints out of scope (§7) and treats them as an external dependency
 **Depends on:** [`2026-08-04-database-and-schema-design.md`](2026-08-04-database-and-schema-design.md)
 
-The SDK spec froze a 4-endpoint contract with an explicit rule: *"Add response fields freely; never
-remove or retype one — old builds sit in app stores for years and cannot be recalled."* This document
+The SDK spec froze a 4-endpoint contract with an explicit rule: _"Add response fields freely; never
+remove or retype one — old builds sit in app stores for years and cannot be recalled."_ This document
 is the server side of that contract, plus the auth endpoint the game's backend calls.
 
 **Getting this right matters more than getting it fast.** A shipped Unity build cannot be recalled, so
@@ -15,13 +15,13 @@ a mistake here is permanent for the lifetime of that build in the store.
 
 ## Endpoint map
 
-| Endpoint | Caller | Auth |
-|---|---|---|
-| `POST /auth/player-token` | the **game's** backend | workspace secret |
-| `POST /sdk/sessions/start` | SDK (via Outbox) | player JWT |
-| `POST /sdk/sessions/end` | SDK (via Outbox) | player JWT |
-| `POST /sdk/incidents` | SDK (via Outbox) | player JWT |
-| `GET /sdk/unread` | SDK (direct poll) | player JWT |
+| Endpoint                   | Caller                 | Auth             |
+| -------------------------- | ---------------------- | ---------------- |
+| `POST /auth/player-token`  | the **game's** backend | workspace secret |
+| `POST /sdk/sessions/start` | SDK (via Outbox)       | player JWT       |
+| `POST /sdk/sessions/end`   | SDK (via Outbox)       | player JWT       |
+| `POST /sdk/incidents`      | SDK (via Outbox)       | player JWT       |
+| `GET /sdk/unread`          | SDK (direct poll)      | player JWT       |
 
 **The SDK never holds a secret.** The workspace secret lives only in the game's own backend, which
 mints a short-lived player JWT and hands it to the client. The SDK ships
@@ -29,12 +29,12 @@ mints a short-lived player JWT and hands it to the client. The SDK ships
 
 ## Headers on every `/sdk/*` request
 
-| Header | Use |
-|---|---|
-| `Idempotency-Key` | Logged, **not load-bearing** — see *Idempotency* below |
-| `X-Support-Workspace` | Workspace slug. Cross-checked against the JWT claim; a mismatch is `403` |
-| `X-Support-Sdk` | SDK version, for `sdk_incident` triage |
-| `X-Support-Client-Version` | Game build version |
+| Header                     | Use                                                                      |
+| -------------------------- | ------------------------------------------------------------------------ |
+| `Idempotency-Key`          | Logged, **not load-bearing** — see _Idempotency_ below                   |
+| `X-Support-Workspace`      | Workspace slug. Cross-checked against the JWT claim; a mismatch is `403` |
+| `X-Support-Sdk`            | SDK version, for `sdk_incident` triage                                   |
+| `X-Support-Client-Version` | Game build version                                                       |
 
 ## Idempotency
 
@@ -81,41 +81,41 @@ JWT claims: `workspace_id`, `player_id`, `external_player_id`, `iat`, `exp`. **1
 because it travels in a URL fragment; the web app refreshes against its own session, not by re-reading
 the fragment.
 
-| Failure | Response |
-|---|---|
-| Bad or missing workspace secret | `401` |
-| Workspace not found or disabled | `404` |
-| Malformed `external_player_id` | `422` |
+| Failure                         | Response |
+| ------------------------------- | -------- |
+| Bad or missing workspace secret | `401`    |
+| Workspace not found or disabled | `404`    |
+| Malformed `external_player_id`  | `422`    |
 
 ## `POST /sdk/sessions/start`
 
 ```jsonc
 {
-  "session_id":  "b3f1…",              // client-generated, becomes session.id
-  "entry_point": "settings_menu",       // context only, NEVER classification
-  "started_at":  "2026-08-04T09:12:00Z",
+  "session_id": "b3f1…", // client-generated, becomes session.id
+  "entry_point": "settings_menu", // context only, NEVER classification
+  "started_at": "2026-08-04T09:12:00Z",
   "snapshot": {
-    "player_id":          "UserId7661",
-    "client_version":     "6.2.01",
-    "platform":           "ios",
-    "os_version":         "26.5.2",
-    "device_model":       "iPhone 13 Pro Max",
-    "locale":             "en-GB",
-    "player_level":       34,
-    "total_spend":        0.00,
-    "spend_tier":         "non-payer",
+    "player_id": "UserId7661",
+    "client_version": "6.2.01",
+    "platform": "ios",
+    "os_version": "26.5.2",
+    "device_model": "iPhone 13 Pro Max",
+    "locale": "en-GB",
+    "player_level": 34,
+    "total_spend": 0.0,
+    "spend_tier": "non-payer",
     "account_created_at": "2026-07-27T09:12:00Z",
-    "last_session_at":    "2026-08-03T08:40:00Z",
-    "extra":            { "ab_bucket": "B", "collection_status": "event_in_progress" },
-    "degraded_reason":   null            // set when provider fields threw
-  }
+    "last_session_at": "2026-08-03T08:40:00Z",
+    "extra": { "ab_bucket": "B", "collection_status": "event_in_progress" },
+    "degraded_reason": null, // set when provider fields threw
+  },
 }
 ```
 
 Server does, in one transaction:
 
 1. Upsert `session` — `ON CONFLICT (id) DO NOTHING`.
-2. **Split the snapshot** against the `declared_field` set *current at this moment*. Declared keys go
+2. **Split the snapshot** against the `declared_field` set _current at this moment_. Declared keys go
    to `declared`; everything else, including all of `extra`, goes to `raw`. **The split is permanent —
    no backfill, ever.** This is what makes promotion non-retroactive.
 3. Upsert `player_state_snapshot` on `session_id`.
@@ -125,7 +125,7 @@ Server does, in one transaction:
 200 { "ok": true }
 ```
 
-**Never `4xx` for a bad snapshot.** A malformed, empty or absent snapshot is a *state*: write the row
+**Never `4xx` for a bad snapshot.** A malformed, empty or absent snapshot is a _state_: write the row
 with `is_missing = true` or `degraded_reason` set and return `200`. Rejecting it would mean the
 conversations where something is broken are the ones that fail to attach context.
 
@@ -142,10 +142,10 @@ repair step, no ordering requirement.
 
 ```jsonc
 {
-  "session_id":           "b3f1…",
-  "duration_ms":          184200,
+  "session_id": "b3f1…",
+  "duration_ms": 184200,
   "conversation_created": false,
-  "articles_read":        ["a_123", "a_456"]
+  "articles_read": ["a_123", "a_456"],
 }
 ```
 
@@ -167,8 +167,8 @@ because the array only arrives if `sessions/end` arrives.
 ```
 
 **If this never arrives, the session has no `ended_at`.** The SDK spec flags the same risk from the
-other side: *"The web surface must call `close`, or the session never ends and the visit is missing
-from the self-serve denominator."* Two mitigations, both needed:
+other side: _"The web surface must call `close`, or the session never ends and the visit is missing
+from the self-serve denominator."_ Two mitigations, both needed:
 
 - A repeatable job closes sessions with no `ended_at` older than 30 minutes, marking them
   `ended_by = 'timeout'`.
@@ -180,12 +180,12 @@ from the self-serve denominator."* Two mitigations, both needed:
 
 ```jsonc
 {
-  "incident_id":    "c7a2…",          // client-generated → idempotent
-  "session_id":     "b3f1…",          // nullable: may fail before a session exists
-  "kind":           "token_timeout",
-  "detail":         "5s elapsed, no response",
-  "sdk_version":    "1.0.2",
-  "client_version": "6.2.01"
+  "incident_id": "c7a2…", // client-generated → idempotent
+  "session_id": "b3f1…", // nullable: may fail before a session exists
+  "kind": "token_timeout",
+  "detail": "5s elapsed, no response",
+  "sdk_version": "1.0.2",
+  "client_version": "6.2.01",
 }
 ```
 
@@ -198,7 +198,7 @@ low and it inherits workspace scoping, the BRIN index and append-only enforcemen
 
 **Always `200` if the body parses.** An incident report that itself errors is worse than useless. And
 **something must watch this stream**: a rising incident count is how you learn a release broke support
-entry for an entire platform. Per *"failure is never silent"*, an unwatched incident stream is the
+entry for an entire platform. Per _"failure is never silent"_, an unwatched incident stream is the
 silent failure it was built to prevent.
 
 ## `GET /sdk/unread`
@@ -249,13 +249,13 @@ makes a cross-workspace write impossible regardless of handler bugs.
 
 Solo, sequential. The seam is what needs proving first, so it comes before any real UI.
 
-| Step | Work | Done when |
-|---|---|---|
-| **1** | pnpm workspace, Drizzle schema, RLS policies, docker-compose (Postgres + Redis), seed one workspace and the `Other` taxonomy | `drizzle-kit push` runs clean; the cross-workspace isolation test passes with `404` |
-| **2** | `POST /auth/player-token` + the four `/sdk/*` endpoints | curl mints a token, starts a session, and a `player_state_snapshot` row appears with the split correct |
-| **3** | Web surface **stub** — reads `#t=`, calls the API, renders the player state, calls `SupportBridge.post({type:'close'})`. Deliberately ugly | Opening the URL by hand shows the right player's state and ends the session |
-| **4** | SDK `Assets/Support/` per its own spec, pointed at the real endpoint | A button in Unity opens an embedded webview showing that player's state; killing the network still opens it and queues `sessions/start` |
-| **5** | Only now: `POST /conversations`, `POST /messages`, the real chat UI, the agent inbox | The core loop — player message → agent reply → player sees it |
+| Step  | Work                                                                                                                                       | Done when                                                                                                                               |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| **1** | pnpm workspace, Drizzle schema, RLS policies, docker-compose (Postgres + Redis), seed one workspace and the `Other` taxonomy               | `drizzle-kit push` runs clean; the cross-workspace isolation test passes with `404`                                                     |
+| **2** | `POST /auth/player-token` + the four `/sdk/*` endpoints                                                                                    | curl mints a token, starts a session, and a `player_state_snapshot` row appears with the split correct                                  |
+| **3** | Web surface **stub** — reads `#t=`, calls the API, renders the player state, calls `SupportBridge.post({type:'close'})`. Deliberately ugly | Opening the URL by hand shows the right player's state and ends the session                                                             |
+| **4** | SDK `Assets/Support/` per its own spec, pointed at the real endpoint                                                                       | A button in Unity opens an embedded webview showing that player's state; killing the network still opens it and queues `sessions/start` |
+| **5** | Only now: `POST /conversations`, `POST /messages`, the real chat UI, the agent inbox                                                       | The core loop — player message → agent reply → player sees it                                                                           |
 
 Steps 1–4 prove the seam: token issuance, the fragment handoff, snapshot delivery, the bridge, and
 `close` ending the session. That seam spans both repos and is where the surprises live, so it gets

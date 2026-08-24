@@ -1,32 +1,37 @@
-import { useState } from 'react'
+import { useState } from 'react';
 
 type ComposerProps = {
-  onSend: (body: string, visibility?: 'public' | 'internal') => void
-  disabled?: boolean
+  onSend: (body: string, visibility?: 'public' | 'internal') => void;
+  disabled?: boolean;
   /** Only the agent console passes this. The player surface's Composer usage omits it, so
    *  onSend is always called with visibility undefined there — there is no code path for a
    *  player to send an internal note. */
-  allowVisibilityToggle?: boolean
+  allowVisibilityToggle?: boolean;
   /** Defaults to today's copy, so the webview surface is untouched. */
-  placeholder?: string
-}
+  placeholder?: string;
+};
 
 /**
  * Styled with bare Tailwind utilities against the --color-* tokens rather than
  * a semantic classname — shared across surfaces, each of which defines those
  * tokens differently in its own scoped stylesheet (see ChatThread.tsx).
  */
-export function Composer({ onSend, disabled, allowVisibilityToggle, placeholder = 'Type a message…' }: ComposerProps) {
-  const [value, setValue] = useState('')
-  const [visibility, setVisibility] = useState<'public' | 'internal'>('public')
+export function Composer({
+  onSend,
+  disabled,
+  allowVisibilityToggle,
+  placeholder = 'Type a message…',
+}: ComposerProps) {
+  const [value, setValue] = useState('');
+  const [visibility, setVisibility] = useState<'public' | 'internal'>('public');
 
   const submit = () => {
-    const trimmed = value.trim()
-    if (trimmed.length === 0) return
-    onSend(trimmed, allowVisibilityToggle ? visibility : undefined)
-    setValue('')
-    setVisibility('public')
-  }
+    const trimmed = value.trim();
+    if (trimmed.length === 0) return;
+    onSend(trimmed, allowVisibilityToggle ? visibility : undefined);
+    setValue('');
+    setVisibility('public');
+  };
 
   return (
     <div className="flex shrink-0 items-center gap-2 border-t border-muted/20 bg-bg p-2">
@@ -64,8 +69,8 @@ export function Composer({ onSend, disabled, allowVisibilityToggle, placeholder 
         onChange={(event) => setValue(event.target.value)}
         onKeyDown={(event) => {
           if (event.key === 'Enter' && !event.shiftKey) {
-            event.preventDefault()
-            submit()
+            event.preventDefault();
+            submit();
           }
         }}
         placeholder={placeholder}
@@ -83,5 +88,5 @@ export function Composer({ onSend, disabled, allowVisibilityToggle, placeholder 
         Send
       </button>
     </div>
-  )
+  );
 }

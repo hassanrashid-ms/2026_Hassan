@@ -1,8 +1,8 @@
-import { useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { createWorkspace } from '../../../api/adminApi.ts'
-import { loadAdminSession } from '../../../lib/adminSession.ts'
-import { Button } from '../../../components/ui/button.tsx'
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { createWorkspace } from '../../../api/adminApi.ts';
+import { loadAdminSession } from '../../../lib/adminSession.ts';
+import { Button } from '../../../components/ui/button.tsx';
 import {
   Dialog,
   DialogContent,
@@ -10,56 +10,58 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-} from '../../../components/ui/dialog.tsx'
-import { Input } from '../../../components/ui/input.tsx'
+} from '../../../components/ui/dialog.tsx';
+import { Input } from '../../../components/ui/input.tsx';
 
 function slugify(value: string): string {
   return value
     .toLowerCase()
     .replace(/\s+/g, '-')
-    .replace(/[^a-z0-9-]/g, '')
+    .replace(/[^a-z0-9-]/g, '');
 }
 
 export function CreateWorkspaceDialog({
   open,
   onOpenChange,
 }: {
-  open: boolean
-  onOpenChange: (open: boolean) => void
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }) {
-  const session = loadAdminSession()
-  const queryClient = useQueryClient()
-  const [name, setName] = useState('')
-  const [slug, setSlug] = useState('')
-  const [slugTouched, setSlugTouched] = useState(false)
+  const session = loadAdminSession();
+  const queryClient = useQueryClient();
+  const [name, setName] = useState('');
+  const [slug, setSlug] = useState('');
+  const [slugTouched, setSlugTouched] = useState(false);
 
   const reset = () => {
-    setName('')
-    setSlug('')
-    setSlugTouched(false)
-  }
+    setName('');
+    setSlug('');
+    setSlugTouched(false);
+  };
 
   const create = useMutation({
     mutationFn: () => createWorkspace(session!.token, { name, slug }),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['adminWorkspaces'] })
-      reset()
-      onOpenChange(false)
+      void queryClient.invalidateQueries({ queryKey: ['adminWorkspaces'] });
+      reset();
+      onOpenChange(false);
     },
-  })
+  });
 
   return (
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        if (!next) reset()
-        onOpenChange(next)
+        if (!next) reset();
+        onOpenChange(next);
       }}
     >
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Create workspace</DialogTitle>
-          <DialogDescription>The slug is used in SDK requests and is immutable once created.</DialogDescription>
+          <DialogDescription>
+            The slug is used in SDK requests and is immutable once created.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col gap-3">
@@ -71,9 +73,9 @@ export function CreateWorkspaceDialog({
               id="workspace-name"
               value={name}
               onChange={(e) => {
-                const next = e.target.value
-                setName(next)
-                if (!slugTouched) setSlug(slugify(next))
+                const next = e.target.value;
+                setName(next);
+                if (!slugTouched) setSlug(slugify(next));
               }}
               placeholder="Demo Game"
             />
@@ -86,8 +88,8 @@ export function CreateWorkspaceDialog({
               id="workspace-slug"
               value={slug}
               onChange={(e) => {
-                setSlugTouched(true)
-                setSlug(e.target.value)
+                setSlugTouched(true);
+                setSlug(e.target.value);
               }}
               placeholder="demo-game"
             />
@@ -108,5 +110,5 @@ export function CreateWorkspaceDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

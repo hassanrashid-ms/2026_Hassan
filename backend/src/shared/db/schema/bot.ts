@@ -1,7 +1,7 @@
-import { boolean, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
-import { workspace } from './identity.ts'
+import { boolean, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { workspace } from './identity.ts';
 
-const tz = { withTimezone: true, mode: 'date' } as const
+const tz = { withTimezone: true, mode: 'date' } as const;
 
 /**
  * What the orchestrator gates on, and the prompt it sends.
@@ -28,4 +28,4 @@ export const botConfig = pgTable('bot_config', {
   limitsConfig: jsonb('limits_config').notNull(),
   createdAt: timestamp('created_at', tz).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', tz).notNull().defaultNow(),
-})
+});

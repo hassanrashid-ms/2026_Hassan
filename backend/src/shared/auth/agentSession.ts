@@ -1,8 +1,8 @@
-import { SignJWT, jwtVerify } from 'jose'
-import { getEnv } from '../../env.ts'
+import { SignJWT, jwtVerify } from 'jose';
+import { getEnv } from '../../env.ts';
 
-const ISSUER = 'support-crm'
-const AUDIENCE = 'support-agent-dev'
+const ISSUER = 'support-crm';
+const AUDIENCE = 'support-agent-dev';
 
 /**
  * A regular agent's workspace is fixed at login (one row per membership), so it
@@ -14,10 +14,10 @@ const AUDIENCE = 'support-agent-dev'
  */
 export type AgentSessionClaims =
   | { agent_id: string; workspace_id: string; is_admin?: false }
-  | { agent_id: string; is_admin: true }
+  | { agent_id: string; is_admin: true };
 
 function key(): Uint8Array {
-  return new TextEncoder().encode(getEnv().AGENT_SESSION_JWT_SECRET)
+  return new TextEncoder().encode(getEnv().AGENT_SESSION_JWT_SECRET);
 }
 
 /**
@@ -36,32 +36,32 @@ export async function signAgentSession(
     .setAudience(AUDIENCE)
     .setIssuedAt()
     .setExpirationTime(`${ttlSeconds}s`)
-    .sign(key())
+    .sign(key());
 }
 
 export class InvalidAgentSession extends Error {}
 
 export async function verifyAgentSession(token: string): Promise<AgentSessionClaims> {
-  let payload: Record<string, unknown>
+  let payload: Record<string, unknown>;
   try {
-    ;({ payload } = await jwtVerify(token, key(), {
+    ({ payload } = await jwtVerify(token, key(), {
       issuer: ISSUER,
       audience: AUDIENCE,
       algorithms: ['HS256'],
-    }))
+    }));
   } catch (error) {
-    throw new InvalidAgentSession(error instanceof Error ? error.message : 'token rejected')
+    throw new InvalidAgentSession(error instanceof Error ? error.message : 'token rejected');
   }
 
-  const { agent_id, workspace_id, is_admin } = payload
+  const { agent_id, workspace_id, is_admin } = payload;
   if (typeof agent_id !== 'string') {
-    throw new InvalidAgentSession('token is missing a required claim')
+    throw new InvalidAgentSession('token is missing a required claim');
   }
   if (is_admin === true) {
-    return { agent_id, is_admin: true }
+    return { agent_id, is_admin: true };
   }
   if (typeof workspace_id !== 'string') {
-    throw new InvalidAgentSession('token is missing a required claim')
+    throw new InvalidAgentSession('token is missing a required claim');
   }
-  return { agent_id, workspace_id }
+  return { agent_id, workspace_id };
 }

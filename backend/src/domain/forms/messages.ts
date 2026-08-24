@@ -13,8 +13,8 @@ const FORM_SUMMARY_MESSAGES = {
   completed: 'Thanks — your answers are with the team now.',
   partial: 'Thanks — what you answered is with the team now.',
   skipped: 'No problem — this is with the team now.',
-} as const
+} as const;
 
 export function formSummaryMessage(status: keyof typeof FORM_SUMMARY_MESSAGES): string {
-  return FORM_SUMMARY_MESSAGES[status]
+  return FORM_SUMMARY_MESSAGES[status];
 }

@@ -1,40 +1,44 @@
-import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
-import { ExternalLink, Pencil, Plus } from 'lucide-react'
-import { fetchWorkspaces, type WorkspaceSummary } from '../../api/adminApi.ts'
-import { loadAdminSession } from '../../lib/adminSession.ts'
-import { Button } from '../../components/ui/button.tsx'
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card.tsx'
-import { Skeleton } from '../../components/ui/skeleton.tsx'
-import { CreateWorkspaceDialog } from './components/CreateWorkspaceDialog.tsx'
-import { RenameWorkspaceDialog } from './components/RenameWorkspaceDialog.tsx'
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
+import { ExternalLink, Pencil, Plus } from 'lucide-react';
+import { fetchWorkspaces, type WorkspaceSummary } from '../../api/adminApi.ts';
+import { loadAdminSession } from '../../lib/adminSession.ts';
+import { Button } from '../../components/ui/button.tsx';
+import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card.tsx';
+import { Skeleton } from '../../components/ui/skeleton.tsx';
+import { CreateWorkspaceDialog } from './components/CreateWorkspaceDialog.tsx';
+import { RenameWorkspaceDialog } from './components/RenameWorkspaceDialog.tsx';
 
 export function Overview() {
-  const session = loadAdminSession()
-  const navigate = useNavigate()
-  const [createOpen, setCreateOpen] = useState(false)
-  const [renameTarget, setRenameTarget] = useState<WorkspaceSummary | null>(null)
+  const session = loadAdminSession();
+  const navigate = useNavigate();
+  const [createOpen, setCreateOpen] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<WorkspaceSummary | null>(null);
 
   const workspacesQuery = useQuery({
     queryKey: ['adminWorkspaces'],
     queryFn: () => fetchWorkspaces(session!.token),
     enabled: session !== null,
-  })
+  });
 
-  if (!session) return null
+  if (!session) return null;
 
-  const workspaces = workspacesQuery.data?.workspaces ?? []
+  const workspaces = workspacesQuery.data?.workspaces ?? [];
 
   // Reuses the admin's own login token as-is — no new token is minted (see
   // 2026-08-21-superadmin-workspace-console-access-design.md). Only the token
   // goes in the fragment; workspace/agent id and display name aren't secrets,
   // so the query string is fine for them (mirrors lib/boot.ts's convention).
   const openConsole = (workspaceId: string) => {
-    const query = new URLSearchParams({ workspace: workspaceId, agentId: session.agentId, name: session.displayName })
-    const fragment = new URLSearchParams({ t: session.token })
-    window.open(`/inbox?${query.toString()}#${fragment.toString()}`, '_blank', 'noopener')
-  }
+    const query = new URLSearchParams({
+      workspace: workspaceId,
+      agentId: session.agentId,
+      name: session.displayName,
+    });
+    const fragment = new URLSearchParams({ t: session.token });
+    window.open(`/inbox?${query.toString()}#${fragment.toString()}`, '_blank', 'noopener');
+  };
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -55,7 +59,9 @@ export function Overview() {
           </div>
         )}
 
-        {workspacesQuery.isError && <p className="text-sm text-red-600">Could not load workspaces.</p>}
+        {workspacesQuery.isError && (
+          <p className="text-sm text-red-600">Could not load workspaces.</p>
+        )}
 
         {workspacesQuery.isSuccess && workspaces.length === 0 && (
           <p className="text-sm text-muted">No workspaces yet.</p>
@@ -78,8 +84,8 @@ export function Overview() {
                       size="icon"
                       className="size-7"
                       onClick={(e) => {
-                        e.stopPropagation()
-                        openConsole(workspace.id)
+                        e.stopPropagation();
+                        openConsole(workspace.id);
                       }}
                     >
                       <ExternalLink className="size-3.5" />
@@ -91,8 +97,8 @@ export function Overview() {
                       size="icon"
                       className="size-7"
                       onClick={(e) => {
-                        e.stopPropagation()
-                        setRenameTarget(workspace)
+                        e.stopPropagation();
+                        setRenameTarget(workspace);
                       }}
                     >
                       <Pencil className="size-3.5" />
@@ -117,9 +123,9 @@ export function Overview() {
       <RenameWorkspaceDialog
         workspace={renameTarget}
         onOpenChange={(open) => {
-          if (!open) setRenameTarget(null)
+          if (!open) setRenameTarget(null);
         }}
       />
     </div>
-  )
+  );
 }

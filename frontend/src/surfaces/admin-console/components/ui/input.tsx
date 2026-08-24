@@ -1,5 +1,5 @@
-import * as React from 'react'
-import { cn } from '../../lib/cn.ts'
+import * as React from 'react';
+import { cn } from '../../lib/cn.ts';
 
 function Input({ className, type, ...props }: React.ComponentProps<'input'>) {
   return (
@@ -13,7 +13,7 @@ function Input({ className, type, ...props }: React.ComponentProps<'input'>) {
       )}
       {...props}
     />
-  )
+  );
 }
 
-export { Input }
+export { Input };

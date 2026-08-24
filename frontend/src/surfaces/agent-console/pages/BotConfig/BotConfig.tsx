@@ -1,21 +1,21 @@
-import { useQuery } from '@tanstack/react-query'
-import { fetchBotConfig } from '../../api/agentApi.ts'
-import { loadAgentSession } from '../../lib/agentSession.ts'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs.tsx'
-import { PromptTab } from './components/PromptTab.tsx'
-import { RulesTab } from './components/RulesTab.tsx'
-import { ToolsTab } from './components/ToolsTab.tsx'
+import { useQuery } from '@tanstack/react-query';
+import { fetchBotConfig } from '../../api/agentApi.ts';
+import { loadAgentSession } from '../../lib/agentSession.ts';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs.tsx';
+import { PromptTab } from './components/PromptTab.tsx';
+import { RulesTab } from './components/RulesTab.tsx';
+import { ToolsTab } from './components/ToolsTab.tsx';
 
 export function BotConfig() {
-  const session = loadAgentSession()
+  const session = loadAgentSession();
 
   const configQuery = useQuery({
     queryKey: ['bot-config'],
     queryFn: () => fetchBotConfig(session!.token),
     enabled: session !== null,
-  })
+  });
 
-  if (!session) return null
+  if (!session) return null;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -39,5 +39,5 @@ export function BotConfig() {
         </TabsContent>
       </Tabs>
     </div>
-  )
+  );
 }

@@ -1,6 +1,6 @@
-import { useQuery } from '@tanstack/react-query'
-import { useSupport } from '@/surfaces/webview/components/SupportContext'
-import { fetchArticleDetail } from '@/surfaces/webview/api/surfaceApi'
+import { useQuery } from '@tanstack/react-query';
+import { useSupport } from '@/surfaces/webview/components/SupportContext';
+import { fetchArticleDetail } from '@/surfaces/webview/api/surfaceApi';
 
 /**
  * Shared by ArticleSheet (which renders the body) and SupportHome (which only
@@ -8,11 +8,11 @@ import { fetchArticleDetail } from '@/surfaces/webview/api/surfaceApi'
  * TanStack dedupes them into one request rather than two.
  */
 export function useArticleDetail(articleId: string | null) {
-  const { boot } = useSupport()
+  const { boot } = useSupport();
 
   return useQuery({
     queryKey: ['surfaceArticleDetail', boot?.token, articleId],
     queryFn: () => fetchArticleDetail(boot!.token, articleId!),
     enabled: boot !== null && articleId !== null,
-  })
+  });
 }

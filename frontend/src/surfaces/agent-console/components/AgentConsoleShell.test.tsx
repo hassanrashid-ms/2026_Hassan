@@ -1,11 +1,11 @@
-import { describe, expect, it, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { AgentConsoleShell } from './AgentConsoleShell.tsx'
-import { loadAgentSession } from '../lib/agentSession.ts'
+import { describe, expect, it, beforeEach } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { AgentConsoleShell } from './AgentConsoleShell.tsx';
+import { loadAgentSession } from '../lib/agentSession.ts';
 
 function setLocation(url: string) {
-  window.history.pushState(null, '', url)
+  window.history.pushState(null, '', url);
 }
 
 function renderShell() {
@@ -16,40 +16,40 @@ function renderShell() {
         <Route path="*" element={<AgentConsoleShell />} />
       </Routes>
     </MemoryRouter>,
-  )
+  );
 }
 
 describe('AgentConsoleShell console-boot bootstrap', () => {
   beforeEach(() => {
-    localStorage.clear()
-    window.history.pushState(null, '', '/')
-  })
+    localStorage.clear();
+    window.history.pushState(null, '', '/');
+  });
 
   it('consumes an admin deep-link (query + fragment), saves it as a session, and scrubs the token from the URL', async () => {
-    setLocation('/inbox?workspace=ws-1&agentId=admin-1&name=Ada%20Admin#t=admin.jwt.token')
+    setLocation('/inbox?workspace=ws-1&agentId=admin-1&name=Ada%20Admin#t=admin.jwt.token');
 
-    renderShell()
+    renderShell();
 
-    expect(await screen.findByText('Ada Admin')).toBeInTheDocument()
+    expect(await screen.findByText('Ada Admin')).toBeInTheDocument();
 
-    const session = loadAgentSession()
+    const session = loadAgentSession();
     expect(session).toMatchObject({
       token: 'admin.jwt.token',
       agentId: 'admin-1',
       displayName: 'Ada Admin',
       workspaceId: 'ws-1',
-    })
+    });
 
     // Fragment is gone; the query string (not a secret) is left alone.
-    expect(window.location.hash).toBe('')
-    expect(window.location.search).toBe('?workspace=ws-1&agentId=admin-1&name=Ada%20Admin')
-  })
+    expect(window.location.hash).toBe('');
+    expect(window.location.search).toBe('?workspace=ws-1&agentId=admin-1&name=Ada%20Admin');
+  });
 
   it('redirects to /login when there is no existing session and no boot data in the URL', async () => {
-    setLocation('/inbox')
+    setLocation('/inbox');
 
-    renderShell()
+    renderShell();
 
-    expect(await screen.findByText('Login Screen')).toBeInTheDocument()
-  })
-})
+    expect(await screen.findByText('Login Screen')).toBeInTheDocument();
+  });
+});

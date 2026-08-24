@@ -1,11 +1,11 @@
-import { sql } from 'drizzle-orm'
-import { bigserial, index, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
-import { eventActorType } from './enums.ts'
-import { workspace } from './identity.ts'
-import { conversation } from './conversations.ts'
-import { session } from './players.ts'
+import { sql } from 'drizzle-orm';
+import { bigserial, index, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { eventActorType } from './enums.ts';
+import { workspace } from './identity.ts';
+import { conversation } from './conversations.ts';
+import { session } from './players.ts';
 
-const tz = { withTimezone: true, mode: 'date' } as const
+const tz = { withTimezone: true, mode: 'date' } as const;
 
 /**
  * The reporting spine, append-only. Enforcement is REVOKE UPDATE, DELETE in
@@ -24,12 +24,17 @@ export const event = pgTable(
       .references(() => workspace.id, { onDelete: 'restrict' }),
     /** text, not an enum: new types arrive every slice. */
     type: text('type').notNull(),
-    conversationId: uuid('conversation_id').references(() => conversation.id, { onDelete: 'restrict' }),
+    conversationId: uuid('conversation_id').references(() => conversation.id, {
+      onDelete: 'restrict',
+    }),
     sessionId: uuid('session_id').references(() => session.id, { onDelete: 'restrict' }),
     /** No FK: this holds an agent id or a player id depending on actor_type. */
     actorId: uuid('actor_id'),
     actorType: eventActorType('actor_type').notNull(),
-    payload: jsonb('payload').$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
+    payload: jsonb('payload')
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
     occurredAt: timestamp('occurred_at', tz).notNull().defaultNow(),
   },
   (t) => [
@@ -38,4 +43,4 @@ export const event = pgTable(
     index('event_conversation_occurred_idx').on(t.conversationId, t.occurredAt),
     index('event_session_type_idx').on(t.sessionId, t.type),
   ],
-)
+);

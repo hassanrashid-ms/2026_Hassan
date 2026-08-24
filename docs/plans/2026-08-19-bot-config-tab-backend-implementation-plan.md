@@ -30,81 +30,83 @@
 ### Task 1: Rules & tools catalog module
 
 **Files:**
+
 - Create: `backend/src/domain/bot/rulesCatalog.ts`
 - Test: `backend/tests/bot.rulesCatalog.test.ts`
 
 **Interfaces:**
+
 - Produces: `RuleEntry` type (`{ key: string; text: string; enabled: boolean; locked: boolean; source: 'builtin' | 'custom' }`), `RuleEnforcement` (`'code' | 'prompt'`), `DEFAULT_BOT_RULES_CATALOG` (readonly array of `{ key, text, defaultEnabled: true, locked, enforcement }`), `LOCKED_RULE_KEYS: ReadonlySet<string>`, `BUILTIN_RULE_KEYS: ReadonlySet<string>`, `deriveEnforcement(entry: { key: string; source: 'builtin' | 'custom' }): RuleEnforcement`, `buildBaselineRules(): RuleEntry[]`.
 
 - [ ] **Step 1: Write the failing test**
 
 ```ts
 // backend/tests/bot.rulesCatalog.test.ts
-import { describe, expect, it } from 'vitest'
-import { DEFAULT_BOT_RULES } from '../src/domain/bot/defaultPrompt.ts'
+import { describe, expect, it } from 'vitest';
+import { DEFAULT_BOT_RULES } from '../src/domain/bot/defaultPrompt.ts';
 import {
   BUILTIN_RULE_KEYS,
   DEFAULT_BOT_RULES_CATALOG,
   LOCKED_RULE_KEYS,
   buildBaselineRules,
   deriveEnforcement,
-} from '../src/domain/bot/rulesCatalog.ts'
+} from '../src/domain/bot/rulesCatalog.ts';
 
 describe('DEFAULT_BOT_RULES_CATALOG', () => {
   it('is a verbatim split of DEFAULT_BOT_RULES, in order, every entry enabled by default', () => {
-    const rebuilt = DEFAULT_BOT_RULES_CATALOG.map((r) => `- ${r.text}`).join('\n')
-    expect(rebuilt).toBe(DEFAULT_BOT_RULES)
-    expect(DEFAULT_BOT_RULES_CATALOG.every((r) => r.defaultEnabled)).toBe(true)
-  })
+    const rebuilt = DEFAULT_BOT_RULES_CATALOG.map((r) => `- ${r.text}`).join('\n');
+    expect(rebuilt).toBe(DEFAULT_BOT_RULES);
+    expect(DEFAULT_BOT_RULES_CATALOG.every((r) => r.defaultEnabled)).toBe(true);
+  });
 
-  it('has exactly 8 entries, matching today\'s catalog size', () => {
-    expect(DEFAULT_BOT_RULES_CATALOG).toHaveLength(8)
-  })
+  it("has exactly 8 entries, matching today's catalog size", () => {
+    expect(DEFAULT_BOT_RULES_CATALOG).toHaveLength(8);
+  });
 
   it('locks exactly handoff_immediate and no_credentials', () => {
-    expect(LOCKED_RULE_KEYS).toEqual(new Set(['handoff_immediate', 'no_credentials']))
-  })
+    expect(LOCKED_RULE_KEYS).toEqual(new Set(['handoff_immediate', 'no_credentials']));
+  });
 
   it('marks no_invented_facts as code-enforced and every other builtin as prompt-enforced', () => {
-    const byKey = new Map(DEFAULT_BOT_RULES_CATALOG.map((r) => [r.key, r.enforcement]))
-    expect(byKey.get('no_invented_facts')).toBe('code')
+    const byKey = new Map(DEFAULT_BOT_RULES_CATALOG.map((r) => [r.key, r.enforcement]));
+    expect(byKey.get('no_invented_facts')).toBe('code');
     for (const [key, enforcement] of byKey) {
-      if (key !== 'no_invented_facts') expect(enforcement).toBe('prompt')
+      if (key !== 'no_invented_facts') expect(enforcement).toBe('prompt');
     }
-  })
-})
+  });
+});
 
 describe('BUILTIN_RULE_KEYS', () => {
   it('contains every catalog key', () => {
-    expect(BUILTIN_RULE_KEYS).toEqual(new Set(DEFAULT_BOT_RULES_CATALOG.map((r) => r.key)))
-  })
-})
+    expect(BUILTIN_RULE_KEYS).toEqual(new Set(DEFAULT_BOT_RULES_CATALOG.map((r) => r.key)));
+  });
+});
 
 describe('deriveEnforcement', () => {
   it('looks up a builtin key in the catalog', () => {
-    expect(deriveEnforcement({ key: 'no_invented_facts', source: 'builtin' })).toBe('code')
-    expect(deriveEnforcement({ key: 'no_regreet', source: 'builtin' })).toBe('prompt')
-  })
+    expect(deriveEnforcement({ key: 'no_invented_facts', source: 'builtin' })).toBe('code');
+    expect(deriveEnforcement({ key: 'no_regreet', source: 'builtin' })).toBe('prompt');
+  });
 
   it('is always prompt for a custom entry, regardless of key', () => {
-    expect(deriveEnforcement({ key: 'anything', source: 'custom' })).toBe('prompt')
-  })
-})
+    expect(deriveEnforcement({ key: 'anything', source: 'custom' })).toBe('prompt');
+  });
+});
 
 describe('buildBaselineRules', () => {
   it('returns one RuleEntry per catalog row, all enabled, source builtin, in catalog order', () => {
-    const baseline = buildBaselineRules()
-    expect(baseline).toHaveLength(8)
-    expect(baseline.every((r) => r.enabled && r.source === 'builtin')).toBe(true)
-    expect(baseline.map((r) => r.key)).toEqual(DEFAULT_BOT_RULES_CATALOG.map((r) => r.key))
-  })
+    const baseline = buildBaselineRules();
+    expect(baseline).toHaveLength(8);
+    expect(baseline.every((r) => r.enabled && r.source === 'builtin')).toBe(true);
+    expect(baseline.map((r) => r.key)).toEqual(DEFAULT_BOT_RULES_CATALOG.map((r) => r.key));
+  });
 
   it('marks locked entries locked and everything else unlocked', () => {
-    const baseline = buildBaselineRules()
-    const locked = baseline.filter((r) => r.locked).map((r) => r.key)
-    expect(new Set(locked)).toEqual(LOCKED_RULE_KEYS)
-  })
-})
+    const baseline = buildBaselineRules();
+    const locked = baseline.filter((r) => r.locked).map((r) => r.key);
+    expect(new Set(locked)).toEqual(LOCKED_RULE_KEYS);
+  });
+});
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -116,25 +118,25 @@ Expected: FAIL — `Cannot find module '../src/domain/bot/rulesCatalog.ts'`
 
 ```ts
 // backend/src/domain/bot/rulesCatalog.ts
-import { DEFAULT_BOT_RULES } from './defaultPrompt.ts'
+import { DEFAULT_BOT_RULES } from './defaultPrompt.ts';
 
-export type RuleEnforcement = 'code' | 'prompt'
+export type RuleEnforcement = 'code' | 'prompt';
 
 export type RuleEntry = {
-  key: string
-  text: string
-  enabled: boolean
-  locked: boolean
-  source: 'builtin' | 'custom'
-}
+  key: string;
+  text: string;
+  enabled: boolean;
+  locked: boolean;
+  source: 'builtin' | 'custom';
+};
 
 type CatalogRule = {
-  key: string
-  text: string
-  defaultEnabled: true
-  locked: boolean
-  enforcement: RuleEnforcement
-}
+  key: string;
+  text: string;
+  defaultEnabled: true;
+  locked: boolean;
+  enforcement: RuleEnforcement;
+};
 
 /**
  * Verbatim split of DEFAULT_BOT_RULES, in its shipped order — the doc's
@@ -198,18 +200,23 @@ export const DEFAULT_BOT_RULES_CATALOG: readonly CatalogRule[] = [
     locked: false,
     enforcement: 'prompt',
   },
-] as const
+] as const;
 
 export const LOCKED_RULE_KEYS: ReadonlySet<string> = new Set(
   DEFAULT_BOT_RULES_CATALOG.filter((r) => r.locked).map((r) => r.key),
-)
+);
 
-export const BUILTIN_RULE_KEYS: ReadonlySet<string> = new Set(DEFAULT_BOT_RULES_CATALOG.map((r) => r.key))
+export const BUILTIN_RULE_KEYS: ReadonlySet<string> = new Set(
+  DEFAULT_BOT_RULES_CATALOG.map((r) => r.key),
+);
 
 /** enforcement is display-only and never stored — always re-derived from the catalog. */
-export function deriveEnforcement(entry: { key: string; source: 'builtin' | 'custom' }): RuleEnforcement {
-  if (entry.source === 'custom') return 'prompt'
-  return DEFAULT_BOT_RULES_CATALOG.find((r) => r.key === entry.key)?.enforcement ?? 'prompt'
+export function deriveEnforcement(entry: {
+  key: string;
+  source: 'builtin' | 'custom';
+}): RuleEnforcement {
+  if (entry.source === 'custom') return 'prompt';
+  return DEFAULT_BOT_RULES_CATALOG.find((r) => r.key === entry.key)?.enforcement ?? 'prompt';
 }
 
 /** "Version 1" — what a freshly seeded or reset-to-default workspace's rules look like. */
@@ -220,7 +227,7 @@ export function buildBaselineRules(): RuleEntry[] {
     enabled: true,
     locked: r.locked,
     source: 'builtin' as const,
-  }))
+  }));
 }
 ```
 
@@ -241,10 +248,12 @@ git commit -m "feat(bot-config): add rules catalog module"
 ### Task 2: Shared types for rules, tools, and rollback
 
 **Files:**
+
 - Modify: `packages/types/src/bot.ts`
 - Test: `packages/types/tests/bot.test.ts`
 
 **Interfaces:**
+
 - Consumes: nothing new.
 - Produces: `RuleEntrySchema`/`RuleEntryValue`, `TOGGLEABLE_TOOL_NAMES` (`['search_articles', 'classify', 'answer_from_article', 'confirm_resolution']`), `ToolToggleSchema`/`ToolToggleValue`, `LIMIT_KEYS` (`['max_bot_messages', 'max_tool_calls_per_turn', 'max_articles_per_turn', 'max_unhelped_replies']`), `LimitToggleSchema`/`LimitToggleValue`, updated `SaveBotConfigBody` (now takes `rules: RuleEntryValue[] | null`, `tools_config: ToolToggleValue[] | null`, `limits_config: LimitToggleValue[] | null`), `RollbackBotConfigBody` (`field` enum now includes `'limits_config'`), `RuleEntryView` (`RuleEntryValue & { enforcement: 'code' | 'prompt' }`), updated `BotConfigView` (`rules: RuleEntryView[]`, `tools_config: ToolToggleValue[]`, `enabled_tools: string[]`, `is_tools_customized: boolean`, `limits_config: LimitToggleValue[]`, `resolved_limits: Record<string, number>`, `is_limits_customized: boolean`).
 
@@ -257,38 +266,65 @@ Replace the two `SaveBotConfigBody` tests that assert the old string-based `rule
 ```ts
 // Replace this existing test body:
 it('accepts a single field on its own', () => {
-  expect(SaveBotConfigBody.safeParse({ is_provisioned: true }).success).toBe(true)
-  expect(SaveBotConfigBody.safeParse({ prompt: 'Be helpful.' }).success).toBe(true)
+  expect(SaveBotConfigBody.safeParse({ is_provisioned: true }).success).toBe(true);
+  expect(SaveBotConfigBody.safeParse({ prompt: 'Be helpful.' }).success).toBe(true);
   expect(
     SaveBotConfigBody.safeParse({
-      rules: [{ key: 'no_regreet', text: 'Do not greet twice.', enabled: true, locked: false, source: 'builtin' }],
+      rules: [
+        {
+          key: 'no_regreet',
+          text: 'Do not greet twice.',
+          enabled: true,
+          locked: false,
+          source: 'builtin',
+        },
+      ],
     }).success,
-  ).toBe(true)
-})
+  ).toBe(true);
+});
 
 // Replace this existing test body:
 it('accepts explicit null as a reset for prompt, rules, tools_config and limits_config', () => {
-  const parsed = SaveBotConfigBody.safeParse({ prompt: null, rules: null, tools_config: null, limits_config: null })
-  expect(parsed.success).toBe(true)
-  expect(parsed.data).toEqual({ prompt: null, rules: null, tools_config: null, limits_config: null })
-})
+  const parsed = SaveBotConfigBody.safeParse({
+    prompt: null,
+    rules: null,
+    tools_config: null,
+    limits_config: null,
+  });
+  expect(parsed.success).toBe(true);
+  expect(parsed.data).toEqual({
+    prompt: null,
+    rules: null,
+    tools_config: null,
+    limits_config: null,
+  });
+});
 
 // New describe block, appended at the end of the file:
 describe('RuleEntrySchema (via SaveBotConfigBody.rules)', () => {
   it('rejects an entry carrying enforcement — it is never client-settable', () => {
     const parsed = SaveBotConfigBody.safeParse({
-      rules: [{ key: 'k', text: 't', enabled: true, locked: false, source: 'custom', enforcement: 'code' }],
-    })
-    expect(parsed.success).toBe(false)
-  })
+      rules: [
+        {
+          key: 'k',
+          text: 't',
+          enabled: true,
+          locked: false,
+          source: 'custom',
+          enforcement: 'code',
+        },
+      ],
+    });
+    expect(parsed.success).toBe(false);
+  });
 
   it('rejects an entry with empty text', () => {
     const parsed = SaveBotConfigBody.safeParse({
       rules: [{ key: 'k', text: '', enabled: true, locked: false, source: 'custom' }],
-    })
-    expect(parsed.success).toBe(false)
-  })
-})
+    });
+    expect(parsed.success).toBe(false);
+  });
+});
 
 describe('ToolToggleSchema (via SaveBotConfigBody.tools_config)', () => {
   it('accepts every toggleable tool name', () => {
@@ -299,15 +335,19 @@ describe('ToolToggleSchema (via SaveBotConfigBody.tools_config)', () => {
         { tool: 'answer_from_article', enabled: false },
         { tool: 'confirm_resolution', enabled: true },
       ],
-    })
-    expect(parsed.success).toBe(true)
-  })
+    });
+    expect(parsed.success).toBe(true);
+  });
 
   it('rejects an unknown tool name, including handoff', () => {
-    expect(SaveBotConfigBody.safeParse({ tools_config: [{ tool: 'handoff', enabled: false }] }).success).toBe(false)
-    expect(SaveBotConfigBody.safeParse({ tools_config: [{ tool: 'nope', enabled: true }] }).success).toBe(false)
-  })
-})
+    expect(
+      SaveBotConfigBody.safeParse({ tools_config: [{ tool: 'handoff', enabled: false }] }).success,
+    ).toBe(false);
+    expect(
+      SaveBotConfigBody.safeParse({ tools_config: [{ tool: 'nope', enabled: true }] }).success,
+    ).toBe(false);
+  });
+});
 
 describe('LimitToggleSchema (via SaveBotConfigBody.limits_config)', () => {
   it('accepts every limit key', () => {
@@ -318,44 +358,57 @@ describe('LimitToggleSchema (via SaveBotConfigBody.limits_config)', () => {
         { key: 'max_articles_per_turn', value: 2 },
         { key: 'max_unhelped_replies', value: 4 },
       ],
-    })
-    expect(parsed.success).toBe(true)
-  })
+    });
+    expect(parsed.success).toBe(true);
+  });
 
   it('rejects an unknown key', () => {
-    expect(SaveBotConfigBody.safeParse({ limits_config: [{ key: 'nope', value: 5 }] }).success).toBe(false)
-  })
+    expect(
+      SaveBotConfigBody.safeParse({ limits_config: [{ key: 'nope', value: 5 }] }).success,
+    ).toBe(false);
+  });
 
   it('rejects a non-positive-integer value', () => {
-    expect(SaveBotConfigBody.safeParse({ limits_config: [{ key: 'max_bot_messages', value: 0 }] }).success).toBe(
-      false,
-    )
     expect(
-      SaveBotConfigBody.safeParse({ limits_config: [{ key: 'max_bot_messages', value: 2.5 }] }).success,
-    ).toBe(false)
-  })
-})
+      SaveBotConfigBody.safeParse({ limits_config: [{ key: 'max_bot_messages', value: 0 }] })
+        .success,
+    ).toBe(false);
+    expect(
+      SaveBotConfigBody.safeParse({ limits_config: [{ key: 'max_bot_messages', value: 2.5 }] })
+        .success,
+    ).toBe(false);
+  });
+});
 
 describe('RollbackBotConfigBody', () => {
   it('accepts a valid rollback request', () => {
     expect(
-      RollbackBotConfigBody.safeParse({ field: 'rules', change_log_id: '42', side: 'before' }).success,
-    ).toBe(true)
-  })
+      RollbackBotConfigBody.safeParse({ field: 'rules', change_log_id: '42', side: 'before' })
+        .success,
+    ).toBe(true);
+  });
 
   it('accepts limits_config as a rollback field', () => {
     expect(
-      RollbackBotConfigBody.safeParse({ field: 'limits_config', change_log_id: '42', side: 'before' }).success,
-    ).toBe(true)
-  })
+      RollbackBotConfigBody.safeParse({
+        field: 'limits_config',
+        change_log_id: '42',
+        side: 'before',
+      }).success,
+    ).toBe(true);
+  });
 
   it('rejects an unknown field or side', () => {
-    expect(RollbackBotConfigBody.safeParse({ field: 'nope', change_log_id: '1', side: 'before' }).success).toBe(false)
-    expect(RollbackBotConfigBody.safeParse({ field: 'rules', change_log_id: '1', side: 'sideways' }).success).toBe(
-      false,
-    )
-  })
-})
+    expect(
+      RollbackBotConfigBody.safeParse({ field: 'nope', change_log_id: '1', side: 'before' })
+        .success,
+    ).toBe(false);
+    expect(
+      RollbackBotConfigBody.safeParse({ field: 'rules', change_log_id: '1', side: 'sideways' })
+        .success,
+    ).toBe(false);
+  });
+});
 ```
 
 Add the two new imports (`RollbackBotConfigBody`) to the top `import` line.
@@ -370,8 +423,13 @@ Expected: FAIL — old `SaveBotConfigBody` still treats `rules` as `z.string().n
 In `packages/types/src/bot.ts`, replace the whole file body from the `SaveBotConfigBody` export onward (keep the file's opening `import { z } from 'zod'` and its comment):
 
 ```ts
-export const TOGGLEABLE_TOOL_NAMES = ['search_articles', 'classify', 'answer_from_article', 'confirm_resolution'] as const
-export type ToggleableToolName = (typeof TOGGLEABLE_TOOL_NAMES)[number]
+export const TOGGLEABLE_TOOL_NAMES = [
+  'search_articles',
+  'classify',
+  'answer_from_article',
+  'confirm_resolution',
+] as const;
+export type ToggleableToolName = (typeof TOGGLEABLE_TOOL_NAMES)[number];
 
 /**
  * `enforcement` is deliberately absent: it's never client-settable — the server
@@ -386,19 +444,24 @@ const RuleEntrySchema = z
     locked: z.boolean(),
     source: z.enum(['builtin', 'custom']),
   })
-  .strict()
-export type RuleEntryValue = z.infer<typeof RuleEntrySchema>
+  .strict();
+export type RuleEntryValue = z.infer<typeof RuleEntrySchema>;
 
 const ToolToggleSchema = z
   .object({
     tool: z.enum(TOGGLEABLE_TOOL_NAMES),
     enabled: z.boolean(),
   })
-  .strict()
-export type ToolToggleValue = z.infer<typeof ToolToggleSchema>
+  .strict();
+export type ToolToggleValue = z.infer<typeof ToolToggleSchema>;
 
-export const LIMIT_KEYS = ['max_bot_messages', 'max_tool_calls_per_turn', 'max_articles_per_turn', 'max_unhelped_replies'] as const
-export type LimitKey = (typeof LIMIT_KEYS)[number]
+export const LIMIT_KEYS = [
+  'max_bot_messages',
+  'max_tool_calls_per_turn',
+  'max_articles_per_turn',
+  'max_unhelped_replies',
+] as const;
+export type LimitKey = (typeof LIMIT_KEYS)[number];
 
 /**
  * Shape-only validation. Per-key min/max bounds live in `LIMIT_CATALOG`
@@ -411,8 +474,8 @@ const LimitToggleSchema = z
     key: z.enum(LIMIT_KEYS),
     value: z.number().int().positive(),
   })
-  .strict()
-export type LimitToggleValue = z.infer<typeof LimitToggleSchema>
+  .strict();
+export type LimitToggleValue = z.infer<typeof LimitToggleSchema>;
 
 /**
  * A partial save: an omitted key means "leave this field alone", and an explicit
@@ -441,9 +504,12 @@ export const SaveBotConfigBody = z
       body.rules !== undefined ||
       body.tools_config !== undefined ||
       body.limits_config !== undefined,
-    { message: 'At least one of is_provisioned, prompt, rules, tools_config or limits_config is required.' },
-  )
-export type SaveBotConfigBodyValue = z.infer<typeof SaveBotConfigBody>
+    {
+      message:
+        'At least one of is_provisioned, prompt, rules, tools_config or limits_config is required.',
+    },
+  );
+export type SaveBotConfigBodyValue = z.infer<typeof SaveBotConfigBody>;
 
 export const RollbackBotConfigBody = z
   .object({
@@ -451,8 +517,8 @@ export const RollbackBotConfigBody = z
     change_log_id: z.string().min(1),
     side: z.enum(['before', 'after']),
   })
-  .strict()
-export type RollbackBotConfigBodyValue = z.infer<typeof RollbackBotConfigBody>
+  .strict();
+export type RollbackBotConfigBodyValue = z.infer<typeof RollbackBotConfigBody>;
 
 /**
  * `limit` is coerced because Express query values are always strings. The 200 cap
@@ -462,10 +528,10 @@ export type RollbackBotConfigBodyValue = z.infer<typeof RollbackBotConfigBody>
 export const ChangeLogHistoryQuery = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
   cursor: z.string().min(1).optional(),
-})
-export type ChangeLogHistoryQueryValue = z.infer<typeof ChangeLogHistoryQuery>
+});
+export type ChangeLogHistoryQueryValue = z.infer<typeof ChangeLogHistoryQuery>;
 
-export type RuleEntryView = RuleEntryValue & { enforcement: 'code' | 'prompt' }
+export type RuleEntryView = RuleEntryValue & { enforcement: 'code' | 'prompt' };
 
 /**
  * `prompt`, `rules`, `tools_config` are always populated — every workspace has a
@@ -476,22 +542,22 @@ export type RuleEntryView = RuleEntryValue & { enforcement: 'code' | 'prompt' }
  * null-checks (there is no more null state to check).
  */
 export type BotConfigView = {
-  is_provisioned: boolean
-  prompt: string
-  rules: RuleEntryView[]
-  tools_config: ToolToggleValue[]
-  enabled_tools: string[]
-  limits_config: LimitToggleValue[]
-  resolved_limits: Record<LimitKey, number>
-  system_prompt: string
-  is_prompt_customized: boolean
-  is_rules_customized: boolean
-  is_tools_customized: boolean
-  is_limits_customized: boolean
-  updated_at: string | null
-}
+  is_provisioned: boolean;
+  prompt: string;
+  rules: RuleEntryView[];
+  tools_config: ToolToggleValue[];
+  enabled_tools: string[];
+  limits_config: LimitToggleValue[];
+  resolved_limits: Record<LimitKey, number>;
+  system_prompt: string;
+  is_prompt_customized: boolean;
+  is_rules_customized: boolean;
+  is_tools_customized: boolean;
+  is_limits_customized: boolean;
+  updated_at: string | null;
+};
 
-export type ChangeLogActorView = { id: string; display_name: string; email: string }
+export type ChangeLogActorView = { id: string; display_name: string; email: string };
 
 /**
  * `field` is the COLUMN name — 'is_provisioned' | 'prompt' | 'rules' |
@@ -506,19 +572,19 @@ export type ChangeLogActorView = { id: string; display_name: string; email: stri
  * hold it safely and a JS bigint cannot be serialised at all.
  */
 export type ChangeLogEntryView = {
-  id: string
-  field: string
-  before_value: unknown
-  after_value: unknown
-  actor: ChangeLogActorView
-  changed_at: string
-}
+  id: string;
+  field: string;
+  before_value: unknown;
+  after_value: unknown;
+  actor: ChangeLogActorView;
+  changed_at: string;
+};
 
 /** `next_cursor` null means this is the last page. */
 export type ChangeLogHistoryResponse = {
-  entries: ChangeLogEntryView[]
-  next_cursor: string | null
-}
+  entries: ChangeLogEntryView[];
+  next_cursor: string | null;
+};
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
@@ -538,6 +604,7 @@ git commit -m "feat(bot-config): add rule/tool/rollback types"
 ### Task 3: Schema change — `bot_config.rules` becomes jsonb, add `tools_config`
 
 **Files:**
+
 - Modify: `backend/src/shared/db/schema/bot.ts`
 - Create: `backend/drizzle/0008_bot_config_rules_and_tools.sql` (interim, hand-authored)
 - Create: `backend/src/shared/db/migrations/backfillBotConfig.ts`
@@ -579,21 +646,21 @@ Expected: the migration applies cleanly (no data assumptions yet — both new co
 
 ```ts
 // backend/src/shared/db/migrations/backfillBotConfig.ts
-import { randomUUID } from 'node:crypto'
-import { drizzle } from 'drizzle-orm/node-postgres'
-import { Pool } from 'pg'
-import { getEnv } from '../../../env.ts'
-import { loadRootEnv } from '../../../env/loadRootEnv.ts'
-import { logger } from '../../logging/logger.ts'
-import { DEFAULT_BOT_PROMPT } from '../../../domain/bot/defaultPrompt.ts'
-import { buildBaselineRules, type RuleEntry } from '../../../domain/bot/rulesCatalog.ts'
-import { buildBaselineToolsConfig } from '../../../domain/bot/tools.ts'
-import { buildBaselineLimits } from '../../../domain/bot/limitsCatalog.ts'
-import { getOrCreateSystemActor } from '../../../domain/bot/systemActor.ts'
-import { appendChangeLog } from '../../changeLog/appendChangeLog.ts'
-import { BOT_CONFIG_ENTITY_TYPE } from '../../../domain/bot/botConfig.ts'
+import { randomUUID } from 'node:crypto';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { Pool } from 'pg';
+import { getEnv } from '../../../env.ts';
+import { loadRootEnv } from '../../../env/loadRootEnv.ts';
+import { logger } from '../../logging/logger.ts';
+import { DEFAULT_BOT_PROMPT } from '../../../domain/bot/defaultPrompt.ts';
+import { buildBaselineRules, type RuleEntry } from '../../../domain/bot/rulesCatalog.ts';
+import { buildBaselineToolsConfig } from '../../../domain/bot/tools.ts';
+import { buildBaselineLimits } from '../../../domain/bot/limitsCatalog.ts';
+import { getOrCreateSystemActor } from '../../../domain/bot/systemActor.ts';
+import { appendChangeLog } from '../../changeLog/appendChangeLog.ts';
+import { BOT_CONFIG_ENTITY_TYPE } from '../../../domain/bot/botConfig.ts';
 
-type LegacyRow = { workspaceId: string; prompt: string | null; rulesLegacyText: string | null }
+type LegacyRow = { workspaceId: string; prompt: string | null; rulesLegacyText: string | null };
 
 /**
  * One-time data migration, run manually between the interim and finalize
@@ -601,61 +668,75 @@ type LegacyRow = { workspaceId: string; prompt: string | null; rulesLegacyText: 
  * Task 3). Idempotent: a row whose `rules` column is already populated is
  * skipped, so re-running this after a partial failure is safe.
  */
-export async function backfillBotConfig(url: string = getEnv().MIGRATION_DATABASE_URL): Promise<void> {
-  const pool = new Pool({ connectionString: url })
-  const db = drizzle(pool)
+export async function backfillBotConfig(
+  url: string = getEnv().MIGRATION_DATABASE_URL,
+): Promise<void> {
+  const pool = new Pool({ connectionString: url });
+  const db = drizzle(pool);
   try {
     const rows = await db.execute<LegacyRow & { rules: unknown }>(
       `select workspace_id as "workspaceId", prompt, rules_legacy_text as "rulesLegacyText", rules
          from bot_config where rules is null`,
-    )
+    );
 
     for (const row of rows.rows as (LegacyRow & { rules: unknown })[]) {
       await db.transaction(async (tx) => {
-        const actorId = await getOrCreateSystemActor(tx)
+        const actorId = await getOrCreateSystemActor(tx);
 
-        const afterPrompt = row.prompt ?? DEFAULT_BOT_PROMPT
-        const baseline = buildBaselineRules()
+        const afterPrompt = row.prompt ?? DEFAULT_BOT_PROMPT;
+        const baseline = buildBaselineRules();
         const afterRules: RuleEntry[] =
           row.rulesLegacyText === null
             ? baseline
             : [
                 ...baseline,
-                { key: `legacy-${randomUUID()}`, text: row.rulesLegacyText, enabled: true, locked: false, source: 'custom' },
-              ]
-        const afterTools = buildBaselineToolsConfig()
-        const afterLimits = buildBaselineLimits()
+                {
+                  key: `legacy-${randomUUID()}`,
+                  text: row.rulesLegacyText,
+                  enabled: true,
+                  locked: false,
+                  source: 'custom',
+                },
+              ];
+        const afterTools = buildBaselineToolsConfig();
+        const afterLimits = buildBaselineLimits();
 
         await tx.execute(
           `update bot_config set prompt = $2, rules = $3::jsonb, tools_config = $4::jsonb, limits_config = $5::jsonb where workspace_id = $1`,
-          [row.workspaceId, afterPrompt, JSON.stringify(afterRules), JSON.stringify(afterTools), JSON.stringify(afterLimits)],
-        )
+          [
+            row.workspaceId,
+            afterPrompt,
+            JSON.stringify(afterRules),
+            JSON.stringify(afterTools),
+            JSON.stringify(afterLimits),
+          ],
+        );
 
         const changes = [
           ...(row.prompt === null ? [{ field: 'prompt', before: null, after: afterPrompt }] : []),
           { field: 'rules', before: row.rulesLegacyText, after: afterRules },
           { field: 'tools_config', before: null, after: afterTools },
           { field: 'limits_config', before: null, after: afterLimits },
-        ]
+        ];
         await appendChangeLog(tx, {
           workspaceId: row.workspaceId,
           entityType: BOT_CONFIG_ENTITY_TYPE,
           entityId: row.workspaceId,
           actorId,
           changes,
-        })
-      })
-      logger.info('db', 'backfilled bot_config row', { workspaceId: row.workspaceId })
+        });
+      });
+      logger.info('db', 'backfilled bot_config row', { workspaceId: row.workspaceId });
     }
   } finally {
-    await pool.end()
+    await pool.end();
   }
 }
 
 if (process.argv[1]?.endsWith('backfillBotConfig.ts')) {
-  loadRootEnv(import.meta.url)
-  await backfillBotConfig()
-  logger.info('db', 'bot_config backfill complete')
+  loadRootEnv(import.meta.url);
+  await backfillBotConfig();
+  logger.info('db', 'bot_config backfill complete');
 }
 ```
 
@@ -688,10 +769,10 @@ ALTER TABLE "bot_config" DROP COLUMN "rules_legacy_text";
 
 ```ts
 // backend/src/shared/db/schema/bot.ts
-import { boolean, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
-import { workspace } from './identity.ts'
+import { boolean, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { workspace } from './identity.ts';
 
-const tz = { withTimezone: true, mode: 'date' } as const
+const tz = { withTimezone: true, mode: 'date' } as const;
 
 /**
  * What the orchestrator gates on, and the prompt it sends.
@@ -718,7 +799,7 @@ export const botConfig = pgTable('bot_config', {
   limitsConfig: jsonb('limits_config').notNull(),
   createdAt: timestamp('created_at', tz).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', tz).notNull().defaultNow(),
-})
+});
 ```
 
 Run: `pnpm --filter @support/api db:setup`
@@ -738,51 +819,56 @@ git commit -m "feat(bot-config): migrate rules to jsonb, add tools_config column
 ### Task 4: System actor for seed-time audit rows
 
 **Files:**
+
 - Create: `backend/src/domain/bot/systemActor.ts`
 - Test: `backend/tests/bot.systemActor.test.ts`
 
 **Interfaces:**
+
 - Produces: `SYSTEM_ACTOR_EMAIL`, `getOrCreateSystemActor(tx: Tx): Promise<string>`.
 
 - [ ] **Step 1: Write the failing test**
 
 ```ts
 // backend/tests/bot.systemActor.test.ts
-import { afterAll, beforeEach, describe, expect, it } from 'vitest'
-import { closeDb } from '../src/shared/db/client.ts'
-import { withWorkspace } from '../src/shared/db/withWorkspace.ts'
-import { getOrCreateSystemActor, SYSTEM_ACTOR_EMAIL } from '../src/domain/bot/systemActor.ts'
-import { closeOwnerPool, ownerPool, seedWorkspace, truncateAll } from './helpers/db.ts'
+import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { closeDb } from '../src/shared/db/client.ts';
+import { withWorkspace } from '../src/shared/db/withWorkspace.ts';
+import { getOrCreateSystemActor, SYSTEM_ACTOR_EMAIL } from '../src/domain/bot/systemActor.ts';
+import { closeOwnerPool, ownerPool, seedWorkspace, truncateAll } from './helpers/db.ts';
 
 describe('getOrCreateSystemActor', () => {
-  let workspaceId: string
+  let workspaceId: string;
 
   beforeEach(async () => {
-    await truncateAll()
-    workspaceId = await seedWorkspace()
-  })
+    await truncateAll();
+    workspaceId = await seedWorkspace();
+  });
 
   it('creates the system agent row on first call', async () => {
-    const id = await withWorkspace(workspaceId, (tx) => getOrCreateSystemActor(tx))
-    const { rows } = await ownerPool.query(`select email, display_name from agent where id = $1`, [id])
-    expect(rows[0]).toEqual({ email: SYSTEM_ACTOR_EMAIL, display_name: 'System' })
-  })
+    const id = await withWorkspace(workspaceId, (tx) => getOrCreateSystemActor(tx));
+    const { rows } = await ownerPool.query(`select email, display_name from agent where id = $1`, [
+      id,
+    ]);
+    expect(rows[0]).toEqual({ email: SYSTEM_ACTOR_EMAIL, display_name: 'System' });
+  });
 
   it('returns the same id on a second call rather than inserting twice', async () => {
-    const first = await withWorkspace(workspaceId, (tx) => getOrCreateSystemActor(tx))
-    const second = await withWorkspace(workspaceId, (tx) => getOrCreateSystemActor(tx))
-    expect(second).toBe(first)
-    const { rows } = await ownerPool.query(`select count(*)::int as n from agent where email = $1`, [
-      SYSTEM_ACTOR_EMAIL,
-    ])
-    expect(rows[0]).toEqual({ n: 1 })
-  })
-})
+    const first = await withWorkspace(workspaceId, (tx) => getOrCreateSystemActor(tx));
+    const second = await withWorkspace(workspaceId, (tx) => getOrCreateSystemActor(tx));
+    expect(second).toBe(first);
+    const { rows } = await ownerPool.query(
+      `select count(*)::int as n from agent where email = $1`,
+      [SYSTEM_ACTOR_EMAIL],
+    );
+    expect(rows[0]).toEqual({ n: 1 });
+  });
+});
 
 afterAll(async () => {
-  await closeDb()
-  await closeOwnerPool()
-})
+  await closeDb();
+  await closeOwnerPool();
+});
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -794,9 +880,9 @@ Expected: FAIL — module not found.
 
 ```ts
 // backend/src/domain/bot/systemActor.ts
-import { eq } from 'drizzle-orm'
-import type { Tx } from '../../shared/db/withWorkspace.ts'
-import { agent } from '../../shared/db/schema/index.ts'
+import { eq } from 'drizzle-orm';
+import type { Tx } from '../../shared/db/withWorkspace.ts';
+import { agent } from '../../shared/db/schema/index.ts';
 
 /**
  * `change_log.actor_id` is NOT NULL with a real FK — "every row is a human
@@ -805,22 +891,30 @@ import { agent } from '../../shared/db/schema/index.ts'
  * at rather than a nullable actor column that would quietly permit others.
  * `agent` is one of the two unscoped tables, so a single global row is correct.
  */
-export const SYSTEM_ACTOR_EMAIL = 'system@internal.support'
+export const SYSTEM_ACTOR_EMAIL = 'system@internal.support';
 
 export async function getOrCreateSystemActor(tx: Tx): Promise<string> {
-  const [existing] = await tx.select({ id: agent.id }).from(agent).where(eq(agent.email, SYSTEM_ACTOR_EMAIL)).limit(1)
-  if (existing) return existing.id
+  const [existing] = await tx
+    .select({ id: agent.id })
+    .from(agent)
+    .where(eq(agent.email, SYSTEM_ACTOR_EMAIL))
+    .limit(1);
+  if (existing) return existing.id;
 
   const [created] = await tx
     .insert(agent)
     .values({ email: SYSTEM_ACTOR_EMAIL, displayName: 'System' })
     .onConflictDoNothing({ target: agent.email })
-    .returning({ id: agent.id })
-  if (created) return created.id
+    .returning({ id: agent.id });
+  if (created) return created.id;
 
   // Lost a race with a concurrent seed — the row now exists, read it back.
-  const [row] = await tx.select({ id: agent.id }).from(agent).where(eq(agent.email, SYSTEM_ACTOR_EMAIL)).limit(1)
-  return row!.id
+  const [row] = await tx
+    .select({ id: agent.id })
+    .from(agent)
+    .where(eq(agent.email, SYSTEM_ACTOR_EMAIL))
+    .limit(1);
+  return row!.id;
 }
 ```
 
@@ -841,10 +935,12 @@ git commit -m "feat(bot-config): add system actor for seed-time audit rows"
 ### Task 5: `buildSystemPrompt` takes `RuleEntry[]`
 
 **Files:**
+
 - Modify: `backend/src/domain/bot/defaultPrompt.ts`
 - Modify: `backend/tests/bot.config.test.ts` (the `buildSystemPrompt` describe block)
 
 **Interfaces:**
+
 - Consumes: `RuleEntry` from `./rulesCatalog.ts`, `buildBaselineRules` for the parity test.
 - Produces: `buildSystemPrompt(prompt: string, rules: RuleEntry[]): string`.
 
@@ -860,40 +956,40 @@ describe('buildSystemPrompt', () => {
     enabled,
     locked: false,
     source: 'builtin',
-  })
+  });
 
   it('sends the prompt and enabled rule texts as one string, prompt first and rules last', () => {
-    const built = buildSystemPrompt('PROMPT BODY', [rule('RULE ONE')])
-    expect(built).toContain('PROMPT BODY')
-    expect(built).toContain('RULE ONE')
-    expect(built.indexOf('PROMPT BODY')).toBeLessThan(built.indexOf(BOT_RULES_HEADING))
-    expect(built.indexOf(BOT_RULES_HEADING)).toBeLessThan(built.indexOf('RULE ONE'))
-  })
+    const built = buildSystemPrompt('PROMPT BODY', [rule('RULE ONE')]);
+    expect(built).toContain('PROMPT BODY');
+    expect(built).toContain('RULE ONE');
+    expect(built.indexOf('PROMPT BODY')).toBeLessThan(built.indexOf(BOT_RULES_HEADING));
+    expect(built.indexOf(BOT_RULES_HEADING)).toBeLessThan(built.indexOf('RULE ONE'));
+  });
 
   it('omits a disabled rule entirely', () => {
-    const built = buildSystemPrompt('P', [rule('KEEP ME'), rule('DROP ME', false)])
-    expect(built).toContain('KEEP ME')
-    expect(built).not.toContain('DROP ME')
-  })
+    const built = buildSystemPrompt('P', [rule('KEEP ME'), rule('DROP ME', false)]);
+    expect(built).toContain('KEEP ME');
+    expect(built).not.toContain('DROP ME');
+  });
 
   it('renders each enabled rule as "- {text}", in array order', () => {
-    const built = buildSystemPrompt('P', [rule('first'), rule('second')])
-    const rulesBlock = built.slice(built.indexOf(BOT_RULES_HEADING))
-    expect(rulesBlock.indexOf('- first')).toBeLessThan(rulesBlock.indexOf('- second'))
-  })
+    const built = buildSystemPrompt('P', [rule('first'), rule('second')]);
+    const rulesBlock = built.slice(built.indexOf(BOT_RULES_HEADING));
+    expect(rulesBlock.indexOf('- first')).toBeLessThan(rulesBlock.indexOf('- second'));
+  });
 
   it('PARITY: an unmodified catalog baseline renders byte-identical to the old string-rules formula', () => {
-    const built = buildSystemPrompt(DEFAULT_BOT_PROMPT, buildBaselineRules())
-    const oldFormula = `${DEFAULT_BOT_PROMPT.trimEnd()}\n\n${BOT_RULES_HEADING}\n${DEFAULT_BOT_RULES.trim()}`
-    expect(built).toBe(oldFormula)
-  })
+    const built = buildSystemPrompt(DEFAULT_BOT_PROMPT, buildBaselineRules());
+    const oldFormula = `${DEFAULT_BOT_PROMPT.trimEnd()}\n\n${BOT_RULES_HEADING}\n${DEFAULT_BOT_RULES.trim()}`;
+    expect(built).toBe(oldFormula);
+  });
 
   it('keeps the placeholders intact — the orchestrator substitutes after the join', () => {
-    const built = buildSystemPrompt(DEFAULT_BOT_PROMPT, buildBaselineRules())
-    expect(built).toContain('{{subintents}}')
-    expect(built).toContain('{{articles}}')
-  })
-})
+    const built = buildSystemPrompt(DEFAULT_BOT_PROMPT, buildBaselineRules());
+    expect(built).toContain('{{subintents}}');
+    expect(built).toContain('{{articles}}');
+  });
+});
 ```
 
 Add `import { buildBaselineRules, type RuleEntry } from '../src/domain/bot/rulesCatalog.ts'` to the top of the test file.
@@ -908,7 +1004,7 @@ Expected: FAIL — current `buildSystemPrompt(prompt: string, rules: string)` ca
 In `backend/src/domain/bot/defaultPrompt.ts`, replace the `buildSystemPrompt` function (keep `DEFAULT_BOT_PROMPT`, `DEFAULT_BOT_RULES`, `BOT_PROMPT_PLACEHOLDERS`, `BOT_RULES_HEADING` exactly as-is — `DEFAULT_BOT_RULES` stays exported permanently as the parity test's ground truth):
 
 ```ts
-import type { RuleEntry } from './rulesCatalog.ts'
+import type { RuleEntry } from './rulesCatalog.ts';
 
 // ... (BOT_PROMPT_PLACEHOLDERS, DEFAULT_BOT_PROMPT, DEFAULT_BOT_RULES, BOT_RULES_HEADING unchanged above) ...
 
@@ -926,8 +1022,8 @@ export function buildSystemPrompt(prompt: string, rules: RuleEntry[]): string {
   const rulesBlock = rules
     .filter((r) => r.enabled)
     .map((r) => `- ${r.text}`)
-    .join('\n')
-  return `${prompt.trimEnd()}\n\n${BOT_RULES_HEADING}\n${rulesBlock.trim()}`
+    .join('\n');
+  return `${prompt.trimEnd()}\n\n${BOT_RULES_HEADING}\n${rulesBlock.trim()}`;
 }
 ```
 
@@ -948,10 +1044,12 @@ git commit -m "feat(bot-config): buildSystemPrompt takes RuleEntry[]"
 ### Task 6: Tool catalog and deterministic `toolsForPhase`
 
 **Files:**
+
 - Modify: `backend/src/domain/bot/tools.ts`
 - Create: `backend/tests/bot.tools.test.ts`
 
 **Interfaces:**
+
 - Produces: `TOOL_CATALOG` (readonly array of `{ name, lockable: true, defaultEnabled: true, consequence }`, names `search_articles`, `classify`, `answer_from_article`, `confirm_resolution`, in that order), `buildBaselineToolsConfig(): ToolToggle[]`, `type ToolToggle = { tool: string; enabled: boolean }`, updated `toolsForPhase(phase: ToolPhase, enabledTools: ReadonlySet<string>): unknown[]`.
 - Consumes (by later tasks): nothing changes in `ALWAYS_AVAILABLE_TOOLS`/`CONFIRM_RESOLUTION_TOOL`/`TOOL_DEFS`/`searchArticles`/`resolveClassifyIndex` — keep those exactly as they are today.
 
@@ -959,10 +1057,15 @@ git commit -m "feat(bot-config): buildSystemPrompt takes RuleEntry[]"
 
 ```ts
 // backend/tests/bot.tools.test.ts
-import { describe, expect, it } from 'vitest'
-import { CONFIRM_RESOLUTION_TOOL_NAME, TOOL_CATALOG, buildBaselineToolsConfig, toolsForPhase } from '../src/domain/bot/tools.ts'
+import { describe, expect, it } from 'vitest';
+import {
+  CONFIRM_RESOLUTION_TOOL_NAME,
+  TOOL_CATALOG,
+  buildBaselineToolsConfig,
+  toolsForPhase,
+} from '../src/domain/bot/tools.ts';
 
-const ALL_TOGGLEABLE = new Set(TOOL_CATALOG.map((t) => t.name))
+const ALL_TOGGLEABLE = new Set(TOOL_CATALOG.map((t) => t.name));
 
 describe('TOOL_CATALOG', () => {
   it('lists exactly the 4 toggleable tools, excluding handoff, all default-enabled and lockable', () => {
@@ -971,47 +1074,57 @@ describe('TOOL_CATALOG', () => {
       'classify',
       'answer_from_article',
       CONFIRM_RESOLUTION_TOOL_NAME,
-    ])
-    expect(TOOL_CATALOG.every((t) => t.defaultEnabled && t.lockable)).toBe(true)
-  })
-})
+    ]);
+    expect(TOOL_CATALOG.every((t) => t.defaultEnabled && t.lockable)).toBe(true);
+  });
+});
 
 describe('buildBaselineToolsConfig', () => {
   it('returns one enabled ToolToggle per catalog entry', () => {
-    expect(buildBaselineToolsConfig()).toEqual(TOOL_CATALOG.map((t) => ({ tool: t.name, enabled: true })))
-  })
-})
+    expect(buildBaselineToolsConfig()).toEqual(
+      TOOL_CATALOG.map((t) => ({ tool: t.name, enabled: true })),
+    );
+  });
+});
 
 describe('toolsForPhase (deterministic gating)', () => {
-  it('PARITY: with every toggleable tool enabled, matches today\'s tool array exactly, in order', () => {
-    const bot_article = toolsForPhase('bot_article', ALL_TOGGLEABLE)
-    const agent_ask = toolsForPhase('agent_ask', ALL_TOGGLEABLE)
-    expect(bot_article).toHaveLength(4)
-    expect(agent_ask).toHaveLength(3)
-    expect((bot_article[3] as { function: { name: string } }).function.name).toBe(CONFIRM_RESOLUTION_TOOL_NAME)
-    expect((agent_ask.map((t) => (t as { function: { name: string } }).function.name))).toEqual([
+  it("PARITY: with every toggleable tool enabled, matches today's tool array exactly, in order", () => {
+    const bot_article = toolsForPhase('bot_article', ALL_TOGGLEABLE);
+    const agent_ask = toolsForPhase('agent_ask', ALL_TOGGLEABLE);
+    expect(bot_article).toHaveLength(4);
+    expect(agent_ask).toHaveLength(3);
+    expect((bot_article[3] as { function: { name: string } }).function.name).toBe(
+      CONFIRM_RESOLUTION_TOOL_NAME,
+    );
+    expect(agent_ask.map((t) => (t as { function: { name: string } }).function.name)).toEqual([
       'search_articles',
       'classify',
       'answer_from_article',
-    ])
-  })
+    ]);
+  });
 
   it('drops a disabled tool without reordering the rest', () => {
-    const enabled = new Set(['classify', 'answer_from_article', CONFIRM_RESOLUTION_TOOL_NAME])
-    const names = toolsForPhase('bot_article', enabled).map((t) => (t as { function: { name: string } }).function.name)
-    expect(names).toEqual(['classify', 'answer_from_article', CONFIRM_RESOLUTION_TOOL_NAME])
-  })
+    const enabled = new Set(['classify', 'answer_from_article', CONFIRM_RESOLUTION_TOOL_NAME]);
+    const names = toolsForPhase('bot_article', enabled).map(
+      (t) => (t as { function: { name: string } }).function.name,
+    );
+    expect(names).toEqual(['classify', 'answer_from_article', CONFIRM_RESOLUTION_TOOL_NAME]);
+  });
 
   it('never drops handoff, even when the enabled set is empty', () => {
-    const names = toolsForPhase('agent_ask', new Set()).map((t) => (t as { function: { name: string } }).function.name)
-    expect(names).toEqual(['handoff'])
-  })
+    const names = toolsForPhase('agent_ask', new Set()).map(
+      (t) => (t as { function: { name: string } }).function.name,
+    );
+    expect(names).toEqual(['handoff']);
+  });
 
   it('drops confirm_resolution outside bot_article regardless of the enabled set', () => {
-    const names = toolsForPhase('agent_ask', ALL_TOGGLEABLE).map((t) => (t as { function: { name: string } }).function.name)
-    expect(names).not.toContain(CONFIRM_RESOLUTION_TOOL_NAME)
-  })
-})
+    const names = toolsForPhase('agent_ask', ALL_TOGGLEABLE).map(
+      (t) => (t as { function: { name: string } }).function.name,
+    );
+    expect(names).not.toContain(CONFIRM_RESOLUTION_TOOL_NAME);
+  });
+});
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -1024,7 +1137,7 @@ Expected: FAIL — `TOOL_CATALOG`/`buildBaselineToolsConfig` don't exist, `tools
 In `backend/src/domain/bot/tools.ts`, keep everything above `toolsForPhase` unchanged (`ALWAYS_AVAILABLE_TOOLS`, `CONFIRM_RESOLUTION_TOOL`, `TOOL_DEFS`) and replace `toolsForPhase` and everything below it stays the same, but add before it:
 
 ```ts
-export type ToolToggle = { tool: string; enabled: boolean }
+export type ToolToggle = { tool: string; enabled: boolean };
 
 /**
  * Declared in the same order ALWAYS_AVAILABLE_TOOLS already ships them, then
@@ -1048,19 +1161,21 @@ export const TOOL_CATALOG = [
     name: ANSWER_FROM_ARTICLE_TOOL_NAME,
     lockable: true,
     defaultEnabled: true,
-    consequence: 'Bot can search/classify but never answers itself — always hands off after searching.',
+    consequence:
+      'Bot can search/classify but never answers itself — always hands off after searching.',
   },
   {
     name: CONFIRM_RESOLUTION_TOOL_NAME,
     lockable: true,
     defaultEnabled: true,
-    consequence: 'Article answers are never confirmed by the player; bot_active exits only via handoff or the turn cap.',
+    consequence:
+      'Article answers are never confirmed by the player; bot_active exits only via handoff or the turn cap.',
   },
-] as const
+] as const;
 
 /** "Version 1" — every toggleable tool enabled, matching today's always-on behavior. */
 export function buildBaselineToolsConfig(): ToolToggle[] {
-  return TOOL_CATALOG.map((t) => ({ tool: t.name, enabled: true }))
+  return TOOL_CATALOG.map((t) => ({ tool: t.name, enabled: true }));
 }
 
 /**
@@ -1073,8 +1188,11 @@ export function buildBaselineToolsConfig(): ToolToggle[] {
  * which is the entire determinism guarantee this function exists for.
  */
 export function toolsForPhase(phase: ToolPhase, enabledTools: ReadonlySet<string>): unknown[] {
-  const base = phase === 'bot_article' ? [...ALWAYS_AVAILABLE_TOOLS, CONFIRM_RESOLUTION_TOOL] : [...ALWAYS_AVAILABLE_TOOLS]
-  return base.filter((t) => t.function.name === 'handoff' || enabledTools.has(t.function.name))
+  const base =
+    phase === 'bot_article'
+      ? [...ALWAYS_AVAILABLE_TOOLS, CONFIRM_RESOLUTION_TOOL]
+      : [...ALWAYS_AVAILABLE_TOOLS];
+  return base.filter((t) => t.function.name === 'handoff' || enabledTools.has(t.function.name));
 }
 ```
 
@@ -1097,10 +1215,12 @@ git commit -m "feat(bot-config): deterministic tool gating via TOOL_CATALOG"
 ### Task 6.5: Limits catalog module
 
 **Files:**
+
 - Create: `backend/src/domain/bot/limitsCatalog.ts`
 - Test: `backend/tests/bot.limitsCatalog.test.ts`
 
 **Interfaces:**
+
 - Produces: `LimitCatalogEntry` type (`{ key: LimitKey; label: string; consequence: string; defaultValue: number; min: number; max: number }`), `LIMIT_CATALOG` (readonly array, 4 entries in the order `max_bot_messages`, `max_tool_calls_per_turn`, `max_articles_per_turn`, `max_unhelped_replies`), `buildBaselineLimits(): LimitToggle[]`, `clampLimitBounds(key: LimitKey, value: number): { ok: true } | { ok: false; min: number; max: number }`.
 
 This module is the numeric-limits analogue of `TOOL_CATALOG` (Task 6) — same shape, same reason: a single source of truth for defaults and bounds that both the seed/backfill path and the save-validation path (Task 7.5) read from, so a bound can never drift between "what a fresh workspace gets" and "what an admin is allowed to set."
@@ -1109,48 +1229,54 @@ This module is the numeric-limits analogue of `TOOL_CATALOG` (Task 6) — same s
 
 ```ts
 // backend/tests/bot.limitsCatalog.test.ts
-import { describe, expect, it } from 'vitest'
-import { LIMIT_CATALOG, buildBaselineLimits, clampLimitBounds } from '../src/domain/bot/limitsCatalog.ts'
+import { describe, expect, it } from 'vitest';
+import {
+  LIMIT_CATALOG,
+  buildBaselineLimits,
+  clampLimitBounds,
+} from '../src/domain/bot/limitsCatalog.ts';
 
 describe('LIMIT_CATALOG', () => {
-  it('lists exactly the 4 limit keys, in order, matching today\'s hardcoded constants as defaults', () => {
+  it("lists exactly the 4 limit keys, in order, matching today's hardcoded constants as defaults", () => {
     expect(LIMIT_CATALOG.map((l) => l.key)).toEqual([
       'max_bot_messages',
       'max_tool_calls_per_turn',
       'max_articles_per_turn',
       'max_unhelped_replies',
-    ])
-    const byKey = new Map(LIMIT_CATALOG.map((l) => [l.key, l.defaultValue]))
-    expect(byKey.get('max_bot_messages')).toBe(8)
-    expect(byKey.get('max_tool_calls_per_turn')).toBe(6)
-    expect(byKey.get('max_articles_per_turn')).toBe(3)
-    expect(byKey.get('max_unhelped_replies')).toBe(3)
-  })
+    ]);
+    const byKey = new Map(LIMIT_CATALOG.map((l) => [l.key, l.defaultValue]));
+    expect(byKey.get('max_bot_messages')).toBe(8);
+    expect(byKey.get('max_tool_calls_per_turn')).toBe(6);
+    expect(byKey.get('max_articles_per_turn')).toBe(3);
+    expect(byKey.get('max_unhelped_replies')).toBe(3);
+  });
 
   it('every entry has min <= defaultValue <= max', () => {
     for (const l of LIMIT_CATALOG) {
-      expect(l.min).toBeLessThanOrEqual(l.defaultValue)
-      expect(l.defaultValue).toBeLessThanOrEqual(l.max)
+      expect(l.min).toBeLessThanOrEqual(l.defaultValue);
+      expect(l.defaultValue).toBeLessThanOrEqual(l.max);
     }
-  })
-})
+  });
+});
 
 describe('buildBaselineLimits', () => {
   it('returns one LimitToggle per catalog entry, at its default value, in catalog order', () => {
-    expect(buildBaselineLimits()).toEqual(LIMIT_CATALOG.map((l) => ({ key: l.key, value: l.defaultValue })))
-  })
-})
+    expect(buildBaselineLimits()).toEqual(
+      LIMIT_CATALOG.map((l) => ({ key: l.key, value: l.defaultValue })),
+    );
+  });
+});
 
 describe('clampLimitBounds', () => {
   it('accepts a value within [min, max]', () => {
-    expect(clampLimitBounds('max_bot_messages', 8)).toEqual({ ok: true })
-  })
+    expect(clampLimitBounds('max_bot_messages', 8)).toEqual({ ok: true });
+  });
 
   it('rejects a value outside [min, max], naming the actual bound', () => {
-    const result = clampLimitBounds('max_bot_messages', 100)
-    expect(result).toEqual({ ok: false, min: 3, max: 20 })
-  })
-})
+    const result = clampLimitBounds('max_bot_messages', 100);
+    expect(result).toEqual({ ok: false, min: 3, max: 20 });
+  });
+});
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -1162,16 +1288,16 @@ Expected: FAIL — `Cannot find module '../src/domain/bot/limitsCatalog.ts'`
 
 ```ts
 // backend/src/domain/bot/limitsCatalog.ts
-import type { LimitKey, LimitToggleValue } from '@support/types'
+import type { LimitKey, LimitToggleValue } from '@support/types';
 
 export type LimitCatalogEntry = {
-  key: LimitKey
-  label: string
-  consequence: string
-  defaultValue: number
-  min: number
-  max: number
-}
+  key: LimitKey;
+  label: string;
+  consequence: string;
+  defaultValue: number;
+  min: number;
+  max: number;
+};
 
 /**
  * Defaults are today's hardcoded constants (MAX_BOT_MESSAGES=8,
@@ -1185,7 +1311,8 @@ export const LIMIT_CATALOG: readonly LimitCatalogEntry[] = [
   {
     key: 'max_bot_messages',
     label: 'Max bot messages per conversation',
-    consequence: 'Conversation force-hands-off once the bot has sent this many messages, regardless of progress.',
+    consequence:
+      'Conversation force-hands-off once the bot has sent this many messages, regardless of progress.',
     defaultValue: 8,
     min: 3,
     max: 20,
@@ -1201,7 +1328,8 @@ export const LIMIT_CATALOG: readonly LimitCatalogEntry[] = [
   {
     key: 'max_articles_per_turn',
     label: 'Max article searches per turn',
-    consequence: 'Additional search_articles calls in the same turn are rejected with a limit-reached message.',
+    consequence:
+      'Additional search_articles calls in the same turn are rejected with a limit-reached message.',
     defaultValue: 3,
     min: 1,
     max: 10,
@@ -1215,20 +1343,20 @@ export const LIMIT_CATALOG: readonly LimitCatalogEntry[] = [
     min: 1,
     max: 8,
   },
-] as const
+] as const;
 
 /** "Version 1" — what a freshly seeded or reset-to-default workspace's limits look like. */
 export function buildBaselineLimits(): LimitToggleValue[] {
-  return LIMIT_CATALOG.map((l) => ({ key: l.key, value: l.defaultValue }))
+  return LIMIT_CATALOG.map((l) => ({ key: l.key, value: l.defaultValue }));
 }
 
 export function clampLimitBounds(
   key: LimitKey,
   value: number,
 ): { ok: true } | { ok: false; min: number; max: number } {
-  const entry = LIMIT_CATALOG.find((l) => l.key === key)!
-  if (value < entry.min || value > entry.max) return { ok: false, min: entry.min, max: entry.max }
-  return { ok: true }
+  const entry = LIMIT_CATALOG.find((l) => l.key === key)!;
+  if (value < entry.min || value > entry.max) return { ok: false, min: entry.min, max: entry.max };
+  return { ok: true };
 }
 ```
 
@@ -1249,11 +1377,13 @@ git commit -m "feat(bot-config): add limits catalog module"
 ### Task 7: `resolveBotConfig` / `saveBotConfig` / `seedBotConfig` rewrite
 
 **Files:**
+
 - Modify: `backend/src/domain/bot/botConfig.ts`
 - Modify: `backend/tests/bot.config.test.ts` (the `resolveBotConfig`/`saveBotConfig` describe blocks, plus new `seedBotConfig` block)
 - Modify: `backend/tests/helpers/db.ts` (`seedBotConfig` test helper — now inserts jsonb)
 
 **Interfaces:**
+
 - Consumes: `RuleEntry`, `BUILTIN_RULE_KEYS`, `LOCKED_RULE_KEYS`, `buildBaselineRules` from `./rulesCatalog.ts`; `ToolToggle`, `TOOL_CATALOG`, `buildBaselineToolsConfig` from `./tools.ts`; `LIMIT_CATALOG`, `buildBaselineLimits`, `clampLimitBounds` from `./limitsCatalog.ts` (Task 6.5); `getOrCreateSystemActor` from `./systemActor.ts`; `buildSystemPrompt`, `DEFAULT_BOT_PROMPT` from `./defaultPrompt.ts`.
 - Produces: `ResolvedBotConfig` (`{ isProvisioned, prompt, rules: RuleEntry[], toolsConfig: ToolToggle[], enabledTools: ReadonlySet<string>, limitsConfig: LimitToggle[], resolvedLimits: Record<LimitKey, number>, systemPrompt }`), `resolveBotConfig(tx, workspaceId)`, `EmptyBotPrompt` (unchanged), `InvalidRulesPayload`, `InvalidToolsPayload`, `InvalidLimitsPayload`, `BotConfigSave` (`{ workspaceId, actorId, isProvisioned?, prompt?: string | null, rules?: RuleEntry[] | null, toolsConfig?: ToolToggle[] | null, limitsConfig?: LimitToggle[] | null }`), `saveBotConfig(tx, input)`, `seedBotConfig(tx, workspaceId): Promise<ResolvedBotConfig>`, `BOT_CONFIG_ENTITY_TYPE` (unchanged).
 
@@ -1262,11 +1392,11 @@ git commit -m "feat(bot-config): add limits catalog module"
 ```ts
 // backend/tests/helpers/db.ts — replace seedBotConfig
 export async function seedBotConfig(args: {
-  workspaceId: string
-  isProvisioned?: boolean
-  prompt?: string
-  rules?: unknown[]
-  toolsConfig?: unknown[]
+  workspaceId: string;
+  isProvisioned?: boolean;
+  prompt?: string;
+  rules?: unknown[];
+  toolsConfig?: unknown[];
 }): Promise<void> {
   await ownerPool.query(
     `insert into bot_config (workspace_id, is_provisioned, prompt, rules, tools_config)
@@ -1278,7 +1408,7 @@ export async function seedBotConfig(args: {
       JSON.stringify(args.rules ?? []),
       JSON.stringify(args.toolsConfig ?? []),
     ],
-  )
+  );
 }
 ```
 
@@ -1288,194 +1418,281 @@ Replace the `describe('resolveBotConfig', ...)` and `describe('saveBotConfig', .
 
 ```ts
 describe('resolveBotConfig', () => {
-  let workspaceId: string
+  let workspaceId: string;
 
   beforeEach(async () => {
-    await truncateAll()
-    workspaceId = await seedWorkspace()
-  })
+    await truncateAll();
+    workspaceId = await seedWorkspace();
+  });
 
   it('resolves an absent row to off, with the catalog baseline prompt/rules/tools', async () => {
-    const resolved = await withWorkspace(workspaceId, (tx) => resolveBotConfig(tx, workspaceId))
-    expect(resolved.isProvisioned).toBe(false)
-    expect(resolved.prompt).toBe(DEFAULT_BOT_PROMPT)
-    expect(resolved.rules).toEqual(buildBaselineRules())
-    expect(resolved.toolsConfig).toEqual(buildBaselineToolsConfig())
-    expect(resolved.enabledTools).toEqual(new Set(TOOL_CATALOG.map((t) => t.name)))
-    expect(resolved.systemPrompt).toBe(buildSystemPrompt(DEFAULT_BOT_PROMPT, buildBaselineRules()))
-  })
+    const resolved = await withWorkspace(workspaceId, (tx) => resolveBotConfig(tx, workspaceId));
+    expect(resolved.isProvisioned).toBe(false);
+    expect(resolved.prompt).toBe(DEFAULT_BOT_PROMPT);
+    expect(resolved.rules).toEqual(buildBaselineRules());
+    expect(resolved.toolsConfig).toEqual(buildBaselineToolsConfig());
+    expect(resolved.enabledTools).toEqual(new Set(TOOL_CATALOG.map((t) => t.name)));
+    expect(resolved.systemPrompt).toBe(buildSystemPrompt(DEFAULT_BOT_PROMPT, buildBaselineRules()));
+  });
 
   it('returns a stored prompt, rules and tools_config verbatim', async () => {
-    const rules = [{ key: 'no_regreet', text: 'Do not greet twice.', enabled: false, locked: false, source: 'builtin' }]
-    const toolsConfig = [{ tool: 'search_articles', enabled: false }]
-    await seedBotConfig({ workspaceId, isProvisioned: true, prompt: 'MY PROMPT', rules, toolsConfig })
-    const resolved = await withWorkspace(workspaceId, (tx) => resolveBotConfig(tx, workspaceId))
-    expect(resolved.prompt).toBe('MY PROMPT')
-    expect(resolved.rules).toEqual(rules)
-    expect(resolved.toolsConfig).toEqual(toolsConfig)
-    expect(resolved.enabledTools).toEqual(new Set())
-  })
+    const rules = [
+      {
+        key: 'no_regreet',
+        text: 'Do not greet twice.',
+        enabled: false,
+        locked: false,
+        source: 'builtin',
+      },
+    ];
+    const toolsConfig = [{ tool: 'search_articles', enabled: false }];
+    await seedBotConfig({
+      workspaceId,
+      isProvisioned: true,
+      prompt: 'MY PROMPT',
+      rules,
+      toolsConfig,
+    });
+    const resolved = await withWorkspace(workspaceId, (tx) => resolveBotConfig(tx, workspaceId));
+    expect(resolved.prompt).toBe('MY PROMPT');
+    expect(resolved.rules).toEqual(rules);
+    expect(resolved.toolsConfig).toEqual(toolsConfig);
+    expect(resolved.enabledTools).toEqual(new Set());
+  });
 
   it('cannot tell an absent row from is_provisioned = false — one resolver, one answer', async () => {
-    const absent = await withWorkspace(workspaceId, (tx) => resolveBotConfig(tx, workspaceId))
-    await seedBotConfig({ workspaceId, isProvisioned: false, prompt: DEFAULT_BOT_PROMPT, rules: buildBaselineRules(), toolsConfig: buildBaselineToolsConfig() })
-    const present = await withWorkspace(workspaceId, (tx) => resolveBotConfig(tx, workspaceId))
-    expect(present).toEqual(absent)
-  })
+    const absent = await withWorkspace(workspaceId, (tx) => resolveBotConfig(tx, workspaceId));
+    await seedBotConfig({
+      workspaceId,
+      isProvisioned: false,
+      prompt: DEFAULT_BOT_PROMPT,
+      rules: buildBaselineRules(),
+      toolsConfig: buildBaselineToolsConfig(),
+    });
+    const present = await withWorkspace(workspaceId, (tx) => resolveBotConfig(tx, workspaceId));
+    expect(present).toEqual(absent);
+  });
 
   it('never leaks another workspace config', async () => {
-    const otherWorkspaceId = await seedWorkspace()
-    await seedBotConfig({ workspaceId: otherWorkspaceId, isProvisioned: true, prompt: 'theirs' })
-    const resolved = await withWorkspace(workspaceId, (tx) => resolveBotConfig(tx, workspaceId))
-    expect(resolved.prompt).toBe(DEFAULT_BOT_PROMPT)
-    expect(resolved.isProvisioned).toBe(false)
-  })
-})
+    const otherWorkspaceId = await seedWorkspace();
+    await seedBotConfig({ workspaceId: otherWorkspaceId, isProvisioned: true, prompt: 'theirs' });
+    const resolved = await withWorkspace(workspaceId, (tx) => resolveBotConfig(tx, workspaceId));
+    expect(resolved.prompt).toBe(DEFAULT_BOT_PROMPT);
+    expect(resolved.isProvisioned).toBe(false);
+  });
+});
 
 describe('saveBotConfig', () => {
-  let workspaceId: string
-  let actorId: string
+  let workspaceId: string;
+  let actorId: string;
 
   beforeEach(async () => {
-    await truncateAll()
-    workspaceId = await seedWorkspace()
-    actorId = await seedAgent()
-  })
+    await truncateAll();
+    workspaceId = await seedWorkspace();
+    actorId = await seedAgent();
+  });
 
   it('creates the row on first save and upserts on the second rather than erroring', async () => {
     const first = await withWorkspace(workspaceId, (tx) =>
       saveBotConfig(tx, { workspaceId, actorId, isProvisioned: true, prompt: 'v1' }),
-    )
-    expect(first).toMatchObject({ isProvisioned: true, prompt: 'v1' })
+    );
+    expect(first).toMatchObject({ isProvisioned: true, prompt: 'v1' });
 
-    const second = await withWorkspace(workspaceId, (tx) => saveBotConfig(tx, { workspaceId, actorId, prompt: 'v2' }))
-    expect(second).toMatchObject({ isProvisioned: true, prompt: 'v2' })
+    const second = await withWorkspace(workspaceId, (tx) =>
+      saveBotConfig(tx, { workspaceId, actorId, prompt: 'v2' }),
+    );
+    expect(second).toMatchObject({ isProvisioned: true, prompt: 'v2' });
 
-    const { rows } = await ownerPool.query(`select count(*)::int as n from bot_config where workspace_id = $1`, [
-      workspaceId,
-    ])
-    expect(rows[0]).toEqual({ n: 1 })
-  })
+    const { rows } = await ownerPool.query(
+      `select count(*)::int as n from bot_config where workspace_id = $1`,
+      [workspaceId],
+    );
+    expect(rows[0]).toEqual({ n: 1 });
+  });
 
   it('leaves an omitted field alone, and resets to the catalog baseline on an explicit null', async () => {
-    const customRules = [...buildBaselineRules().slice(0, 1)]
+    const customRules = [...buildBaselineRules().slice(0, 1)];
     await withWorkspace(workspaceId, (tx) =>
-      saveBotConfig(tx, { workspaceId, actorId, prompt: 'custom', rules: customRules.length ? undefined : undefined }),
-    )
-    const cleared = await withWorkspace(workspaceId, (tx) => saveBotConfig(tx, { workspaceId, actorId, prompt: null }))
-    expect(cleared.prompt).toBe(DEFAULT_BOT_PROMPT)
-  })
+      saveBotConfig(tx, {
+        workspaceId,
+        actorId,
+        prompt: 'custom',
+        rules: customRules.length ? undefined : undefined,
+      }),
+    );
+    const cleared = await withWorkspace(workspaceId, (tx) =>
+      saveBotConfig(tx, { workspaceId, actorId, prompt: null }),
+    );
+    expect(cleared.prompt).toBe(DEFAULT_BOT_PROMPT);
+  });
 
   it('rejects an empty or whitespace-only prompt instead of storing one', async () => {
     for (const blank of ['', '   ', '\n\t']) {
       await expect(
-        withWorkspace(workspaceId, (tx) => saveBotConfig(tx, { workspaceId, actorId, prompt: blank })),
-      ).rejects.toThrow(EmptyBotPrompt)
+        withWorkspace(workspaceId, (tx) =>
+          saveBotConfig(tx, { workspaceId, actorId, prompt: blank }),
+        ),
+      ).rejects.toThrow(EmptyBotPrompt);
     }
-  })
+  });
 
   it('rejects a payload where a locked rule key is missing or disabled', async () => {
-    const withoutLocked = buildBaselineRules().filter((r) => r.key !== 'no_credentials')
+    const withoutLocked = buildBaselineRules().filter((r) => r.key !== 'no_credentials');
     await expect(
-      withWorkspace(workspaceId, (tx) => saveBotConfig(tx, { workspaceId, actorId, rules: withoutLocked })),
-    ).rejects.toThrow(InvalidRulesPayload)
+      withWorkspace(workspaceId, (tx) =>
+        saveBotConfig(tx, { workspaceId, actorId, rules: withoutLocked }),
+      ),
+    ).rejects.toThrow(InvalidRulesPayload);
 
-    const disabledLocked = buildBaselineRules().map((r) => (r.key === 'no_credentials' ? { ...r, enabled: false } : r))
+    const disabledLocked = buildBaselineRules().map((r) =>
+      r.key === 'no_credentials' ? { ...r, enabled: false } : r,
+    );
     await expect(
-      withWorkspace(workspaceId, (tx) => saveBotConfig(tx, { workspaceId, actorId, rules: disabledLocked })),
-    ).rejects.toThrow(InvalidRulesPayload)
-  })
+      withWorkspace(workspaceId, (tx) =>
+        saveBotConfig(tx, { workspaceId, actorId, rules: disabledLocked }),
+      ),
+    ).rejects.toThrow(InvalidRulesPayload);
+  });
 
   it('rejects a payload missing any other builtin key, even an unlocked one', async () => {
-    const withoutBuiltin = buildBaselineRules().filter((r) => r.key !== 'no_regreet')
+    const withoutBuiltin = buildBaselineRules().filter((r) => r.key !== 'no_regreet');
     await expect(
-      withWorkspace(workspaceId, (tx) => saveBotConfig(tx, { workspaceId, actorId, rules: withoutBuiltin })),
-    ).rejects.toThrow(InvalidRulesPayload)
-  })
+      withWorkspace(workspaceId, (tx) =>
+        saveBotConfig(tx, { workspaceId, actorId, rules: withoutBuiltin }),
+      ),
+    ).rejects.toThrow(InvalidRulesPayload);
+  });
 
   it('rejects a rule set with zero enabled entries', async () => {
-    const allDisabled = buildBaselineRules().map((r) => ({ ...r, enabled: false }))
+    const allDisabled = buildBaselineRules().map((r) => ({ ...r, enabled: false }));
     await expect(
-      withWorkspace(workspaceId, (tx) => saveBotConfig(tx, { workspaceId, actorId, rules: allDisabled })),
-    ).rejects.toThrow(InvalidRulesPayload)
-  })
+      withWorkspace(workspaceId, (tx) =>
+        saveBotConfig(tx, { workspaceId, actorId, rules: allDisabled }),
+      ),
+    ).rejects.toThrow(InvalidRulesPayload);
+  });
 
   it('rejects a custom rule that reuses a builtin key', async () => {
-    const reused = [...buildBaselineRules(), { key: 'no_regreet', text: 'dup', enabled: true, locked: false, source: 'custom' as const }]
+    const reused = [
+      ...buildBaselineRules(),
+      { key: 'no_regreet', text: 'dup', enabled: true, locked: false, source: 'custom' as const },
+    ];
     await expect(
-      withWorkspace(workspaceId, (tx) => saveBotConfig(tx, { workspaceId, actorId, rules: reused })),
-    ).rejects.toThrow(InvalidRulesPayload)
-  })
+      withWorkspace(workspaceId, (tx) =>
+        saveBotConfig(tx, { workspaceId, actorId, rules: reused }),
+      ),
+    ).rejects.toThrow(InvalidRulesPayload);
+  });
 
   it('accepts an added custom rule, appended after the catalog', async () => {
-    const withCustom = [...buildBaselineRules(), { key: 'custom-1', text: 'No emoji.', enabled: true, locked: false, source: 'custom' as const }]
-    const saved = await withWorkspace(workspaceId, (tx) => saveBotConfig(tx, { workspaceId, actorId, rules: withCustom }))
-    expect(saved.rules.at(-1)).toEqual({ key: 'custom-1', text: 'No emoji.', enabled: true, locked: false, source: 'custom' })
-    expect(saved.systemPrompt).toContain('No emoji.')
-  })
+    const withCustom = [
+      ...buildBaselineRules(),
+      {
+        key: 'custom-1',
+        text: 'No emoji.',
+        enabled: true,
+        locked: false,
+        source: 'custom' as const,
+      },
+    ];
+    const saved = await withWorkspace(workspaceId, (tx) =>
+      saveBotConfig(tx, { workspaceId, actorId, rules: withCustom }),
+    );
+    expect(saved.rules.at(-1)).toEqual({
+      key: 'custom-1',
+      text: 'No emoji.',
+      enabled: true,
+      locked: false,
+      source: 'custom',
+    });
+    expect(saved.systemPrompt).toContain('No emoji.');
+  });
 
   it('rejects tools_config missing a catalog tool', async () => {
-    const missingOne = buildBaselineToolsConfig().slice(1)
+    const missingOne = buildBaselineToolsConfig().slice(1);
     await expect(
-      withWorkspace(workspaceId, (tx) => saveBotConfig(tx, { workspaceId, actorId, toolsConfig: missingOne })),
-    ).rejects.toThrow(InvalidToolsPayload)
-  })
+      withWorkspace(workspaceId, (tx) =>
+        saveBotConfig(tx, { workspaceId, actorId, toolsConfig: missingOne }),
+      ),
+    ).rejects.toThrow(InvalidToolsPayload);
+  });
 
   it('disabling a tool removes it from enabledTools', async () => {
-    const toggled = buildBaselineToolsConfig().map((t) => (t.tool === 'search_articles' ? { ...t, enabled: false } : t))
-    const saved = await withWorkspace(workspaceId, (tx) => saveBotConfig(tx, { workspaceId, actorId, toolsConfig: toggled }))
-    expect(saved.enabledTools.has('search_articles')).toBe(false)
-    expect(saved.enabledTools.has('classify')).toBe(true)
-  })
+    const toggled = buildBaselineToolsConfig().map((t) =>
+      t.tool === 'search_articles' ? { ...t, enabled: false } : t,
+    );
+    const saved = await withWorkspace(workspaceId, (tx) =>
+      saveBotConfig(tx, { workspaceId, actorId, toolsConfig: toggled }),
+    );
+    expect(saved.enabledTools.has('search_articles')).toBe(false);
+    expect(saved.enabledTools.has('classify')).toBe(true);
+  });
 
   it('bumps updated_at on a real change without touching created_at', async () => {
-    await withWorkspace(workspaceId, (tx) => saveBotConfig(tx, { workspaceId, actorId, prompt: 'v1' }))
+    await withWorkspace(workspaceId, (tx) =>
+      saveBotConfig(tx, { workspaceId, actorId, prompt: 'v1' }),
+    );
     const before = await ownerPool.query<{ created_at: Date; updated_at: Date }>(
       `select created_at, updated_at from bot_config where workspace_id = $1`,
       [workspaceId],
-    )
-    await withWorkspace(workspaceId, (tx) => saveBotConfig(tx, { workspaceId, actorId, prompt: 'v2' }))
+    );
+    await withWorkspace(workspaceId, (tx) =>
+      saveBotConfig(tx, { workspaceId, actorId, prompt: 'v2' }),
+    );
     const after = await ownerPool.query<{ created_at: Date; updated_at: Date }>(
       `select created_at, updated_at from bot_config where workspace_id = $1`,
       [workspaceId],
-    )
-    expect(after.rows[0]!.created_at.getTime()).toBe(before.rows[0]!.created_at.getTime())
-    expect(after.rows[0]!.updated_at.getTime()).toBeGreaterThanOrEqual(before.rows[0]!.updated_at.getTime())
-  })
-})
+    );
+    expect(after.rows[0]!.created_at.getTime()).toBe(before.rows[0]!.created_at.getTime());
+    expect(after.rows[0]!.updated_at.getTime()).toBeGreaterThanOrEqual(
+      before.rows[0]!.updated_at.getTime(),
+    );
+  });
+});
 
 describe('seedBotConfig', () => {
-  let workspaceId: string
+  let workspaceId: string;
 
   beforeEach(async () => {
-    await truncateAll()
-    workspaceId = await seedWorkspace()
-  })
+    await truncateAll();
+    workspaceId = await seedWorkspace();
+  });
 
   it('creates a real row with the catalog baseline and one change_log entry per field, attributed to the system actor', async () => {
-    const resolved = await withWorkspace(workspaceId, (tx) => seedBotConfig(tx, workspaceId))
-    expect(resolved.prompt).toBe(DEFAULT_BOT_PROMPT)
-    expect(resolved.rules).toEqual(buildBaselineRules())
-    expect(resolved.toolsConfig).toEqual(buildBaselineToolsConfig())
+    const resolved = await withWorkspace(workspaceId, (tx) => seedBotConfig(tx, workspaceId));
+    expect(resolved.prompt).toBe(DEFAULT_BOT_PROMPT);
+    expect(resolved.rules).toEqual(buildBaselineRules());
+    expect(resolved.toolsConfig).toEqual(buildBaselineToolsConfig());
 
-    const { rows } = await ownerPool.query<{ field: string; before_value: unknown; actor_id: string }>(
+    const { rows } = await ownerPool.query<{
+      field: string;
+      before_value: unknown;
+      actor_id: string;
+    }>(
       `select field, before_value, actor_id from change_log where entity_type = 'bot_config' and entity_id = $1 order by field`,
       [workspaceId],
-    )
-    expect(rows.map((r) => r.field)).toEqual(['prompt', 'rules', 'tools_config'])
-    expect(rows.every((r) => r.before_value === null)).toBe(true)
-    const { rows: agentRows } = await ownerPool.query(`select email from agent where id = $1`, [rows[0]!.actor_id])
-    expect(agentRows[0]).toEqual({ email: SYSTEM_ACTOR_EMAIL })
-  })
+    );
+    expect(rows.map((r) => r.field)).toEqual(['prompt', 'rules', 'tools_config']);
+    expect(rows.every((r) => r.before_value === null)).toBe(true);
+    const { rows: agentRows } = await ownerPool.query(`select email from agent where id = $1`, [
+      rows[0]!.actor_id,
+    ]);
+    expect(agentRows[0]).toEqual({ email: SYSTEM_ACTOR_EMAIL });
+  });
 
   it('is a no-op when a row already exists', async () => {
-    await withWorkspace(workspaceId, (tx) => saveBotConfig(tx, { workspaceId, actorId: await seedAgent(), prompt: 'already customised' }))
-    const resolved = await withWorkspace(workspaceId, (tx) => seedBotConfig(tx, workspaceId))
-    expect(resolved.prompt).toBe('already customised')
-    const { rows } = await ownerPool.query(`select count(*)::int as n from bot_config where workspace_id = $1`, [workspaceId])
-    expect(rows[0]).toEqual({ n: 1 })
-  })
-})
+    await withWorkspace(workspaceId, (tx) =>
+      saveBotConfig(tx, { workspaceId, actorId: await seedAgent(), prompt: 'already customised' }),
+    );
+    const resolved = await withWorkspace(workspaceId, (tx) => seedBotConfig(tx, workspaceId));
+    expect(resolved.prompt).toBe('already customised');
+    const { rows } = await ownerPool.query(
+      `select count(*)::int as n from bot_config where workspace_id = $1`,
+      [workspaceId],
+    );
+    expect(rows[0]).toEqual({ n: 1 });
+  });
+});
 ```
 
 Update the file's top imports to add: `buildBaselineRules` and `RuleEntry`-typed helpers from `../src/domain/bot/rulesCatalog.ts`; `TOOL_CATALOG`, `buildBaselineToolsConfig` from `../src/domain/bot/tools.ts`; `SYSTEM_ACTOR_EMAIL` from `../src/domain/bot/systemActor.ts`; and `InvalidRulesPayload`, `InvalidToolsPayload`, `seedBotConfig` from `../src/domain/bot/botConfig.ts`.
@@ -1489,25 +1706,35 @@ Expected: FAIL — current `botConfig.ts` still uses the old nullable-string mod
 
 ```ts
 // backend/src/domain/bot/botConfig.ts
-import { eq } from 'drizzle-orm'
-import type { Tx } from '../../shared/db/withWorkspace.ts'
-import { botConfig } from '../../shared/db/schema/index.ts'
-import { buildSystemPrompt, DEFAULT_BOT_PROMPT } from './defaultPrompt.ts'
-import { BUILTIN_RULE_KEYS, LOCKED_RULE_KEYS, buildBaselineRules, type RuleEntry } from './rulesCatalog.ts'
-import { TOOL_CATALOG, buildBaselineToolsConfig, type ToolToggle } from './tools.ts'
-import { appendChangeLog } from '../../shared/changeLog/appendChangeLog.ts'
+import { eq } from 'drizzle-orm';
+import type { Tx } from '../../shared/db/withWorkspace.ts';
+import { botConfig } from '../../shared/db/schema/index.ts';
+import { buildSystemPrompt, DEFAULT_BOT_PROMPT } from './defaultPrompt.ts';
+import {
+  BUILTIN_RULE_KEYS,
+  LOCKED_RULE_KEYS,
+  buildBaselineRules,
+  type RuleEntry,
+} from './rulesCatalog.ts';
+import { TOOL_CATALOG, buildBaselineToolsConfig, type ToolToggle } from './tools.ts';
+import { appendChangeLog } from '../../shared/changeLog/appendChangeLog.ts';
 
 export type ResolvedBotConfig = {
-  isProvisioned: boolean
-  prompt: string
-  rules: RuleEntry[]
-  toolsConfig: ToolToggle[]
+  isProvisioned: boolean;
+  prompt: string;
+  rules: RuleEntry[];
+  toolsConfig: ToolToggle[];
   /** Derived from toolsConfig — what toolsForPhase actually filters against. */
-  enabledTools: ReadonlySet<string>
-  systemPrompt: string
-}
+  enabledTools: ReadonlySet<string>;
+  systemPrompt: string;
+};
 
-function resolved(isProvisioned: boolean, prompt: string, rules: RuleEntry[], toolsConfig: ToolToggle[]): ResolvedBotConfig {
+function resolved(
+  isProvisioned: boolean,
+  prompt: string,
+  rules: RuleEntry[],
+  toolsConfig: ToolToggle[],
+): ResolvedBotConfig {
   return {
     isProvisioned,
     prompt,
@@ -1515,7 +1742,7 @@ function resolved(isProvisioned: boolean, prompt: string, rules: RuleEntry[], to
     toolsConfig,
     enabledTools: new Set(toolsConfig.filter((t) => t.enabled).map((t) => t.tool)),
     systemPrompt: buildSystemPrompt(prompt, rules),
-  }
+  };
 }
 
 /**
@@ -1527,81 +1754,92 @@ function resolved(isProvisioned: boolean, prompt: string, rules: RuleEntry[], to
  */
 export async function resolveBotConfig(tx: Tx, workspaceId: string): Promise<ResolvedBotConfig> {
   const [row] = await tx
-    .select({ isProvisioned: botConfig.isProvisioned, prompt: botConfig.prompt, rules: botConfig.rules, toolsConfig: botConfig.toolsConfig })
+    .select({
+      isProvisioned: botConfig.isProvisioned,
+      prompt: botConfig.prompt,
+      rules: botConfig.rules,
+      toolsConfig: botConfig.toolsConfig,
+    })
     .from(botConfig)
     .where(eq(botConfig.workspaceId, workspaceId))
-    .limit(1)
+    .limit(1);
 
-  if (!row) return resolved(false, DEFAULT_BOT_PROMPT, buildBaselineRules(), buildBaselineToolsConfig())
-  return resolved(row.isProvisioned, row.prompt, row.rules as RuleEntry[], row.toolsConfig as ToolToggle[])
+  if (!row)
+    return resolved(false, DEFAULT_BOT_PROMPT, buildBaselineRules(), buildBaselineToolsConfig());
+  return resolved(
+    row.isProvisioned,
+    row.prompt,
+    row.rules as RuleEntry[],
+    row.toolsConfig as ToolToggle[],
+  );
 }
 
-export const BOT_CONFIG_ENTITY_TYPE = 'bot_config'
+export const BOT_CONFIG_ENTITY_TYPE = 'bot_config';
 
 export class EmptyBotPrompt extends Error {
-  readonly field: 'prompt'
+  readonly field: 'prompt';
   constructor() {
-    super('Bot prompt cannot be empty — pass null to reset it to the default')
-    this.name = 'EmptyBotPrompt'
-    this.field = 'prompt'
+    super('Bot prompt cannot be empty — pass null to reset it to the default');
+    this.name = 'EmptyBotPrompt';
+    this.field = 'prompt';
   }
 }
 
 export class InvalidRulesPayload extends Error {
   constructor(message: string) {
-    super(message)
-    this.name = 'InvalidRulesPayload'
+    super(message);
+    this.name = 'InvalidRulesPayload';
   }
 }
 
 export class InvalidToolsPayload extends Error {
   constructor(message: string) {
-    super(message)
-    this.name = 'InvalidToolsPayload'
+    super(message);
+    this.name = 'InvalidToolsPayload';
   }
 }
 
 /** Save-time domain validation beyond Zod's shape check (spec "API / types"). */
 function validateRules(rules: readonly RuleEntry[]): void {
-  const byKey = new Map(rules.map((r) => [r.key, r]))
+  const byKey = new Map(rules.map((r) => [r.key, r]));
 
   for (const key of BUILTIN_RULE_KEYS) {
-    const entry = byKey.get(key)
-    if (!entry) throw new InvalidRulesPayload(`Rules payload is missing builtin rule "${key}".`)
+    const entry = byKey.get(key);
+    if (!entry) throw new InvalidRulesPayload(`Rules payload is missing builtin rule "${key}".`);
     if (LOCKED_RULE_KEYS.has(key) && !entry.enabled) {
-      throw new InvalidRulesPayload(`"${key}" is a locked rule and cannot be disabled.`)
+      throw new InvalidRulesPayload(`"${key}" is a locked rule and cannot be disabled.`);
     }
   }
 
   for (const rule of rules) {
     if (rule.source === 'custom' && BUILTIN_RULE_KEYS.has(rule.key)) {
-      throw new InvalidRulesPayload(`Custom rule cannot reuse builtin key "${rule.key}".`)
+      throw new InvalidRulesPayload(`Custom rule cannot reuse builtin key "${rule.key}".`);
     }
   }
 
   if (!rules.some((r) => r.enabled)) {
-    throw new InvalidRulesPayload('At least one rule must remain enabled.')
+    throw new InvalidRulesPayload('At least one rule must remain enabled.');
   }
 }
 
 function validateToolsConfig(toolsConfig: readonly ToolToggle[]): void {
-  const names = new Set(toolsConfig.map((t) => t.tool))
+  const names = new Set(toolsConfig.map((t) => t.tool));
   for (const t of TOOL_CATALOG) {
-    if (!names.has(t.name)) throw new InvalidToolsPayload(`tools_config is missing "${t.name}".`)
+    if (!names.has(t.name)) throw new InvalidToolsPayload(`tools_config is missing "${t.name}".`);
   }
 }
 
 export type BotConfigSave = {
-  workspaceId: string
-  actorId: string
-  isProvisioned?: boolean
+  workspaceId: string;
+  actorId: string;
+  isProvisioned?: boolean;
   /** Omitted means leave alone; explicit null resets to DEFAULT_BOT_PROMPT. */
-  prompt?: string | null
+  prompt?: string | null;
   /** Omitted means leave alone; explicit null resets to the catalog baseline. */
-  rules?: RuleEntry[] | null
+  rules?: RuleEntry[] | null;
   /** Omitted means leave alone; explicit null resets to the catalog baseline. */
-  toolsConfig?: ToolToggle[] | null
-}
+  toolsConfig?: ToolToggle[] | null;
+};
 
 /**
  * The only way `bot_config` is written for an ordinary edit. `seedBotConfig`
@@ -1609,33 +1847,56 @@ export type BotConfigSave = {
  * before_value semantics.
  */
 export async function saveBotConfig(tx: Tx, input: BotConfigSave): Promise<ResolvedBotConfig> {
-  if (typeof input.prompt === 'string' && input.prompt.trim() === '') throw new EmptyBotPrompt()
-  if (input.rules) validateRules(input.rules)
-  if (input.toolsConfig) validateToolsConfig(input.toolsConfig)
+  if (typeof input.prompt === 'string' && input.prompt.trim() === '') throw new EmptyBotPrompt();
+  if (input.rules) validateRules(input.rules);
+  if (input.toolsConfig) validateToolsConfig(input.toolsConfig);
 
   const [existing] = await tx
-    .select({ isProvisioned: botConfig.isProvisioned, prompt: botConfig.prompt, rules: botConfig.rules, toolsConfig: botConfig.toolsConfig })
+    .select({
+      isProvisioned: botConfig.isProvisioned,
+      prompt: botConfig.prompt,
+      rules: botConfig.rules,
+      toolsConfig: botConfig.toolsConfig,
+    })
     .from(botConfig)
     .where(eq(botConfig.workspaceId, input.workspaceId))
-    .limit(1)
+    .limit(1);
 
-  const beforeProvisioned = existing?.isProvisioned ?? false
-  const beforePrompt = existing?.prompt ?? DEFAULT_BOT_PROMPT
-  const beforeRules = (existing?.rules as RuleEntry[] | undefined) ?? buildBaselineRules()
-  const beforeTools = (existing?.toolsConfig as ToolToggle[] | undefined) ?? buildBaselineToolsConfig()
+  const beforeProvisioned = existing?.isProvisioned ?? false;
+  const beforePrompt = existing?.prompt ?? DEFAULT_BOT_PROMPT;
+  const beforeRules = (existing?.rules as RuleEntry[] | undefined) ?? buildBaselineRules();
+  const beforeTools =
+    (existing?.toolsConfig as ToolToggle[] | undefined) ?? buildBaselineToolsConfig();
 
-  const afterProvisioned = input.isProvisioned ?? beforeProvisioned
-  const afterPrompt = input.prompt === undefined ? beforePrompt : input.prompt ?? DEFAULT_BOT_PROMPT
-  const afterRules = input.rules === undefined ? beforeRules : input.rules ?? buildBaselineRules()
-  const afterTools = input.toolsConfig === undefined ? beforeTools : input.toolsConfig ?? buildBaselineToolsConfig()
+  const afterProvisioned = input.isProvisioned ?? beforeProvisioned;
+  const afterPrompt =
+    input.prompt === undefined ? beforePrompt : (input.prompt ?? DEFAULT_BOT_PROMPT);
+  const afterRules =
+    input.rules === undefined ? beforeRules : (input.rules ?? buildBaselineRules());
+  const afterTools =
+    input.toolsConfig === undefined
+      ? beforeTools
+      : (input.toolsConfig ?? buildBaselineToolsConfig());
 
   await tx
     .insert(botConfig)
-    .values({ workspaceId: input.workspaceId, isProvisioned: afterProvisioned, prompt: afterPrompt, rules: afterRules, toolsConfig: afterTools })
+    .values({
+      workspaceId: input.workspaceId,
+      isProvisioned: afterProvisioned,
+      prompt: afterPrompt,
+      rules: afterRules,
+      toolsConfig: afterTools,
+    })
     .onConflictDoUpdate({
       target: botConfig.workspaceId,
-      set: { isProvisioned: afterProvisioned, prompt: afterPrompt, rules: afterRules, toolsConfig: afterTools, updatedAt: new Date() },
-    })
+      set: {
+        isProvisioned: afterProvisioned,
+        prompt: afterPrompt,
+        rules: afterRules,
+        toolsConfig: afterTools,
+        updatedAt: new Date(),
+      },
+    });
 
   await appendChangeLog(tx, {
     workspaceId: input.workspaceId,
@@ -1648,9 +1909,9 @@ export async function saveBotConfig(tx: Tx, input: BotConfigSave): Promise<Resol
       { field: 'rules', before: beforeRules, after: afterRules },
       { field: 'tools_config', before: beforeTools, after: afterTools },
     ],
-  })
+  });
 
-  return resolved(afterProvisioned, afterPrompt, afterRules, afterTools)
+  return resolved(afterProvisioned, afterPrompt, afterRules, afterTools);
 }
 
 /**
@@ -1663,17 +1924,23 @@ export async function saveBotConfig(tx: Tx, input: BotConfigSave): Promise<Resol
  * baseline", so the History panel shows a real "version 1" row.
  */
 export async function seedBotConfig(tx: Tx, workspaceId: string): Promise<ResolvedBotConfig> {
-  const [existing] = await tx.select({ workspaceId: botConfig.workspaceId }).from(botConfig).where(eq(botConfig.workspaceId, workspaceId)).limit(1)
-  if (existing) return resolveBotConfig(tx, workspaceId)
+  const [existing] = await tx
+    .select({ workspaceId: botConfig.workspaceId })
+    .from(botConfig)
+    .where(eq(botConfig.workspaceId, workspaceId))
+    .limit(1);
+  if (existing) return resolveBotConfig(tx, workspaceId);
 
-  const { getOrCreateSystemActor } = await import('./systemActor.ts')
-  const actorId = await getOrCreateSystemActor(tx)
+  const { getOrCreateSystemActor } = await import('./systemActor.ts');
+  const actorId = await getOrCreateSystemActor(tx);
 
-  const prompt = DEFAULT_BOT_PROMPT
-  const rules = buildBaselineRules()
-  const toolsConfig = buildBaselineToolsConfig()
+  const prompt = DEFAULT_BOT_PROMPT;
+  const rules = buildBaselineRules();
+  const toolsConfig = buildBaselineToolsConfig();
 
-  await tx.insert(botConfig).values({ workspaceId, isProvisioned: false, prompt, rules, toolsConfig })
+  await tx
+    .insert(botConfig)
+    .values({ workspaceId, isProvisioned: false, prompt, rules, toolsConfig });
 
   await appendChangeLog(tx, {
     workspaceId,
@@ -1685,9 +1952,9 @@ export async function seedBotConfig(tx: Tx, workspaceId: string): Promise<Resolv
       { field: 'rules', before: null, after: rules },
       { field: 'tools_config', before: null, after: toolsConfig },
     ],
-  })
+  });
 
-  return resolved(false, prompt, rules, toolsConfig)
+  return resolved(false, prompt, rules, toolsConfig);
 }
 ```
 
@@ -1723,11 +1990,13 @@ git commit -m "feat(bot-config): rewrite resolve/save/seed for jsonb rules and t
 ### Task 8: Thread `enabledTools` through `contextAssembly` and `toolLoop`
 
 **Files:**
+
 - Modify: `backend/src/domain/bot/contextAssembly.ts`
 - Modify: `backend/src/domain/bot/toolLoop.ts`
 - Create: `backend/tests/bot.toolLoop.determinism.test.ts`
 
 **Interfaces:**
+
 - Consumes: `resolveBotConfig` (now returns `enabledTools`), `toolsForPhase(phase, enabledTools)`.
 - Produces: `BuildMessagesResult` gains `enabledTools: ReadonlySet<string>`.
 
@@ -1735,35 +2004,49 @@ git commit -m "feat(bot-config): rewrite resolve/save/seed for jsonb rules and t
 
 ```ts
 // backend/tests/bot.toolLoop.determinism.test.ts
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { closeDb } from '../src/shared/db/client.ts'
-import { withWorkspace } from '../src/shared/db/withWorkspace.ts'
-import { toolLoopDecider } from '../src/domain/bot/toolLoop.ts'
-import * as openaiClient from '../src/domain/bot/openaiClient.ts'
-import { saveBotConfig } from '../src/domain/bot/botConfig.ts'
-import { buildBaselineToolsConfig } from '../src/domain/bot/tools.ts'
-import { closeOwnerPool, seedAgent, seedConversation, seedMessage, seedPlayer, seedWorkspace, truncateAll } from './helpers/db.ts'
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { closeDb } from '../src/shared/db/client.ts';
+import { withWorkspace } from '../src/shared/db/withWorkspace.ts';
+import { toolLoopDecider } from '../src/domain/bot/toolLoop.ts';
+import * as openaiClient from '../src/domain/bot/openaiClient.ts';
+import { saveBotConfig } from '../src/domain/bot/botConfig.ts';
+import { buildBaselineToolsConfig } from '../src/domain/bot/tools.ts';
+import {
+  closeOwnerPool,
+  seedAgent,
+  seedConversation,
+  seedMessage,
+  seedPlayer,
+  seedWorkspace,
+  truncateAll,
+} from './helpers/db.ts';
 
 describe('toolLoopDecider — deterministic tool gating', () => {
-  let workspaceId: string
-  let conversationId: string
+  let workspaceId: string;
+  let conversationId: string;
 
   beforeEach(async () => {
-    await truncateAll()
-    workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    conversationId = await seedConversation({ workspaceId, playerId })
-    await seedMessage({ workspaceId, conversationId, seq: 1, authorType: 'player', body: 'help' })
-    const actorId = await seedAgent()
-    const toolsConfig = buildBaselineToolsConfig().map((t) => (t.tool === 'search_articles' ? { ...t, enabled: false } : t))
-    await withWorkspace(workspaceId, (tx) => saveBotConfig(tx, { workspaceId, actorId, isProvisioned: true, toolsConfig }))
-  })
+    await truncateAll();
+    workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    conversationId = await seedConversation({ workspaceId, playerId });
+    await seedMessage({ workspaceId, conversationId, seq: 1, authorType: 'player', body: 'help' });
+    const actorId = await seedAgent();
+    const toolsConfig = buildBaselineToolsConfig().map((t) =>
+      t.tool === 'search_articles' ? { ...t, enabled: false } : t,
+    );
+    await withWorkspace(workspaceId, (tx) =>
+      saveBotConfig(tx, { workspaceId, actorId, isProvisioned: true, toolsConfig }),
+    );
+  });
 
-  it('never sends a disabled tool\'s schema to the model, regardless of prompt/rules content', async () => {
+  it("never sends a disabled tool's schema to the model, regardless of prompt/rules content", async () => {
     const callModelSpy = vi.spyOn(openaiClient, 'callModel').mockResolvedValue({
       text: null,
-      toolCalls: [{ id: '1', name: 'handoff', arguments: JSON.stringify({ reason: 'asked_for_person' }) }],
-    })
+      toolCalls: [
+        { id: '1', name: 'handoff', arguments: JSON.stringify({ reason: 'asked_for_person' }) },
+      ],
+    });
 
     await toolLoopDecider({
       workspaceId,
@@ -1773,18 +2056,18 @@ describe('toolLoopDecider — deterministic tool gating', () => {
       botMessageCount: 0,
       lastPlayerMessageAt: new Date(),
       history: [],
-    })
+    });
 
-    expect(callModelSpy).toHaveBeenCalledTimes(1)
-    const toolsSent = callModelSpy.mock.calls[0]![1] as { function: { name: string } }[]
-    expect(toolsSent.map((t) => t.function.name)).not.toContain('search_articles')
-  })
-})
+    expect(callModelSpy).toHaveBeenCalledTimes(1);
+    const toolsSent = callModelSpy.mock.calls[0]![1] as { function: { name: string } }[];
+    expect(toolsSent.map((t) => t.function.name)).not.toContain('search_articles');
+  });
+});
 
 afterAll(async () => {
-  await closeDb()
-  await closeOwnerPool()
-})
+  await closeDb();
+  await closeOwnerPool();
+});
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -1798,42 +2081,50 @@ In `backend/src/domain/bot/contextAssembly.ts`:
 
 ```ts
 export type BuildMessagesResult = {
-  messages: ChatMessage[]
-  subintentOptions: SubintentOption[]
-  catalogueArticleCount: number
+  messages: ChatMessage[];
+  subintentOptions: SubintentOption[];
+  catalogueArticleCount: number;
   /** What toolsForPhase filters against — carried out so toolLoop doesn't re-resolve config. */
-  enabledTools: ReadonlySet<string>
-}
+  enabledTools: ReadonlySet<string>;
+};
 ```
 
 and in `buildMessages`, change the return statement's final line:
 
 ```ts
-  return { messages, subintentOptions, catalogueArticleCount: catalogue.count, enabledTools: config.enabledTools }
+return {
+  messages,
+  subintentOptions,
+  catalogueArticleCount: catalogue.count,
+  enabledTools: config.enabledTools,
+};
 ```
 
 In `backend/src/domain/bot/toolLoop.ts`, change:
 
 ```ts
-const { messages, subintentOptions } = await buildMessages(tx, input)
+const { messages, subintentOptions } = await buildMessages(tx, input);
 ```
 
 to:
 
 ```ts
-const { messages, subintentOptions, enabledTools } = await buildMessages(tx, input)
+const { messages, subintentOptions, enabledTools } = await buildMessages(tx, input);
 ```
 
 and change the `callModel` call site:
 
 ```ts
-const response = await callModel(conversationMessages, toolsForPhase(input.confirmPhase))
+const response = await callModel(conversationMessages, toolsForPhase(input.confirmPhase));
 ```
 
 to:
 
 ```ts
-const response = await callModel(conversationMessages, toolsForPhase(input.confirmPhase, enabledTools))
+const response = await callModel(
+  conversationMessages,
+  toolsForPhase(input.confirmPhase, enabledTools),
+);
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
@@ -1888,75 +2179,121 @@ git commit -m "feat(bot-config): configurable turn/tool/article ceilings and new
 ### Task 9: `getChangeLogEntryById` for rollback lookups
 
 **Files:**
+
 - Modify: `backend/src/shared/changeLog/readChangeLog.ts`
 - Test: `backend/tests/changeLog.getEntry.test.ts`
 
 **Interfaces:**
+
 - Produces: `getChangeLogEntryById(tx: Tx, input: { workspaceId: string; entityType: string; entityId: string; id: string }): Promise<ChangeLogRow | null>`.
 
 - [ ] **Step 1: Write the failing test**
 
 ```ts
 // backend/tests/changeLog.getEntry.test.ts
-import { afterAll, beforeEach, describe, expect, it } from 'vitest'
-import { closeDb } from '../src/shared/db/client.ts'
-import { withWorkspace } from '../src/shared/db/withWorkspace.ts'
-import { getChangeLogEntryById } from '../src/shared/changeLog/readChangeLog.ts'
-import { appendChangeLog } from '../src/shared/changeLog/appendChangeLog.ts'
-import { closeOwnerPool, seedAgent, seedWorkspace, truncateAll } from './helpers/db.ts'
+import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { closeDb } from '../src/shared/db/client.ts';
+import { withWorkspace } from '../src/shared/db/withWorkspace.ts';
+import { getChangeLogEntryById } from '../src/shared/changeLog/readChangeLog.ts';
+import { appendChangeLog } from '../src/shared/changeLog/appendChangeLog.ts';
+import { closeOwnerPool, seedAgent, seedWorkspace, truncateAll } from './helpers/db.ts';
 
 describe('getChangeLogEntryById', () => {
-  let workspaceId: string
-  let actorId: string
+  let workspaceId: string;
+  let actorId: string;
 
   beforeEach(async () => {
-    await truncateAll()
-    workspaceId = await seedWorkspace()
-    actorId = await seedAgent()
-  })
+    await truncateAll();
+    workspaceId = await seedWorkspace();
+    actorId = await seedAgent();
+  });
 
   it('returns the row scoped to workspace, entity type and entity id', async () => {
-    let id = ''
+    let id = '';
     await withWorkspace(workspaceId, async (tx) => {
-      await appendChangeLog(tx, { workspaceId, entityType: 'bot_config', entityId: workspaceId, actorId, changes: [{ field: 'prompt', before: null, after: 'x' }] })
-    })
-    const { ownerPool } = await import('./helpers/db.ts')
-    const { rows } = await ownerPool.query(`select id from change_log where workspace_id = $1`, [workspaceId])
-    id = String(rows[0]!.id)
+      await appendChangeLog(tx, {
+        workspaceId,
+        entityType: 'bot_config',
+        entityId: workspaceId,
+        actorId,
+        changes: [{ field: 'prompt', before: null, after: 'x' }],
+      });
+    });
+    const { ownerPool } = await import('./helpers/db.ts');
+    const { rows } = await ownerPool.query(`select id from change_log where workspace_id = $1`, [
+      workspaceId,
+    ]);
+    id = String(rows[0]!.id);
 
-    const entry = await withWorkspace(workspaceId, (tx) => getChangeLogEntryById(tx, { workspaceId, entityType: 'bot_config', entityId: workspaceId, id }))
-    expect(entry).toMatchObject({ id, field: 'prompt', beforeValue: null, afterValue: 'x' })
-  })
+    const entry = await withWorkspace(workspaceId, (tx) =>
+      getChangeLogEntryById(tx, {
+        workspaceId,
+        entityType: 'bot_config',
+        entityId: workspaceId,
+        id,
+      }),
+    );
+    expect(entry).toMatchObject({ id, field: 'prompt', beforeValue: null, afterValue: 'x' });
+  });
 
   it('returns null for an id that does not exist', async () => {
-    const entry = await withWorkspace(workspaceId, (tx) => getChangeLogEntryById(tx, { workspaceId, entityType: 'bot_config', entityId: workspaceId, id: '999999' }))
-    expect(entry).toBeNull()
-  })
+    const entry = await withWorkspace(workspaceId, (tx) =>
+      getChangeLogEntryById(tx, {
+        workspaceId,
+        entityType: 'bot_config',
+        entityId: workspaceId,
+        id: '999999',
+      }),
+    );
+    expect(entry).toBeNull();
+  });
 
   it('returns null for a non-numeric id rather than throwing', async () => {
-    const entry = await withWorkspace(workspaceId, (tx) => getChangeLogEntryById(tx, { workspaceId, entityType: 'bot_config', entityId: workspaceId, id: 'not-a-number' }))
-    expect(entry).toBeNull()
-  })
+    const entry = await withWorkspace(workspaceId, (tx) =>
+      getChangeLogEntryById(tx, {
+        workspaceId,
+        entityType: 'bot_config',
+        entityId: workspaceId,
+        id: 'not-a-number',
+      }),
+    );
+    expect(entry).toBeNull();
+  });
 
   it('returns null for a real id belonging to another workspace — indistinguishable from unknown', async () => {
-    const otherWorkspaceId = await seedWorkspace()
-    const otherActorId = await seedAgent()
+    const otherWorkspaceId = await seedWorkspace();
+    const otherActorId = await seedAgent();
     await withWorkspace(otherWorkspaceId, async (tx) => {
-      await appendChangeLog(tx, { workspaceId: otherWorkspaceId, entityType: 'bot_config', entityId: otherWorkspaceId, actorId: otherActorId, changes: [{ field: 'prompt', before: null, after: 'y' }] })
-    })
-    const { ownerPool } = await import('./helpers/db.ts')
-    const { rows } = await ownerPool.query(`select id from change_log where workspace_id = $1`, [otherWorkspaceId])
-    const otherId = String(rows[0]!.id)
+      await appendChangeLog(tx, {
+        workspaceId: otherWorkspaceId,
+        entityType: 'bot_config',
+        entityId: otherWorkspaceId,
+        actorId: otherActorId,
+        changes: [{ field: 'prompt', before: null, after: 'y' }],
+      });
+    });
+    const { ownerPool } = await import('./helpers/db.ts');
+    const { rows } = await ownerPool.query(`select id from change_log where workspace_id = $1`, [
+      otherWorkspaceId,
+    ]);
+    const otherId = String(rows[0]!.id);
 
-    const entry = await withWorkspace(workspaceId, (tx) => getChangeLogEntryById(tx, { workspaceId, entityType: 'bot_config', entityId: workspaceId, id: otherId }))
-    expect(entry).toBeNull()
-  })
-})
+    const entry = await withWorkspace(workspaceId, (tx) =>
+      getChangeLogEntryById(tx, {
+        workspaceId,
+        entityType: 'bot_config',
+        entityId: workspaceId,
+        id: otherId,
+      }),
+    );
+    expect(entry).toBeNull();
+  });
+});
 
 afterAll(async () => {
-  await closeDb()
-  await closeOwnerPool()
-})
+  await closeDb();
+  await closeOwnerPool();
+});
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -1980,7 +2317,7 @@ export async function getChangeLogEntryById(
   tx: Tx,
   input: { workspaceId: string; entityType: string; entityId: string; id: string },
 ): Promise<ChangeLogRow | null> {
-  if (!/^\d{1,19}$/.test(input.id)) return null
+  if (!/^\d{1,19}$/.test(input.id)) return null;
 
   const [row] = await tx
     .select({
@@ -2003,9 +2340,9 @@ export async function getChangeLogEntryById(
         eq(changeLog.id, sql`${input.id}::bigint`),
       ),
     )
-    .limit(1)
+    .limit(1);
 
-  if (!row) return null
+  if (!row) return null;
   return {
     id: String(row.id),
     field: row.field,
@@ -2013,7 +2350,7 @@ export async function getChangeLogEntryById(
     afterValue: row.afterValue,
     changedAt: row.changedAt,
     actor: { id: row.actorId, displayName: row.actorDisplayName, email: row.actorEmail },
-  }
+  };
 }
 ```
 
@@ -2036,9 +2373,11 @@ git commit -m "feat(bot-config): add getChangeLogEntryById for rollback lookups"
 ### Task 10: `botConfigService.ts` — view with enforcement, diffed customized flags, rollback
 
 **Files:**
+
 - Modify: `backend/src/agent/services/botConfigService.ts`
 
 **Interfaces:**
+
 - Consumes: `resolveBotConfig`, `saveBotConfig`, `seedBotConfig`, `deriveEnforcement`, `getChangeLogEntryById`, `buildBaselineLimits` (Task 6.5).
 - Produces: `saveBotConfigForAgent` (extended input), `rollbackBotConfigForAgent(ctx, input)`, `ChangeLogEntryNotFound`, `ChangeLogFieldMismatch`. `getBotConfigView`/`listBotConfigHistory` keep their existing signatures.
 
@@ -2048,29 +2387,41 @@ There is no standalone unit test file for this task — it's exercised end-to-en
 
 ```ts
 // backend/src/agent/services/botConfigService.ts
-import { eq, isDeepStrictEqual } from 'drizzle-orm'
-import { isDeepStrictEqual as deepEqual } from 'node:util'
-import type { BotConfigView, ChangeLogHistoryResponse } from '@support/types'
-import { botConfig } from '../../shared/db/schema/index.ts'
-import { withWorkspace, type Tx } from '../../shared/db/withWorkspace.ts'
-import { BOT_CONFIG_ENTITY_TYPE, resolveBotConfig, saveBotConfig } from '../../domain/bot/botConfig.ts'
-import { DEFAULT_BOT_PROMPT } from '../../domain/bot/defaultPrompt.ts'
-import { buildBaselineRules, deriveEnforcement, type RuleEntry } from '../../domain/bot/rulesCatalog.ts'
-import { buildBaselineToolsConfig, type ToolToggle } from '../../domain/bot/tools.ts'
-import { buildBaselineLimits, type LimitToggle } from '../../domain/bot/limitsCatalog.ts'
-import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts'
-import type { ChangeLogCursor } from '../../shared/changeLog/cursor.ts'
-import { getChangeLogEntryById, readChangeLog } from '../../shared/changeLog/readChangeLog.ts'
+import { eq, isDeepStrictEqual } from 'drizzle-orm';
+import { isDeepStrictEqual as deepEqual } from 'node:util';
+import type { BotConfigView, ChangeLogHistoryResponse } from '@support/types';
+import { botConfig } from '../../shared/db/schema/index.ts';
+import { withWorkspace, type Tx } from '../../shared/db/withWorkspace.ts';
+import {
+  BOT_CONFIG_ENTITY_TYPE,
+  resolveBotConfig,
+  saveBotConfig,
+} from '../../domain/bot/botConfig.ts';
+import { DEFAULT_BOT_PROMPT } from '../../domain/bot/defaultPrompt.ts';
+import {
+  buildBaselineRules,
+  deriveEnforcement,
+  type RuleEntry,
+} from '../../domain/bot/rulesCatalog.ts';
+import { buildBaselineToolsConfig, type ToolToggle } from '../../domain/bot/tools.ts';
+import { buildBaselineLimits, type LimitToggle } from '../../domain/bot/limitsCatalog.ts';
+import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts';
+import type { ChangeLogCursor } from '../../shared/changeLog/cursor.ts';
+import { getChangeLogEntryById, readChangeLog } from '../../shared/changeLog/readChangeLog.ts';
 
 async function readUpdatedAt(tx: Tx, workspaceId: string): Promise<Date | null> {
-  const [row] = await tx.select({ updatedAt: botConfig.updatedAt }).from(botConfig).where(eq(botConfig.workspaceId, workspaceId)).limit(1)
-  return row?.updatedAt ?? null
+  const [row] = await tx
+    .select({ updatedAt: botConfig.updatedAt })
+    .from(botConfig)
+    .where(eq(botConfig.workspaceId, workspaceId))
+    .limit(1);
+  return row?.updatedAt ?? null;
 }
 
 /** Shared by the read and the save so one response shape cannot drift from the other. */
 async function view(tx: Tx, workspaceId: string): Promise<BotConfigView> {
-  const resolved = await resolveBotConfig(tx, workspaceId)
-  const updatedAt = await readUpdatedAt(tx, workspaceId)
+  const resolved = await resolveBotConfig(tx, workspaceId);
+  const updatedAt = await readUpdatedAt(tx, workspaceId);
 
   return {
     is_provisioned: resolved.isProvisioned,
@@ -2088,22 +2439,25 @@ async function view(tx: Tx, workspaceId: string): Promise<BotConfigView> {
     is_tools_customized: !deepEqual(resolved.toolsConfig, buildBaselineToolsConfig()),
     is_limits_customized: !deepEqual(resolved.limitsConfig, buildBaselineLimits()),
     updated_at: updatedAt?.toISOString() ?? null,
-  }
+  };
 }
 
 export async function getBotConfigView(ctx: AgentContext): Promise<BotConfigView> {
-  return withWorkspace(ctx.workspaceId, (tx) => view(tx, ctx.workspaceId))
+  return withWorkspace(ctx.workspaceId, (tx) => view(tx, ctx.workspaceId));
 }
 
 export type BotConfigSaveInput = {
-  isProvisioned?: boolean
-  prompt?: string | null
-  rules?: RuleEntry[] | null
-  toolsConfig?: ToolToggle[] | null
-  limitsConfig?: LimitToggle[] | null
-}
+  isProvisioned?: boolean;
+  prompt?: string | null;
+  rules?: RuleEntry[] | null;
+  toolsConfig?: ToolToggle[] | null;
+  limitsConfig?: LimitToggle[] | null;
+};
 
-export async function saveBotConfigForAgent(ctx: AgentContext, input: BotConfigSaveInput): Promise<BotConfigView> {
+export async function saveBotConfigForAgent(
+  ctx: AgentContext,
+  input: BotConfigSaveInput,
+): Promise<BotConfigView> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
     await saveBotConfig(tx, {
       workspaceId: ctx.workspaceId,
@@ -2113,17 +2467,17 @@ export async function saveBotConfigForAgent(ctx: AgentContext, input: BotConfigS
       rules: input.rules,
       toolsConfig: input.toolsConfig,
       limitsConfig: input.limitsConfig,
-    })
-    return view(tx, ctx.workspaceId)
-  })
+    });
+    return view(tx, ctx.workspaceId);
+  });
 }
 
 export async function listBotConfigHistory(
   ctx: AgentContext,
   input: {
-    limit: number
-    cursor?: ChangeLogCursor
-    field?: 'prompt' | 'rules' | 'tools_config' | 'limits_config' | 'is_provisioned'
+    limit: number;
+    cursor?: ChangeLogCursor;
+    field?: 'prompt' | 'rules' | 'tools_config' | 'limits_config' | 'is_provisioned';
   },
 ): Promise<ChangeLogHistoryResponse> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
@@ -2133,9 +2487,9 @@ export async function listBotConfigHistory(
       entityId: ctx.workspaceId,
       limit: input.limit,
       cursor: input.cursor,
-    })
+    });
 
-    const filtered = input.field ? page.rows.filter((r) => r.field === input.field) : page.rows
+    const filtered = input.field ? page.rows.filter((r) => r.field === input.field) : page.rows;
 
     return {
       entries: filtered.map((row) => ({
@@ -2147,21 +2501,21 @@ export async function listBotConfigHistory(
         changed_at: row.changedAt.toISOString(),
       })),
       next_cursor: page.nextCursor,
-    }
-  })
+    };
+  });
 }
 
 export class ChangeLogEntryNotFound extends Error {
   constructor() {
-    super('No matching change_log entry.')
-    this.name = 'ChangeLogEntryNotFound'
+    super('No matching change_log entry.');
+    this.name = 'ChangeLogEntryNotFound';
   }
 }
 
 export class ChangeLogFieldMismatch extends Error {
   constructor(actual: string, requested: string) {
-    super(`change_log_id refers to field "${actual}", not "${requested}".`)
-    this.name = 'ChangeLogFieldMismatch'
+    super(`change_log_id refers to field "${actual}", not "${requested}".`);
+    this.name = 'ChangeLogFieldMismatch';
   }
 }
 
@@ -2172,7 +2526,11 @@ export class ChangeLogFieldMismatch extends Error {
  */
 export async function rollbackBotConfigForAgent(
   ctx: AgentContext,
-  input: { field: 'prompt' | 'rules' | 'tools_config' | 'limits_config'; changeLogId: string; side: 'before' | 'after' },
+  input: {
+    field: 'prompt' | 'rules' | 'tools_config' | 'limits_config';
+    changeLogId: string;
+    side: 'before' | 'after';
+  },
 ): Promise<BotConfigView> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
     const entry = await getChangeLogEntryById(tx, {
@@ -2180,11 +2538,11 @@ export async function rollbackBotConfigForAgent(
       entityType: BOT_CONFIG_ENTITY_TYPE,
       entityId: ctx.workspaceId,
       id: input.changeLogId,
-    })
-    if (!entry) throw new ChangeLogEntryNotFound()
-    if (entry.field !== input.field) throw new ChangeLogFieldMismatch(entry.field, input.field)
+    });
+    if (!entry) throw new ChangeLogEntryNotFound();
+    if (entry.field !== input.field) throw new ChangeLogFieldMismatch(entry.field, input.field);
 
-    const value = input.side === 'before' ? entry.beforeValue : entry.afterValue
+    const value = input.side === 'before' ? entry.beforeValue : entry.afterValue;
     const save =
       input.field === 'prompt'
         ? { prompt: value as string | null }
@@ -2192,11 +2550,11 @@ export async function rollbackBotConfigForAgent(
           ? { rules: value as RuleEntry[] | null }
           : input.field === 'tools_config'
             ? { toolsConfig: value as ToolToggle[] | null }
-            : { limitsConfig: value as LimitToggle[] | null }
+            : { limitsConfig: value as LimitToggle[] | null };
 
-    await saveBotConfig(tx, { workspaceId: ctx.workspaceId, actorId: ctx.agentId, ...save })
-    return view(tx, ctx.workspaceId)
-  })
+    await saveBotConfig(tx, { workspaceId: ctx.workspaceId, actorId: ctx.agentId, ...save });
+    return view(tx, ctx.workspaceId);
+  });
 }
 ```
 
@@ -2219,10 +2577,12 @@ git commit -m "feat(bot-config): service layer for enforcement view, diffed cust
 ### Task 11: Controller + router — extended save, `field` filter, rollback endpoint
 
 **Files:**
+
 - Modify: `backend/src/agent/controllers/botConfigController.ts`
 - Modify: `backend/src/agent/routers/botConfigRouter.ts`
 
 **Interfaces:**
+
 - Consumes: `SaveBotConfigBody`, `RollbackBotConfigBody`, `ChangeLogHistoryQuery` from `@support/types`; `EmptyBotPrompt`, `InvalidRulesPayload`, `InvalidToolsPayload`, `InvalidLimitsPayload` from `../../domain/bot/botConfig.ts`; `ChangeLogEntryNotFound`, `ChangeLogFieldMismatch`, `rollbackBotConfigForAgent` from the service.
 - Produces: `rollbackBotConfigHandler`.
 
@@ -2230,11 +2590,16 @@ git commit -m "feat(bot-config): service layer for enforcement view, diffed cust
 
 ```ts
 // backend/src/agent/controllers/botConfigController.ts
-import type { RequestHandler } from 'express'
-import { ChangeLogHistoryQuery, RollbackBotConfigBody, SaveBotConfigBody } from '@support/types'
-import { sendError } from '../../errors.ts'
-import { EmptyBotPrompt, InvalidRulesPayload, InvalidToolsPayload, InvalidLimitsPayload } from '../../domain/bot/botConfig.ts'
-import { decodeChangeLogCursor } from '../../shared/changeLog/cursor.ts'
+import type { RequestHandler } from 'express';
+import { ChangeLogHistoryQuery, RollbackBotConfigBody, SaveBotConfigBody } from '@support/types';
+import { sendError } from '../../errors.ts';
+import {
+  EmptyBotPrompt,
+  InvalidRulesPayload,
+  InvalidToolsPayload,
+  InvalidLimitsPayload,
+} from '../../domain/bot/botConfig.ts';
+import { decodeChangeLogCursor } from '../../shared/changeLog/cursor.ts';
 import {
   ChangeLogEntryNotFound,
   ChangeLogFieldMismatch,
@@ -2242,22 +2607,22 @@ import {
   listBotConfigHistory,
   rollbackBotConfigForAgent,
   saveBotConfigForAgent,
-} from '../services/botConfigService.ts'
+} from '../services/botConfigService.ts';
 
 export const getBotConfigHandler: RequestHandler = async (req, res) => {
-  res.status(200).json(await getBotConfigView(req.agent!))
-}
+  res.status(200).json(await getBotConfigView(req.agent!));
+};
 
 export const saveBotConfigHandler: RequestHandler = async (req, res) => {
-  const body = SaveBotConfigBody.safeParse(req.body)
+  const body = SaveBotConfigBody.safeParse(req.body);
   if (!body.success) {
     sendError(
       res,
       422,
       'invalid_request',
       'At least one of is_provisioned, prompt, rules, tools_config or limits_config is required.',
-    )
-    return
+    );
+    return;
   }
 
   try {
@@ -2269,7 +2634,7 @@ export const saveBotConfigHandler: RequestHandler = async (req, res) => {
         toolsConfig: body.data.tools_config,
         limitsConfig: body.data.limits_config,
       }),
-    )
+    );
   } catch (error) {
     if (
       error instanceof EmptyBotPrompt ||
@@ -2277,48 +2642,61 @@ export const saveBotConfigHandler: RequestHandler = async (req, res) => {
       error instanceof InvalidToolsPayload ||
       error instanceof InvalidLimitsPayload
     ) {
-      sendError(res, 422, 'invalid_request', error.message)
-      return
+      sendError(res, 422, 'invalid_request', error.message);
+      return;
     }
-    throw error
+    throw error;
   }
-}
+};
 
-const HISTORY_FIELDS = new Set(['prompt', 'rules', 'tools_config', 'limits_config', 'is_provisioned'])
+const HISTORY_FIELDS = new Set([
+  'prompt',
+  'rules',
+  'tools_config',
+  'limits_config',
+  'is_provisioned',
+]);
 
 export const getBotConfigHistoryHandler: RequestHandler = async (req, res) => {
-  const query = ChangeLogHistoryQuery.safeParse(req.query)
+  const query = ChangeLogHistoryQuery.safeParse(req.query);
   if (!query.success) {
-    sendError(res, 422, 'invalid_request', 'limit must be an integer between 1 and 200.')
-    return
+    sendError(res, 422, 'invalid_request', 'limit must be an integer between 1 and 200.');
+    return;
   }
 
-  const rawField = req.query.field
+  const rawField = req.query.field;
   if (rawField !== undefined && (typeof rawField !== 'string' || !HISTORY_FIELDS.has(rawField))) {
-    sendError(res, 422, 'invalid_request', 'field must be one of prompt, rules, tools_config, limits_config, is_provisioned.')
-    return
+    sendError(
+      res,
+      422,
+      'invalid_request',
+      'field must be one of prompt, rules, tools_config, limits_config, is_provisioned.',
+    );
+    return;
   }
 
-  const cursor = query.data.cursor === undefined ? undefined : decodeChangeLogCursor(query.data.cursor)
+  const cursor =
+    query.data.cursor === undefined ? undefined : decodeChangeLogCursor(query.data.cursor);
   if (cursor === null) {
-    sendError(res, 422, 'invalid_request', 'cursor is not a valid page cursor.')
-    return
+    sendError(res, 422, 'invalid_request', 'cursor is not a valid page cursor.');
+    return;
   }
 
   res.status(200).json(
     await listBotConfigHistory(req.agent!, {
       limit: query.data.limit,
       cursor,
-      field: rawField as 'prompt' | 'rules' | 'tools_config' | 'limits_config' | 'is_provisioned' | undefined,
+      field: rawField as
+        'prompt' | 'rules' | 'tools_config' | 'limits_config' | 'is_provisioned' | undefined,
     }),
-  )
-}
+  );
+};
 
 export const rollbackBotConfigHandler: RequestHandler = async (req, res) => {
-  const body = RollbackBotConfigBody.safeParse(req.body)
+  const body = RollbackBotConfigBody.safeParse(req.body);
   if (!body.success) {
-    sendError(res, 422, 'invalid_request', 'field, change_log_id and side are required.')
-    return
+    sendError(res, 422, 'invalid_request', 'field, change_log_id and side are required.');
+    return;
   }
 
   try {
@@ -2328,11 +2706,11 @@ export const rollbackBotConfigHandler: RequestHandler = async (req, res) => {
         changeLogId: body.data.change_log_id,
         side: body.data.side,
       }),
-    )
+    );
   } catch (error) {
     if (error instanceof ChangeLogEntryNotFound) {
-      sendError(res, 404, 'not_found', error.message)
-      return
+      sendError(res, 404, 'not_found', error.message);
+      return;
     }
     if (
       error instanceof ChangeLogFieldMismatch ||
@@ -2341,12 +2719,12 @@ export const rollbackBotConfigHandler: RequestHandler = async (req, res) => {
       error instanceof InvalidLimitsPayload ||
       error instanceof EmptyBotPrompt
     ) {
-      sendError(res, 422, 'invalid_request', error.message)
-      return
+      sendError(res, 422, 'invalid_request', error.message);
+      return;
     }
-    throw error
+    throw error;
   }
-}
+};
 ```
 
 ```ts
@@ -2356,10 +2734,10 @@ import {
   getBotConfigHistoryHandler,
   rollbackBotConfigHandler,
   saveBotConfigHandler,
-} from '../controllers/botConfigController.ts'
+} from '../controllers/botConfigController.ts';
 
 // ... existing router setup unchanged ...
-botConfigRouter.post('/bot-config/rollback', requireAdminRole, rollbackBotConfigHandler)
+botConfigRouter.post('/bot-config/rollback', requireAdminRole, rollbackBotConfigHandler);
 ```
 
 Add `not_found` to `ErrorCode` in `backend/src/errors.ts` if it is not already there (it already is — confirmed in the codebase read).
@@ -2381,6 +2759,7 @@ git commit -m "feat(bot-config): rollback endpoint and field-filtered history"
 ### Task 12: Rewrite `agent.botConfig.test.ts` (HTTP-level tests)
 
 **Files:**
+
 - Modify: `backend/tests/agent.botConfig.test.ts`
 
 This is the task where Tasks 10–11 actually get their pass/fail signal.
@@ -2390,233 +2769,331 @@ This is the task where Tasks 10–11 actually get their pass/fail signal.
 Replace the whole file's body (keep the file's setup boilerplate: `app`, `beforeAll`/`afterAll`, `seedAgentWithRole`) with tests updated for the new shapes, plus new rollback tests. Key replacements:
 
 ```ts
-import { DEFAULT_BOT_PROMPT, buildSystemPrompt } from '../src/domain/bot/defaultPrompt.ts'
-import { buildBaselineRules } from '../src/domain/bot/rulesCatalog.ts'
-import { buildBaselineToolsConfig } from '../src/domain/bot/tools.ts'
-import { seedBotConfig as seedBotConfigRaw, /* other existing helper imports unchanged */ } from './helpers/db.ts'
+import { DEFAULT_BOT_PROMPT, buildSystemPrompt } from '../src/domain/bot/defaultPrompt.ts';
+import { buildBaselineRules } from '../src/domain/bot/rulesCatalog.ts';
+import { buildBaselineToolsConfig } from '../src/domain/bot/tools.ts';
+import {
+  seedBotConfig as seedBotConfigRaw /* other existing helper imports unchanged */,
+} from './helpers/db.ts';
 
 describe('GET /bot-config', () => {
   it('resolves an absent row to the off state on the catalog baseline', async () => {
-    const workspaceId = await seedWorkspace()
-    const { token } = await seedAgentWithRole(workspaceId, 'admin')
+    const workspaceId = await seedWorkspace();
+    const { token } = await seedAgentWithRole(workspaceId, 'admin');
 
-    const res = await request(app).get('/bot-config').set('Authorization', `Bearer ${token}`).expect(200)
+    const res = await request(app)
+      .get('/bot-config')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
 
-    expect(res.body.is_provisioned).toBe(false)
-    expect(res.body.prompt).toBe(DEFAULT_BOT_PROMPT)
-    expect(res.body.rules).toHaveLength(8)
-    expect(res.body.rules.find((r: { key: string }) => r.key === 'no_invented_facts').enforcement).toBe('code')
-    expect(res.body.tools_config).toHaveLength(4)
-    expect(res.body.enabled_tools.sort()).toEqual(['answer_from_article', 'classify', 'confirm_resolution', 'search_articles'])
-    expect(res.body.system_prompt).toBe(buildSystemPrompt(DEFAULT_BOT_PROMPT, buildBaselineRules()))
-    expect(res.body.is_prompt_customized).toBe(false)
-    expect(res.body.is_rules_customized).toBe(false)
-    expect(res.body.is_tools_customized).toBe(false)
-    expect(res.body.updated_at).toBeNull()
-  })
+    expect(res.body.is_provisioned).toBe(false);
+    expect(res.body.prompt).toBe(DEFAULT_BOT_PROMPT);
+    expect(res.body.rules).toHaveLength(8);
+    expect(
+      res.body.rules.find((r: { key: string }) => r.key === 'no_invented_facts').enforcement,
+    ).toBe('code');
+    expect(res.body.tools_config).toHaveLength(4);
+    expect(res.body.enabled_tools.sort()).toEqual([
+      'answer_from_article',
+      'classify',
+      'confirm_resolution',
+      'search_articles',
+    ]);
+    expect(res.body.system_prompt).toBe(
+      buildSystemPrompt(DEFAULT_BOT_PROMPT, buildBaselineRules()),
+    );
+    expect(res.body.is_prompt_customized).toBe(false);
+    expect(res.body.is_rules_customized).toBe(false);
+    expect(res.body.is_tools_customized).toBe(false);
+    expect(res.body.updated_at).toBeNull();
+  });
 
   it('refuses a plain agent with 403', async () => {
-    const workspaceId = await seedWorkspace()
-    const { token } = await seedAgentWithRole(workspaceId, 'agent')
-    await request(app).get('/bot-config').set('Authorization', `Bearer ${token}`).expect(403)
-  })
-})
+    const workspaceId = await seedWorkspace();
+    const { token } = await seedAgentWithRole(workspaceId, 'agent');
+    await request(app).get('/bot-config').set('Authorization', `Bearer ${token}`).expect(403);
+  });
+});
 
 describe('POST /bot-config', () => {
   it('rejects a rules payload missing a locked builtin key', async () => {
-    const workspaceId = await seedWorkspace()
-    const { token } = await seedAgentWithRole(workspaceId, 'admin')
-    const withoutLocked = buildBaselineRules().filter((r) => r.key !== 'no_credentials')
+    const workspaceId = await seedWorkspace();
+    const { token } = await seedAgentWithRole(workspaceId, 'admin');
+    const withoutLocked = buildBaselineRules().filter((r) => r.key !== 'no_credentials');
 
     const res = await request(app)
       .post('/bot-config')
       .set('Authorization', `Bearer ${token}`)
       .send({ rules: withoutLocked })
-      .expect(422)
-    expect(res.body.error.message).toContain('no_credentials')
-  })
+      .expect(422);
+    expect(res.body.error.message).toContain('no_credentials');
+  });
 
   it('accepts an added custom rule and renders it in system_prompt', async () => {
-    const workspaceId = await seedWorkspace()
-    const { token } = await seedAgentWithRole(workspaceId, 'admin')
-    const rules = [...buildBaselineRules(), { key: 'custom-1', text: 'Never mention competitor games.', enabled: true, locked: false, source: 'custom' }]
+    const workspaceId = await seedWorkspace();
+    const { token } = await seedAgentWithRole(workspaceId, 'admin');
+    const rules = [
+      ...buildBaselineRules(),
+      {
+        key: 'custom-1',
+        text: 'Never mention competitor games.',
+        enabled: true,
+        locked: false,
+        source: 'custom',
+      },
+    ];
 
-    const res = await request(app).post('/bot-config').set('Authorization', `Bearer ${token}`).send({ rules }).expect(200)
-    expect(res.body.system_prompt).toContain('Never mention competitor games.')
-    expect(res.body.is_rules_customized).toBe(true)
-  })
+    const res = await request(app)
+      .post('/bot-config')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ rules })
+      .expect(200);
+    expect(res.body.system_prompt).toContain('Never mention competitor games.');
+    expect(res.body.is_rules_customized).toBe(true);
+  });
 
   it('disabling a tool removes it from enabled_tools and is reflected in is_tools_customized', async () => {
-    const workspaceId = await seedWorkspace()
-    const { token } = await seedAgentWithRole(workspaceId, 'admin')
-    const toolsConfig = buildBaselineToolsConfig().map((t) => (t.tool === 'classify' ? { ...t, enabled: false } : t))
+    const workspaceId = await seedWorkspace();
+    const { token } = await seedAgentWithRole(workspaceId, 'admin');
+    const toolsConfig = buildBaselineToolsConfig().map((t) =>
+      t.tool === 'classify' ? { ...t, enabled: false } : t,
+    );
 
-    const res = await request(app).post('/bot-config').set('Authorization', `Bearer ${token}`).send({ tools_config: toolsConfig }).expect(200)
-    expect(res.body.enabled_tools).not.toContain('classify')
-    expect(res.body.is_tools_customized).toBe(true)
-  })
+    const res = await request(app)
+      .post('/bot-config')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ tools_config: toolsConfig })
+      .expect(200);
+    expect(res.body.enabled_tools).not.toContain('classify');
+    expect(res.body.is_tools_customized).toBe(true);
+  });
 
   it('rejects tools_config missing a catalog tool', async () => {
-    const workspaceId = await seedWorkspace()
-    const { token } = await seedAgentWithRole(workspaceId, 'admin')
-    const missingOne = buildBaselineToolsConfig().slice(1)
+    const workspaceId = await seedWorkspace();
+    const { token } = await seedAgentWithRole(workspaceId, 'admin');
+    const missingOne = buildBaselineToolsConfig().slice(1);
 
-    await request(app).post('/bot-config').set('Authorization', `Bearer ${token}`).send({ tools_config: missingOne }).expect(422)
-  })
+    await request(app)
+      .post('/bot-config')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ tools_config: missingOne })
+      .expect(422);
+  });
 
   it('writes one audit row per changed field, attributed to the caller', async () => {
-    const workspaceId = await seedWorkspace()
-    const { agentId, token } = await seedAgentWithRole(workspaceId, 'admin')
+    const workspaceId = await seedWorkspace();
+    const { agentId, token } = await seedAgentWithRole(workspaceId, 'admin');
 
-    await request(app).post('/bot-config').set('Authorization', `Bearer ${token}`).send({ is_provisioned: true, prompt: 'Custom prompt' }).expect(200)
+    await request(app)
+      .post('/bot-config')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ is_provisioned: true, prompt: 'Custom prompt' })
+      .expect(200);
 
     const { rows } = await ownerPool.query<{ field: string; actor_id: string }>(
       `select field, actor_id from change_log where entity_type = 'bot_config' and entity_id = $1 order by field`,
       [workspaceId],
-    )
-    expect(rows.map((row) => row.field)).toEqual(['is_provisioned', 'prompt'])
-    expect(rows.every((row) => row.actor_id === agentId)).toBe(true)
-  })
+    );
+    expect(rows.map((row) => row.field)).toEqual(['is_provisioned', 'prompt']);
+    expect(rows.every((row) => row.actor_id === agentId)).toBe(true);
+  });
 
   // keep the existing "refuses a team lead", "refuses a plain agent", "writes only the caller workspace row" tests, updated only where they `.send({ prompt: ... })` with a still-valid payload — no shape change needed for those.
-})
+});
 
 describe('POST /bot-config/rollback', () => {
   it('restores a prior prompt value and writes a new, forward audit row', async () => {
-    const workspaceId = await seedWorkspace()
-    const { token } = await seedAgentWithRole(workspaceId, 'admin')
-    await request(app).post('/bot-config').set('Authorization', `Bearer ${token}`).send({ prompt: 'First' }).expect(200)
-    await request(app).post('/bot-config').set('Authorization', `Bearer ${token}`).send({ prompt: 'Second' }).expect(200)
+    const workspaceId = await seedWorkspace();
+    const { token } = await seedAgentWithRole(workspaceId, 'admin');
+    await request(app)
+      .post('/bot-config')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ prompt: 'First' })
+      .expect(200);
+    await request(app)
+      .post('/bot-config')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ prompt: 'Second' })
+      .expect(200);
 
-    const history = await request(app).get('/bot-config/history?field=prompt').set('Authorization', `Bearer ${token}`).expect(200)
-    const firstChangeId = history.body.entries.find((e: { after_value: unknown }) => e.after_value === 'First').id
+    const history = await request(app)
+      .get('/bot-config/history?field=prompt')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    const firstChangeId = history.body.entries.find(
+      (e: { after_value: unknown }) => e.after_value === 'First',
+    ).id;
 
     const res = await request(app)
       .post('/bot-config/rollback')
       .set('Authorization', `Bearer ${token}`)
       .send({ field: 'prompt', change_log_id: firstChangeId, side: 'after' })
-      .expect(200)
-    expect(res.body.prompt).toBe('First')
+      .expect(200);
+    expect(res.body.prompt).toBe('First');
 
-    const { rows } = await ownerPool.query<{ count: string }>(`select count(*)::text as count from change_log where entity_id = $1 and field = 'prompt'`, [workspaceId])
-    expect(rows[0]!.count).toBe('3') // First, Second, and the rollback-to-First
-  })
+    const { rows } = await ownerPool.query<{ count: string }>(
+      `select count(*)::text as count from change_log where entity_id = $1 and field = 'prompt'`,
+      [workspaceId],
+    );
+    expect(rows[0]!.count).toBe('3'); // First, Second, and the rollback-to-First
+  });
 
   it('404s on an unknown change_log_id', async () => {
-    const workspaceId = await seedWorkspace()
-    const { token } = await seedAgentWithRole(workspaceId, 'admin')
+    const workspaceId = await seedWorkspace();
+    const { token } = await seedAgentWithRole(workspaceId, 'admin');
     await request(app)
       .post('/bot-config/rollback')
       .set('Authorization', `Bearer ${token}`)
       .send({ field: 'prompt', change_log_id: '999999999', side: 'after' })
-      .expect(404)
-  })
+      .expect(404);
+  });
 
   it('404s on a change_log_id belonging to another workspace', async () => {
-    const workspaceA = await seedWorkspace()
-    const workspaceB = await seedWorkspace()
-    const { token: tokenB } = await seedAgentWithRole(workspaceB, 'admin')
-    await request(app).post('/bot-config').set('Authorization', `Bearer ${tokenB}`).send({ prompt: 'B prompt' }).expect(200)
-    const historyB = await request(app).get('/bot-config/history').set('Authorization', `Bearer ${tokenB}`).expect(200)
-    const idFromB = historyB.body.entries[0].id
+    const workspaceA = await seedWorkspace();
+    const workspaceB = await seedWorkspace();
+    const { token: tokenB } = await seedAgentWithRole(workspaceB, 'admin');
+    await request(app)
+      .post('/bot-config')
+      .set('Authorization', `Bearer ${tokenB}`)
+      .send({ prompt: 'B prompt' })
+      .expect(200);
+    const historyB = await request(app)
+      .get('/bot-config/history')
+      .set('Authorization', `Bearer ${tokenB}`)
+      .expect(200);
+    const idFromB = historyB.body.entries[0].id;
 
-    const { token: tokenA } = await seedAgentWithRole(workspaceA, 'admin')
+    const { token: tokenA } = await seedAgentWithRole(workspaceA, 'admin');
     await request(app)
       .post('/bot-config/rollback')
       .set('Authorization', `Bearer ${tokenA}`)
       .send({ field: 'prompt', change_log_id: idFromB, side: 'after' })
-      .expect(404)
-  })
+      .expect(404);
+  });
 
-  it('422s when the change_log_id\'s stored field does not match the request field', async () => {
-    const workspaceId = await seedWorkspace()
-    const { token } = await seedAgentWithRole(workspaceId, 'admin')
-    await request(app).post('/bot-config').set('Authorization', `Bearer ${token}`).send({ prompt: 'X' }).expect(200)
-    const history = await request(app).get('/bot-config/history?field=prompt').set('Authorization', `Bearer ${token}`).expect(200)
-    const promptChangeId = history.body.entries[0].id
+  it("422s when the change_log_id's stored field does not match the request field", async () => {
+    const workspaceId = await seedWorkspace();
+    const { token } = await seedAgentWithRole(workspaceId, 'admin');
+    await request(app)
+      .post('/bot-config')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ prompt: 'X' })
+      .expect(200);
+    const history = await request(app)
+      .get('/bot-config/history?field=prompt')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    const promptChangeId = history.body.entries[0].id;
 
     await request(app)
       .post('/bot-config/rollback')
       .set('Authorization', `Bearer ${token}`)
       .send({ field: 'rules', change_log_id: promptChangeId, side: 'after' })
-      .expect(422)
-  })
+      .expect(422);
+  });
 
   it('refuses a team lead with 403', async () => {
-    const workspaceId = await seedWorkspace()
-    const { token: adminToken } = await seedAgentWithRole(workspaceId, 'admin')
-    await request(app).post('/bot-config').set('Authorization', `Bearer ${adminToken}`).send({ prompt: 'X' }).expect(200)
-    const history = await request(app).get('/bot-config/history').set('Authorization', `Bearer ${adminToken}`).expect(200)
-    const { token: leadToken } = await seedAgentWithRole(workspaceId, 'team_lead')
+    const workspaceId = await seedWorkspace();
+    const { token: adminToken } = await seedAgentWithRole(workspaceId, 'admin');
+    await request(app)
+      .post('/bot-config')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ prompt: 'X' })
+      .expect(200);
+    const history = await request(app)
+      .get('/bot-config/history')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(200);
+    const { token: leadToken } = await seedAgentWithRole(workspaceId, 'team_lead');
 
     await request(app)
       .post('/bot-config/rollback')
       .set('Authorization', `Bearer ${leadToken}`)
       .send({ field: 'prompt', change_log_id: history.body.entries[0].id, side: 'after' })
-      .expect(403)
-  })
-})
+      .expect(403);
+  });
+});
 ```
 
 Keep the rest of the existing `GET /bot-config/history` describe block as-is (it still applies — history paging didn't change shape) plus add one test for the new `field=` filter:
 
 ```ts
 it('filters by field when ?field= is given', async () => {
-  const workspaceId = await seedWorkspace()
-  const { token } = await seedAgentWithRole(workspaceId, 'admin')
-  await request(app).post('/bot-config').set('Authorization', `Bearer ${token}`).send({ is_provisioned: true, prompt: 'First' }).expect(200)
+  const workspaceId = await seedWorkspace();
+  const { token } = await seedAgentWithRole(workspaceId, 'admin');
+  await request(app)
+    .post('/bot-config')
+    .set('Authorization', `Bearer ${token}`)
+    .send({ is_provisioned: true, prompt: 'First' })
+    .expect(200);
 
-  const res = await request(app).get('/bot-config/history?field=prompt').set('Authorization', `Bearer ${token}`).expect(200)
-  expect(res.body.entries.every((e: { field: string }) => e.field === 'prompt')).toBe(true)
-})
+  const res = await request(app)
+    .get('/bot-config/history?field=prompt')
+    .set('Authorization', `Bearer ${token}`)
+    .expect(200);
+  expect(res.body.entries.every((e: { field: string }) => e.field === 'prompt')).toBe(true);
+});
 ```
 
 Also add `limits_config`/`resolved_limits` coverage alongside the existing `rules`/`tools_config` tests:
 
 ```ts
 it('GET resolves limits_config to the catalog defaults and rejects an out-of-bound save', async () => {
-  const workspaceId = await seedWorkspace()
-  const { token } = await seedAgentWithRole(workspaceId, 'admin')
+  const workspaceId = await seedWorkspace();
+  const { token } = await seedAgentWithRole(workspaceId, 'admin');
 
-  const get = await request(app).get('/bot-config').set('Authorization', `Bearer ${token}`).expect(200)
-  expect(get.body.limits_config).toHaveLength(4)
+  const get = await request(app)
+    .get('/bot-config')
+    .set('Authorization', `Bearer ${token}`)
+    .expect(200);
+  expect(get.body.limits_config).toHaveLength(4);
   expect(get.body.resolved_limits).toEqual({
     max_bot_messages: 8,
     max_tool_calls_per_turn: 6,
     max_articles_per_turn: 3,
     max_unhelped_replies: 3,
-  })
-  expect(get.body.is_limits_customized).toBe(false)
+  });
+  expect(get.body.is_limits_customized).toBe(false);
 
   const badSave = await request(app)
     .post('/bot-config')
     .set('Authorization', `Bearer ${token}`)
     .send({ limits_config: [{ key: 'max_bot_messages', value: 999 }] })
-    .expect(422)
-  expect(badSave.body.error).toMatch(/max_bot_messages/)
-})
+    .expect(422);
+  expect(badSave.body.error).toMatch(/max_bot_messages/);
+});
 
 it('rolls back limits_config the same way as tools_config', async () => {
-  const workspaceId = await seedWorkspace()
-  const { token } = await seedAgentWithRole(workspaceId, 'admin')
-  const original = await request(app).get('/bot-config').set('Authorization', `Bearer ${token}`).expect(200)
+  const workspaceId = await seedWorkspace();
+  const { token } = await seedAgentWithRole(workspaceId, 'admin');
+  const original = await request(app)
+    .get('/bot-config')
+    .set('Authorization', `Bearer ${token}`)
+    .expect(200);
 
   await request(app)
     .post('/bot-config')
     .set('Authorization', `Bearer ${token}`)
-    .send({ limits_config: original.body.limits_config.map((l: { key: string; value: number }) => (l.key === 'max_unhelped_replies' ? { ...l, value: 5 } : l)) })
-    .expect(200)
+    .send({
+      limits_config: original.body.limits_config.map((l: { key: string; value: number }) =>
+        l.key === 'max_unhelped_replies' ? { ...l, value: 5 } : l,
+      ),
+    })
+    .expect(200);
 
-  const history = await request(app).get('/bot-config/history?field=limits_config').set('Authorization', `Bearer ${token}`).expect(200)
-  const changeLogId = history.body.entries[0].id
+  const history = await request(app)
+    .get('/bot-config/history?field=limits_config')
+    .set('Authorization', `Bearer ${token}`)
+    .expect(200);
+  const changeLogId = history.body.entries[0].id;
 
   const restored = await request(app)
     .post('/bot-config/rollback')
     .set('Authorization', `Bearer ${token}`)
     .send({ field: 'limits_config', change_log_id: changeLogId, side: 'before' })
-    .expect(200)
-  expect(restored.body.resolved_limits.max_unhelped_replies).toBe(3)
-})
+    .expect(200);
+  expect(restored.body.resolved_limits.max_unhelped_replies).toBe(3);
+});
 ```
 
 - [ ] **Step 2: Run test to verify it fails, then passes after Tasks 10–11's code**
@@ -2636,6 +3113,7 @@ git commit -m "test(bot-config): HTTP tests for rules/tools payloads and rollbac
 ### Task 13: `seed.ts` and `openapi.ts` wiring
 
 **Files:**
+
 - Modify: `backend/src/shared/db/seed.ts`
 - Modify: `backend/src/docs/openapi.ts`
 
@@ -2644,9 +3122,9 @@ git commit -m "test(bot-config): HTTP tests for rules/tools payloads and rollbac
 In `backend/src/shared/db/seed.ts`, after the workspace insert (around the `insert into workspace` call found at line 47), add a call that provisions the bot config baseline for that seeded workspace, using the same connection/transaction pattern the rest of `seed.ts` already uses (read the file's existing structure — it likely uses `ownerPool` or a `drizzle` instance directly, not `withWorkspace`, since seeding predates any authenticated request). Wrap the call in the appropriate transaction helper already used by that file, and call:
 
 ```ts
-import { seedBotConfig } from '../../domain/bot/botConfig.ts'
+import { seedBotConfig } from '../../domain/bot/botConfig.ts';
 // ... after the workspace row is inserted and its id is known ...
-await withWorkspace(workspaceId, (tx) => seedBotConfig(tx, workspaceId))
+await withWorkspace(workspaceId, (tx) => seedBotConfig(tx, workspaceId));
 ```
 
 (`withWorkspace` sets the RLS session variable required for the insert; import it the same way other domain-layer scripts do, e.g. `backend/src/shared/db/migrations/backfillBotConfig.ts` from Task 3 does not use `withWorkspace` because it runs as `MIGRATION_DATABASE_URL`'s owner role outside RLS — `seed.ts` should match whatever pattern it already uses elsewhere in the same file for RLS-scoped inserts; if it currently writes directly via the owner pool for every table, insert `bot_config` the same way instead of introducing `withWorkspace` — mirror the file's existing convention rather than this snippet literally.)
@@ -2672,7 +3150,7 @@ registry.registerPath({
     200: { description: 'Resolved bot config' },
     403: { description: 'Forbidden — Team Lead or Admin role required' },
   },
-})
+});
 
 registry.registerPath({
   method: 'post',
@@ -2687,7 +3165,11 @@ registry.registerPath({
         'application/json': {
           schema: z.object({
             is_provisioned: z.boolean().optional().openapi({ example: true }),
-            prompt: z.string().nullable().optional().openapi({ example: 'You are the first-line support assistant…' }),
+            prompt: z
+              .string()
+              .nullable()
+              .optional()
+              .openapi({ example: 'You are the first-line support assistant…' }),
             rules: z
               .array(
                 z.object({
@@ -2724,9 +3206,12 @@ registry.registerPath({
   responses: {
     200: { description: 'Resolved bot config after the save' },
     403: { description: 'Forbidden — admin role required' },
-    422: { description: 'Nothing to change, an unknown field, an empty prompt, or an invalid rules/tools_config/limits_config payload' },
+    422: {
+      description:
+        'Nothing to change, an unknown field, an empty prompt, or an invalid rules/tools_config/limits_config payload',
+    },
   },
-})
+});
 
 registry.registerPath({
   method: 'get',
@@ -2738,8 +3223,13 @@ registry.registerPath({
   request: {
     query: z.object({
       limit: z.coerce.number().int().min(1).max(200).optional().openapi({ example: 50 }),
-      cursor: z.string().optional().openapi({ description: 'Opaque next_cursor from the previous page' }),
-      field: z.enum(['prompt', 'rules', 'tools_config', 'limits_config', 'is_provisioned']).optional(),
+      cursor: z
+        .string()
+        .optional()
+        .openapi({ description: 'Opaque next_cursor from the previous page' }),
+      field: z
+        .enum(['prompt', 'rules', 'tools_config', 'limits_config', 'is_provisioned'])
+        .optional(),
     }),
   },
   responses: {
@@ -2747,7 +3237,7 @@ registry.registerPath({
     403: { description: 'Forbidden — Team Lead or Admin role required' },
     422: { description: 'Invalid limit, cursor or field' },
   },
-})
+});
 
 registry.registerPath({
   method: 'post',
@@ -2773,9 +3263,12 @@ registry.registerPath({
     200: { description: 'Resolved bot config after the rollback' },
     403: { description: 'Forbidden — admin role required' },
     404: { description: 'No matching change_log entry for this workspace' },
-    422: { description: 'change_log_id does not belong to the requested field, or the restored value fails validation' },
+    422: {
+      description:
+        'change_log_id does not belong to the requested field, or the restored value fails validation',
+    },
   },
-})
+});
 ```
 
 - [ ] **Step 4: Confirm the OpenAPI doc builds**
@@ -2788,7 +3281,6 @@ Run: `pnpm --filter @support/api typecheck` (the openapi module is plain TS, so 
 git add backend/src/shared/db/seed.ts backend/src/docs/openapi.ts
 git commit -m "feat(bot-config): seed dev workspace baseline, update OpenAPI docs"
 ```
-
 
 ---
 

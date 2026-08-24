@@ -1,4 +1,4 @@
-import { sql } from 'drizzle-orm'
+import { sql } from 'drizzle-orm';
 import {
   foreignKey,
   index,
@@ -10,13 +10,13 @@ import {
   unique,
   uniqueIndex,
   uuid,
-} from 'drizzle-orm/pg-core'
-import type { FormField } from '@support/types'
-import { conversation } from './conversations.ts'
-import { formFieldType, formStatus } from './enums.ts'
-import { agent, workspace } from './identity.ts'
+} from 'drizzle-orm/pg-core';
+import type { FormField } from '@support/types';
+import { conversation } from './conversations.ts';
+import { formFieldType, formStatus } from './enums.ts';
+import { agent, workspace } from './identity.ts';
 
-const tz = { withTimezone: true, mode: 'date' } as const
+const tz = { withTimezone: true, mode: 'date' } as const;
 
 export const form = pgTable(
   'form',
@@ -35,7 +35,7 @@ export const form = pgTable(
     // Composite-FK parent key: form_version, form_submission and subintent all reference (workspace_id, id).
     unique('form_workspace_id_uk').on(t.workspaceId, t.id),
   ],
-)
+);
 
 export const formVersion = pgTable(
   'form_version',
@@ -46,7 +46,10 @@ export const formVersion = pgTable(
       .references(() => workspace.id, { onDelete: 'restrict' }),
     formId: uuid('form_id').notNull(),
     version: integer('version').notNull(),
-    fields: jsonb('fields').$type<FormField[]>().notNull().default(sql`'[]'::jsonb`),
+    fields: jsonb('fields')
+      .$type<FormField[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
     publishedAt: timestamp('published_at', tz),
     publishedBy: uuid('published_by').references(() => agent.id, { onDelete: 'restrict' }),
     createdAt: timestamp('created_at', tz).notNull().defaultNow(),
@@ -59,7 +62,7 @@ export const formVersion = pgTable(
       foreignColumns: [form.workspaceId, form.id],
     }).onDelete('restrict'),
   ],
-)
+);
 
 export const formSubmission = pgTable(
   'form_submission',
@@ -94,7 +97,7 @@ export const formSubmission = pgTable(
       foreignColumns: [formVersion.formId, formVersion.version],
     }).onDelete('restrict'),
   ],
-)
+);
 
 export const formAnswer = pgTable(
   'form_answer',
@@ -117,4 +120,4 @@ export const formAnswer = pgTable(
       foreignColumns: [formSubmission.workspaceId, formSubmission.id],
     }).onDelete('restrict'),
   ],
-)
+);

@@ -99,12 +99,14 @@ backend/tests/admin.isolation.test.ts    NEW
 ### Task 1: Schema — global admin flags and `invited` status
 
 **Files:**
+
 - Modify: `backend/src/shared/db/schema/enums.ts`
 - Modify: `backend/src/shared/db/schema/identity.ts`
 - Create: (generated) `backend/drizzle/00xx_*.sql`
 - Test: `backend/tests/schema.test.ts`
 
 **Interfaces:**
+
 - Produces: `agent.isAdmin: boolean`, `agent.isSuperAdmin: boolean` (Drizzle columns `is_admin`, `is_super_admin`), `agentStatus` enum including `'invited'`. Every later task's `is_admin`/`is_super_admin` checks read these columns.
 
 - [ ] **Step 1: Edit the enum**
@@ -112,13 +114,13 @@ backend/tests/admin.isolation.test.ts    NEW
 In `backend/src/shared/db/schema/enums.ts`, change:
 
 ```ts
-export const agentStatus = pgEnum('agent_status', ['active', 'on_leave', 'deactivated'])
+export const agentStatus = pgEnum('agent_status', ['active', 'on_leave', 'deactivated']);
 ```
 
 to:
 
 ```ts
-export const agentStatus = pgEnum('agent_status', ['active', 'on_leave', 'deactivated', 'invited'])
+export const agentStatus = pgEnum('agent_status', ['active', 'on_leave', 'deactivated', 'invited']);
 ```
 
 - [ ] **Step 2: Add the columns**
@@ -151,11 +153,11 @@ Expected: exits 0. Then: `psql "$MIGRATION_DATABASE_URL" -c "\d agent"` and conf
 In `backend/tests/schema.test.ts`, add after the existing `'carries the two columns the wire contract adds to workspace'` test:
 
 ```ts
-  it('gives agent the two global admin flags, both defaulting false', async () => {
-    const cols = await columns('agent')
-    expect(cols.get('is_admin')?.nullable).toBe(false)
-    expect(cols.get('is_super_admin')?.nullable).toBe(false)
-  })
+it('gives agent the two global admin flags, both defaulting false', async () => {
+  const cols = await columns('agent');
+  expect(cols.get('is_admin')?.nullable).toBe(false);
+  expect(cols.get('is_super_admin')?.nullable).toBe(false);
+});
 ```
 
 - [ ] **Step 6: Run and commit**
@@ -173,12 +175,14 @@ git commit -m "Add global agent.is_admin/is_super_admin flags and agent_status '
 ### Task 2: Schema — `workspace_secret` table, drop `workspace.secret_hash`
 
 **Files:**
+
 - Modify: `backend/src/shared/db/schema/identity.ts`
 - Modify: `backend/src/shared/db/schema/index.ts`
 - Create: (generated, then hand-edited) `backend/drizzle/00xx_*.sql`
 - Test: `backend/tests/schema.test.ts`
 
 **Interfaces:**
+
 - Consumes: `workspace.id` (from Task 1's unchanged `workspace` table).
 - Produces: `workspaceSecret` table — `{ id, workspaceId, secretHash, createdAt, expiresAt: Date | null, revokedAt: Date | null }`. Task 4's `playerTokenRoute.ts` and Task 17's secret service both read/write this table.
 
@@ -211,7 +215,7 @@ export const workspaceSecret = pgTable('workspace_secret', {
   expiresAt: timestamp('expires_at', tz),
   /** Set only if an admin manually revokes ahead of expiry. */
   revokedAt: timestamp('revoked_at', tz),
-})
+});
 ```
 
 - [ ] **Step 2: Export it**
@@ -260,18 +264,18 @@ Expected: exits 0. Then: `psql "$MIGRATION_DATABASE_URL" -c "select count(*) fro
 Add `'workspace_secret'` to `EXPECTED_TABLES` (alphabetically, after `'subintent'`). Replace the `'carries the two columns the wire contract adds to workspace'` test's `secret_hash` line:
 
 ```ts
-  it('carries the disabled_at column the wire contract adds to workspace', async () => {
-    const cols = await columns('workspace')
-    expect(cols.get('disabled_at')?.nullable).toBe(true)
-    expect(cols.get('secret_hash')).toBeUndefined()
-  })
+it('carries the disabled_at column the wire contract adds to workspace', async () => {
+  const cols = await columns('workspace');
+  expect(cols.get('disabled_at')?.nullable).toBe(true);
+  expect(cols.get('secret_hash')).toBeUndefined();
+});
 
-  it('gives workspace_secret a nullable expiry and revocation, non-null hash', async () => {
-    const cols = await columns('workspace_secret')
-    expect(cols.get('secret_hash')?.nullable).toBe(false)
-    expect(cols.get('expires_at')?.nullable).toBe(true)
-    expect(cols.get('revoked_at')?.nullable).toBe(true)
-  })
+it('gives workspace_secret a nullable expiry and revocation, non-null hash', async () => {
+  const cols = await columns('workspace_secret');
+  expect(cols.get('secret_hash')?.nullable).toBe(false);
+  expect(cols.get('expires_at')?.nullable).toBe(true);
+  expect(cols.get('revoked_at')?.nullable).toBe(true);
+});
 ```
 
 (rename the `it(...)` title from `'carries the two columns...'` since it now only covers one).
@@ -291,10 +295,12 @@ git commit -m "Replace workspace.secret_hash with rotatable workspace_secret tab
 ### Task 3: Migrate `workspace_role` — drop `'admin'`, backfill `agent.is_admin`
 
 **Files:**
+
 - Create (via `drizzle-kit generate --custom`, then hand-written): `backend/drizzle/00xx_migrate_admin_role.sql`
 - Modify: `backend/src/shared/db/schema/enums.ts`
 
 **Interfaces:**
+
 - Consumes: `agent.isAdmin` (Task 1), `workspace_member.role` (existing).
 - Produces: `workspaceRole` enum with only `'agent' | 'team_lead'`; every agent that held any `workspace_member.role = 'admin'` row now has `agent.is_admin = true` and no such rows remain.
 
@@ -303,7 +309,7 @@ git commit -m "Replace workspace.secret_hash with rotatable workspace_secret tab
 In `backend/src/shared/db/schema/enums.ts`:
 
 ```ts
-export const workspaceRole = pgEnum('workspace_role', ['agent', 'team_lead'])
+export const workspaceRole = pgEnum('workspace_role', ['agent', 'team_lead']);
 ```
 
 - [ ] **Step 2: Scaffold a custom (empty) migration**
@@ -365,11 +371,13 @@ git commit -m "Drop workspace_role 'admin', backfill agent.is_admin"
 ### Task 4: Rotatable secret checking — `playerTokenRoute.ts` and `workspaceSecret.ts`
 
 **Files:**
+
 - Modify: `backend/src/shared/auth/workspaceSecret.ts`
 - Modify: `backend/src/shared/auth/playerTokenRoute.ts`
 - Test: `backend/tests/auth.playerToken.test.ts`
 
 **Interfaces:**
+
 - Consumes: `workspaceSecret` table (Task 2).
 - Produces: `secretMatchesAny(raw: string, hashes: readonly string[]): boolean` — used by `playerTokenRoute.ts` and later by Task 17's rotation service indirectly (rotation itself doesn't need this, but keeping the matcher here keeps every secret-comparison code path in one file).
 
@@ -380,7 +388,7 @@ Append to `backend/src/shared/auth/workspaceSecret.ts`:
 ```ts
 /** True if `raw` matches ANY of the given hashes — used when a grace-window rotation leaves two active secrets. */
 export function secretMatchesAny(raw: string, hashes: readonly string[]): boolean {
-  return hashes.some((hash) => secretMatches(raw, hash))
+  return hashes.some((hash) => secretMatches(raw, hash));
 }
 ```
 
@@ -389,78 +397,82 @@ export function secretMatchesAny(raw: string, hashes: readonly string[]): boolea
 Replace the existing lookup block:
 
 ```ts
-  const [found] = await withoutWorkspace(async (tx) =>
-    tx
-      .select({ id: workspace.id, secretHash: workspace.secretHash, disabledAt: workspace.disabledAt })
-      .from(workspace)
-      .where(eq(workspace.slug, parsed.slug))
-      .limit(1),
-  )
+const [found] = await withoutWorkspace(async (tx) =>
+  tx
+    .select({
+      id: workspace.id,
+      secretHash: workspace.secretHash,
+      disabledAt: workspace.disabledAt,
+    })
+    .from(workspace)
+    .where(eq(workspace.slug, parsed.slug))
+    .limit(1),
+);
 
-  // Unknown and disabled are both 404, per the wire contract. The slug itself is not
-  // a secret — it travels in the X-Support-Workspace header on every SDK request —
-  // so a 404 revealing "no such slug" is accepted deliberately: a game backend
-  // operator needs 404 to mean "you typed the slug wrong".
-  if (!found || !secretMatches(parsed.raw, found.secretHash)) {
-    sendError(
-      res,
-      found ? 401 : 404,
-      found ? 'unauthorized' : 'not_found',
-      found ? 'Workspace secret is not valid.' : 'Workspace not found.',
-    )
-    return
-  }
-  if (found.disabledAt) {
-    sendError(res, 404, 'not_found', 'Workspace not found.')
-    return
-  }
+// Unknown and disabled are both 404, per the wire contract. The slug itself is not
+// a secret — it travels in the X-Support-Workspace header on every SDK request —
+// so a 404 revealing "no such slug" is accepted deliberately: a game backend
+// operator needs 404 to mean "you typed the slug wrong".
+if (!found || !secretMatches(parsed.raw, found.secretHash)) {
+  sendError(
+    res,
+    found ? 401 : 404,
+    found ? 'unauthorized' : 'not_found',
+    found ? 'Workspace secret is not valid.' : 'Workspace not found.',
+  );
+  return;
+}
+if (found.disabledAt) {
+  sendError(res, 404, 'not_found', 'Workspace not found.');
+  return;
+}
 ```
 
 with:
 
 ```ts
-  const [found] = await withoutWorkspace(async (tx) =>
-    tx
-      .select({ id: workspace.id, disabledAt: workspace.disabledAt })
-      .from(workspace)
-      .where(eq(workspace.slug, parsed.slug))
-      .limit(1),
-  )
+const [found] = await withoutWorkspace(async (tx) =>
+  tx
+    .select({ id: workspace.id, disabledAt: workspace.disabledAt })
+    .from(workspace)
+    .where(eq(workspace.slug, parsed.slug))
+    .limit(1),
+);
 
-  const activeHashes = found
-    ? (
-        await withWorkspace(found.id, (tx) =>
-          tx
-            .select({ secretHash: workspaceSecret.secretHash })
-            .from(workspaceSecret)
-            .where(
-              and(
-                eq(workspaceSecret.workspaceId, found.id),
-                isNull(workspaceSecret.revokedAt),
-                or(isNull(workspaceSecret.expiresAt), gt(workspaceSecret.expiresAt, new Date())),
-              ),
+const activeHashes = found
+  ? (
+      await withWorkspace(found.id, (tx) =>
+        tx
+          .select({ secretHash: workspaceSecret.secretHash })
+          .from(workspaceSecret)
+          .where(
+            and(
+              eq(workspaceSecret.workspaceId, found.id),
+              isNull(workspaceSecret.revokedAt),
+              or(isNull(workspaceSecret.expiresAt), gt(workspaceSecret.expiresAt, new Date())),
             ),
-        )
-      ).map((row) => row.secretHash)
-    : []
+          ),
+      )
+    ).map((row) => row.secretHash)
+  : [];
 
-  // Unknown and disabled are both 404, per the wire contract. The slug itself is not
-  // a secret — it travels in the X-Support-Workspace header on every SDK request —
-  // so a 404 revealing "no such slug" is accepted deliberately: a game backend
-  // operator needs 404 to mean "you typed the slug wrong".
-  if (!found || !secretMatchesAny(parsed.raw, activeHashes)) {
-    sendError(
-      res,
-      found ? 401 : 404,
-      found ? 'unauthorized' : 'not_found',
-      found ? 'Workspace secret is not valid.' : 'Workspace not found.',
-    )
-    return
-  }
-  if (found.disabledAt) {
-    sendError(res, 404, 'not_found', 'Workspace not found.')
-    return
-  }
+// Unknown and disabled are both 404, per the wire contract. The slug itself is not
+// a secret — it travels in the X-Support-Workspace header on every SDK request —
+// so a 404 revealing "no such slug" is accepted deliberately: a game backend
+// operator needs 404 to mean "you typed the slug wrong".
+if (!found || !secretMatchesAny(parsed.raw, activeHashes)) {
+  sendError(
+    res,
+    found ? 401 : 404,
+    found ? 'unauthorized' : 'not_found',
+    found ? 'Workspace secret is not valid.' : 'Workspace not found.',
+  );
+  return;
+}
+if (found.disabledAt) {
+  sendError(res, 404, 'not_found', 'Workspace not found.');
+  return;
+}
 ```
 
 Update the imports at the top: replace `import { player, workspace } from '../db/schema/index.ts'` with `import { player, workspace, workspaceSecret } from '../db/schema/index.ts'`; replace `import { and, eq, sql } from 'drizzle-orm'` with `import { and, eq, gt, isNull, or, sql } from 'drizzle-orm'`; replace `import { parseWorkspaceSecret, secretMatches } from './workspaceSecret.ts'` with `import { parseWorkspaceSecret, secretMatchesAny } from './workspaceSecret.ts'`.
@@ -470,9 +482,9 @@ Update the imports at the top: replace `import { player, workspace } from '../db
 In `backend/tests/auth.playerToken.test.ts`, find where it seeds via `seedWorkspace({ slug, secretHash, disabledAt })` (around line 22-23) and replace with (Task 5 adds `seedWorkspaceSecret`, so this step depends on it — do Task 5 first if executing out of order, or treat Steps 3 of both tasks as one combined edit):
 
 ```ts
-  const { secret, secretHash } = generateWorkspaceSecret(slug)
-  const id = await seedWorkspace({ slug, disabledAt })
-  await seedWorkspaceSecret({ workspaceId: id, secretHash })
+const { secret, secretHash } = generateWorkspaceSecret(slug);
+const id = await seedWorkspace({ slug, disabledAt });
+await seedWorkspaceSecret({ workspaceId: id, secretHash });
 ```
 
 Add `seedWorkspaceSecret` to the `from './helpers/db.ts'` import.
@@ -492,12 +504,14 @@ git commit -m "Check player-token auth against rotatable workspace_secret rows"
 ### Task 5: Test helpers — `seedWorkspaceSecret`, `isAdmin`/`isSuperAdmin`, drop `'admin'` from role types
 
 **Files:**
+
 - Modify: `backend/tests/helpers/db.ts`
 - Modify: `backend/tests/isolation.test.ts`
 - Modify: `backend/tests/rls.test.ts`
 - Modify: `backend/tests/ticketNumber.test.ts`
 
 **Interfaces:**
+
 - Produces: `seedWorkspaceSecret(args: { workspaceId: string; secretHash: string; expiresAt?: Date | null; revokedAt?: Date | null }): Promise<string>`; `seedAgent(email?, options?: { isAdmin?: boolean; isSuperAdmin?: boolean }): Promise<string>` (signature widened, backward compatible with existing single-arg call sites); `seedWorkspace`'s `secretHash`/`SCOPED_TABLES` no longer reference workspace's own column.
 
 - [ ] **Step 1: Remove `secretHash` from `seedWorkspace`, add `seedWorkspaceSecret`**
@@ -507,35 +521,35 @@ In `backend/tests/helpers/db.ts`, change `seedWorkspace`'s overrides type and bo
 ```ts
 export async function seedWorkspace(
   overrides: {
-    id?: string
-    slug?: string
-    name?: string
-    disabledAt?: Date | null
-    autoCloseDays?: number
+    id?: string;
+    slug?: string;
+    name?: string;
+    disabledAt?: Date | null;
+    autoCloseDays?: number;
   } = {},
 ): Promise<string> {
-  const id = overrides.id ?? randomUUID()
-  const slug = overrides.slug ?? `ws-${id.slice(0, 8)}`
+  const id = overrides.id ?? randomUUID();
+  const slug = overrides.slug ?? `ws-${id.slice(0, 8)}`;
   await ownerPool.query(
     `insert into workspace (id, name, slug, disabled_at, auto_close_days)
      values ($1, $2, $3, $4, $5)`,
     [id, overrides.name ?? slug, slug, overrides.disabledAt ?? null, overrides.autoCloseDays ?? 7],
-  )
-  return id
+  );
+  return id;
 }
 
 export async function seedWorkspaceSecret(args: {
-  workspaceId: string
-  secretHash: string
-  expiresAt?: Date | null
-  revokedAt?: Date | null
+  workspaceId: string;
+  secretHash: string;
+  expiresAt?: Date | null;
+  revokedAt?: Date | null;
 }): Promise<string> {
-  const id = randomUUID()
+  const id = randomUUID();
   await ownerPool.query(
     `insert into workspace_secret (id, workspace_id, secret_hash, expires_at, revoked_at) values ($1, $2, $3, $4, $5)`,
     [id, args.workspaceId, args.secretHash, args.expiresAt ?? null, args.revokedAt ?? null],
-  )
-  return id
+  );
+  return id;
 }
 ```
 
@@ -546,13 +560,15 @@ Add `'workspace_secret'` to `SCOPED_TABLES` (before `'workspace_member'`, since 
 Replace:
 
 ```ts
-export async function seedAgent(email = `a-${randomUUID().slice(0, 8)}@example.test`): Promise<string> {
-  const id = randomUUID()
+export async function seedAgent(
+  email = `a-${randomUUID().slice(0, 8)}@example.test`,
+): Promise<string> {
+  const id = randomUUID();
   await ownerPool.query(
     `insert into agent (id, email, display_name) values ($1, $2, 'Test Agent')`,
     [id, email],
-  )
-  return id
+  );
+  return id;
 }
 ```
 
@@ -563,12 +579,12 @@ export async function seedAgent(
   email = `a-${randomUUID().slice(0, 8)}@example.test`,
   options: { isAdmin?: boolean; isSuperAdmin?: boolean } = {},
 ): Promise<string> {
-  const id = randomUUID()
+  const id = randomUUID();
   await ownerPool.query(
     `insert into agent (id, email, display_name, is_admin, is_super_admin) values ($1, $2, 'Test Agent', $3, $4)`,
     [id, email, options.isAdmin ?? false, options.isSuperAdmin ?? false],
-  )
-  return id
+  );
+  return id;
 }
 ```
 
@@ -603,14 +619,14 @@ export async function seedWorkspaceMember(args: {
 In `backend/tests/isolation.test.ts`, replace the two `update workspace set secret_hash = $2 where id = $1` calls (around lines 151-157) with inserts into `workspace_secret`:
 
 ```ts
-    await ownerPool.query(`insert into workspace_secret (workspace_id, secret_hash) values ($1, $2)`, [
-      workspaceA,
-      aSecret.secretHash,
-    ])
-    await ownerPool.query(`insert into workspace_secret (workspace_id, secret_hash) values ($1, $2)`, [
-      workspaceB,
-      bSecret.secretHash,
-    ])
+await ownerPool.query(`insert into workspace_secret (workspace_id, secret_hash) values ($1, $2)`, [
+  workspaceA,
+  aSecret.secretHash,
+]);
+await ownerPool.query(`insert into workspace_secret (workspace_id, secret_hash) values ($1, $2)`, [
+  workspaceB,
+  bSecret.secretHash,
+]);
 ```
 
 In `backend/tests/rls.test.ts`, replace `insert into workspace (id, name, slug, secret_hash) values ($1, $2, $3, 'x')` (line 47) with `insert into workspace (id, name, slug) values ($1, $2, $3)` (drop the fourth bind param from that call).
@@ -618,17 +634,17 @@ In `backend/tests/rls.test.ts`, replace `insert into workspace (id, name, slug, 
 In `backend/tests/ticketNumber.test.ts`, replace the `'grants support_app UPDATE on ticket_seq but not on secret_hash'` test:
 
 ```ts
-  it('grants support_app UPDATE on ticket_seq, and no write access to workspace_secret', async () => {
-    const { rows: allowed } = await ownerPool.query<{ ok: boolean }>(
-      `select has_column_privilege('support_app', 'workspace', 'ticket_seq', 'UPDATE') as ok`,
-    )
-    expect(allowed[0]!.ok).toBe(true)
+it('grants support_app UPDATE on ticket_seq, and no write access to workspace_secret', async () => {
+  const { rows: allowed } = await ownerPool.query<{ ok: boolean }>(
+    `select has_column_privilege('support_app', 'workspace', 'ticket_seq', 'UPDATE') as ok`,
+  );
+  expect(allowed[0]!.ok).toBe(true);
 
-    const { rows: denied } = await ownerPool.query<{ ok: boolean }>(
-      `select has_table_privilege('support_app', 'workspace_secret', 'INSERT') as ok`,
-    )
-    expect(denied[0]!.ok).toBe(false)
-  })
+  const { rows: denied } = await ownerPool.query<{ ok: boolean }>(
+    `select has_table_privilege('support_app', 'workspace_secret', 'INSERT') as ok`,
+  );
+  expect(denied[0]!.ok).toBe(false);
+});
 ```
 
 (This anticipates Task 11 revoking `workspace_secret` writes from `support_app` — only `crm_admin` may write it. If Task 11 hasn't landed yet when this test runs, it will fail; sequence Tasks 5 and 11 together, or run this specific test only after Task 11.)
@@ -648,9 +664,11 @@ git commit -m "Update test helpers for workspace_secret table and global admin f
 ### Task 6: `seed.ts` — dev seed uses global `is_admin`
 
 **Files:**
+
 - Modify: `backend/src/shared/db/seed.ts`
 
 **Interfaces:**
+
 - Consumes: `agent.isAdmin` (Task 1), `workspaceSecret` (Task 2).
 
 - [ ] **Step 1: Seed the workspace secret via the new table**
@@ -667,12 +685,12 @@ Find the block writing `workspace` on the owner connection with `secret_hash` (a
 then, immediately after that statement resolves and the workspace `id` is known, add:
 
 ```ts
-    await client.query(
-      `insert into workspace_secret (workspace_id, secret_hash)
+await client.query(
+  `insert into workspace_secret (workspace_id, secret_hash)
          select id, $2 from workspace where slug = $1
          on conflict do nothing`,
-      [SLUG, secretHash],
-    )
+  [SLUG, secretHash],
+);
 ```
 
 (Read the surrounding function fully before editing — the exact variable name holding the resolved workspace id and the `client`/`ownerPool` handle in scope must match what Task 6's implementer sees in the actual file; preserve every other statement in that block unchanged.)
@@ -682,20 +700,20 @@ then, immediately after that statement resolves and the workspace `id` is known,
 Find:
 
 ```ts
-    await tx
-      .insert(workspaceMember)
-      .values({ workspaceId, agentId: adminId, role: 'admin' })
-      .onConflictDoNothing()
+await tx
+  .insert(workspaceMember)
+  .values({ workspaceId, agentId: adminId, role: 'admin' })
+  .onConflictDoNothing();
 ```
 
 and delete it. Instead, where `adminId` is first resolved (the `agent` upsert near the top of `seed()`), add `isAdmin: true` to that upsert's `.values({...})` and `.onConflictDoUpdate({ ..., set: { ... } })` — mirroring how `displayName` is already set in that same upsert:
 
 ```ts
-    const [admin] = await tx
-      .insert(agent)
-      .values({ email: ADMIN_EMAIL, displayName: 'Admin Agent', isAdmin: true })
-      .onConflictDoUpdate({ target: agent.email, set: { displayName: 'Admin Agent', isAdmin: true } })
-      .returning({ id: agent.id })
+const [admin] = await tx
+  .insert(agent)
+  .values({ email: ADMIN_EMAIL, displayName: 'Admin Agent', isAdmin: true })
+  .onConflictDoUpdate({ target: agent.email, set: { displayName: 'Admin Agent', isAdmin: true } })
+  .returning({ id: agent.id });
 ```
 
 (Read the actual existing admin-upsert block before editing — reuse its exact `displayName` value and query shape, only adding `isAdmin: true` to both the `.values()` and the `.set()`.)
@@ -715,22 +733,24 @@ git commit -m "Seed dev admin via global is_admin instead of a workspace_member 
 ### Task 7: `requireAdminRole` becomes global; add `requireSuperAdminFlag`
 
 **Files:**
+
 - Modify: `backend/src/shared/middleware/requireAdminRole.ts`
 - Create: `backend/src/shared/middleware/requireSuperAdminFlag.ts`
 - Test: `backend/tests/auth.workspaceRole.test.ts`
 
 **Interfaces:**
+
 - Consumes: `req.agent: AgentContext` (from `requireAgentSession`, unchanged), `agent.isAdmin`/`agent.isSuperAdmin` (Task 1), `withoutWorkspace` (existing, `shared/db/withWorkspace.ts`).
 - Produces: `requireAdminRole: RequestHandler` (same export name, new global semantics — its 11 existing call sites across `taxonomyRouter.ts`, `formsRouter.ts`, `botConfigRouter.ts` need no edits). `requireSuperAdminFlag: RequestHandler`.
 
 - [ ] **Step 1: Rewrite `requireAdminRole.ts`**
 
 ```ts
-import type { RequestHandler } from 'express'
-import { eq } from 'drizzle-orm'
-import { sendError } from '../../errors.ts'
-import { agent } from '../db/schema/index.ts'
-import { withoutWorkspace } from '../db/withWorkspace.ts'
+import type { RequestHandler } from 'express';
+import { eq } from 'drizzle-orm';
+import { sendError } from '../../errors.ts';
+import { agent } from '../db/schema/index.ts';
+import { withoutWorkspace } from '../db/withWorkspace.ts';
 
 /**
  * Global, not workspace-scoped: an admin manages every workspace, so this reads
@@ -742,47 +762,51 @@ import { withoutWorkspace } from '../db/withWorkspace.ts'
  * withoutWorkspace rather than withWorkspace.
  */
 export const requireAdminRole: RequestHandler = async (req, res, next) => {
-  const ctx = req.agent!
+  const ctx = req.agent!;
   const isAdmin = await withoutWorkspace(async (tx) => {
-    const [row] = await tx.select({ isAdmin: agent.isAdmin }).from(agent).where(eq(agent.id, ctx.agentId)).limit(1)
-    return row?.isAdmin ?? false
-  })
+    const [row] = await tx
+      .select({ isAdmin: agent.isAdmin })
+      .from(agent)
+      .where(eq(agent.id, ctx.agentId))
+      .limit(1);
+    return row?.isAdmin ?? false;
+  });
 
   if (!isAdmin) {
-    sendError(res, 403, 'forbidden', 'Requires admin.')
-    return
+    sendError(res, 403, 'forbidden', 'Requires admin.');
+    return;
   }
-  next()
-}
+  next();
+};
 ```
 
 - [ ] **Step 2: Add `requireSuperAdminFlag.ts`**
 
 ```ts
-import type { RequestHandler } from 'express'
-import { eq } from 'drizzle-orm'
-import { sendError } from '../../errors.ts'
-import { agent } from '../db/schema/index.ts'
-import { withoutWorkspace } from '../db/withWorkspace.ts'
+import type { RequestHandler } from 'express';
+import { eq } from 'drizzle-orm';
+import { sendError } from '../../errors.ts';
+import { agent } from '../db/schema/index.ts';
+import { withoutWorkspace } from '../db/withWorkspace.ts';
 
 /** Gates grant/revoke of the is_admin and is_super_admin flags themselves. */
 export const requireSuperAdminFlag: RequestHandler = async (req, res, next) => {
-  const ctx = req.agent!
+  const ctx = req.agent!;
   const isSuperAdmin = await withoutWorkspace(async (tx) => {
     const [row] = await tx
       .select({ isSuperAdmin: agent.isSuperAdmin })
       .from(agent)
       .where(eq(agent.id, ctx.agentId))
-      .limit(1)
-    return row?.isSuperAdmin ?? false
-  })
+      .limit(1);
+    return row?.isSuperAdmin ?? false;
+  });
 
   if (!isSuperAdmin) {
-    sendError(res, 403, 'forbidden', 'Requires super admin.')
-    return
+    sendError(res, 403, 'forbidden', 'Requires super admin.');
+    return;
   }
-  next()
-}
+  next();
+};
 ```
 
 - [ ] **Step 3: Rewrite the `requireAdminRole` describe block in `auth.workspaceRole.test.ts`**
@@ -792,26 +816,26 @@ Replace the entire `describe('requireAdminRole', ...)` block at the bottom of th
 ```ts
 describe('requireAdminRole (global)', () => {
   it('admits a globally is_admin agent regardless of which workspace their session names', async () => {
-    const workspaceA = await seedWorkspace()
-    const workspaceB = await seedWorkspace()
-    const adminId = await seedAgent(undefined, { isAdmin: true })
+    const workspaceA = await seedWorkspace();
+    const workspaceB = await seedWorkspace();
+    const adminId = await seedAgent(undefined, { isAdmin: true });
     // Session names workspace A; is_admin is global, so this must still pass —
     // unlike the old per-workspace admin, no workspace_member row exists at all.
-    const token = await signAgentSession({ agent_id: adminId, workspace_id: workspaceA })
-    await request(app).get('/admins-only').set('Authorization', `Bearer ${token}`).expect(200)
+    const token = await signAgentSession({ agent_id: adminId, workspace_id: workspaceA });
+    await request(app).get('/admins-only').set('Authorization', `Bearer ${token}`).expect(200);
     // Same agent, session naming the OTHER workspace — still admitted, because
     // the flag is global, not tied to either workspace.
-    const tokenB = await signAgentSession({ agent_id: adminId, workspace_id: workspaceB })
-    await request(app).get('/admins-only').set('Authorization', `Bearer ${tokenB}`).expect(200)
-  })
+    const tokenB = await signAgentSession({ agent_id: adminId, workspace_id: workspaceB });
+    await request(app).get('/admins-only').set('Authorization', `Bearer ${tokenB}`).expect(200);
+  });
 
   it('refuses a non-admin agent', async () => {
-    const workspaceId = await seedWorkspace()
-    const agentId = await seedAgent()
-    const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId })
-    await request(app).get('/admins-only').set('Authorization', `Bearer ${token}`).expect(403)
-  })
-})
+    const workspaceId = await seedWorkspace();
+    const agentId = await seedAgent();
+    const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId });
+    await request(app).get('/admins-only').set('Authorization', `Bearer ${token}`).expect(403);
+  });
+});
 ```
 
 Add `seedAgent` and `signAgentSession` to the file's imports if not already present (`signAgentSession` already is; add `seedAgent` to the `from './helpers/db.ts'` import list).
@@ -819,11 +843,11 @@ Add `seedAgent` and `signAgentSession` to the file's imports if not already pres
 The earlier `describe('requireWorkspaceRole', ...)` block's `'admits every role in the set'` test currently loops `for (const role of ['team_lead', 'admin'] as const)` — change the loop to `for (const role of ['team_lead'] as const)` (a single-element loop reads oddly; leave it as a loop rather than collapsing it, so a future third workspace role needs no shape change here) and delete the two `'admin'`-seeding tests that exercised the old per-workspace admin concept (`'refuses an agent with no membership row in this workspace'` and `'refuses a deactivated member regardless of role'`'s admin half) — replace both with the single new describe block from Step 3 above plus a narrowed team-lead-only deactivation test:
 
 ```ts
-  it('refuses a deactivated team lead', async () => {
-    const workspaceId = await seedWorkspace()
-    const token = await tokenForRole(workspaceId, 'team_lead', { deactivated: true })
-    await request(app).get('/leads-and-admins').set('Authorization', `Bearer ${token}`).expect(403)
-  })
+it('refuses a deactivated team lead', async () => {
+  const workspaceId = await seedWorkspace();
+  const token = await tokenForRole(workspaceId, 'team_lead', { deactivated: true });
+  await request(app).get('/leads-and-admins').set('Authorization', `Bearer ${token}`).expect(403);
+});
 ```
 
 Narrow `tokenForRole`'s `role` parameter type from `'agent' | 'team_lead' | 'admin'` to `'agent' | 'team_lead'`, and its `insert into workspace_member` call is unchanged otherwise.
@@ -843,12 +867,14 @@ git commit -m "Make requireAdminRole check the global is_admin flag; add require
 ### Task 8: `requireTeamLeadOrAdmin`, narrow `WorkspaceRole`, update the two combined-role routers
 
 **Files:**
+
 - Create: `backend/src/shared/middleware/requireTeamLeadOrAdmin.ts`
 - Modify: `backend/src/shared/middleware/requireWorkspaceRole.ts`
 - Modify: `backend/src/agent/routers/botConfigRouter.ts`
 - Modify: `backend/src/agent/routers/formsRouter.ts`
 
 **Interfaces:**
+
 - Consumes: `requireWorkspaceRole('team_lead')` (existing, now narrower type), `withoutWorkspace`, `agent.isAdmin`.
 - Produces: `requireTeamLeadOrAdmin: RequestHandler`, used by `canSeeBotConfig` and `canBuildForms`.
 
@@ -857,13 +883,13 @@ git commit -m "Make requireAdminRole check the global is_admin flag; add require
 In `backend/src/shared/middleware/requireWorkspaceRole.ts`, change:
 
 ```ts
-export type WorkspaceRole = 'agent' | 'team_lead' | 'admin'
+export type WorkspaceRole = 'agent' | 'team_lead' | 'admin';
 ```
 
 to:
 
 ```ts
-export type WorkspaceRole = 'agent' | 'team_lead'
+export type WorkspaceRole = 'agent' | 'team_lead';
 ```
 
 (the function body is unchanged — it already reads `workspaceMember.role`, which the database now only ever contains `'agent'`/`'team_lead'` for, per Task 3).
@@ -871,14 +897,14 @@ export type WorkspaceRole = 'agent' | 'team_lead'
 - [ ] **Step 2: Add `requireTeamLeadOrAdmin.ts`**
 
 ```ts
-import type { RequestHandler } from 'express'
-import { eq } from 'drizzle-orm'
-import { sendError } from '../../errors.ts'
-import { agent } from '../db/schema/index.ts'
-import { withoutWorkspace } from '../db/withWorkspace.ts'
-import { requireWorkspaceRole } from './requireWorkspaceRole.ts'
+import type { RequestHandler } from 'express';
+import { eq } from 'drizzle-orm';
+import { sendError } from '../../errors.ts';
+import { agent } from '../db/schema/index.ts';
+import { withoutWorkspace } from '../db/withWorkspace.ts';
+import { requireWorkspaceRole } from './requireWorkspaceRole.ts';
 
-const isTeamLead = requireWorkspaceRole('team_lead')
+const isTeamLead = requireWorkspaceRole('team_lead');
 
 /**
  * Replaces the old requireWorkspaceRole('team_lead', 'admin') now that admin is
@@ -887,17 +913,21 @@ const isTeamLead = requireWorkspaceRole('team_lead')
  * "Team Lead, Admin" — see botConfigRouter.ts and formsRouter.ts.
  */
 export const requireTeamLeadOrAdmin: RequestHandler = async (req, res, next) => {
-  const ctx = req.agent!
+  const ctx = req.agent!;
   const isAdmin = await withoutWorkspace(async (tx) => {
-    const [row] = await tx.select({ isAdmin: agent.isAdmin }).from(agent).where(eq(agent.id, ctx.agentId)).limit(1)
-    return row?.isAdmin ?? false
-  })
+    const [row] = await tx
+      .select({ isAdmin: agent.isAdmin })
+      .from(agent)
+      .where(eq(agent.id, ctx.agentId))
+      .limit(1);
+    return row?.isAdmin ?? false;
+  });
   if (isAdmin) {
-    next()
-    return
+    next();
+    return;
   }
-  isTeamLead(req, res, next)
-}
+  isTeamLead(req, res, next);
+};
 ```
 
 - [ ] **Step 3: Swap the two call sites**
@@ -905,12 +935,15 @@ export const requireTeamLeadOrAdmin: RequestHandler = async (req, res, next) => 
 In `backend/src/agent/routers/botConfigRouter.ts`, replace:
 
 ```ts
-import { requireWorkspaceRole } from '../../shared/middleware/requireWorkspaceRole.ts'
+import { requireWorkspaceRole } from '../../shared/middleware/requireWorkspaceRole.ts';
 ```
+
 with
+
 ```ts
-import { requireTeamLeadOrAdmin } from '../../shared/middleware/requireTeamLeadOrAdmin.ts'
+import { requireTeamLeadOrAdmin } from '../../shared/middleware/requireTeamLeadOrAdmin.ts';
 ```
+
 and replace `const canSeeBotConfig = requireWorkspaceRole('team_lead', 'admin')` with `const canSeeBotConfig = requireTeamLeadOrAdmin`.
 
 Make the identical two edits in `backend/src/agent/routers/formsRouter.ts` (import swap, and `const canBuildForms = requireWorkspaceRole('team_lead', 'admin')` becomes `const canBuildForms = requireTeamLeadOrAdmin`).
@@ -927,17 +960,16 @@ async function seedAgentWithRole(
   const { rows } = await ownerPool.query<{ id: string }>(
     `insert into agent (email, display_name, is_admin) values ($1, 'Test Agent', $2) returning id`,
     [`${role}-${Math.random().toString(36).slice(2)}@example.test`, role === 'admin'],
-  )
-  const agentId = rows[0]!.id
+  );
+  const agentId = rows[0]!.id;
   if (role !== 'admin') {
-    await ownerPool.query(`insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, $3)`, [
-      workspaceId,
-      agentId,
-      role,
-    ])
+    await ownerPool.query(
+      `insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, $3)`,
+      [workspaceId, agentId, role],
+    );
   }
-  const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId })
-  return { agentId, token }
+  const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId });
+  return { agentId, token };
 }
 ```
 
@@ -950,37 +982,37 @@ Apply the identical change to `seedAgentWithRole` in `backend/tests/formsAdmin.t
 `assignOnHandoff` selects from `workspace_member` only, so a global admin (no `workspace_member` row) is now correctly never a handoff candidate — this is intentional (admins manage, they don't take tickets by default). Replace the test:
 
 ```ts
-  it('includes admins and team leads', async () => {
-    const workspaceId = await seedWorkspace()
-    const admin = await seedAgent()
-    await seedWorkspaceMember({ workspaceId, agentId: admin, role: 'admin' })
+it('includes admins and team leads', async () => {
+  const workspaceId = await seedWorkspace();
+  const admin = await seedAgent();
+  await seedWorkspaceMember({ workspaceId, agentId: admin, role: 'admin' });
 
-    const result = await withWorkspace(workspaceId, (tx) => assignOnHandoff(tx, workspaceId))
-    expect(result).toBe(admin)
-  })
+  const result = await withWorkspace(workspaceId, (tx) => assignOnHandoff(tx, workspaceId));
+  expect(result).toBe(admin);
+});
 ```
 
 with:
 
 ```ts
-  it('includes team leads', async () => {
-    const workspaceId = await seedWorkspace()
-    const lead = await seedAgent()
-    await seedWorkspaceMember({ workspaceId, agentId: lead, role: 'team_lead' })
+it('includes team leads', async () => {
+  const workspaceId = await seedWorkspace();
+  const lead = await seedAgent();
+  await seedWorkspaceMember({ workspaceId, agentId: lead, role: 'team_lead' });
 
-    const result = await withWorkspace(workspaceId, (tx) => assignOnHandoff(tx, workspaceId))
-    expect(result).toBe(lead)
-  })
+  const result = await withWorkspace(workspaceId, (tx) => assignOnHandoff(tx, workspaceId));
+  expect(result).toBe(lead);
+});
 
-  it('never assigns a global admin, who holds no workspace_member row', async () => {
-    const workspaceId = await seedWorkspace()
-    const admin = await seedAgent(undefined, { isAdmin: true })
-    const active = await seedAgent()
-    await seedWorkspaceMember({ workspaceId, agentId: active })
+it('never assigns a global admin, who holds no workspace_member row', async () => {
+  const workspaceId = await seedWorkspace();
+  const admin = await seedAgent(undefined, { isAdmin: true });
+  const active = await seedAgent();
+  await seedWorkspaceMember({ workspaceId, agentId: active });
 
-    const result = await withWorkspace(workspaceId, (tx) => assignOnHandoff(tx, workspaceId))
-    expect(result).toBe(active)
-  })
+  const result = await withWorkspace(workspaceId, (tx) => assignOnHandoff(tx, workspaceId));
+  expect(result).toBe(active);
+});
 ```
 
 - [ ] **Step 6: Run and commit**
@@ -998,10 +1030,12 @@ git commit -m "Add requireTeamLeadOrAdmin, migrate all 'team_lead or admin' gate
 ### Task 9: `crm_admin` Postgres role
 
 **Files:**
+
 - Modify: `backend/src/shared/db/sql/002_rls.sql`
 - Test: `backend/tests/ticketNumber.test.ts` (Task 5's Step 4 deferred assertion now applies)
 
 **Interfaces:**
+
 - Produces: Postgres role `crm_admin` — `LOGIN`, `BYPASSRLS`, same table grants as `support_app` (`SELECT, INSERT, UPDATE` on every table, `event`/`change_log`/`form_answer` still `REVOKE UPDATE, DELETE`) plus **unrestricted** `INSERT, UPDATE` on `workspace` and full access to `workspace_secret` (both denied to `support_app`).
 
 - [ ] **Step 1: Add the role block**
@@ -1082,11 +1116,13 @@ git commit -m "Add crm_admin BYPASSRLS role for the admin dashboard"
 ### Task 10: `adminClient.ts` — the `crm_admin` connection pool
 
 **Files:**
+
 - Create: `backend/src/shared/db/adminClient.ts`
 - Modify: `backend/src/env.ts`
 - Modify: `.env.example` (repo root)
 
 **Interfaces:**
+
 - Produces: `adminDb: NodePgDatabase<typeof schema>`, `closeAdminDb(): Promise<void>` — mirrors `client.ts`'s `db`/`closeDb`. Every Task 14–18 service imports `adminDb` and `withoutWorkspace`-style raw queries against it (no RLS context to set, since `crm_admin` bypasses RLS entirely).
 
 - [ ] **Step 1: Add the env var**
@@ -1111,11 +1147,11 @@ ADMIN_DATABASE_URL=postgres://crm_admin:crm_admin@localhost:5432/support
 - [ ] **Step 3: Create `adminClient.ts`**
 
 ```ts
-import { drizzle } from 'drizzle-orm/node-postgres'
-import { Pool } from 'pg'
-import { getEnv } from '../../env.ts'
-import { logger } from '../logging/logger.ts'
-import * as schema from './schema/index.ts'
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { Pool } from 'pg';
+import { getEnv } from '../../env.ts';
+import { logger } from '../logging/logger.ts';
+import * as schema from './schema/index.ts';
 
 /**
  * Connects as crm_admin: BYPASSRLS. Every query run through this client sees
@@ -1123,15 +1159,15 @@ import * as schema from './schema/index.ts'
  * non-admin handler reaching for this instead of client.ts's `db` is a tenancy
  * bug, not a style choice.
  */
-export const adminPool = new Pool({ connectionString: getEnv().ADMIN_DATABASE_URL, max: 5 })
+export const adminPool = new Pool({ connectionString: getEnv().ADMIN_DATABASE_URL, max: 5 });
 adminPool.on('error', (err) => {
-  logger.error('db.adminPool', `Idle client error: ${err.message}`)
-})
+  logger.error('db.adminPool', `Idle client error: ${err.message}`);
+});
 
-export const adminDb = drizzle(adminPool, { schema })
+export const adminDb = drizzle(adminPool, { schema });
 
 export async function closeAdminDb(): Promise<void> {
-  await adminPool.end()
+  await adminPool.end();
 }
 ```
 
@@ -1154,22 +1190,24 @@ git commit -m "Add crm_admin connection pool for the admin dashboard"
 ### Task 11: `requireAdminAccess`, `requireSuperAdminAccess` — the `/admin/*` gate
 
 **Files:**
+
 - Create: `backend/src/shared/middleware/requireAdminAccess.ts`
 - Create: `backend/src/shared/middleware/requireSuperAdminAccess.ts`
 - Test: `backend/tests/admin.isolation.test.ts` (first test in this file; more added by Task 18)
 
 **Interfaces:**
+
 - Consumes: `req.agent: AgentContext` (from `requireAgentSession`, run first — an admin's session still names a workspace, even though `is_admin` grants access beyond it), `adminDb` (Task 10).
 - Produces: `requireAdminAccess: RequestHandler` — after this runs, `req.agent!.agentId` is confirmed `is_admin`. `requireSuperAdminAccess: RequestHandler` — additionally confirms `is_super_admin`. Every Task 14–18 router mounts one of these after `requireAgentSession`.
 
 - [ ] **Step 1: `requireAdminAccess.ts`**
 
 ```ts
-import type { RequestHandler } from 'express'
-import { eq } from 'drizzle-orm'
-import { sendError } from '../../errors.ts'
-import { adminDb } from '../db/adminClient.ts'
-import { agent } from '../db/schema/index.ts'
+import type { RequestHandler } from 'express';
+import { eq } from 'drizzle-orm';
+import { sendError } from '../../errors.ts';
+import { adminDb } from '../db/adminClient.ts';
+import { agent } from '../db/schema/index.ts';
 
 /**
  * Gates every /admin/* route. Runs after requireAgentSession, which puts the
@@ -1179,41 +1217,45 @@ import { agent } from '../db/schema/index.ts'
  * to fail the same way the rest of the route would if crm_admin were misconfigured).
  */
 export const requireAdminAccess: RequestHandler = async (req, res, next) => {
-  const ctx = req.agent!
-  const [row] = await adminDb.select({ isAdmin: agent.isAdmin }).from(agent).where(eq(agent.id, ctx.agentId)).limit(1)
+  const ctx = req.agent!;
+  const [row] = await adminDb
+    .select({ isAdmin: agent.isAdmin })
+    .from(agent)
+    .where(eq(agent.id, ctx.agentId))
+    .limit(1);
 
   if (!row?.isAdmin) {
-    sendError(res, 403, 'forbidden', 'Requires admin.')
-    return
+    sendError(res, 403, 'forbidden', 'Requires admin.');
+    return;
   }
-  next()
-}
+  next();
+};
 ```
 
 - [ ] **Step 2: `requireSuperAdminAccess.ts`**
 
 ```ts
-import type { RequestHandler } from 'express'
-import { eq } from 'drizzle-orm'
-import { sendError } from '../../errors.ts'
-import { adminDb } from '../db/adminClient.ts'
-import { agent } from '../db/schema/index.ts'
+import type { RequestHandler } from 'express';
+import { eq } from 'drizzle-orm';
+import { sendError } from '../../errors.ts';
+import { adminDb } from '../db/adminClient.ts';
+import { agent } from '../db/schema/index.ts';
 
 /** Gates grant/revoke of is_admin and is_super_admin themselves. Run after requireAdminAccess. */
 export const requireSuperAdminAccess: RequestHandler = async (req, res, next) => {
-  const ctx = req.agent!
+  const ctx = req.agent!;
   const [row] = await adminDb
     .select({ isSuperAdmin: agent.isSuperAdmin })
     .from(agent)
     .where(eq(agent.id, ctx.agentId))
-    .limit(1)
+    .limit(1);
 
   if (!row?.isSuperAdmin) {
-    sendError(res, 403, 'forbidden', 'Requires super admin.')
-    return
+    sendError(res, 403, 'forbidden', 'Requires super admin.');
+    return;
   }
-  next()
-}
+  next();
+};
 ```
 
 - [ ] **Step 3: Write the first isolation test**
@@ -1221,51 +1263,51 @@ export const requireSuperAdminAccess: RequestHandler = async (req, res, next) =>
 Create `backend/tests/admin.isolation.test.ts`:
 
 ```ts
-import express from 'express'
-import { afterAll, beforeEach, describe, expect, it } from 'vitest'
-import { req as request } from './helpers/http.ts'
-import { closeDb } from '../src/shared/db/client.ts'
-import { closeAdminDb } from '../src/shared/db/adminClient.ts'
-import { errorMiddleware } from '../src/errors.ts'
-import { requireAgentSession } from '../src/shared/middleware/requireAgentSession.ts'
-import { requireAdminAccess } from '../src/shared/middleware/requireAdminAccess.ts'
-import { signAgentSession } from '../src/shared/auth/agentSession.ts'
-import { closeOwnerPool, seedAgent, seedWorkspace, truncateAll } from './helpers/db.ts'
+import express from 'express';
+import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { req as request } from './helpers/http.ts';
+import { closeDb } from '../src/shared/db/client.ts';
+import { closeAdminDb } from '../src/shared/db/adminClient.ts';
+import { errorMiddleware } from '../src/errors.ts';
+import { requireAgentSession } from '../src/shared/middleware/requireAgentSession.ts';
+import { requireAdminAccess } from '../src/shared/middleware/requireAdminAccess.ts';
+import { signAgentSession } from '../src/shared/auth/agentSession.ts';
+import { closeOwnerPool, seedAgent, seedWorkspace, truncateAll } from './helpers/db.ts';
 
-const app = express()
-app.use(express.json())
+const app = express();
+app.use(express.json());
 app.use('/admin/probe', requireAgentSession, requireAdminAccess, (_req, res) => {
-  res.status(200).json({ ok: true })
-})
-app.use(errorMiddleware)
+  res.status(200).json({ ok: true });
+});
+app.use(errorMiddleware);
 
 afterAll(async () => {
-  await closeDb()
-  await closeAdminDb()
-  await closeOwnerPool()
-})
+  await closeDb();
+  await closeAdminDb();
+  await closeOwnerPool();
+});
 
-beforeEach(truncateAll)
+beforeEach(truncateAll);
 
 describe('requireAdminAccess', () => {
   it('admits a globally is_admin agent', async () => {
-    const workspaceId = await seedWorkspace()
-    const agentId = await seedAgent(undefined, { isAdmin: true })
-    const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId })
-    await request(app).get('/admin/probe').set('Authorization', `Bearer ${token}`).expect(200)
-  })
+    const workspaceId = await seedWorkspace();
+    const agentId = await seedAgent(undefined, { isAdmin: true });
+    const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId });
+    await request(app).get('/admin/probe').set('Authorization', `Bearer ${token}`).expect(200);
+  });
 
   it('refuses a non-admin agent with 403', async () => {
-    const workspaceId = await seedWorkspace()
-    const agentId = await seedAgent()
-    const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId })
-    await request(app).get('/admin/probe').set('Authorization', `Bearer ${token}`).expect(403)
-  })
+    const workspaceId = await seedWorkspace();
+    const agentId = await seedAgent();
+    const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId });
+    await request(app).get('/admin/probe').set('Authorization', `Bearer ${token}`).expect(403);
+  });
 
   it('requires authentication before it can check the flag', async () => {
-    await request(app).get('/admin/probe').expect(401)
-  })
-})
+    await request(app).get('/admin/probe').expect(401);
+  });
+});
 ```
 
 - [ ] **Step 4: Run and commit**
@@ -1283,6 +1325,7 @@ git commit -m "Add requireAdminAccess/requireSuperAdminAccess for the /admin/* r
 ### Task 12: Workspaces — list, create
 
 **Files:**
+
 - Create: `backend/src/admin/services/workspacesService.ts`
 - Create: `backend/src/admin/controllers/workspacesController.ts`
 - Create: `backend/src/admin/routers/workspacesRouter.ts`
@@ -1290,23 +1333,24 @@ git commit -m "Add requireAdminAccess/requireSuperAdminAccess for the /admin/* r
 - Test: `backend/tests/admin.workspaces.test.ts`
 
 **Interfaces:**
+
 - Consumes: `adminDb` (Task 10), `workspace`/`workspaceMember` schema.
 - Produces: `listWorkspaces(): Promise<WorkspaceSummary[]>`, `createWorkspace(args: { name: string; slug: string }): Promise<{ id: string; name: string; slug: string; createdAt: Date }>` — both consumed by Task 13's rename service file import and Task 19's `admin/router.ts` wiring.
 
 - [ ] **Step 1: `workspacesService.ts`**
 
 ```ts
-import { count, eq } from 'drizzle-orm'
-import { adminDb } from '../../shared/db/adminClient.ts'
-import { workspace, workspaceMember } from '../../shared/db/schema/index.ts'
+import { count, eq } from 'drizzle-orm';
+import { adminDb } from '../../shared/db/adminClient.ts';
+import { workspace, workspaceMember } from '../../shared/db/schema/index.ts';
 
 export type WorkspaceSummary = {
-  id: string
-  name: string
-  slug: string
-  member_count: number
-  created_at: Date
-}
+  id: string;
+  name: string;
+  slug: string;
+  member_count: number;
+  created_at: Date;
+};
 
 /** One query across every workspace — this is what crm_admin's BYPASSRLS is for. */
 export async function listWorkspaces(): Promise<WorkspaceSummary[]> {
@@ -1321,7 +1365,7 @@ export async function listWorkspaces(): Promise<WorkspaceSummary[]> {
     .from(workspace)
     .leftJoin(workspaceMember, eq(workspaceMember.workspaceId, workspace.id))
     .groupBy(workspace.id)
-    .orderBy(workspace.createdAt)
+    .orderBy(workspace.createdAt);
 
   return rows.map((row) => ({
     id: row.id,
@@ -1329,25 +1373,33 @@ export async function listWorkspaces(): Promise<WorkspaceSummary[]> {
     slug: row.slug,
     member_count: row.memberCount,
     created_at: row.createdAt,
-  }))
+  }));
 }
 
 export class SlugTaken extends Error {}
 
-export async function createWorkspace(args: { name: string; slug: string }): Promise<WorkspaceSummary> {
+export async function createWorkspace(args: {
+  name: string;
+  slug: string;
+}): Promise<WorkspaceSummary> {
   try {
     const [row] = await adminDb
       .insert(workspace)
       .values({ name: args.name, slug: args.slug })
-      .returning({ id: workspace.id, name: workspace.name, slug: workspace.slug, createdAt: workspace.createdAt })
-    if (!row) throw new Error('workspace insert returned nothing')
-    return { ...row, member_count: 0 }
+      .returning({
+        id: workspace.id,
+        name: workspace.name,
+        slug: workspace.slug,
+        createdAt: workspace.createdAt,
+      });
+    if (!row) throw new Error('workspace insert returned nothing');
+    return { ...row, member_count: 0 };
   } catch (error) {
     // Postgres unique_violation
     if (error && typeof error === 'object' && 'code' in error && error.code === '23505') {
-      throw new SlugTaken(args.slug)
+      throw new SlugTaken(args.slug);
     }
-    throw error
+    throw error;
   }
 }
 ```
@@ -1355,15 +1407,15 @@ export async function createWorkspace(args: { name: string; slug: string }): Pro
 - [ ] **Step 2: `workspacesController.ts`**
 
 ```ts
-import type { RequestHandler } from 'express'
-import { z } from 'zod'
-import { sendError } from '../../errors.ts'
-import { createWorkspace, listWorkspaces, SlugTaken } from '../services/workspacesService.ts'
+import type { RequestHandler } from 'express';
+import { z } from 'zod';
+import { sendError } from '../../errors.ts';
+import { createWorkspace, listWorkspaces, SlugTaken } from '../services/workspacesService.ts';
 
 export const listWorkspacesHandler: RequestHandler = async (_req, res) => {
-  const workspaces = await listWorkspaces()
-  res.status(200).json({ workspaces })
-}
+  const workspaces = await listWorkspaces();
+  res.status(200).json({ workspaces });
+};
 
 const CreateWorkspaceBody = z.object({
   name: z.string().min(1).max(200),
@@ -1372,51 +1424,54 @@ const CreateWorkspaceBody = z.object({
     .min(1)
     .max(63)
     .regex(/^[a-z0-9-]+$/, 'slug must be lowercase letters, numbers, and hyphens'),
-})
+});
 
 export const createWorkspaceHandler: RequestHandler = async (req, res) => {
-  const body = CreateWorkspaceBody.safeParse(req.body)
+  const body = CreateWorkspaceBody.safeParse(req.body);
   if (!body.success) {
-    sendError(res, 422, 'invalid_request', 'name or slug is missing or malformed.')
-    return
+    sendError(res, 422, 'invalid_request', 'name or slug is missing or malformed.');
+    return;
   }
   try {
-    const created = await createWorkspace(body.data)
-    res.status(201).json(created)
+    const created = await createWorkspace(body.data);
+    res.status(201).json(created);
   } catch (error) {
     if (error instanceof SlugTaken) {
-      sendError(res, 422, 'name_taken', 'That slug is already in use.')
-      return
+      sendError(res, 422, 'name_taken', 'That slug is already in use.');
+      return;
     }
-    throw error
+    throw error;
   }
-}
+};
 ```
 
 - [ ] **Step 3: `workspacesRouter.ts`**
 
 ```ts
-import { Router } from 'express'
-import { createWorkspaceHandler, listWorkspacesHandler } from '../controllers/workspacesController.ts'
+import { Router } from 'express';
+import {
+  createWorkspaceHandler,
+  listWorkspacesHandler,
+} from '../controllers/workspacesController.ts';
 
-export const workspacesRouter = Router()
-workspacesRouter.get('/workspaces', listWorkspacesHandler)
-workspacesRouter.post('/workspaces', createWorkspaceHandler)
+export const workspacesRouter = Router();
+workspacesRouter.get('/workspaces', listWorkspacesHandler);
+workspacesRouter.post('/workspaces', createWorkspaceHandler);
 ```
 
 - [ ] **Step 4: `admin/router.ts`**
 
 ```ts
-import { Router } from 'express'
-import { requireAgentSession } from '../shared/middleware/requireAgentSession.ts'
-import { requireAdminAccess } from '../shared/middleware/requireAdminAccess.ts'
-import { workspacesRouter } from './routers/workspacesRouter.ts'
+import { Router } from 'express';
+import { requireAgentSession } from '../shared/middleware/requireAgentSession.ts';
+import { requireAdminAccess } from '../shared/middleware/requireAdminAccess.ts';
+import { workspacesRouter } from './routers/workspacesRouter.ts';
 
-export const adminRouter = Router()
+export const adminRouter = Router();
 
-adminRouter.use(requireAgentSession)
-adminRouter.use(requireAdminAccess)
-adminRouter.use(workspacesRouter)
+adminRouter.use(requireAgentSession);
+adminRouter.use(requireAdminAccess);
+adminRouter.use(workspacesRouter);
 ```
 
 (Task 13–18 each add one more `adminRouter.use(...Router)` line here, mirroring `agent/router.ts`'s shape.)
@@ -1424,89 +1479,99 @@ adminRouter.use(workspacesRouter)
 - [ ] **Step 5: `admin.workspaces.test.ts`**
 
 ```ts
-import express from 'express'
-import { afterAll, beforeEach, describe, expect, it } from 'vitest'
-import { req as request } from './helpers/http.ts'
-import { closeDb } from '../src/shared/db/client.ts'
-import { closeAdminDb } from '../src/shared/db/adminClient.ts'
-import { errorMiddleware } from '../src/errors.ts'
-import { adminRouter } from '../src/admin/router.ts'
-import { signAgentSession } from '../src/shared/auth/agentSession.ts'
-import { closeOwnerPool, ownerPool, seedAgent, seedWorkspace, seedWorkspaceMember, truncateAll } from './helpers/db.ts'
+import express from 'express';
+import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { req as request } from './helpers/http.ts';
+import { closeDb } from '../src/shared/db/client.ts';
+import { closeAdminDb } from '../src/shared/db/adminClient.ts';
+import { errorMiddleware } from '../src/errors.ts';
+import { adminRouter } from '../src/admin/router.ts';
+import { signAgentSession } from '../src/shared/auth/agentSession.ts';
+import {
+  closeOwnerPool,
+  ownerPool,
+  seedAgent,
+  seedWorkspace,
+  seedWorkspaceMember,
+  truncateAll,
+} from './helpers/db.ts';
 
-const app = express()
-app.use(express.json())
-app.use('/admin', adminRouter)
-app.use(errorMiddleware)
+const app = express();
+app.use(express.json());
+app.use('/admin', adminRouter);
+app.use(errorMiddleware);
 
 afterAll(async () => {
-  await closeDb()
-  await closeAdminDb()
-  await closeOwnerPool()
-})
+  await closeDb();
+  await closeAdminDb();
+  await closeOwnerPool();
+});
 
-beforeEach(truncateAll)
+beforeEach(truncateAll);
 
 async function adminToken(workspaceId: string): Promise<string> {
-  const agentId = await seedAgent(undefined, { isAdmin: true })
-  return signAgentSession({ agent_id: agentId, workspace_id: workspaceId })
+  const agentId = await seedAgent(undefined, { isAdmin: true });
+  return signAgentSession({ agent_id: agentId, workspace_id: workspaceId });
 }
 
 describe('GET /admin/workspaces', () => {
   it('lists every workspace with its member count, in one call, across tenants', async () => {
-    const workspaceA = await seedWorkspace({ name: 'Game A' })
-    const workspaceB = await seedWorkspace({ name: 'Game B' })
-    const memberAgent = await seedAgent()
-    await seedWorkspaceMember({ workspaceId: workspaceA, agentId: memberAgent })
-    const token = await adminToken(workspaceA)
+    const workspaceA = await seedWorkspace({ name: 'Game A' });
+    const workspaceB = await seedWorkspace({ name: 'Game B' });
+    const memberAgent = await seedAgent();
+    await seedWorkspaceMember({ workspaceId: workspaceA, agentId: memberAgent });
+    const token = await adminToken(workspaceA);
 
-    const res = await request(app).get('/admin/workspaces').set('Authorization', `Bearer ${token}`).expect(200)
+    const res = await request(app)
+      .get('/admin/workspaces')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
 
-    const byId = new Map(res.body.workspaces.map((w: any) => [w.id, w]))
-    expect(byId.get(workspaceA)).toMatchObject({ name: 'Game A', member_count: 1 })
-    expect(byId.get(workspaceB)).toMatchObject({ name: 'Game B', member_count: 0 })
-  })
-})
+    const byId = new Map(res.body.workspaces.map((w: any) => [w.id, w]));
+    expect(byId.get(workspaceA)).toMatchObject({ name: 'Game A', member_count: 1 });
+    expect(byId.get(workspaceB)).toMatchObject({ name: 'Game B', member_count: 0 });
+  });
+});
 
 describe('POST /admin/workspaces', () => {
   it('creates a workspace', async () => {
-    const workspaceId = await seedWorkspace()
-    const token = await adminToken(workspaceId)
+    const workspaceId = await seedWorkspace();
+    const token = await adminToken(workspaceId);
 
     const res = await request(app)
       .post('/admin/workspaces')
       .set('Authorization', `Bearer ${token}`)
       .send({ name: 'New Game', slug: 'new-game' })
-      .expect(201)
+      .expect(201);
 
-    expect(res.body).toMatchObject({ name: 'New Game', slug: 'new-game', member_count: 0 })
-    const { rows } = await ownerPool.query(`select * from workspace where slug = 'new-game'`)
-    expect(rows).toHaveLength(1)
-  })
+    expect(res.body).toMatchObject({ name: 'New Game', slug: 'new-game', member_count: 0 });
+    const { rows } = await ownerPool.query(`select * from workspace where slug = 'new-game'`);
+    expect(rows).toHaveLength(1);
+  });
 
   it('rejects a duplicate slug with 422', async () => {
-    const workspaceId = await seedWorkspace({ slug: 'taken' })
-    const token = await adminToken(workspaceId)
+    const workspaceId = await seedWorkspace({ slug: 'taken' });
+    const token = await adminToken(workspaceId);
 
     await request(app)
       .post('/admin/workspaces')
       .set('Authorization', `Bearer ${token}`)
       .send({ name: 'Other', slug: 'taken' })
-      .expect(422)
-  })
+      .expect(422);
+  });
 
   it('refuses a non-admin agent with 403', async () => {
-    const workspaceId = await seedWorkspace()
-    const agentId = await seedAgent()
-    const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId })
+    const workspaceId = await seedWorkspace();
+    const agentId = await seedAgent();
+    const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId });
 
     await request(app)
       .post('/admin/workspaces')
       .set('Authorization', `Bearer ${token}`)
       .send({ name: 'Nope', slug: 'nope' })
-      .expect(403)
-  })
-})
+      .expect(403);
+  });
+});
 ```
 
 - [ ] **Step 6: Run and commit**
@@ -1524,12 +1589,14 @@ git commit -m "Add GET/POST /admin/workspaces"
 ### Task 13: Workspace rename
 
 **Files:**
+
 - Modify: `backend/src/admin/services/workspacesService.ts`
 - Modify: `backend/src/admin/controllers/workspacesController.ts`
 - Modify: `backend/src/admin/routers/workspacesRouter.ts`
 - Modify: `backend/tests/admin.workspaces.test.ts`
 
 **Interfaces:**
+
 - Produces: `renameWorkspace(id: string, name: string): Promise<WorkspaceSummary | null>` — `null` when no row with that id exists.
 
 - [ ] **Step 1: Add `renameWorkspace` to `workspacesService.ts`**
@@ -1540,14 +1607,19 @@ export async function renameWorkspace(id: string, name: string): Promise<Workspa
     .update(workspace)
     .set({ name })
     .where(eq(workspace.id, id))
-    .returning({ id: workspace.id, name: workspace.name, slug: workspace.slug, createdAt: workspace.createdAt })
-  if (!row) return null
+    .returning({
+      id: workspace.id,
+      name: workspace.name,
+      slug: workspace.slug,
+      createdAt: workspace.createdAt,
+    });
+  if (!row) return null;
 
   const [{ memberCount }] = await adminDb
     .select({ memberCount: count(workspaceMember.id) })
     .from(workspaceMember)
-    .where(eq(workspaceMember.workspaceId, id))
-  return { ...row, member_count: memberCount }
+    .where(eq(workspaceMember.workspaceId, id));
+  return { ...row, member_count: memberCount };
 }
 ```
 
@@ -1556,21 +1628,21 @@ export async function renameWorkspace(id: string, name: string): Promise<Workspa
 In `workspacesController.ts`:
 
 ```ts
-const RenameWorkspaceBody = z.object({ name: z.string().min(1).max(200) })
+const RenameWorkspaceBody = z.object({ name: z.string().min(1).max(200) });
 
 export const renameWorkspaceHandler: RequestHandler = async (req, res) => {
-  const body = RenameWorkspaceBody.safeParse(req.body)
+  const body = RenameWorkspaceBody.safeParse(req.body);
   if (!body.success) {
-    sendError(res, 422, 'invalid_request', 'name is missing or malformed.')
-    return
+    sendError(res, 422, 'invalid_request', 'name is missing or malformed.');
+    return;
   }
-  const updated = await renameWorkspace(req.params.id!, body.data.name)
+  const updated = await renameWorkspace(req.params.id!, body.data.name);
   if (!updated) {
-    sendError(res, 404, 'not_found', 'Workspace not found.')
-    return
+    sendError(res, 404, 'not_found', 'Workspace not found.');
+    return;
   }
-  res.status(200).json(updated)
-}
+  res.status(200).json(updated);
+};
 ```
 
 Add `renameWorkspace` to the `from '../services/workspacesService.ts'` import.
@@ -1586,29 +1658,29 @@ Append to `backend/tests/admin.workspaces.test.ts`:
 ```ts
 describe('PATCH /admin/workspaces/:id', () => {
   it('renames a workspace, leaving its slug untouched', async () => {
-    const workspaceId = await seedWorkspace({ name: 'Old Name', slug: 'stays-put' })
-    const token = await adminToken(workspaceId)
+    const workspaceId = await seedWorkspace({ name: 'Old Name', slug: 'stays-put' });
+    const token = await adminToken(workspaceId);
 
     const res = await request(app)
       .patch(`/admin/workspaces/${workspaceId}`)
       .set('Authorization', `Bearer ${token}`)
       .send({ name: 'New Name' })
-      .expect(200)
+      .expect(200);
 
-    expect(res.body).toMatchObject({ name: 'New Name', slug: 'stays-put' })
-  })
+    expect(res.body).toMatchObject({ name: 'New Name', slug: 'stays-put' });
+  });
 
   it('returns 404 for an unknown workspace id', async () => {
-    const workspaceId = await seedWorkspace()
-    const token = await adminToken(workspaceId)
+    const workspaceId = await seedWorkspace();
+    const token = await adminToken(workspaceId);
 
     await request(app)
       .patch(`/admin/workspaces/${randomUUID()}`)
       .set('Authorization', `Bearer ${token}`)
       .send({ name: 'New Name' })
-      .expect(404)
-  })
-})
+      .expect(404);
+  });
+});
 ```
 
 Add `import { randomUUID } from 'node:crypto'` to the top of the file.
@@ -1628,28 +1700,30 @@ git commit -m "Add PATCH /admin/workspaces/:id (name-only rename)"
 ### Task 14: Workspace members — list, add, change/remove
 
 **Files:**
+
 - Create: `backend/src/admin/services/membersService.ts`
 - Create: `backend/src/admin/controllers/membersController.ts`
 - Modify: `backend/src/admin/routers/workspacesRouter.ts`
 - Test: `backend/tests/admin.members.test.ts`
 
 **Interfaces:**
+
 - Produces: `listMembers(workspaceId: string): Promise<MemberSummary[]>`, `addMember(args: { workspaceId: string; email: string; role: 'agent' | 'team_lead' }): Promise<MemberSummary>`, `updateMember(args: { workspaceId: string; agentId: string; role?: 'agent' | 'team_lead'; remove?: boolean }): Promise<MemberSummary | null>`.
 
 - [ ] **Step 1: `membersService.ts`**
 
 ```ts
-import { and, eq, isNull } from 'drizzle-orm'
-import { adminDb } from '../../shared/db/adminClient.ts'
-import { agent, workspaceMember } from '../../shared/db/schema/index.ts'
+import { and, eq, isNull } from 'drizzle-orm';
+import { adminDb } from '../../shared/db/adminClient.ts';
+import { agent, workspaceMember } from '../../shared/db/schema/index.ts';
 
 export type MemberSummary = {
-  agent_id: string
-  email: string
-  display_name: string
-  status: string
-  role: 'agent' | 'team_lead'
-}
+  agent_id: string;
+  email: string;
+  display_name: string;
+  status: string;
+  role: 'agent' | 'team_lead';
+};
 
 export async function listMembers(workspaceId: string): Promise<MemberSummary[]> {
   const rows = await adminDb
@@ -1663,7 +1737,7 @@ export async function listMembers(workspaceId: string): Promise<MemberSummary[]>
     .from(workspaceMember)
     .innerJoin(agent, eq(agent.id, workspaceMember.agentId))
     .where(and(eq(workspaceMember.workspaceId, workspaceId), isNull(workspaceMember.deactivatedAt)))
-    .orderBy(agent.displayName)
+    .orderBy(agent.displayName);
 
   return rows.map((row) => ({
     agent_id: row.agentId,
@@ -1671,14 +1745,14 @@ export async function listMembers(workspaceId: string): Promise<MemberSummary[]>
     display_name: row.displayName,
     status: row.status,
     role: row.role,
-  }))
+  }));
 }
 
 /** Upsert: granting access to an email already invited/active in this workspace updates the role instead of erroring. */
 export async function addMember(args: {
-  workspaceId: string
-  email: string
-  role: 'agent' | 'team_lead'
+  workspaceId: string;
+  email: string;
+  role: 'agent' | 'team_lead';
 }): Promise<MemberSummary> {
   // onConflictDoNothing + a defensive re-select, not onConflictDoUpdate with an
   // empty SET (invalid SQL) — mirrors the exact upsert-or-fetch pattern
@@ -1689,18 +1763,28 @@ export async function addMember(args: {
     .insert(agent)
     .values({ email: args.email, displayName: args.email, status: 'invited' })
     .onConflictDoNothing({ target: agent.email })
-    .returning({ id: agent.id, email: agent.email, displayName: agent.displayName, status: agent.status })
+    .returning({
+      id: agent.id,
+      email: agent.email,
+      displayName: agent.displayName,
+      status: agent.status,
+    });
 
   const agentRow =
     inserted ??
     (
       await adminDb
-        .select({ id: agent.id, email: agent.email, displayName: agent.displayName, status: agent.status })
+        .select({
+          id: agent.id,
+          email: agent.email,
+          displayName: agent.displayName,
+          status: agent.status,
+        })
         .from(agent)
         .where(eq(agent.email, args.email))
         .limit(1)
-    )[0]
-  if (!agentRow) throw new Error('agent upsert-or-fetch returned nothing')
+    )[0];
+  if (!agentRow) throw new Error('agent upsert-or-fetch returned nothing');
 
   await adminDb
     .insert(workspaceMember)
@@ -1708,7 +1792,7 @@ export async function addMember(args: {
     .onConflictDoUpdate({
       target: [workspaceMember.workspaceId, workspaceMember.agentId],
       set: { role: args.role, deactivatedAt: null },
-    })
+    });
 
   return {
     agent_id: agentRow.id,
@@ -1716,30 +1800,40 @@ export async function addMember(args: {
     display_name: agentRow.displayName,
     status: agentRow.status,
     role: args.role,
-  }
+  };
 }
 
 export async function updateMember(args: {
-  workspaceId: string
-  agentId: string
-  role?: 'agent' | 'team_lead'
-  remove?: boolean
+  workspaceId: string;
+  agentId: string;
+  role?: 'agent' | 'team_lead';
+  remove?: boolean;
 }): Promise<MemberSummary | null> {
   const [existing] = await adminDb
     .select({ status: agent.status })
     .from(agent)
     .innerJoin(workspaceMember, eq(workspaceMember.agentId, agent.id))
-    .where(and(eq(workspaceMember.workspaceId, args.workspaceId), eq(workspaceMember.agentId, args.agentId)))
-    .limit(1)
-  if (!existing) return null
+    .where(
+      and(
+        eq(workspaceMember.workspaceId, args.workspaceId),
+        eq(workspaceMember.agentId, args.agentId),
+      ),
+    )
+    .limit(1);
+  if (!existing) return null;
 
   // An invited agent has never signed in — removing them deletes the pending
   // row outright rather than soft-deactivating a membership that never became real.
   if (args.remove && existing.status === 'invited') {
     await adminDb
       .delete(workspaceMember)
-      .where(and(eq(workspaceMember.workspaceId, args.workspaceId), eq(workspaceMember.agentId, args.agentId)))
-    return null
+      .where(
+        and(
+          eq(workspaceMember.workspaceId, args.workspaceId),
+          eq(workspaceMember.agentId, args.agentId),
+        ),
+      );
+    return null;
   }
 
   const [row] = await adminDb
@@ -1748,15 +1842,20 @@ export async function updateMember(args: {
       role: args.role,
       deactivatedAt: args.remove ? new Date() : undefined,
     })
-    .where(and(eq(workspaceMember.workspaceId, args.workspaceId), eq(workspaceMember.agentId, args.agentId)))
-    .returning({ role: workspaceMember.role })
-  if (!row) return null
+    .where(
+      and(
+        eq(workspaceMember.workspaceId, args.workspaceId),
+        eq(workspaceMember.agentId, args.agentId),
+      ),
+    )
+    .returning({ role: workspaceMember.role });
+  if (!row) return null;
 
   const [agentRow] = await adminDb
     .select({ email: agent.email, displayName: agent.displayName, status: agent.status })
     .from(agent)
     .where(eq(agent.id, args.agentId))
-    .limit(1)
+    .limit(1);
 
   return {
     agent_id: args.agentId,
@@ -1764,61 +1863,65 @@ export async function updateMember(args: {
     display_name: agentRow!.displayName,
     status: agentRow!.status,
     role: row.role,
-  }
+  };
 }
 ```
 
 - [ ] **Step 2: `membersController.ts`**
 
 ```ts
-import type { RequestHandler } from 'express'
-import { z } from 'zod'
-import { sendError } from '../../errors.ts'
-import { addMember, listMembers, updateMember } from '../services/membersService.ts'
+import type { RequestHandler } from 'express';
+import { z } from 'zod';
+import { sendError } from '../../errors.ts';
+import { addMember, listMembers, updateMember } from '../services/membersService.ts';
 
 export const listMembersHandler: RequestHandler = async (req, res) => {
-  const members = await listMembers(req.params.id!)
-  res.status(200).json({ members })
-}
+  const members = await listMembers(req.params.id!);
+  res.status(200).json({ members });
+};
 
 const AddMemberBody = z.object({
   email: z.email(),
   role: z.enum(['agent', 'team_lead']),
-})
+});
 
 export const addMemberHandler: RequestHandler = async (req, res) => {
-  const body = AddMemberBody.safeParse(req.body)
+  const body = AddMemberBody.safeParse(req.body);
   if (!body.success) {
-    sendError(res, 422, 'invalid_request', 'email or role is missing or malformed.')
-    return
+    sendError(res, 422, 'invalid_request', 'email or role is missing or malformed.');
+    return;
   }
-  const member = await addMember({ workspaceId: req.params.id!, email: body.data.email, role: body.data.role })
-  res.status(201).json(member)
-}
+  const member = await addMember({
+    workspaceId: req.params.id!,
+    email: body.data.email,
+    role: body.data.role,
+  });
+  res.status(201).json(member);
+};
 
 const UpdateMemberBody = z.object({
   role: z.enum(['agent', 'team_lead']).optional(),
   remove: z.boolean().optional(),
-})
+});
 
 export const updateMemberHandler: RequestHandler = async (req, res) => {
-  const body = UpdateMemberBody.safeParse(req.body)
+  const body = UpdateMemberBody.safeParse(req.body);
   if (!body.success) {
-    sendError(res, 422, 'invalid_request', 'role or remove is malformed.')
-    return
+    sendError(res, 422, 'invalid_request', 'role or remove is malformed.');
+    return;
   }
   const result = await updateMember({
     workspaceId: req.params.id!,
     agentId: req.params.agentId!,
     role: body.data.role,
     remove: body.data.remove,
-  })
+  });
   if (result === null && !body.data.remove) {
-    sendError(res, 404, 'not_found', 'Member not found in this workspace.')
-    return
+    sendError(res, 404, 'not_found', 'Member not found in this workspace.');
+    return;
   }
-  res.status(200).json(result ?? { removed: true })
-}
+  res.status(200).json(result ?? { removed: true });
+};
 ```
 
 - [ ] **Step 3: Wire the routes**
@@ -1826,159 +1929,180 @@ export const updateMemberHandler: RequestHandler = async (req, res) => {
 In `workspacesRouter.ts`, add:
 
 ```ts
-import { addMemberHandler, listMembersHandler, updateMemberHandler } from '../controllers/membersController.ts'
+import {
+  addMemberHandler,
+  listMembersHandler,
+  updateMemberHandler,
+} from '../controllers/membersController.ts';
 ```
 
 ```ts
-workspacesRouter.get('/workspaces/:id/members', listMembersHandler)
-workspacesRouter.post('/workspaces/:id/members', addMemberHandler)
-workspacesRouter.patch('/workspaces/:id/members/:agentId', updateMemberHandler)
+workspacesRouter.get('/workspaces/:id/members', listMembersHandler);
+workspacesRouter.post('/workspaces/:id/members', addMemberHandler);
+workspacesRouter.patch('/workspaces/:id/members/:agentId', updateMemberHandler);
 ```
 
 - [ ] **Step 4: `admin.members.test.ts`**
 
 ```ts
-import express from 'express'
-import { afterAll, beforeEach, describe, expect, it } from 'vitest'
-import { req as request } from './helpers/http.ts'
-import { closeDb } from '../src/shared/db/client.ts'
-import { closeAdminDb } from '../src/shared/db/adminClient.ts'
-import { errorMiddleware } from '../src/errors.ts'
-import { adminRouter } from '../src/admin/router.ts'
-import { signAgentSession } from '../src/shared/auth/agentSession.ts'
-import { closeOwnerPool, ownerPool, seedAgent, seedWorkspace, seedWorkspaceMember, truncateAll } from './helpers/db.ts'
+import express from 'express';
+import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { req as request } from './helpers/http.ts';
+import { closeDb } from '../src/shared/db/client.ts';
+import { closeAdminDb } from '../src/shared/db/adminClient.ts';
+import { errorMiddleware } from '../src/errors.ts';
+import { adminRouter } from '../src/admin/router.ts';
+import { signAgentSession } from '../src/shared/auth/agentSession.ts';
+import {
+  closeOwnerPool,
+  ownerPool,
+  seedAgent,
+  seedWorkspace,
+  seedWorkspaceMember,
+  truncateAll,
+} from './helpers/db.ts';
 
-const app = express()
-app.use(express.json())
-app.use('/admin', adminRouter)
-app.use(errorMiddleware)
+const app = express();
+app.use(express.json());
+app.use('/admin', adminRouter);
+app.use(errorMiddleware);
 
 afterAll(async () => {
-  await closeDb()
-  await closeAdminDb()
-  await closeOwnerPool()
-})
+  await closeDb();
+  await closeAdminDb();
+  await closeOwnerPool();
+});
 
-beforeEach(truncateAll)
+beforeEach(truncateAll);
 
 async function adminToken(workspaceId: string): Promise<string> {
-  const agentId = await seedAgent(undefined, { isAdmin: true })
-  return signAgentSession({ agent_id: agentId, workspace_id: workspaceId })
+  const agentId = await seedAgent(undefined, { isAdmin: true });
+  return signAgentSession({ agent_id: agentId, workspace_id: workspaceId });
 }
 
 describe('POST /admin/workspaces/:id/members', () => {
   it('invites a brand-new email, creating a pending agent row', async () => {
-    const workspaceId = await seedWorkspace()
-    const token = await adminToken(workspaceId)
+    const workspaceId = await seedWorkspace();
+    const token = await adminToken(workspaceId);
 
     const res = await request(app)
       .post(`/admin/workspaces/${workspaceId}/members`)
       .set('Authorization', `Bearer ${token}`)
       .send({ email: 'new-hire@mindstormstudios.com', role: 'agent' })
-      .expect(201)
+      .expect(201);
 
-    expect(res.body).toMatchObject({ email: 'new-hire@mindstormstudios.com', role: 'agent', status: 'invited' })
-    const { rows } = await ownerPool.query(`select status from agent where email = 'new-hire@mindstormstudios.com'`)
-    expect(rows[0].status).toBe('invited')
-  })
+    expect(res.body).toMatchObject({
+      email: 'new-hire@mindstormstudios.com',
+      role: 'agent',
+      status: 'invited',
+    });
+    const { rows } = await ownerPool.query(
+      `select status from agent where email = 'new-hire@mindstormstudios.com'`,
+    );
+    expect(rows[0].status).toBe('invited');
+  });
 
   it('upserts the role when the email is already a member', async () => {
-    const workspaceId = await seedWorkspace()
-    const existing = await seedAgent('already-here@mindstormstudios.com')
-    await seedWorkspaceMember({ workspaceId, agentId: existing, role: 'agent' })
-    const token = await adminToken(workspaceId)
+    const workspaceId = await seedWorkspace();
+    const existing = await seedAgent('already-here@mindstormstudios.com');
+    await seedWorkspaceMember({ workspaceId, agentId: existing, role: 'agent' });
+    const token = await adminToken(workspaceId);
 
     const res = await request(app)
       .post(`/admin/workspaces/${workspaceId}/members`)
       .set('Authorization', `Bearer ${token}`)
       .send({ email: 'already-here@mindstormstudios.com', role: 'team_lead' })
-      .expect(201)
+      .expect(201);
 
-    expect(res.body.role).toBe('team_lead')
+    expect(res.body.role).toBe('team_lead');
     const { rows } = await ownerPool.query(
       `select role from workspace_member where workspace_id = $1 and agent_id = $2`,
       [workspaceId, existing],
-    )
-    expect(rows).toHaveLength(1)
-    expect(rows[0].role).toBe('team_lead')
-  })
-})
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].role).toBe('team_lead');
+  });
+});
 
 describe('GET /admin/workspaces/:id/members', () => {
   it('lists active members with their role', async () => {
-    const workspaceId = await seedWorkspace()
-    const leadId = await seedAgent('lead@mindstormstudios.com')
-    await seedWorkspaceMember({ workspaceId, agentId: leadId, role: 'team_lead' })
-    const token = await adminToken(workspaceId)
+    const workspaceId = await seedWorkspace();
+    const leadId = await seedAgent('lead@mindstormstudios.com');
+    await seedWorkspaceMember({ workspaceId, agentId: leadId, role: 'team_lead' });
+    const token = await adminToken(workspaceId);
 
     const res = await request(app)
       .get(`/admin/workspaces/${workspaceId}/members`)
       .set('Authorization', `Bearer ${token}`)
-      .expect(200)
+      .expect(200);
 
     expect(res.body.members).toEqual([
-      expect.objectContaining({ agent_id: leadId, role: 'team_lead', email: 'lead@mindstormstudios.com' }),
-    ])
-  })
-})
+      expect.objectContaining({
+        agent_id: leadId,
+        role: 'team_lead',
+        email: 'lead@mindstormstudios.com',
+      }),
+    ]);
+  });
+});
 
 describe('PATCH /admin/workspaces/:id/members/:agentId', () => {
   it('changes a member role', async () => {
-    const workspaceId = await seedWorkspace()
-    const memberId = await seedAgent()
-    await seedWorkspaceMember({ workspaceId, agentId: memberId, role: 'agent' })
-    const token = await adminToken(workspaceId)
+    const workspaceId = await seedWorkspace();
+    const memberId = await seedAgent();
+    await seedWorkspaceMember({ workspaceId, agentId: memberId, role: 'agent' });
+    const token = await adminToken(workspaceId);
 
     const res = await request(app)
       .patch(`/admin/workspaces/${workspaceId}/members/${memberId}`)
       .set('Authorization', `Bearer ${token}`)
       .send({ role: 'team_lead' })
-      .expect(200)
+      .expect(200);
 
-    expect(res.body.role).toBe('team_lead')
-  })
+    expect(res.body.role).toBe('team_lead');
+  });
 
   it('removes access by setting deactivated_at, not deleting the row, for an already-active member', async () => {
-    const workspaceId = await seedWorkspace()
-    const memberId = await seedAgent()
-    await seedWorkspaceMember({ workspaceId, agentId: memberId, role: 'agent' })
-    const token = await adminToken(workspaceId)
+    const workspaceId = await seedWorkspace();
+    const memberId = await seedAgent();
+    await seedWorkspaceMember({ workspaceId, agentId: memberId, role: 'agent' });
+    const token = await adminToken(workspaceId);
 
     await request(app)
       .patch(`/admin/workspaces/${workspaceId}/members/${memberId}`)
       .set('Authorization', `Bearer ${token}`)
       .send({ remove: true })
-      .expect(200)
+      .expect(200);
 
     const { rows } = await ownerPool.query(
       `select deactivated_at from workspace_member where workspace_id = $1 and agent_id = $2`,
       [workspaceId, memberId],
-    )
-    expect(rows[0].deactivated_at).not.toBeNull()
-  })
+    );
+    expect(rows[0].deactivated_at).not.toBeNull();
+  });
 
   it('deletes the pending row outright when removing an invited (never-logged-in) member', async () => {
-    const workspaceId = await seedWorkspace()
-    const token = await adminToken(workspaceId)
+    const workspaceId = await seedWorkspace();
+    const token = await adminToken(workspaceId);
     const created = await request(app)
       .post(`/admin/workspaces/${workspaceId}/members`)
       .set('Authorization', `Bearer ${token}`)
       .send({ email: 'pending@mindstormstudios.com', role: 'agent' })
-      .expect(201)
+      .expect(201);
 
     await request(app)
       .patch(`/admin/workspaces/${workspaceId}/members/${created.body.agent_id}`)
       .set('Authorization', `Bearer ${token}`)
       .send({ remove: true })
-      .expect(200)
+      .expect(200);
 
     const { rows } = await ownerPool.query(
       `select * from workspace_member where workspace_id = $1 and agent_id = $2`,
       [workspaceId, created.body.agent_id],
-    )
-    expect(rows).toHaveLength(0)
-  })
-})
+    );
+    expect(rows).toHaveLength(0);
+  });
+});
 ```
 
 - [ ] **Step 5: Run and commit**
@@ -1996,35 +2120,37 @@ git commit -m "Add /admin/workspaces/:id/members list/add/update"
 ### Task 15: Workspace secret — view metadata, rotate
 
 **Files:**
+
 - Create: `backend/src/admin/services/secretService.ts`
 - Create: `backend/src/admin/controllers/secretController.ts`
 - Modify: `backend/src/admin/routers/workspacesRouter.ts`
 - Test: `backend/tests/admin.secret.test.ts`
 
 **Interfaces:**
+
 - Consumes: `generateWorkspaceSecret` (existing, `shared/auth/workspaceSecret.ts`).
 - Produces: `getSecretMetadata(workspaceId: string): Promise<{ created_at: Date; expires_at: Date | null }[]>`, `rotateSecret(workspaceId: string, slug: string): Promise<{ secret: string; created_at: Date }>`.
 
 - [ ] **Step 1: `secretService.ts`**
 
 ```ts
-import { and, desc, eq, isNull } from 'drizzle-orm'
-import { adminDb } from '../../shared/db/adminClient.ts'
-import { workspaceSecret } from '../../shared/db/schema/index.ts'
-import { generateWorkspaceSecret } from '../../shared/auth/workspaceSecret.ts'
+import { and, desc, eq, isNull } from 'drizzle-orm';
+import { adminDb } from '../../shared/db/adminClient.ts';
+import { workspaceSecret } from '../../shared/db/schema/index.ts';
+import { generateWorkspaceSecret } from '../../shared/auth/workspaceSecret.ts';
 
-const GRACE_WINDOW_MS = 24 * 60 * 60 * 1000
+const GRACE_WINDOW_MS = 24 * 60 * 60 * 1000;
 
-export type SecretMetadata = { created_at: Date; expires_at: Date | null }
+export type SecretMetadata = { created_at: Date; expires_at: Date | null };
 
 export async function getSecretMetadata(workspaceId: string): Promise<SecretMetadata[]> {
   const rows = await adminDb
     .select({ createdAt: workspaceSecret.createdAt, expiresAt: workspaceSecret.expiresAt })
     .from(workspaceSecret)
     .where(and(eq(workspaceSecret.workspaceId, workspaceId), isNull(workspaceSecret.revokedAt)))
-    .orderBy(desc(workspaceSecret.createdAt))
+    .orderBy(desc(workspaceSecret.createdAt));
 
-  return rows.map((row) => ({ created_at: row.createdAt, expires_at: row.expiresAt }))
+  return rows.map((row) => ({ created_at: row.createdAt, expires_at: row.expiresAt }));
 }
 
 /**
@@ -2033,48 +2159,61 @@ export async function getSecretMetadata(workspaceId: string): Promise<SecretMeta
  * backend with the new secret without an outage. Returns the raw secret exactly
  * once — it is never retrievable again after this call returns.
  */
-export async function rotateSecret(workspaceId: string, slug: string): Promise<{ secret: string; created_at: Date }> {
-  const { secret, secretHash } = generateWorkspaceSecret(slug)
+export async function rotateSecret(
+  workspaceId: string,
+  slug: string,
+): Promise<{ secret: string; created_at: Date }> {
+  const { secret, secretHash } = generateWorkspaceSecret(slug);
 
   await adminDb
     .update(workspaceSecret)
     .set({ expiresAt: new Date(Date.now() + GRACE_WINDOW_MS) })
-    .where(and(eq(workspaceSecret.workspaceId, workspaceId), isNull(workspaceSecret.expiresAt), isNull(workspaceSecret.revokedAt)))
+    .where(
+      and(
+        eq(workspaceSecret.workspaceId, workspaceId),
+        isNull(workspaceSecret.expiresAt),
+        isNull(workspaceSecret.revokedAt),
+      ),
+    );
 
   const [row] = await adminDb
     .insert(workspaceSecret)
     .values({ workspaceId, secretHash })
-    .returning({ createdAt: workspaceSecret.createdAt })
-  if (!row) throw new Error('workspace_secret insert returned nothing')
+    .returning({ createdAt: workspaceSecret.createdAt });
+  if (!row) throw new Error('workspace_secret insert returned nothing');
 
-  return { secret, created_at: row.createdAt }
+  return { secret, created_at: row.createdAt };
 }
 ```
 
 - [ ] **Step 2: `secretController.ts`**
 
 ```ts
-import type { RequestHandler } from 'express'
-import { eq } from 'drizzle-orm'
-import { sendError } from '../../errors.ts'
-import { adminDb } from '../../shared/db/adminClient.ts'
-import { workspace } from '../../shared/db/schema/index.ts'
-import { getSecretMetadata, rotateSecret } from '../services/secretService.ts'
+import type { RequestHandler } from 'express';
+import { eq } from 'drizzle-orm';
+import { sendError } from '../../errors.ts';
+import { adminDb } from '../../shared/db/adminClient.ts';
+import { workspace } from '../../shared/db/schema/index.ts';
+import { getSecretMetadata, rotateSecret } from '../services/secretService.ts';
 
 export const getSecretHandler: RequestHandler = async (req, res) => {
-  const metadata = await getSecretMetadata(req.params.id!)
-  res.status(200).json({ secrets: metadata })
-}
+  const metadata = await getSecretMetadata(req.params.id!);
+  res.status(200).json({ secrets: metadata });
+};
 
 export const rotateSecretHandler: RequestHandler = async (req, res) => {
-  const [ws] = await adminDb.select({ slug: workspace.slug }).from(workspace).where(eq(workspace.id, req.params.id!)).limit(1)
+  const [ws] = await adminDb
+    .select({ slug: workspace.slug })
+    .from(workspace)
+    .where(eq(workspace.id, req.params.id!))
+    .limit(1);
   if (!ws) {
-    sendError(res, 404, 'not_found', 'Workspace not found.')
-    return
+    sendError(res, 404, 'not_found', 'Workspace not found.');
+    return;
   }
-  const rotated = await rotateSecret(req.params.id!, ws.slug)
-  res.status(201).json(rotated)
-}
+  const rotated = await rotateSecret(req.params.id!, ws.slug);
+  res.status(201).json(rotated);
+};
 ```
 
 - [ ] **Step 3: Wire the routes**
@@ -2082,84 +2221,96 @@ export const rotateSecretHandler: RequestHandler = async (req, res) => {
 In `workspacesRouter.ts`:
 
 ```ts
-import { getSecretHandler, rotateSecretHandler } from '../controllers/secretController.ts'
+import { getSecretHandler, rotateSecretHandler } from '../controllers/secretController.ts';
 ```
+
 ```ts
-workspacesRouter.get('/workspaces/:id/secret', getSecretHandler)
-workspacesRouter.post('/workspaces/:id/secret/rotate', rotateSecretHandler)
+workspacesRouter.get('/workspaces/:id/secret', getSecretHandler);
+workspacesRouter.post('/workspaces/:id/secret/rotate', rotateSecretHandler);
 ```
 
 - [ ] **Step 4: `admin.secret.test.ts`**
 
 ```ts
-import express from 'express'
-import { afterAll, beforeEach, describe, expect, it } from 'vitest'
-import { req as request } from './helpers/http.ts'
-import { closeDb } from '../src/shared/db/client.ts'
-import { closeAdminDb } from '../src/shared/db/adminClient.ts'
-import { errorMiddleware } from '../src/errors.ts'
-import { adminRouter } from '../src/admin/router.ts'
-import { signAgentSession } from '../src/shared/auth/agentSession.ts'
-import { hashSecret, parseWorkspaceSecret, secretMatches } from '../src/shared/auth/workspaceSecret.ts'
-import { closeOwnerPool, ownerPool, seedAgent, seedWorkspace, seedWorkspaceSecret, truncateAll } from './helpers/db.ts'
+import express from 'express';
+import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { req as request } from './helpers/http.ts';
+import { closeDb } from '../src/shared/db/client.ts';
+import { closeAdminDb } from '../src/shared/db/adminClient.ts';
+import { errorMiddleware } from '../src/errors.ts';
+import { adminRouter } from '../src/admin/router.ts';
+import { signAgentSession } from '../src/shared/auth/agentSession.ts';
+import {
+  hashSecret,
+  parseWorkspaceSecret,
+  secretMatches,
+} from '../src/shared/auth/workspaceSecret.ts';
+import {
+  closeOwnerPool,
+  ownerPool,
+  seedAgent,
+  seedWorkspace,
+  seedWorkspaceSecret,
+  truncateAll,
+} from './helpers/db.ts';
 
-const app = express()
-app.use(express.json())
-app.use('/admin', adminRouter)
-app.use(errorMiddleware)
+const app = express();
+app.use(express.json());
+app.use('/admin', adminRouter);
+app.use(errorMiddleware);
 
 afterAll(async () => {
-  await closeDb()
-  await closeAdminDb()
-  await closeOwnerPool()
-})
+  await closeDb();
+  await closeAdminDb();
+  await closeOwnerPool();
+});
 
-beforeEach(truncateAll)
+beforeEach(truncateAll);
 
 async function adminToken(workspaceId: string): Promise<string> {
-  const agentId = await seedAgent(undefined, { isAdmin: true })
-  return signAgentSession({ agent_id: agentId, workspace_id: workspaceId })
+  const agentId = await seedAgent(undefined, { isAdmin: true });
+  return signAgentSession({ agent_id: agentId, workspace_id: workspaceId });
 }
 
 describe('POST /admin/workspaces/:id/secret/rotate', () => {
   it('returns a new raw secret once and gives the old row a 24h expiry', async () => {
-    const workspaceId = await seedWorkspace({ slug: 'rotate-me' })
-    await seedWorkspaceSecret({ workspaceId, secretHash: hashSecret('old-raw-secret') })
-    const token = await adminToken(workspaceId)
+    const workspaceId = await seedWorkspace({ slug: 'rotate-me' });
+    await seedWorkspaceSecret({ workspaceId, secretHash: hashSecret('old-raw-secret') });
+    const token = await adminToken(workspaceId);
 
     const res = await request(app)
       .post(`/admin/workspaces/${workspaceId}/secret/rotate`)
       .set('Authorization', `Bearer ${token}`)
-      .expect(201)
+      .expect(201);
 
-    const parsed = parseWorkspaceSecret(res.body.secret)
-    expect(parsed?.slug).toBe('rotate-me')
-    expect(secretMatches(parsed!.raw, hashSecret(parsed!.raw))).toBe(true)
+    const parsed = parseWorkspaceSecret(res.body.secret);
+    expect(parsed?.slug).toBe('rotate-me');
+    expect(secretMatches(parsed!.raw, hashSecret(parsed!.raw))).toBe(true);
 
     const { rows } = await ownerPool.query(
       `select expires_at from workspace_secret where workspace_id = $1 and secret_hash = $2`,
       [workspaceId, hashSecret('old-raw-secret')],
-    )
-    expect(rows[0].expires_at).not.toBeNull()
-  })
-})
+    );
+    expect(rows[0].expires_at).not.toBeNull();
+  });
+});
 
 describe('GET /admin/workspaces/:id/secret', () => {
   it('never returns the raw secret, only metadata', async () => {
-    const workspaceId = await seedWorkspace()
-    await seedWorkspaceSecret({ workspaceId, secretHash: hashSecret('some-secret') })
-    const token = await adminToken(workspaceId)
+    const workspaceId = await seedWorkspace();
+    await seedWorkspaceSecret({ workspaceId, secretHash: hashSecret('some-secret') });
+    const token = await adminToken(workspaceId);
 
     const res = await request(app)
       .get(`/admin/workspaces/${workspaceId}/secret`)
       .set('Authorization', `Bearer ${token}`)
-      .expect(200)
+      .expect(200);
 
-    expect(res.body.secrets).toHaveLength(1)
-    expect(JSON.stringify(res.body)).not.toContain('some-secret')
-    expect(res.body.secrets[0]).not.toHaveProperty('secret_hash')
-  })
-})
+    expect(res.body.secrets).toHaveLength(1);
+    expect(JSON.stringify(res.body)).not.toContain('some-secret');
+    expect(res.body.secrets[0]).not.toHaveProperty('secret_hash');
+  });
+});
 ```
 
 - [ ] **Step 5: Run and commit**
@@ -2177,6 +2328,7 @@ git commit -m "Add /admin/workspaces/:id/secret get and rotate (24h grace window
 ### Task 16: Agent directory, admin/super-admin grant
 
 **Files:**
+
 - Create: `backend/src/admin/services/agentsService.ts`
 - Create: `backend/src/admin/controllers/agentsController.ts`
 - Create: `backend/src/admin/routers/agentsRouter.ts`
@@ -2184,31 +2336,32 @@ git commit -m "Add /admin/workspaces/:id/secret get and rotate (24h grace window
 - Test: `backend/tests/admin.agents.test.ts`
 
 **Interfaces:**
+
 - Produces: `listAgents(query?: string): Promise<AgentSummary[]>`, `setAdminFlag(args: { targetAgentId: string; callerAgentId: string; isAdmin: boolean }): Promise<AgentSummary>` (throws `SelfDemotion`), `setSuperAdminFlag(args: { targetAgentId: string; callerAgentId: string; isSuperAdmin: boolean }): Promise<AgentSummary>` (throws `SelfDemotion` or `LastSuperAdmin`).
 
 - [ ] **Step 1: `agentsService.ts`**
 
 ```ts
-import { count, eq, ilike, or } from 'drizzle-orm'
-import { adminDb } from '../../shared/db/adminClient.ts'
-import { agent } from '../../shared/db/schema/index.ts'
+import { count, eq, ilike, or } from 'drizzle-orm';
+import { adminDb } from '../../shared/db/adminClient.ts';
+import { agent } from '../../shared/db/schema/index.ts';
 
 export type AgentSummary = {
-  id: string
-  email: string
-  display_name: string
-  status: string
-  is_admin: boolean
-  is_super_admin: boolean
-}
+  id: string;
+  email: string;
+  display_name: string;
+  status: string;
+  is_admin: boolean;
+  is_super_admin: boolean;
+};
 
 function toSummary(row: {
-  id: string
-  email: string
-  displayName: string
-  status: string
-  isAdmin: boolean
-  isSuperAdmin: boolean
+  id: string;
+  email: string;
+  displayName: string;
+  status: string;
+  isAdmin: boolean;
+  isSuperAdmin: boolean;
 }): AgentSummary {
   return {
     id: row.id,
@@ -2217,7 +2370,7 @@ function toSummary(row: {
     status: row.status,
     is_admin: row.isAdmin,
     is_super_admin: row.isSuperAdmin,
-  }
+  };
 }
 
 export async function listAgents(query?: string): Promise<AgentSummary[]> {
@@ -2231,22 +2384,26 @@ export async function listAgents(query?: string): Promise<AgentSummary[]> {
       isSuperAdmin: agent.isSuperAdmin,
     })
     .from(agent)
-    .where(query ? or(ilike(agent.email, `%${query}%`), ilike(agent.displayName, `%${query}%`)) : undefined)
-    .orderBy(agent.displayName)
+    .where(
+      query
+        ? or(ilike(agent.email, `%${query}%`), ilike(agent.displayName, `%${query}%`))
+        : undefined,
+    )
+    .orderBy(agent.displayName);
 
-  return rows.map(toSummary)
+  return rows.map(toSummary);
 }
 
 export class SelfDemotion extends Error {}
 export class LastSuperAdmin extends Error {}
 
 export async function setAdminFlag(args: {
-  targetAgentId: string
-  callerAgentId: string
-  isAdmin: boolean
+  targetAgentId: string;
+  callerAgentId: string;
+  isAdmin: boolean;
 }): Promise<AgentSummary> {
   if (!args.isAdmin && args.targetAgentId === args.callerAgentId) {
-    throw new SelfDemotion()
+    throw new SelfDemotion();
   }
   const [row] = await adminDb
     .update(agent)
@@ -2259,25 +2416,25 @@ export async function setAdminFlag(args: {
       status: agent.status,
       isAdmin: agent.isAdmin,
       isSuperAdmin: agent.isSuperAdmin,
-    })
-  if (!row) throw new Error('agent not found')
-  return toSummary(row)
+    });
+  if (!row) throw new Error('agent not found');
+  return toSummary(row);
 }
 
 export async function setSuperAdminFlag(args: {
-  targetAgentId: string
-  callerAgentId: string
-  isSuperAdmin: boolean
+  targetAgentId: string;
+  callerAgentId: string;
+  isSuperAdmin: boolean;
 }): Promise<AgentSummary> {
   if (!args.isSuperAdmin && args.targetAgentId === args.callerAgentId) {
-    throw new SelfDemotion()
+    throw new SelfDemotion();
   }
   if (!args.isSuperAdmin) {
     const [{ remaining }] = await adminDb
       .select({ remaining: count() })
       .from(agent)
-      .where(eq(agent.isSuperAdmin, true))
-    if (remaining <= 1) throw new LastSuperAdmin()
+      .where(eq(agent.isSuperAdmin, true));
+    if (remaining <= 1) throw new LastSuperAdmin();
   }
   const [row] = await adminDb
     .update(agent)
@@ -2290,86 +2447,101 @@ export async function setSuperAdminFlag(args: {
       status: agent.status,
       isAdmin: agent.isAdmin,
       isSuperAdmin: agent.isSuperAdmin,
-    })
-  if (!row) throw new Error('agent not found')
-  return toSummary(row)
+    });
+  if (!row) throw new Error('agent not found');
+  return toSummary(row);
 }
 ```
 
 - [ ] **Step 2: `agentsController.ts`**
 
 ```ts
-import type { RequestHandler } from 'express'
-import { z } from 'zod'
-import { sendError } from '../../errors.ts'
-import { LastSuperAdmin, listAgents, SelfDemotion, setAdminFlag, setSuperAdminFlag } from '../services/agentsService.ts'
+import type { RequestHandler } from 'express';
+import { z } from 'zod';
+import { sendError } from '../../errors.ts';
+import {
+  LastSuperAdmin,
+  listAgents,
+  SelfDemotion,
+  setAdminFlag,
+  setSuperAdminFlag,
+} from '../services/agentsService.ts';
 
 export const listAgentsHandler: RequestHandler = async (req, res) => {
-  const query = typeof req.query.q === 'string' ? req.query.q : undefined
-  const agents = await listAgents(query)
-  res.status(200).json({ agents })
-}
+  const query = typeof req.query.q === 'string' ? req.query.q : undefined;
+  const agents = await listAgents(query);
+  res.status(200).json({ agents });
+};
 
 export const setAdminHandler: RequestHandler = async (req, res) => {
-  const body = z.object({ is_admin: z.boolean() }).safeParse(req.body)
+  const body = z.object({ is_admin: z.boolean() }).safeParse(req.body);
   if (!body.success) {
-    sendError(res, 422, 'invalid_request', 'is_admin is missing or malformed.')
-    return
+    sendError(res, 422, 'invalid_request', 'is_admin is missing or malformed.');
+    return;
   }
   try {
     const updated = await setAdminFlag({
       targetAgentId: req.params.id!,
       callerAgentId: req.agent!.agentId,
       isAdmin: body.data.is_admin,
-    })
-    res.status(200).json(updated)
+    });
+    res.status(200).json(updated);
   } catch (error) {
     if (error instanceof SelfDemotion) {
-      sendError(res, 422, 'invalid_value', 'A super admin cannot revoke their own admin access.')
-      return
+      sendError(res, 422, 'invalid_value', 'A super admin cannot revoke their own admin access.');
+      return;
     }
-    throw error
+    throw error;
   }
-}
+};
 
 export const setSuperAdminHandler: RequestHandler = async (req, res) => {
-  const body = z.object({ is_super_admin: z.boolean() }).safeParse(req.body)
+  const body = z.object({ is_super_admin: z.boolean() }).safeParse(req.body);
   if (!body.success) {
-    sendError(res, 422, 'invalid_request', 'is_super_admin is missing or malformed.')
-    return
+    sendError(res, 422, 'invalid_request', 'is_super_admin is missing or malformed.');
+    return;
   }
   try {
     const updated = await setSuperAdminFlag({
       targetAgentId: req.params.id!,
       callerAgentId: req.agent!.agentId,
       isSuperAdmin: body.data.is_super_admin,
-    })
-    res.status(200).json(updated)
+    });
+    res.status(200).json(updated);
   } catch (error) {
     if (error instanceof SelfDemotion) {
-      sendError(res, 422, 'invalid_value', 'A super admin cannot revoke their own super admin access.')
-      return
+      sendError(
+        res,
+        422,
+        'invalid_value',
+        'A super admin cannot revoke their own super admin access.',
+      );
+      return;
     }
     if (error instanceof LastSuperAdmin) {
-      sendError(res, 422, 'invalid_value', 'Cannot remove the last super admin.')
-      return
+      sendError(res, 422, 'invalid_value', 'Cannot remove the last super admin.');
+      return;
     }
-    throw error
+    throw error;
   }
-}
+};
 ```
 
 - [ ] **Step 3: `agentsRouter.ts`**
 
 ```ts
-import { Router } from 'express'
-import { requireSuperAdminAccess } from '../../shared/middleware/requireSuperAdminAccess.ts'
-import { listAgentsHandler, setAdminHandler, setSuperAdminHandler } from '../controllers/agentsController.ts'
+import { Router } from 'express';
+import { requireSuperAdminAccess } from '../../shared/middleware/requireSuperAdminAccess.ts';
+import {
+  listAgentsHandler,
+  setAdminHandler,
+  setSuperAdminHandler,
+} from '../controllers/agentsController.ts';
 
-export const agentsRouter = Router()
-agentsRouter.get('/agents', listAgentsHandler)
-agentsRouter.patch('/agents/:id/admin', requireSuperAdminAccess, setAdminHandler)
-agentsRouter.patch('/agents/:id/super-admin', requireSuperAdminAccess, setSuperAdminHandler)
+export const agentsRouter = Router();
+agentsRouter.get('/agents', listAgentsHandler);
+agentsRouter.patch('/agents/:id/admin', requireSuperAdminAccess, setAdminHandler);
+agentsRouter.patch('/agents/:id/super-admin', requireSuperAdminAccess, setSuperAdminHandler);
 ```
 
 - [ ] **Step 4: Wire into `admin/router.ts`**
@@ -2379,111 +2551,130 @@ Add `import { agentsRouter } from './routers/agentsRouter.ts'` and `adminRouter.
 - [ ] **Step 5: `admin.agents.test.ts`**
 
 ```ts
-import express from 'express'
-import { afterAll, beforeEach, describe, expect, it } from 'vitest'
-import { req as request } from './helpers/http.ts'
-import { closeDb } from '../src/shared/db/client.ts'
-import { closeAdminDb } from '../src/shared/db/adminClient.ts'
-import { errorMiddleware } from '../src/errors.ts'
-import { adminRouter } from '../src/admin/router.ts'
-import { signAgentSession } from '../src/shared/auth/agentSession.ts'
-import { closeOwnerPool, seedAgent, seedWorkspace, truncateAll } from './helpers/db.ts'
+import express from 'express';
+import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { req as request } from './helpers/http.ts';
+import { closeDb } from '../src/shared/db/client.ts';
+import { closeAdminDb } from '../src/shared/db/adminClient.ts';
+import { errorMiddleware } from '../src/errors.ts';
+import { adminRouter } from '../src/admin/router.ts';
+import { signAgentSession } from '../src/shared/auth/agentSession.ts';
+import { closeOwnerPool, seedAgent, seedWorkspace, truncateAll } from './helpers/db.ts';
 
-const app = express()
-app.use(express.json())
-app.use('/admin', adminRouter)
-app.use(errorMiddleware)
+const app = express();
+app.use(express.json());
+app.use('/admin', adminRouter);
+app.use(errorMiddleware);
 
 afterAll(async () => {
-  await closeDb()
-  await closeAdminDb()
-  await closeOwnerPool()
-})
+  await closeDb();
+  await closeAdminDb();
+  await closeOwnerPool();
+});
 
-beforeEach(truncateAll)
+beforeEach(truncateAll);
 
 describe('GET /admin/agents', () => {
   it('lists the directory, filterable by email/name', async () => {
-    const workspaceId = await seedWorkspace()
-    const admin = await seedAgent('super@mindstormstudios.com', { isAdmin: true, isSuperAdmin: true })
-    await seedAgent('nomatch@mindstormstudios.com')
-    const token = await signAgentSession({ agent_id: admin, workspace_id: workspaceId })
+    const workspaceId = await seedWorkspace();
+    const admin = await seedAgent('super@mindstormstudios.com', {
+      isAdmin: true,
+      isSuperAdmin: true,
+    });
+    await seedAgent('nomatch@mindstormstudios.com');
+    const token = await signAgentSession({ agent_id: admin, workspace_id: workspaceId });
 
     const res = await request(app)
       .get('/admin/agents?q=super')
       .set('Authorization', `Bearer ${token}`)
-      .expect(200)
+      .expect(200);
 
-    expect(res.body.agents).toHaveLength(1)
-    expect(res.body.agents[0]).toMatchObject({ email: 'super@mindstormstudios.com', is_admin: true, is_super_admin: true })
-  })
-})
+    expect(res.body.agents).toHaveLength(1);
+    expect(res.body.agents[0]).toMatchObject({
+      email: 'super@mindstormstudios.com',
+      is_admin: true,
+      is_super_admin: true,
+    });
+  });
+});
 
 describe('PATCH /admin/agents/:id/admin', () => {
   it('super admin grants admin to another agent', async () => {
-    const workspaceId = await seedWorkspace()
-    const superAdmin = await seedAgent('super@mindstormstudios.com', { isAdmin: true, isSuperAdmin: true })
-    const target = await seedAgent('target@mindstormstudios.com')
-    const token = await signAgentSession({ agent_id: superAdmin, workspace_id: workspaceId })
+    const workspaceId = await seedWorkspace();
+    const superAdmin = await seedAgent('super@mindstormstudios.com', {
+      isAdmin: true,
+      isSuperAdmin: true,
+    });
+    const target = await seedAgent('target@mindstormstudios.com');
+    const token = await signAgentSession({ agent_id: superAdmin, workspace_id: workspaceId });
 
     const res = await request(app)
       .patch(`/admin/agents/${target}/admin`)
       .set('Authorization', `Bearer ${token}`)
       .send({ is_admin: true })
-      .expect(200)
+      .expect(200);
 
-    expect(res.body.is_admin).toBe(true)
-  })
+    expect(res.body.is_admin).toBe(true);
+  });
 
   it('refuses a plain admin (not super admin) with 403', async () => {
-    const workspaceId = await seedWorkspace()
-    const plainAdmin = await seedAgent('admin@mindstormstudios.com', { isAdmin: true })
-    const target = await seedAgent('target@mindstormstudios.com')
-    const token = await signAgentSession({ agent_id: plainAdmin, workspace_id: workspaceId })
+    const workspaceId = await seedWorkspace();
+    const plainAdmin = await seedAgent('admin@mindstormstudios.com', { isAdmin: true });
+    const target = await seedAgent('target@mindstormstudios.com');
+    const token = await signAgentSession({ agent_id: plainAdmin, workspace_id: workspaceId });
 
     await request(app)
       .patch(`/admin/agents/${target}/admin`)
       .set('Authorization', `Bearer ${token}`)
       .send({ is_admin: true })
-      .expect(403)
-  })
-})
+      .expect(403);
+  });
+});
 
 describe('PATCH /admin/agents/:id/super-admin', () => {
   it('blocks a super admin from revoking their own flag', async () => {
-    const workspaceId = await seedWorkspace()
-    const superAdmin = await seedAgent('super@mindstormstudios.com', { isAdmin: true, isSuperAdmin: true })
+    const workspaceId = await seedWorkspace();
+    const superAdmin = await seedAgent('super@mindstormstudios.com', {
+      isAdmin: true,
+      isSuperAdmin: true,
+    });
     // A second super admin so "last super admin" is not the reason for the 422.
-    await seedAgent('other-super@mindstormstudios.com', { isAdmin: true, isSuperAdmin: true })
-    const token = await signAgentSession({ agent_id: superAdmin, workspace_id: workspaceId })
+    await seedAgent('other-super@mindstormstudios.com', { isAdmin: true, isSuperAdmin: true });
+    const token = await signAgentSession({ agent_id: superAdmin, workspace_id: workspaceId });
 
     await request(app)
       .patch(`/admin/agents/${superAdmin}/super-admin`)
       .set('Authorization', `Bearer ${token}`)
       .send({ is_super_admin: false })
-      .expect(422)
-  })
+      .expect(422);
+  });
 
   it('blocks revoking the last super admin', async () => {
-    const workspaceId = await seedWorkspace()
-    const onlySuperAdmin = await seedAgent('only-super@mindstormstudios.com', { isAdmin: true, isSuperAdmin: true })
-    const otherAdmin = await seedAgent('admin2@mindstormstudios.com', { isAdmin: true, isSuperAdmin: true })
-    const token = await signAgentSession({ agent_id: otherAdmin, workspace_id: workspaceId })
+    const workspaceId = await seedWorkspace();
+    const onlySuperAdmin = await seedAgent('only-super@mindstormstudios.com', {
+      isAdmin: true,
+      isSuperAdmin: true,
+    });
+    const otherAdmin = await seedAgent('admin2@mindstormstudios.com', {
+      isAdmin: true,
+      isSuperAdmin: true,
+    });
+    const token = await signAgentSession({ agent_id: otherAdmin, workspace_id: workspaceId });
 
     await request(app)
       .patch(`/admin/agents/${onlySuperAdmin}/super-admin`)
       .set('Authorization', `Bearer ${token}`)
       .send({ is_super_admin: false })
-      .expect(200) // otherAdmin revoking onlySuperAdmin is fine — two exist before this call
+      .expect(200); // otherAdmin revoking onlySuperAdmin is fine — two exist before this call
 
     // Now only `otherAdmin` remains a super admin — revoking them must be blocked.
     await request(app)
       .patch(`/admin/agents/${otherAdmin}/super-admin`)
       .set('Authorization', `Bearer ${token}`)
       .send({ is_super_admin: false })
-      .expect(422)
-  })
-})
+      .expect(422);
+  });
+});
 ```
 
 - [ ] **Step 6: Run and commit**
@@ -2501,10 +2692,12 @@ git commit -m "Add agent directory and admin/super-admin grant endpoints"
 ### Task 17: Mount `/admin` in `app.ts`, register everything in `openapi.ts`
 
 **Files:**
+
 - Modify: `backend/src/app.ts`
 - Modify: `backend/src/docs/openapi.ts`
 
 **Interfaces:**
+
 - Consumes: `adminRouter` (Task 12).
 
 - [ ] **Step 1: Mount the router**
@@ -2512,13 +2705,13 @@ git commit -m "Add agent directory and admin/super-admin grant endpoints"
 In `backend/src/app.ts`, add the import alongside the existing router imports:
 
 ```ts
-import { adminRouter } from './admin/router.ts'
+import { adminRouter } from './admin/router.ts';
 ```
 
 and mount it alongside the existing `app.use('/agent', agentRouter)` line:
 
 ```ts
-  app.use('/admin', adminRouter)
+app.use('/admin', adminRouter);
 ```
 
 - [ ] **Step 2: Register OpenAPI schemas**
@@ -2532,14 +2725,14 @@ const WorkspaceSummarySchema = z.object({
   slug: z.string(),
   member_count: z.number().int().nonnegative(),
   created_at: z.string(),
-})
+});
 
 const CreateWorkspaceBodySchema = z.object({
   name: z.string().min(1).max(200).openapi({ example: 'My New Game' }),
   slug: z.string().min(1).max(63).openapi({ example: 'my-new-game' }),
-})
+});
 
-const RenameWorkspaceBodySchema = z.object({ name: z.string().min(1).max(200) })
+const RenameWorkspaceBodySchema = z.object({ name: z.string().min(1).max(200) });
 
 const MemberSummarySchema = z.object({
   agent_id: z.uuid(),
@@ -2547,27 +2740,27 @@ const MemberSummarySchema = z.object({
   display_name: z.string(),
   status: z.enum(['active', 'on_leave', 'deactivated', 'invited']),
   role: z.enum(['agent', 'team_lead']),
-})
+});
 
 const AddMemberBodySchema = z.object({
   email: z.email().openapi({ example: 'new-hire@mindstormstudios.com' }),
   role: z.enum(['agent', 'team_lead']),
-})
+});
 
 const UpdateMemberBodySchema = z.object({
   role: z.enum(['agent', 'team_lead']).optional(),
   remove: z.boolean().optional(),
-})
+});
 
 const SecretMetadataSchema = z.object({
   created_at: z.string(),
   expires_at: z.string().nullable(),
-})
+});
 
 const RotatedSecretSchema = z.object({
   secret: z.string().openapi({ description: 'Raw secret — shown exactly once.' }),
   created_at: z.string(),
-})
+});
 
 const AgentSummarySchema = z.object({
   id: z.uuid(),
@@ -2576,14 +2769,15 @@ const AgentSummarySchema = z.object({
   status: z.enum(['active', 'on_leave', 'deactivated', 'invited']),
   is_admin: z.boolean(),
   is_super_admin: z.boolean(),
-})
+});
 
 const bearerAgentSession = registry.registerComponent('securitySchemes', 'AgentSessionAuth', {
   type: 'http',
   scheme: 'bearer',
   bearerFormat: 'JWT',
-  description: 'Agent session JWT — the caller must additionally have agent.is_admin = true for every /admin/* route.',
-})
+  description:
+    'Agent session JWT — the caller must additionally have agent.is_admin = true for every /admin/* route.',
+});
 
 registry.registerPath({
   method: 'get',
@@ -2593,10 +2787,12 @@ registry.registerPath({
   responses: {
     200: {
       description: 'Every workspace with its member count',
-      content: { 'application/json': { schema: z.object({ workspaces: z.array(WorkspaceSummarySchema) }) } },
+      content: {
+        'application/json': { schema: z.object({ workspaces: z.array(WorkspaceSummarySchema) }) },
+      },
     },
   },
-})
+});
 
 registry.registerPath({
   method: 'post',
@@ -2604,17 +2800,30 @@ registry.registerPath({
   summary: 'Create Workspace',
   security: [{ [bearerAgentSession.name]: [] }],
   request: { body: { content: { 'application/json': { schema: CreateWorkspaceBodySchema } } } },
-  responses: { 201: { description: 'Workspace created', content: { 'application/json': { schema: WorkspaceSummarySchema } } } },
-})
+  responses: {
+    201: {
+      description: 'Workspace created',
+      content: { 'application/json': { schema: WorkspaceSummarySchema } },
+    },
+  },
+});
 
 registry.registerPath({
   method: 'patch',
   path: '/admin/workspaces/{id}',
   summary: 'Rename Workspace',
   security: [{ [bearerAgentSession.name]: [] }],
-  request: { params: z.object({ id: z.uuid() }), body: { content: { 'application/json': { schema: RenameWorkspaceBodySchema } } } },
-  responses: { 200: { description: 'Workspace renamed', content: { 'application/json': { schema: WorkspaceSummarySchema } } } },
-})
+  request: {
+    params: z.object({ id: z.uuid() }),
+    body: { content: { 'application/json': { schema: RenameWorkspaceBodySchema } } },
+  },
+  responses: {
+    200: {
+      description: 'Workspace renamed',
+      content: { 'application/json': { schema: WorkspaceSummarySchema } },
+    },
+  },
+});
 
 registry.registerPath({
   method: 'get',
@@ -2622,17 +2831,32 @@ registry.registerPath({
   summary: 'List Workspace Members',
   security: [{ [bearerAgentSession.name]: [] }],
   request: { params: z.object({ id: z.uuid() }) },
-  responses: { 200: { description: 'Active members', content: { 'application/json': { schema: z.object({ members: z.array(MemberSummarySchema) }) } } } },
-})
+  responses: {
+    200: {
+      description: 'Active members',
+      content: {
+        'application/json': { schema: z.object({ members: z.array(MemberSummarySchema) }) },
+      },
+    },
+  },
+});
 
 registry.registerPath({
   method: 'post',
   path: '/admin/workspaces/{id}/members',
   summary: 'Grant Workspace Access',
   security: [{ [bearerAgentSession.name]: [] }],
-  request: { params: z.object({ id: z.uuid() }), body: { content: { 'application/json': { schema: AddMemberBodySchema } } } },
-  responses: { 201: { description: 'Member granted', content: { 'application/json': { schema: MemberSummarySchema } } } },
-})
+  request: {
+    params: z.object({ id: z.uuid() }),
+    body: { content: { 'application/json': { schema: AddMemberBodySchema } } },
+  },
+  responses: {
+    201: {
+      description: 'Member granted',
+      content: { 'application/json': { schema: MemberSummarySchema } },
+    },
+  },
+});
 
 registry.registerPath({
   method: 'patch',
@@ -2643,8 +2867,13 @@ registry.registerPath({
     params: z.object({ id: z.uuid(), agentId: z.uuid() }),
     body: { content: { 'application/json': { schema: UpdateMemberBodySchema } } },
   },
-  responses: { 200: { description: 'Member updated or removed', content: { 'application/json': { schema: MemberSummarySchema } } } },
-})
+  responses: {
+    200: {
+      description: 'Member updated or removed',
+      content: { 'application/json': { schema: MemberSummarySchema } },
+    },
+  },
+});
 
 registry.registerPath({
   method: 'get',
@@ -2652,18 +2881,31 @@ registry.registerPath({
   summary: 'Get Workspace Secret Metadata',
   security: [{ [bearerAgentSession.name]: [] }],
   request: { params: z.object({ id: z.uuid() }) },
-  responses: { 200: { description: 'Metadata only — never the raw secret', content: { 'application/json': { schema: z.object({ secrets: z.array(SecretMetadataSchema) }) } } } },
-})
+  responses: {
+    200: {
+      description: 'Metadata only — never the raw secret',
+      content: {
+        'application/json': { schema: z.object({ secrets: z.array(SecretMetadataSchema) }) },
+      },
+    },
+  },
+});
 
 registry.registerPath({
   method: 'post',
   path: '/admin/workspaces/{id}/secret/rotate',
   summary: 'Rotate Workspace Secret',
-  description: 'The old secret keeps working for a 24h grace window. The raw new secret is returned exactly once, here.',
+  description:
+    'The old secret keeps working for a 24h grace window. The raw new secret is returned exactly once, here.',
   security: [{ [bearerAgentSession.name]: [] }],
   request: { params: z.object({ id: z.uuid() }) },
-  responses: { 201: { description: 'New secret minted', content: { 'application/json': { schema: RotatedSecretSchema } } } },
-})
+  responses: {
+    201: {
+      description: 'New secret minted',
+      content: { 'application/json': { schema: RotatedSecretSchema } },
+    },
+  },
+});
 
 registry.registerPath({
   method: 'get',
@@ -2671,26 +2913,51 @@ registry.registerPath({
   summary: 'Agent Directory',
   security: [{ [bearerAgentSession.name]: [] }],
   request: { query: z.object({ q: z.string().optional() }) },
-  responses: { 200: { description: 'Every agent, admin flags included', content: { 'application/json': { schema: z.object({ agents: z.array(AgentSummarySchema) }) } } } },
-})
+  responses: {
+    200: {
+      description: 'Every agent, admin flags included',
+      content: {
+        'application/json': { schema: z.object({ agents: z.array(AgentSummarySchema) }) },
+      },
+    },
+  },
+});
 
 registry.registerPath({
   method: 'patch',
   path: '/admin/agents/{id}/admin',
   summary: 'Grant Or Revoke Admin (super admin only)',
   security: [{ [bearerAgentSession.name]: [] }],
-  request: { params: z.object({ id: z.uuid() }), body: { content: { 'application/json': { schema: z.object({ is_admin: z.boolean() }) } } } },
-  responses: { 200: { description: 'Flag updated', content: { 'application/json': { schema: AgentSummarySchema } } } },
-})
+  request: {
+    params: z.object({ id: z.uuid() }),
+    body: { content: { 'application/json': { schema: z.object({ is_admin: z.boolean() }) } } },
+  },
+  responses: {
+    200: {
+      description: 'Flag updated',
+      content: { 'application/json': { schema: AgentSummarySchema } },
+    },
+  },
+});
 
 registry.registerPath({
   method: 'patch',
   path: '/admin/agents/{id}/super-admin',
   summary: 'Grant Or Revoke Super Admin (super admin only)',
   security: [{ [bearerAgentSession.name]: [] }],
-  request: { params: z.object({ id: z.uuid() }), body: { content: { 'application/json': { schema: z.object({ is_super_admin: z.boolean() }) } } } },
-  responses: { 200: { description: 'Flag updated', content: { 'application/json': { schema: AgentSummarySchema } } } },
-})
+  request: {
+    params: z.object({ id: z.uuid() }),
+    body: {
+      content: { 'application/json': { schema: z.object({ is_super_admin: z.boolean() }) } },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Flag updated',
+      content: { 'application/json': { schema: AgentSummarySchema } },
+    },
+  },
+});
 ```
 
 (Place these `registry.registerPath` calls after the file's existing ones, and the schema/component definitions above them alongside the file's existing schema definitions — follow the file's existing top-to-bottom ordering: schemas, then components, then paths.)
@@ -2709,9 +2976,11 @@ git commit -m "Mount /admin router and register its OpenAPI paths"
 ### Task 18: Cross-workspace isolation test
 
 **Files:**
+
 - Modify: `backend/tests/admin.isolation.test.ts`
 
 **Interfaces:**
+
 - Consumes: `adminRouter` (Task 12), `listWorkspaces` (Task 12).
 
 - [ ] **Step 1: Add the cross-workspace and role-boundary assertions**
@@ -2719,36 +2988,42 @@ git commit -m "Mount /admin router and register its OpenAPI paths"
 Append to `backend/tests/admin.isolation.test.ts` (reusing the file's existing `app`/`beforeEach`/`afterAll`, but mounting the real `adminRouter` this time — add a second Express app instance in this file rather than modifying the Task 11 probe app):
 
 ```ts
-import { adminRouter } from '../src/admin/router.ts'
+import { adminRouter } from '../src/admin/router.ts';
 
-const fullApp = express()
-fullApp.use(express.json())
-fullApp.use('/admin', adminRouter)
-fullApp.use(errorMiddleware)
+const fullApp = express();
+fullApp.use(express.json());
+fullApp.use('/admin', adminRouter);
+fullApp.use(errorMiddleware);
 
 describe('admin cross-workspace isolation', () => {
   it('a single admin request reads across every workspace, unlike a normal RLS-scoped request', async () => {
-    const workspaceA = await seedWorkspace({ name: 'Isolated A' })
-    const workspaceB = await seedWorkspace({ name: 'Isolated B' })
-    const adminId = await seedAgent(undefined, { isAdmin: true })
+    const workspaceA = await seedWorkspace({ name: 'Isolated A' });
+    const workspaceB = await seedWorkspace({ name: 'Isolated B' });
+    const adminId = await seedAgent(undefined, { isAdmin: true });
     // Session names workspace A; the admin endpoint must still see workspace B.
-    const token = await signAgentSession({ agent_id: adminId, workspace_id: workspaceA })
+    const token = await signAgentSession({ agent_id: adminId, workspace_id: workspaceA });
 
-    const res = await request(fullApp).get('/admin/workspaces').set('Authorization', `Bearer ${token}`).expect(200)
+    const res = await request(fullApp)
+      .get('/admin/workspaces')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
 
-    const names = res.body.workspaces.map((w: any) => w.name)
-    expect(names).toContain('Isolated A')
-    expect(names).toContain('Isolated B')
-  })
+    const names = res.body.workspaces.map((w: any) => w.name);
+    expect(names).toContain('Isolated A');
+    expect(names).toContain('Isolated B');
+  });
 
   it('a non-admin session is refused by the real admin router at 403, not merely the probe', async () => {
-    const workspaceId = await seedWorkspace()
-    const agentId = await seedAgent()
-    const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId })
+    const workspaceId = await seedWorkspace();
+    const agentId = await seedAgent();
+    const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId });
 
-    await request(fullApp).get('/admin/workspaces').set('Authorization', `Bearer ${token}`).expect(403)
-  })
-})
+    await request(fullApp)
+      .get('/admin/workspaces')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(403);
+  });
+});
 ```
 
 - [ ] **Step 2: Run and commit**

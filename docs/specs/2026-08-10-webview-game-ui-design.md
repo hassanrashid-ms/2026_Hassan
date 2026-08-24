@@ -39,16 +39,16 @@ banner uploads, dark mode, E2E tests.
 
 ## Decisions
 
-| # | Decision | Rationale |
-|---|---|---|
-| 1 | Webview only; agent console untouched | Console migration is a separate project with its own spec |
-| 2 | Game name from `BootstrapResponse`, fallback `"Game Support"` | `workspace.name` already exists; surface contract is explicitly not frozen; no SDK change; cannot drift |
-| 3 | Real React Router routes per screen | Android hardware back works; screens testable in isolation; breaks up the 350-line component |
-| 4 | Light mode, purple accent, semantic tokens | Token layer makes dark mode and per-game rebranding configuration, not a rewrite |
-| 5 | Hero: bundled asset if present, else gradient | Ships now; `<SupportHero imageUrl?>` makes a future server-driven banner a prop, not a redesign |
-| 6 | Root `font-size: clamp()`, everything in `rem` | One line scales Tailwind's entire rem-based scale; no per-component clamp expressions |
-| 7 | shadcn wherever its behaviour is good; hand-built where its look is not | Radix gives focus trapping, scroll locking, ARIA — hard to get right by hand. Game-scale visuals are ours |
-| 8 | Debug button always rendered, small and low-contrast | A dev-only button is useless exactly when field debugging needs it |
+| #   | Decision                                                                | Rationale                                                                                                 |
+| --- | ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| 1   | Webview only; agent console untouched                                   | Console migration is a separate project with its own spec                                                 |
+| 2   | Game name from `BootstrapResponse`, fallback `"Game Support"`           | `workspace.name` already exists; surface contract is explicitly not frozen; no SDK change; cannot drift   |
+| 3   | Real React Router routes per screen                                     | Android hardware back works; screens testable in isolation; breaks up the 350-line component              |
+| 4   | Light mode, purple accent, semantic tokens                              | Token layer makes dark mode and per-game rebranding configuration, not a rewrite                          |
+| 5   | Hero: bundled asset if present, else gradient                           | Ships now; `<SupportHero imageUrl?>` makes a future server-driven banner a prop, not a redesign           |
+| 6   | Root `font-size: clamp()`, everything in `rem`                          | One line scales Tailwind's entire rem-based scale; no per-component clamp expressions                     |
+| 7   | shadcn wherever its behaviour is good; hand-built where its look is not | Radix gives focus trapping, scroll locking, ARIA — hard to get right by hand. Game-scale visuals are ours |
+| 8   | Debug button always rendered, small and low-contrast                    | A dev-only button is useless exactly when field debugging needs it                                        |
 
 ---
 
@@ -62,20 +62,22 @@ Config-less. Install `tailwindcss` and `@tailwindcss/vite`; register the plugin 
 New `frontend/src/webview.css`:
 
 ```css
-@import "tailwindcss";
+@import 'tailwindcss';
 
 @theme {
-  --color-bg:          #ffffff;
-  --color-surface:     #f5f3fd;  /* purple-tinted card background */
-  --color-accent:      #7c3aed;  /* primary purple */
-  --color-accent-soft: #ede9fe;  /* chips, selected tab background */
-  --color-accent-fg:   #ffffff;
-  --color-text:        #1a1720;
-  --color-muted:       #6b6577;
-  --radius-card:       1rem;
+  --color-bg: #ffffff;
+  --color-surface: #f5f3fd; /* purple-tinted card background */
+  --color-accent: #7c3aed; /* primary purple */
+  --color-accent-soft: #ede9fe; /* chips, selected tab background */
+  --color-accent-fg: #ffffff;
+  --color-text: #1a1720;
+  --color-muted: #6b6577;
+  --radius-card: 1rem;
 }
 
-html { font-size: clamp(14px, 4.27vw, 22px); }
+html {
+  font-size: clamp(14px, 4.27vw, 22px);
+}
 ```
 
 `4.27vw` is `16/375` — 16px at a 375px-wide phone, scaling up, capped at 22px so tablets
@@ -114,7 +116,7 @@ the alias is a convenience, not a hole.
 
 Components taken from shadcn: `Sheet`, `Dialog`, `Tabs`, `ScrollArea`, `Skeleton`,
 `Input`, `Badge`. More may be taken where their input behaviour is good; the test is
-whether the component's *behaviour* is worth more than its *default styling* costs.
+whether the component's _behaviour_ is worth more than its _default styling_ costs.
 
 Hand-built: `SupportButton`, `ArticleCard`, `TopBar`, `SearchField`, `SupportHero`,
 chat bubbles.
@@ -124,7 +126,9 @@ chat bubbles.
 `BootstrapResponse` in `packages/types/src/surface.ts` gains:
 
 ```ts
-workspace: { name: string }
+workspace: {
+  name: string;
+}
 ```
 
 Populated in `backend/src/surface/services/bootstrapService.ts` from `workspace.name`.
@@ -166,18 +170,18 @@ Screens consume context. No screen re-fetches bootstrap.
 
 One component, prop-driven per variant:
 
-| Screen | Left | Centre | Right |
-|---|---|---|---|
-| Home | `✕` close | game name | 🔍 search · 💬 chat (unread badge) |
-| Search | — | `Input` (autofocus) | `Cancel` |
-| Chat | `←` back | "Support" | — |
-| Article (deep link) | `←` back | article title | — |
+| Screen              | Left      | Centre              | Right                              |
+| ------------------- | --------- | ------------------- | ---------------------------------- |
+| Home                | `✕` close | game name           | 🔍 search · 💬 chat (unread badge) |
+| Search              | —         | `Input` (autofocus) | `Cancel`                           |
+| Chat                | `←` back  | "Support"           | —                                  |
+| Article (deep link) | `←` back  | article title       | —                                  |
 
 `✕` posts `{ type: 'close' }` over the bridge, unchanged. `←` is `navigate(-1)`.
 
 Game name reads `data.workspace.name` from context, falling back to `"Game Support"`.
 It renders the fallback string during the bootstrap gap rather than a skeleton — the
-fallback *is* the placeholder.
+fallback _is_ the placeholder.
 
 The debug `⋯` sits in the top bar corner on every screen.
 
@@ -283,12 +287,12 @@ moving home → search → home does not refetch.
 
 Every screen renders one of these. No blank regions.
 
-| State | Rendering |
-|---|---|
-| No token | Full-screen message: "This page must be opened by the game." No top bar — there is no session to close. |
+| State                                                                                                       | Rendering                                                                                                                                 |
+| ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| No token                                                                                                    | Full-screen message: "This page must be opened by the game." No top bar — there is no session to close.                                   |
 | Backend unreachable (bootstrap exhausted 15 attempts, or a screen's own request failed with nothing loaded) | Full-screen message with a **retry** button, identical on every screen including chat. New: today the poll simply stops with no way back. |
-| Loading | shadcn `Skeleton` in the shape of the content. Not a spinner. |
-| Empty | Per-screen copy: "No articles yet", "No results for …". |
+| Loading                                                                                                     | shadcn `Skeleton` in the shape of the content. Not a spinner.                                                                             |
+| Empty                                                                                                       | Per-screen copy: "No articles yet", "No results for …".                                                                                   |
 
 Two behaviours preserved deliberately:
 
@@ -300,11 +304,11 @@ Two behaviours preserved deliberately:
 
 ### Superseded: "chat is always reachable"
 
-This originally read *"the chat icon works even when bootstrap failed — no dead ends outranks
-having complete data"*, and the failure screen offered a **Talk to us anyway** button into chat.
+This originally read _"the chat icon works even when bootstrap failed — no dead ends outranks
+having complete data"_, and the failure screen offered a **Talk to us anyway** button into chat.
 
 That conflated two different failures. Chat needing no bootstrap data is true; chat needing no
-*backend* is not. When the API is unreachable the chat screen cannot load a thread and cannot
+_backend_ is not. When the API is unreachable the chat screen cannot load a thread and cannot
 deliver a message, so the button led to an empty thread above a live composer that accepted
 what the player typed and lost it. Worse than a dead end: it looked like it worked.
 
@@ -330,14 +334,14 @@ it is the one action that still works with no backend.
 Vitest is configured; component testing is not. Adds `@testing-library/react` and
 `jsdom`.
 
-| Test | Proves |
-|---|---|
-| `chatReconcile.test.ts` passes untouched | The chat logic move was a move, not a rewrite |
-| `articleSearch.test.ts` passes untouched | Console search path undisturbed |
-| `readBoot` / `scrubToken` | Already-testable pure functions, currently untested |
-| `SupportHero` | Asset when the glob resolves, gradient when it does not |
-| `TopBar` | Fallback game name before bootstrap lands; real name after |
-| Article list order | Renders in API order — the regression guard on Weaviate ranking |
+| Test                                     | Proves                                                          |
+| ---------------------------------------- | --------------------------------------------------------------- |
+| `chatReconcile.test.ts` passes untouched | The chat logic move was a move, not a rewrite                   |
+| `articleSearch.test.ts` passes untouched | Console search path undisturbed                                 |
+| `readBoot` / `scrubToken`                | Already-testable pure functions, currently untested             |
+| `SupportHero`                            | Asset when the glob resolves, gradient when it does not         |
+| `TopBar`                                 | Fallback game name before bootstrap lands; real name after      |
+| Article list order                       | Renders in API order — the regression guard on Weaviate ranking |
 
 Not included: visual regression and E2E. Low value relative to setup cost on a surface
 about to change again.
@@ -346,13 +350,13 @@ about to change again.
 
 ## Risks
 
-| Risk | Mitigation |
-|---|---|
-| Tailwind preflight leaks into the console | `webview.css` imported by `WebviewShell`, never `main.tsx` |
-| Deleting a `styles.css` class the console uses | Grep each class before deleting; verify by usage, not prefix |
-| `@/` alias bypasses surface boundaries | Add the boundaries rule in the same change as the alias |
-| Chat regressions during the move | Behaviour moves unchanged; `chatReconcile.test.ts` must pass untouched |
-| Search relevance silently lost | Explicit no-re-sort rule plus an order test |
+| Risk                                           | Mitigation                                                             |
+| ---------------------------------------------- | ---------------------------------------------------------------------- |
+| Tailwind preflight leaks into the console      | `webview.css` imported by `WebviewShell`, never `main.tsx`             |
+| Deleting a `styles.css` class the console uses | Grep each class before deleting; verify by usage, not prefix           |
+| `@/` alias bypasses surface boundaries         | Add the boundaries rule in the same change as the alias                |
+| Chat regressions during the move               | Behaviour moves unchanged; `chatReconcile.test.ts` must pass untouched |
+| Search relevance silently lost                 | Explicit no-re-sort rule plus an order test                            |
 
 ---
 
@@ -364,7 +368,7 @@ being right and its stated mechanism being insufficient.
 ### The import location does not isolate the console — the chunk boundary does
 
 "`webview.css` is imported by `WebviewShell`, not by `main.tsx`" is necessary but
-not sufficient. Vite concatenates every *statically reachable* stylesheet into one
+not sufficient. Vite concatenates every _statically reachable_ stylesheet into one
 bundle, so with a plain `import` the console still received Tailwind's preflight in
 production even though no console module mentions it. Being the only importer means
 nothing if the importer is in the same chunk.

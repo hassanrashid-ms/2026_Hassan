@@ -1,4 +1,4 @@
-import type { ChatMessage } from '@/features/chat/components/types'
+import type { ChatMessage } from '@/features/chat/components/types';
 
 /**
  * Whether to render "Bot is typing…" under the thread.
@@ -15,15 +15,15 @@ import type { ChatMessage } from '@/features/chat/components/types'
  * anything on the server for the bot to be answering.
  */
 export function showBotTyping(args: {
-  lastMessage: ChatMessage | undefined
-  status: string | undefined
-  settled: boolean
-  confirmPending: boolean
-  hasActiveForm: boolean
+  lastMessage: ChatMessage | undefined;
+  status: string | undefined;
+  settled: boolean;
+  confirmPending: boolean;
+  hasActiveForm: boolean;
 }): boolean {
-  const { lastMessage, status, settled, confirmPending, hasActiveForm } = args
-  if (status !== 'bot_active') return false
-  if (settled || confirmPending || hasActiveForm) return false
-  if (lastMessage?.authorType !== 'player') return false
-  return lastMessage.deliveryState !== 'sending' && lastMessage.deliveryState !== 'failed'
+  const { lastMessage, status, settled, confirmPending, hasActiveForm } = args;
+  if (status !== 'bot_active') return false;
+  if (settled || confirmPending || hasActiveForm) return false;
+  if (lastMessage?.authorType !== 'player') return false;
+  return lastMessage.deliveryState !== 'sending' && lastMessage.deliveryState !== 'failed';
 }

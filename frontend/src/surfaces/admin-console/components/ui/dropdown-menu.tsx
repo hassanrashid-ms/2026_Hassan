@@ -1,13 +1,13 @@
-import * as React from 'react'
-import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu'
-import { CheckIcon } from 'lucide-react'
-import { cn } from '../../lib/cn.ts'
+import * as React from 'react';
+import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
+import { CheckIcon } from 'lucide-react';
+import { cn } from '../../lib/cn.ts';
 
 function DropdownMenu(props: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) {
-  return <DropdownMenuPrimitive.Root {...props} />
+  return <DropdownMenuPrimitive.Root {...props} />;
 }
 function DropdownMenuTrigger(props: React.ComponentProps<typeof DropdownMenuPrimitive.Trigger>) {
-  return <DropdownMenuPrimitive.Trigger {...props} />
+  return <DropdownMenuPrimitive.Trigger {...props} />;
 }
 function DropdownMenuContent({
   className,
@@ -26,12 +26,14 @@ function DropdownMenuContent({
         {...props}
       />
     </DropdownMenuPrimitive.Portal>
-  )
+  );
 }
 function DropdownMenuItem({
   className,
   ...props
-}: React.ComponentProps<typeof DropdownMenuPrimitive.Item> & { variant?: 'default' | 'destructive' }) {
+}: React.ComponentProps<typeof DropdownMenuPrimitive.Item> & {
+  variant?: 'default' | 'destructive';
+}) {
   return (
     <DropdownMenuPrimitive.Item
       className={cn(
@@ -41,7 +43,7 @@ function DropdownMenuItem({
       )}
       {...props}
     />
-  )
+  );
 }
 function DropdownMenuCheckboxItem({
   className,
@@ -66,13 +68,29 @@ function DropdownMenuCheckboxItem({
       </span>
       {children}
     </DropdownMenuPrimitive.CheckboxItem>
-  )
+  );
 }
-function DropdownMenuSeparator({ className, ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Separator>) {
-  return <DropdownMenuPrimitive.Separator className={cn('-mx-1 my-1 h-px bg-slate-100', className)} {...props} />
+function DropdownMenuSeparator({
+  className,
+  ...props
+}: React.ComponentProps<typeof DropdownMenuPrimitive.Separator>) {
+  return (
+    <DropdownMenuPrimitive.Separator
+      className={cn('-mx-1 my-1 h-px bg-slate-100', className)}
+      {...props}
+    />
+  );
 }
-function DropdownMenuLabel({ className, ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Label>) {
-  return <DropdownMenuPrimitive.Label className={cn('px-2 py-1.5 text-xs font-medium text-muted', className)} {...props} />
+function DropdownMenuLabel({
+  className,
+  ...props
+}: React.ComponentProps<typeof DropdownMenuPrimitive.Label>) {
+  return (
+    <DropdownMenuPrimitive.Label
+      className={cn('px-2 py-1.5 text-xs font-medium text-muted', className)}
+      {...props}
+    />
+  );
 }
 
 export {
@@ -83,4 +101,4 @@ export {
   DropdownMenuCheckboxItem,
   DropdownMenuSeparator,
   DropdownMenuLabel,
-}
+};

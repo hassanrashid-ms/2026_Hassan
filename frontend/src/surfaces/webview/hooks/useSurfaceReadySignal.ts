@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react'
-import { onBridgeReady, post } from '@/services/bridgeService'
+import { useEffect, useRef } from 'react';
+import { onBridgeReady, post } from '@/services/bridgeService';
 
 /**
  * Tells the SDK the surface has painted, so it can reveal the native webview and
@@ -17,10 +17,10 @@ import { onBridgeReady, post } from '@/services/bridgeService'
  * over it would strand them behind a spinner.
  */
 export function useSurfaceReadySignal(resolved: boolean): void {
-  const sentRef = useRef(false)
+  const sentRef = useRef(false);
 
   useEffect(() => {
-    if (!resolved) return
+    if (!resolved) return;
 
     // Signalled directly, with NO requestAnimationFrame.
     //
@@ -41,11 +41,11 @@ export function useSurfaceReadySignal(resolved: boolean): void {
     // forever in development. Subscribing is idempotent; sending is what must
     // happen at most once.
     const unsubscribe = onBridgeReady(() => {
-      if (sentRef.current) return
-      sentRef.current = true
-      post({ type: 'surface_ready' })
-    })
+      if (sentRef.current) return;
+      sentRef.current = true;
+      post({ type: 'surface_ready' });
+    });
 
-    return unsubscribe
-  }, [resolved])
+    return unsubscribe;
+  }, [resolved]);
 }

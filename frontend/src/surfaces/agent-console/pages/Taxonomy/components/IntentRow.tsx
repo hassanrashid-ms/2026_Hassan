@@ -1,12 +1,12 @@
-import { useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import type { IntentSubintentView, IntentView } from '@support/types'
-import { archiveIntent, createSubintent, renameIntent } from '../../../api/agentApi.ts'
-import { isAdmin, type StoredAgentSession } from '../../../lib/agentSession.ts'
-import { Badge } from '../../../components/ui/badge.tsx'
-import { Button } from '../../../components/ui/button.tsx'
-import { Input } from '../../../components/ui/input.tsx'
-import { SubintentRow } from './SubintentRow.tsx'
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import type { IntentSubintentView, IntentView } from '@support/types';
+import { archiveIntent, createSubintent, renameIntent } from '../../../api/agentApi.ts';
+import { isAdmin, type StoredAgentSession } from '../../../lib/agentSession.ts';
+import { Badge } from '../../../components/ui/badge.tsx';
+import { Button } from '../../../components/ui/button.tsx';
+import { Input } from '../../../components/ui/input.tsx';
+import { SubintentRow } from './SubintentRow.tsx';
 
 export function IntentRow({
   token,
@@ -15,45 +15,45 @@ export function IntentRow({
   allIntents,
   allSubintents,
 }: {
-  token: string
-  session: StoredAgentSession
-  intent: IntentView
-  allIntents: IntentView[]
-  allSubintents: (IntentSubintentView & { intentId: string; intentName: string })[]
+  token: string;
+  session: StoredAgentSession;
+  intent: IntentView;
+  allIntents: IntentView[];
+  allSubintents: (IntentSubintentView & { intentId: string; intentName: string })[];
 }) {
-  const queryClient = useQueryClient()
-  const admin = isAdmin(session)
-  const [editing, setEditing] = useState(false)
-  const [name, setName] = useState(intent.name)
-  const [addingSubintent, setAddingSubintent] = useState(false)
-  const [newSubintentName, setNewSubintentName] = useState('')
+  const queryClient = useQueryClient();
+  const admin = isAdmin(session);
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(intent.name);
+  const [addingSubintent, setAddingSubintent] = useState(false);
+  const [newSubintentName, setNewSubintentName] = useState('');
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['admin-intents'] })
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['admin-intents'] });
 
   const rename = useMutation({
     mutationFn: () => renameIntent(token, intent.id, name),
     onSuccess: () => {
-      setEditing(false)
-      void invalidate()
+      setEditing(false);
+      void invalidate();
     },
-  })
+  });
 
   const archive = useMutation({
     mutationFn: () => archiveIntent(token, intent.id),
     onSuccess: () => void invalidate(),
-  })
+  });
 
   const addSubintent = useMutation({
     mutationFn: () => createSubintent(token, intent.id, newSubintentName),
     onSuccess: () => {
-      setNewSubintentName('')
-      setAddingSubintent(false)
-      void invalidate()
+      setNewSubintentName('');
+      setAddingSubintent(false);
+      void invalidate();
     },
-  })
+  });
 
-  const hasActiveSubintents = intent.subintents.some((s) => s.archivedAt === null)
-  const archiveDisabled = intent.isSystem || hasActiveSubintents
+  const hasActiveSubintents = intent.subintents.some((s) => s.archivedAt === null);
+  const archiveDisabled = intent.isSystem || hasActiveSubintents;
   // A published-article block is the third condition in the design spec, but
   // detecting it here would mean fetching articles this tree never loads —
   // that case surfaces through archive.error's server message instead.
@@ -61,7 +61,7 @@ export function IntentRow({
     ? 'The "Other" intent can never be archived.'
     : hasActiveSubintents
       ? 'Archive or move every subintent under this intent first.'
-      : undefined
+      : undefined;
 
   return (
     <li className={intent.archivedAt !== null ? 'opacity-60' : undefined}>
@@ -69,7 +69,12 @@ export function IntentRow({
         {editing ? (
           <>
             <Input value={name} onChange={(e) => setName(e.target.value)} className="h-8 w-48" />
-            <Button type="button" size="sm" onClick={() => rename.mutate()} disabled={rename.isPending || !name}>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => rename.mutate()}
+              disabled={rename.isPending || !name}
+            >
               Save
             </Button>
             <Button type="button" size="sm" variant="outline" onClick={() => setEditing(false)}>
@@ -87,7 +92,12 @@ export function IntentRow({
             <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(true)}>
               Rename
             </Button>
-            <Button type="button" size="sm" variant="ghost" onClick={() => setAddingSubintent(true)}>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => setAddingSubintent(true)}
+            >
               + Add subintent
             </Button>
             <span title={archiveDisabledReason}>
@@ -121,7 +131,12 @@ export function IntentRow({
           >
             Add
           </Button>
-          <Button type="button" size="sm" variant="outline" onClick={() => setAddingSubintent(false)}>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => setAddingSubintent(false)}
+          >
             Cancel
           </Button>
         </div>
@@ -142,5 +157,5 @@ export function IntentRow({
         </ul>
       )}
     </li>
-  )
+  );
 }

@@ -4,7 +4,7 @@
 
 **Goal:** Show a single grey tick when a message reached the server and a double blue tick when the other side actually read it, and record the read time in the database.
 
-**Architecture:** The delivery-state machine and both mark-read endpoints already exist. This adds a `message.read_at` timestamp written by the existing mark-read `UPDATE`s, a `message:read` Socket.io event pushed to the *opposite* audience's room so the sender's ticks flip live, and one shared presentational `DeliveryTicks` component rendered by both thread renderers.
+**Architecture:** The delivery-state machine and both mark-read endpoints already exist. This adds a `message.read_at` timestamp written by the existing mark-read `UPDATE`s, a `message:read` Socket.io event pushed to the _opposite_ audience's room so the sender's ticks flip live, and one shared presentational `DeliveryTicks` component rendered by both thread renderers.
 
 **Tech Stack:** TypeScript, Express 5, Drizzle ORM, PostgreSQL 17, Socket.io, Vitest + supertest (backend), React + TanStack Query + Tailwind + Vitest/jsdom + @testing-library/react (frontend).
 
@@ -30,6 +30,7 @@
 Adds the column, threads it through the row type and both serializers. No behaviour change yet — nothing writes a non-null value until Task 2.
 
 **Files:**
+
 - Modify: `packages/types/src/chat.ts:34-41` (`PlayerMessageView`)
 - Modify: `backend/src/shared/db/schema/conversations.ts:45-70` (`message` table)
 - Modify: `backend/src/domain/conversations/postMessage.ts:18-28` (`PostedMessageRow`)
@@ -37,6 +38,7 @@ Adds the column, threads it through the row type and both serializers. No behavi
 - Test: `backend/tests/domain.serializers.test.ts`
 
 **Interfaces:**
+
 - Consumes: nothing.
 - Produces: `PlayerMessageView.read_at: string | null`; `AgentMessageView.read_at: string | null` (inherited, it extends `PlayerMessageView`); `PostedMessageRow.readAt: Date | null`; `message.readAt` Drizzle column mapping `read_at timestamptz null`.
 
@@ -60,7 +62,7 @@ function row(overrides: Partial<PostedMessageRow> = {}): PostedMessageRow {
     createdAt: new Date('2026-08-06T00:00:00Z'),
     readAt: null,
     ...overrides,
-  }
+  };
 }
 ```
 
@@ -69,16 +71,16 @@ Add `read_at: null` to the expected object in the `toPlayerView` "returns the wh
 ```ts
 describe('read_at serialization', () => {
   it('serializes a read timestamp as an ISO string in both views', () => {
-    const read = row({ deliveryState: 'read', readAt: new Date('2026-08-11T10:43:07Z') })
-    expect(toPlayerView(read)?.read_at).toBe('2026-08-11T10:43:07.000Z')
-    expect(toAgentView(read).read_at).toBe('2026-08-11T10:43:07.000Z')
-  })
+    const read = row({ deliveryState: 'read', readAt: new Date('2026-08-11T10:43:07Z') });
+    expect(toPlayerView(read)?.read_at).toBe('2026-08-11T10:43:07.000Z');
+    expect(toAgentView(read).read_at).toBe('2026-08-11T10:43:07.000Z');
+  });
 
   it('serializes an unread message as null, not undefined or an empty string', () => {
-    expect(toPlayerView(row())?.read_at).toBeNull()
-    expect(toAgentView(row()).read_at).toBeNull()
-  })
-})
+    expect(toPlayerView(row())?.read_at).toBeNull();
+    expect(toAgentView(row()).read_at).toBeNull();
+  });
+});
 ```
 
 - [ ] **Step 2: Run the tests to verify they fail**
@@ -93,15 +95,15 @@ In `packages/types/src/chat.ts`, add to `PlayerMessageView`:
 
 ```ts
 export type PlayerMessageView = {
-  id: string
-  seq: number
-  author_type: ChatAuthorType
-  body: string
-  delivery_state: ChatDeliveryState
+  id: string;
+  seq: number;
+  author_type: ChatAuthorType;
+  body: string;
+  delivery_state: ChatDeliveryState;
   /** ISO 8601, or null until the other side reads it. Additive — the frozen contract permits new response fields. */
-  read_at: string | null
-  created_at: string
-}
+  read_at: string | null;
+  created_at: string;
+};
 ```
 
 `AgentMessageView` extends `PlayerMessageView`, so it picks this up with no edit.
@@ -124,9 +126,9 @@ In `backend/src/shared/db/schema/conversations.ts`, inside the `message` table d
 In `backend/src/domain/conversations/postMessage.ts`, add to `PostedMessageRow` after `deliveryState`:
 
 ```ts
-  deliveryState: ChatDeliveryState
-  readAt: Date | null
-  createdAt: Date
+deliveryState: ChatDeliveryState;
+readAt: Date | null;
+createdAt: Date;
 ```
 
 `postMessage` ends with `return inserted`, the full Drizzle row from `.returning()`, so the new column flows through with no other change to that file.
@@ -169,19 +171,29 @@ git commit -m "feat: add message.read_at and expose it in both serializers"
 Both mark-read services stamp `read_at` and start returning enough information for their caller to emit a receipt in Task 3.
 
 **Files:**
+
 - Modify: `backend/src/surface/services/messagesService.ts:115-133`
 - Modify: `backend/src/agent/services/messagesService.ts:68-89`
 - Test: `backend/tests/surface.messages.test.ts`, `backend/tests/agent.messages.test.ts`
 
 **Interfaces:**
+
 - Consumes: `message.readAt` from Task 1.
 - Produces:
+
   ```ts
   // exported from BOTH service modules
-  export type MarkReadResult = { conversationId: string; upToSeq: number; readAt: Date } | null
-  export async function markPlayerMessagesRead(ctx: PlayerContext, body: MarkPlayerReadBodyType): Promise<MarkReadResult>
-  export async function markAgentMessagesRead(ctx: AgentContext, body: z.infer<typeof MarkAgentReadBody>): Promise<MarkReadResult>
+  export type MarkReadResult = { conversationId: string; upToSeq: number; readAt: Date } | null;
+  export async function markPlayerMessagesRead(
+    ctx: PlayerContext,
+    body: MarkPlayerReadBodyType,
+  ): Promise<MarkReadResult>;
+  export async function markAgentMessagesRead(
+    ctx: AgentContext,
+    body: z.infer<typeof MarkAgentReadBody>,
+  ): Promise<MarkReadResult>;
   ```
+
   `null` means "nothing to announce" — either no conversation, or no row transitioned. Both controllers already `await` and discard the return value (`surface/controllers/messagesController.ts:39`, `agent/controllers/messagesController.ts:32`), so widening it from `boolean` breaks no caller and the HTTP response stays `{ ok: true }`.
 
 - [ ] **Step 1: Write the failing tests**
@@ -190,64 +202,71 @@ Append to `backend/tests/surface.messages.test.ts`. `setup()` and `ownerPool` al
 
 ```ts
 describe('POST /surface/messages/read records when the player saw it', () => {
-  it('stamps read_at on agent messages and leaves the player\'s own untouched', async () => {
-    const { workspaceId, playerId, token } = await setup()
-    const conversationId = await seedConversation({ workspaceId, playerId })
+  it("stamps read_at on agent messages and leaves the player's own untouched", async () => {
+    const { workspaceId, playerId, token } = await setup();
+    const conversationId = await seedConversation({ workspaceId, playerId });
     const agentRow = await ownerPool.query<{ id: string }>(
       `insert into agent (email, display_name) values ('r1@example.test', 'R1') returning id`,
-    )
+    );
     await ownerPool.query(
       `insert into message (workspace_id, conversation_id, seq, author_type, author_agent_id, body)
        values ($1, $2, 1, 'agent', $3, 'from the agent'), ($1, $2, 2, 'player', null, 'from the player')`,
       [workspaceId, conversationId, agentRow.rows[0]!.id],
-    )
+    );
 
     await request(app)
       .post('/surface/messages/read')
       .set('Authorization', `Bearer ${token}`)
       .send({ up_to_seq: 2 })
-      .expect(200)
+      .expect(200);
 
-    const { rows } = await ownerPool.query<{ seq: number; delivery_state: string; read_at: Date | null }>(
-      `select seq, delivery_state, read_at from message where conversation_id = $1 order by seq`,
-      [conversationId],
-    )
-    expect(rows[0]).toMatchObject({ seq: 1, delivery_state: 'read' })
-    expect(rows[0]!.read_at).toBeInstanceOf(Date)
+    const { rows } = await ownerPool.query<{
+      seq: number;
+      delivery_state: string;
+      read_at: Date | null;
+    }>(`select seq, delivery_state, read_at from message where conversation_id = $1 order by seq`, [
+      conversationId,
+    ]);
+    expect(rows[0]).toMatchObject({ seq: 1, delivery_state: 'read' });
+    expect(rows[0]!.read_at).toBeInstanceOf(Date);
     // The player reading their own message is not a receipt.
-    expect(rows[1]).toMatchObject({ seq: 2, delivery_state: 'sent' })
-    expect(rows[1]!.read_at).toBeNull()
-  })
+    expect(rows[1]).toMatchObject({ seq: 2, delivery_state: 'sent' });
+    expect(rows[1]!.read_at).toBeNull();
+  });
 
   it('never moves read_at forward on a second read of the same message', async () => {
-    const { workspaceId, playerId, token } = await setup()
-    const conversationId = await seedConversation({ workspaceId, playerId })
+    const { workspaceId, playerId, token } = await setup();
+    const conversationId = await seedConversation({ workspaceId, playerId });
     const agentRow = await ownerPool.query<{ id: string }>(
       `insert into agent (email, display_name) values ('r2@example.test', 'R2') returning id`,
-    )
+    );
     await ownerPool.query(
       `insert into message (workspace_id, conversation_id, seq, author_type, author_agent_id, body)
        values ($1, $2, 1, 'agent', $3, 'first')`,
       [workspaceId, conversationId, agentRow.rows[0]!.id],
-    )
+    );
 
     const read = () =>
-      request(app).post('/surface/messages/read').set('Authorization', `Bearer ${token}`).send({ up_to_seq: 1 }).expect(200)
+      request(app)
+        .post('/surface/messages/read')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ up_to_seq: 1 })
+        .expect(200);
     const readAtNow = async () => {
       const { rows } = await ownerPool.query<{ read_at: Date }>(
         `select read_at from message where conversation_id = $1 and seq = 1`,
         [conversationId],
-      )
-      return rows[0]!.read_at.toISOString()
-    }
+      );
+      return rows[0]!.read_at.toISOString();
+    };
 
-    await read()
-    const first = await readAtNow()
-    await new Promise((resolve) => setTimeout(resolve, 20))
-    await read()
-    expect(await readAtNow()).toBe(first)
-  })
-})
+    await read();
+    const first = await readAtNow();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    await read();
+    expect(await readAtNow()).toBe(first);
+  });
+});
 ```
 
 Append the mirror-image test to `backend/tests/agent.messages.test.ts`. Note that this file mounts `messagesRouter` on a bare express app, so **the path is `/messages/read`, not `/agent/messages/read`**. It already has `setupAssignedAgent`, `ownerPool`, and a `createSocketServer` call in `beforeAll`, so nothing new needs importing.
@@ -255,65 +274,68 @@ Append the mirror-image test to `backend/tests/agent.messages.test.ts`. Note tha
 ```ts
 describe('POST /messages/read records when the agent saw it', () => {
   it('stamps read_at on player messages and leaves agent messages untouched', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
-    const { agentId, token } = await setupAssignedAgent(workspaceId, conversationId)
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
+    const { agentId, token } = await setupAssignedAgent(workspaceId, conversationId);
     await ownerPool.query(
       `insert into message (workspace_id, conversation_id, seq, author_type, author_agent_id, body)
        values ($1, $2, 1, 'player', null, 'my coins vanished'), ($1, $2, 2, 'agent', $3, 'looking into it')`,
       [workspaceId, conversationId, agentId],
-    )
+    );
 
     await request(app)
       .post('/messages/read')
       .set('Authorization', `Bearer ${token}`)
       .send({ conversation_id: conversationId, up_to_seq: 2 })
-      .expect(200)
+      .expect(200);
 
-    const { rows } = await ownerPool.query<{ seq: number; delivery_state: string; read_at: Date | null }>(
-      `select seq, delivery_state, read_at from message where conversation_id = $1 order by seq`,
-      [conversationId],
-    )
-    expect(rows[0]).toMatchObject({ seq: 1, delivery_state: 'read' })
-    expect(rows[0]!.read_at).toBeInstanceOf(Date)
+    const { rows } = await ownerPool.query<{
+      seq: number;
+      delivery_state: string;
+      read_at: Date | null;
+    }>(`select seq, delivery_state, read_at from message where conversation_id = $1 order by seq`, [
+      conversationId,
+    ]);
+    expect(rows[0]).toMatchObject({ seq: 1, delivery_state: 'read' });
+    expect(rows[0]!.read_at).toBeInstanceOf(Date);
     // An agent reading their own reply is not a receipt.
-    expect(rows[1]).toMatchObject({ seq: 2, delivery_state: 'sent' })
-    expect(rows[1]!.read_at).toBeNull()
-  })
+    expect(rows[1]).toMatchObject({ seq: 2, delivery_state: 'sent' });
+    expect(rows[1]!.read_at).toBeNull();
+  });
 
   it('never moves read_at forward on a second read of the same message', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
-    const { token } = await setupAssignedAgent(workspaceId, conversationId)
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
+    const { token } = await setupAssignedAgent(workspaceId, conversationId);
     await ownerPool.query(
       `insert into message (workspace_id, conversation_id, seq, author_type, author_agent_id, body)
        values ($1, $2, 1, 'player', null, 'my coins vanished')`,
       [workspaceId, conversationId],
-    )
+    );
 
     const read = () =>
       request(app)
         .post('/messages/read')
         .set('Authorization', `Bearer ${token}`)
         .send({ conversation_id: conversationId, up_to_seq: 1 })
-        .expect(200)
+        .expect(200);
     const readAtNow = async () => {
       const { rows } = await ownerPool.query<{ read_at: Date }>(
         `select read_at from message where conversation_id = $1 and seq = 1`,
         [conversationId],
-      )
-      return rows[0]!.read_at.toISOString()
-    }
+      );
+      return rows[0]!.read_at.toISOString();
+    };
 
-    await read()
-    const first = await readAtNow()
-    await new Promise((resolve) => setTimeout(resolve, 20))
-    await read()
-    expect(await readAtNow()).toBe(first)
-  })
-})
+    await read();
+    const first = await readAtNow();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    await read();
+    expect(await readAtNow()).toBe(first);
+  });
+});
 ```
 
 - [ ] **Step 2: Run the tests to verify they fail**
@@ -333,7 +355,7 @@ Replace `markPlayerMessagesRead` in `backend/src/surface/services/messagesServic
  * `null` means there is nothing to announce — no conversation, or every message
  * in range was already read. The caller uses that to skip the socket emit.
  */
-export type MarkReadResult = { conversationId: string; upToSeq: number; readAt: Date } | null
+export type MarkReadResult = { conversationId: string; upToSeq: number; readAt: Date } | null;
 
 export async function markPlayerMessagesRead(
   ctx: PlayerContext,
@@ -341,11 +363,15 @@ export async function markPlayerMessagesRead(
 ): Promise<MarkReadResult> {
   // One timestamp for the whole batch: every message in this range was seen in
   // the same glance, and a per-row now() would imply an ordering that did not happen.
-  const readAt = new Date()
+  const readAt = new Date();
 
   return withWorkspace(ctx.workspaceId, async (tx) => {
-    const [found] = await tx.select({ id: conversation.id }).from(conversation).where(eq(conversation.playerId, ctx.playerId)).limit(1)
-    if (!found) return null
+    const [found] = await tx
+      .select({ id: conversation.id })
+      .from(conversation)
+      .where(eq(conversation.playerId, ctx.playerId))
+      .limit(1);
+    if (!found) return null;
 
     const updated = await tx
       .update(message)
@@ -360,11 +386,11 @@ export async function markPlayerMessagesRead(
           lte(message.seq, body.up_to_seq),
         ),
       )
-      .returning({ seq: message.seq })
+      .returning({ seq: message.seq });
 
-    if (updated.length === 0) return null
-    return { conversationId: found.id, upToSeq: Math.max(...updated.map((r) => r.seq)), readAt }
-  })
+    if (updated.length === 0) return null;
+    return { conversationId: found.id, upToSeq: Math.max(...updated.map((r) => r.seq)), readAt };
+  });
 }
 ```
 
@@ -373,17 +399,21 @@ export async function markPlayerMessagesRead(
 Replace `markAgentMessagesRead` in `backend/src/agent/services/messagesService.ts`. Same shape, mirrored predicate (`eq(message.authorType, 'player')` — an agent reading agent messages is not a receipt):
 
 ```ts
-export type MarkReadResult = { conversationId: string; upToSeq: number; readAt: Date } | null
+export type MarkReadResult = { conversationId: string; upToSeq: number; readAt: Date } | null;
 
 export async function markAgentMessagesRead(
   ctx: AgentContext,
   body: z.infer<typeof MarkAgentReadBody>,
 ): Promise<MarkReadResult> {
-  const readAt = new Date()
+  const readAt = new Date();
 
   return withWorkspace(ctx.workspaceId, async (tx) => {
-    const [found] = await tx.select({ id: conversation.id }).from(conversation).where(eq(conversation.id, body.conversation_id)).limit(1)
-    if (!found) return null
+    const [found] = await tx
+      .select({ id: conversation.id })
+      .from(conversation)
+      .where(eq(conversation.id, body.conversation_id))
+      .limit(1);
+    if (!found) return null;
 
     const updated = await tx
       .update(message)
@@ -396,11 +426,11 @@ export async function markAgentMessagesRead(
           lte(message.seq, body.up_to_seq),
         ),
       )
-      .returning({ seq: message.seq })
+      .returning({ seq: message.seq });
 
-    if (updated.length === 0) return null
-    return { conversationId: found.id, upToSeq: Math.max(...updated.map((r) => r.seq)), readAt }
-  })
+    if (updated.length === 0) return null;
+    return { conversationId: found.id, upToSeq: Math.max(...updated.map((r) => r.seq)), readAt };
+  });
 }
 ```
 
@@ -425,29 +455,37 @@ git commit -m "feat: stamp read_at when messages are marked read"
 
 ### Task 3: `message:read` socket event
 
-Pushes the receipt to the *opposite* audience's room so the sender's ticks flip without a manual refresh.
+Pushes the receipt to the _opposite_ audience's room so the sender's ticks flip without a manual refresh.
 
 **Files:**
+
 - Modify: `packages/types/src/chat.ts` (add `MessageReadEvent`)
 - Modify: `backend/src/shared/realtime/emit.ts`
 - Modify: `backend/src/surface/services/messagesService.ts`, `backend/src/agent/services/messagesService.ts`
 - Test: `backend/tests/realtime.rooms.test.ts`
 
 **Interfaces:**
+
 - Consumes: `MarkReadResult` from Task 2.
 - Produces:
+
   ```ts
   // packages/types/src/chat.ts
   export type MessageReadEvent = {
-    conversation_id: string
-    up_to_seq: number
-    reader_type: 'player' | 'agent'
-    read_at: string
-  }
+    conversation_id: string;
+    up_to_seq: number;
+    reader_type: 'player' | 'agent';
+    read_at: string;
+  };
 
   // backend/src/shared/realtime/emit.ts
-  export function emitReadReceipt(io: Server, audience: 'player' | 'agents', payload: MessageReadEvent): void
+  export function emitReadReceipt(
+    io: Server,
+    audience: 'player' | 'agents',
+    payload: MessageReadEvent,
+  ): void;
   ```
+
   Socket event name: `message:read`.
 
 - [ ] **Step 1: Write the failing test**
@@ -455,60 +493,71 @@ Pushes the receipt to the *opposite* audience's room so the sender's ticks flip 
 Append to `backend/tests/realtime.rooms.test.ts`, inside the existing `describe`. It already imports `agentRoom`, `playerRoom`, `getIo`, and the seed/connect helpers.
 
 ```ts
-  it('routes a read receipt to the opposite audience only, and carries no message body', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
+it('routes a read receipt to the opposite audience only, and carries no message body', async () => {
+  const workspaceId = await seedWorkspace();
+  const playerId = await seedPlayer(workspaceId);
+  const conversationId = await seedConversation({ workspaceId, playerId });
 
-    const playerToken = await mintToken({ workspace_id: workspaceId, player_id: playerId, external_player_id: 'p1' })
-    const agentToken = await signAgentSession({ agent_id: 'agent-1', workspace_id: workspaceId })
-    const playerSocket = connectClient(server.url, { token: playerToken, role: 'player' })
-    const agentSocket = connectClient(server.url, { token: agentToken, role: 'agent' })
-    await Promise.all([waitFor(playerSocket, 'connect'), waitFor(agentSocket, 'connect')])
+  const playerToken = await mintToken({
+    workspace_id: workspaceId,
+    player_id: playerId,
+    external_player_id: 'p1',
+  });
+  const agentToken = await signAgentSession({ agent_id: 'agent-1', workspace_id: workspaceId });
+  const playerSocket = connectClient(server.url, { token: playerToken, role: 'player' });
+  const agentSocket = connectClient(server.url, { token: agentToken, role: 'agent' });
+  await Promise.all([waitFor(playerSocket, 'connect'), waitFor(agentSocket, 'connect')]);
 
-    const join = (socket: ReturnType<typeof connectClient>) =>
-      new Promise<boolean>((resolve) => socket.emit('join_conversation', { conversation_id: conversationId }, resolve))
-    expect(await join(playerSocket)).toBe(true)
-    expect(await join(agentSocket)).toBe(true)
+  const join = (socket: ReturnType<typeof connectClient>) =>
+    new Promise<boolean>((resolve) =>
+      socket.emit('join_conversation', { conversation_id: conversationId }, resolve),
+    );
+  expect(await join(playerSocket)).toBe(true);
+  expect(await join(agentSocket)).toBe(true);
 
-    const playerReceived: unknown[] = []
-    const agentReceived: unknown[] = []
-    playerSocket.on('message:read', (payload: unknown) => playerReceived.push(payload))
-    agentSocket.on('message:read', (payload: unknown) => agentReceived.push(payload))
+  const playerReceived: unknown[] = [];
+  const agentReceived: unknown[] = [];
+  playerSocket.on('message:read', (payload: unknown) => playerReceived.push(payload));
+  agentSocket.on('message:read', (payload: unknown) => agentReceived.push(payload));
 
-    // An agent read is news for the player, who wrote the messages being read.
-    emitReadReceipt(getIo(), 'player', {
+  // An agent read is news for the player, who wrote the messages being read.
+  emitReadReceipt(getIo(), 'player', {
+    conversation_id: conversationId,
+    up_to_seq: 4,
+    reader_type: 'agent',
+    read_at: '2026-08-11T10:43:07.000Z',
+  });
+
+  await new Promise((resolve) => setTimeout(resolve, 150));
+
+  expect(playerReceived).toEqual([
+    {
       conversation_id: conversationId,
       up_to_seq: 4,
       reader_type: 'agent',
       read_at: '2026-08-11T10:43:07.000Z',
-    })
+    },
+  ]);
+  // Never an echo back to the audience that did the reading.
+  expect(agentReceived).toEqual([]);
+  // The payload is exactly the contract — a body leaking here would cross the
+  // internal-note boundary the two serializers exist to protect.
+  expect(Object.keys(playerReceived[0] as object).sort()).toEqual([
+    'conversation_id',
+    'read_at',
+    'reader_type',
+    'up_to_seq',
+  ]);
 
-    await new Promise((resolve) => setTimeout(resolve, 150))
-
-    expect(playerReceived).toEqual([
-      { conversation_id: conversationId, up_to_seq: 4, reader_type: 'agent', read_at: '2026-08-11T10:43:07.000Z' },
-    ])
-    // Never an echo back to the audience that did the reading.
-    expect(agentReceived).toEqual([])
-    // The payload is exactly the contract — a body leaking here would cross the
-    // internal-note boundary the two serializers exist to protect.
-    expect(Object.keys(playerReceived[0] as object).sort()).toEqual([
-      'conversation_id',
-      'read_at',
-      'reader_type',
-      'up_to_seq',
-    ])
-
-    playerSocket.close()
-    agentSocket.close()
-  })
+  playerSocket.close();
+  agentSocket.close();
+});
 ```
 
 Add `emitReadReceipt` to the imports at the top of that file:
 
 ```ts
-import { emitReadReceipt } from '../src/shared/realtime/emit.ts'
+import { emitReadReceipt } from '../src/shared/realtime/emit.ts';
 ```
 
 - [ ] **Step 2: Run the test to verify it fails**
@@ -528,11 +577,11 @@ Append to `packages/types/src/chat.ts`, next to `ConversationChangedEvent`:
  * so a client can ignore an echo of its own action.
  */
 export type MessageReadEvent = {
-  conversation_id: string
-  up_to_seq: number
-  reader_type: 'player' | 'agent'
-  read_at: string
-}
+  conversation_id: string;
+  up_to_seq: number;
+  reader_type: 'player' | 'agent';
+  read_at: string;
+};
 ```
 
 - [ ] **Step 4: Add the emitter**
@@ -546,16 +595,23 @@ Append to `backend/src/shared/realtime/emit.ts`:
  * emitMessageToRooms this payload is typed — it is a fixed four-field contract,
  * not a serializer's output passed through.
  */
-export function emitReadReceipt(io: Server, audience: 'player' | 'agents', payload: MessageReadEvent): void {
-  const room = audience === 'player' ? playerRoom(payload.conversation_id) : agentRoom(payload.conversation_id)
-  io.to(room).emit('message:read', payload)
+export function emitReadReceipt(
+  io: Server,
+  audience: 'player' | 'agents',
+  payload: MessageReadEvent,
+): void {
+  const room =
+    audience === 'player'
+      ? playerRoom(payload.conversation_id)
+      : agentRoom(payload.conversation_id);
+  io.to(room).emit('message:read', payload);
 }
 ```
 
 Add the import at the top of the file:
 
 ```ts
-import type { MessageReadEvent } from '@support/types'
+import type { MessageReadEvent } from '@support/types';
 ```
 
 - [ ] **Step 5: Run the test to verify it passes**
@@ -572,11 +628,15 @@ export async function markPlayerMessagesRead(
   ctx: PlayerContext,
   body: MarkPlayerReadBodyType,
 ): Promise<MarkReadResult> {
-  const readAt = new Date()
+  const readAt = new Date();
 
   const result = await withWorkspace(ctx.workspaceId, async (tx) => {
-    const [found] = await tx.select({ id: conversation.id }).from(conversation).where(eq(conversation.playerId, ctx.playerId)).limit(1)
-    if (!found) return null
+    const [found] = await tx
+      .select({ id: conversation.id })
+      .from(conversation)
+      .where(eq(conversation.playerId, ctx.playerId))
+      .limit(1);
+    if (!found) return null;
 
     const updated = await tx
       .update(message)
@@ -589,11 +649,11 @@ export async function markPlayerMessagesRead(
           lte(message.seq, body.up_to_seq),
         ),
       )
-      .returning({ seq: message.seq })
+      .returning({ seq: message.seq });
 
-    if (updated.length === 0) return null
-    return { conversationId: found.id, upToSeq: Math.max(...updated.map((r) => r.seq)), readAt }
-  })
+    if (updated.length === 0) return null;
+    return { conversationId: found.id, upToSeq: Math.max(...updated.map((r) => r.seq)), readAt };
+  });
 
   if (result) {
     emitReadReceipt(getIo(), 'agents', {
@@ -601,10 +661,10 @@ export async function markPlayerMessagesRead(
       up_to_seq: result.upToSeq,
       reader_type: 'player',
       read_at: result.readAt.toISOString(),
-    })
+    });
   }
 
-  return result
+  return result;
 }
 ```
 
@@ -617,11 +677,15 @@ export async function markAgentMessagesRead(
   ctx: AgentContext,
   body: z.infer<typeof MarkAgentReadBody>,
 ): Promise<MarkReadResult> {
-  const readAt = new Date()
+  const readAt = new Date();
 
   const result = await withWorkspace(ctx.workspaceId, async (tx) => {
-    const [found] = await tx.select({ id: conversation.id }).from(conversation).where(eq(conversation.id, body.conversation_id)).limit(1)
-    if (!found) return null
+    const [found] = await tx
+      .select({ id: conversation.id })
+      .from(conversation)
+      .where(eq(conversation.id, body.conversation_id))
+      .limit(1);
+    if (!found) return null;
 
     const updated = await tx
       .update(message)
@@ -634,11 +698,11 @@ export async function markAgentMessagesRead(
           lte(message.seq, body.up_to_seq),
         ),
       )
-      .returning({ seq: message.seq })
+      .returning({ seq: message.seq });
 
-    if (updated.length === 0) return null
-    return { conversationId: found.id, upToSeq: Math.max(...updated.map((r) => r.seq)), readAt }
-  })
+    if (updated.length === 0) return null;
+    return { conversationId: found.id, upToSeq: Math.max(...updated.map((r) => r.seq)), readAt };
+  });
 
   if (result) {
     emitReadReceipt(getIo(), 'player', {
@@ -646,10 +710,10 @@ export async function markAgentMessagesRead(
       up_to_seq: result.upToSeq,
       reader_type: 'agent',
       read_at: result.readAt.toISOString(),
-    })
+    });
   }
 
-  return result
+  return result;
 }
 ```
 
@@ -680,15 +744,22 @@ git commit -m "feat: push message:read receipts to the opposite audience room"
 The one piece of UI, shared by both surfaces. Pure presentation — no data fetching, no socket, no state.
 
 **Files:**
+
 - Create: `frontend/src/features/chat/components/DeliveryTicks.tsx`
 - Create: `frontend/src/features/chat/components/DeliveryTicks.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `ChatDeliveryState` from `@support/types`.
 - Produces:
+
   ```tsx
-  export function DeliveryTicks(props: { deliveryState?: ChatDeliveryState; readClassName?: string }): JSX.Element | null
+  export function DeliveryTicks(props: {
+    deliveryState?: ChatDeliveryState;
+    readClassName?: string;
+  }): JSX.Element | null;
   ```
+
   Renders `null` for `undefined`, `'sending'`, `'failed'`. One tick for `'sent'` and `'delivered'`, two for `'read'`. `readClassName` defaults to `'text-sky-500'`.
 
 - [ ] **Step 1: Write the failing test**
@@ -696,49 +767,51 @@ The one piece of UI, shared by both surfaces. Pure presentation — no data fetc
 Create `frontend/src/features/chat/components/DeliveryTicks.test.tsx`:
 
 ```tsx
-import { describe, expect, it } from 'vitest'
-import { render, screen } from '@testing-library/react'
-import { DeliveryTicks } from './DeliveryTicks.tsx'
+import { describe, expect, it } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import { DeliveryTicks } from './DeliveryTicks.tsx';
 
 describe('DeliveryTicks', () => {
   it('renders one tick labelled Sent for a delivered-to-server message', () => {
-    render(<DeliveryTicks deliveryState="sent" />)
-    expect(screen.getByText('Sent')).toBeInTheDocument()
-    expect(document.querySelectorAll('svg')).toHaveLength(1)
-  })
+    render(<DeliveryTicks deliveryState="sent" />);
+    expect(screen.getByText('Sent')).toBeInTheDocument();
+    expect(document.querySelectorAll('svg')).toHaveLength(1);
+  });
 
   it('renders two ticks labelled Seen once the other side has read it', () => {
-    render(<DeliveryTicks deliveryState="read" />)
-    expect(screen.getByText('Seen')).toBeInTheDocument()
-    expect(document.querySelectorAll('svg')).toHaveLength(2)
-  })
+    render(<DeliveryTicks deliveryState="read" />);
+    expect(screen.getByText('Seen')).toBeInTheDocument();
+    expect(document.querySelectorAll('svg')).toHaveLength(2);
+  });
 
   it('treats the unused delivered state as sent rather than inventing a third look', () => {
-    render(<DeliveryTicks deliveryState="delivered" />)
-    expect(screen.getByText('Sent')).toBeInTheDocument()
-    expect(document.querySelectorAll('svg')).toHaveLength(1)
-  })
+    render(<DeliveryTicks deliveryState="delivered" />);
+    expect(screen.getByText('Sent')).toBeInTheDocument();
+    expect(document.querySelectorAll('svg')).toHaveLength(1);
+  });
 
   it('renders nothing while sending, when failed, or when the state is unknown', () => {
-    const { container: sending } = render(<DeliveryTicks deliveryState="sending" />)
-    expect(sending).toBeEmptyDOMElement()
-    const { container: failed } = render(<DeliveryTicks deliveryState="failed" />)
-    expect(failed).toBeEmptyDOMElement()
-    const { container: absent } = render(<DeliveryTicks />)
-    expect(absent).toBeEmptyDOMElement()
-  })
+    const { container: sending } = render(<DeliveryTicks deliveryState="sending" />);
+    expect(sending).toBeEmptyDOMElement();
+    const { container: failed } = render(<DeliveryTicks deliveryState="failed" />);
+    expect(failed).toBeEmptyDOMElement();
+    const { container: absent } = render(<DeliveryTicks />);
+    expect(absent).toBeEmptyDOMElement();
+  });
 
   it('colours only the read state, and lets the caller override that colour', () => {
-    const { container } = render(<DeliveryTicks deliveryState="read" readClassName="text-sky-300" />)
-    expect(container.querySelector('.text-sky-300')).not.toBeNull()
-    expect(container.querySelector('.text-sky-500')).toBeNull()
-  })
+    const { container } = render(
+      <DeliveryTicks deliveryState="read" readClassName="text-sky-300" />,
+    );
+    expect(container.querySelector('.text-sky-300')).not.toBeNull();
+    expect(container.querySelector('.text-sky-500')).toBeNull();
+  });
 
   it('hides the glyphs from assistive tech so the label is the only thing read out', () => {
-    const { container } = render(<DeliveryTicks deliveryState="read" />)
-    expect(container.querySelector('[aria-hidden="true"]')).not.toBeNull()
-  })
-})
+    const { container } = render(<DeliveryTicks deliveryState="read" />);
+    expect(container.querySelector('[aria-hidden="true"]')).not.toBeNull();
+  });
+});
 ```
 
 - [ ] **Step 2: Run the test to verify it fails**
@@ -752,8 +825,8 @@ Expected: FAIL — cannot resolve `./DeliveryTicks.tsx`.
 Create `frontend/src/features/chat/components/DeliveryTicks.tsx`:
 
 ```tsx
-import { Check } from 'lucide-react'
-import type { ChatDeliveryState } from '@support/types'
+import { Check } from 'lucide-react';
+import type { ChatDeliveryState } from '@support/types';
 
 /**
  * One grey tick: the server has the message. Two blue ticks: the other side read it.
@@ -775,15 +848,16 @@ export function DeliveryTicks({
   deliveryState,
   readClassName = 'text-sky-500',
 }: {
-  deliveryState?: ChatDeliveryState
-  readClassName?: string
+  deliveryState?: ChatDeliveryState;
+  readClassName?: string;
 }) {
-  if (deliveryState !== 'sent' && deliveryState !== 'delivered' && deliveryState !== 'read') return null
+  if (deliveryState !== 'sent' && deliveryState !== 'delivered' && deliveryState !== 'read')
+    return null;
 
   // 'delivered' is never written by any code path (see the spec's Out of scope).
   // Rendering it as 'sent' means a future writer of that state degrades quietly
   // instead of showing an empty gap.
-  const read = deliveryState === 'read'
+  const read = deliveryState === 'read';
 
   return (
     <span className={read ? readClassName : 'opacity-70'}>
@@ -794,7 +868,7 @@ export function DeliveryTicks({
       {/* Colour is never the only carrier of the signal. */}
       <span className="sr-only">{read ? 'Seen' : 'Sent'}</span>
     </span>
-  )
+  );
 }
 ```
 
@@ -816,6 +890,7 @@ git commit -m "feat: add shared DeliveryTicks component"
 ### Task 5: Render the ticks in both threads
 
 **Files:**
+
 - Modify: `frontend/src/features/chat/components/types.ts` (add `readAt`)
 - Modify: `frontend/src/features/chat/components/ChatThread.tsx:27-60` (agent console)
 - Modify: `frontend/src/surfaces/webview/components/chat/ChatBubbles.tsx:59-73` (webview)
@@ -824,6 +899,7 @@ git commit -m "feat: add shared DeliveryTicks component"
 - Test: create `frontend/src/features/chat/components/ChatThread.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `DeliveryTicks` from Task 4; `read_at` on the message views from Task 1.
 - Produces: `ChatMessage.readAt?: string | null`.
 
@@ -832,10 +908,10 @@ git commit -m "feat: add shared DeliveryTicks component"
 The internal-note rule is the one that must not regress, so it gets a test. Create `frontend/src/features/chat/components/ChatThread.test.tsx`:
 
 ```tsx
-import { describe, expect, it } from 'vitest'
-import { render, screen } from '@testing-library/react'
-import { ChatThread } from './ChatThread.tsx'
-import type { ChatMessage } from './types.ts'
+import { describe, expect, it } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import { ChatThread } from './ChatThread.tsx';
+import type { ChatMessage } from './types.ts';
 
 function message(overrides: Partial<ChatMessage> = {}): ChatMessage {
   return {
@@ -846,31 +922,35 @@ function message(overrides: Partial<ChatMessage> = {}): ChatMessage {
     deliveryState: 'read',
     visibility: 'public',
     ...overrides,
-  }
+  };
 }
 
 describe('ChatThread read receipts', () => {
-  it('shows Seen on the agent\'s own read message', () => {
-    render(<ChatThread messages={[message()]} currentAuthorType="agent" />)
-    expect(screen.getByText('Seen')).toBeInTheDocument()
-  })
+  it("shows Seen on the agent's own read message", () => {
+    render(<ChatThread messages={[message()]} currentAuthorType="agent" />);
+    expect(screen.getByText('Seen')).toBeInTheDocument();
+  });
 
-  it('shows Sent on the agent\'s own unread message', () => {
-    render(<ChatThread messages={[message({ deliveryState: 'sent' })]} currentAuthorType="agent" />)
-    expect(screen.getByText('Sent')).toBeInTheDocument()
-  })
+  it("shows Sent on the agent's own unread message", () => {
+    render(
+      <ChatThread messages={[message({ deliveryState: 'sent' })]} currentAuthorType="agent" />,
+    );
+    expect(screen.getByText('Sent')).toBeInTheDocument();
+  });
 
   it('never shows a receipt on an internal note, which no player can see', () => {
-    render(<ChatThread messages={[message({ visibility: 'internal' })]} currentAuthorType="agent" />)
-    expect(screen.queryByText('Seen')).not.toBeInTheDocument()
-    expect(screen.queryByText('Sent')).not.toBeInTheDocument()
-  })
+    render(
+      <ChatThread messages={[message({ visibility: 'internal' })]} currentAuthorType="agent" />,
+    );
+    expect(screen.queryByText('Seen')).not.toBeInTheDocument();
+    expect(screen.queryByText('Sent')).not.toBeInTheDocument();
+  });
 
-  it('never shows a receipt on the other side\'s message', () => {
-    render(<ChatThread messages={[message({ authorType: 'player' })]} currentAuthorType="agent" />)
-    expect(screen.queryByText('Seen')).not.toBeInTheDocument()
-  })
-})
+  it("never shows a receipt on the other side's message", () => {
+    render(<ChatThread messages={[message({ authorType: 'player' })]} currentAuthorType="agent" />);
+    expect(screen.queryByText('Seen')).not.toBeInTheDocument();
+  });
+});
 ```
 
 - [ ] **Step 2: Run the test to verify it fails**
@@ -885,15 +965,15 @@ In `frontend/src/features/chat/components/types.ts`:
 
 ```ts
 export type ChatMessage = {
-  id: string
-  authorType: ChatAuthorType
-  body: string
-  createdAt: string
-  deliveryState?: 'sending' | 'sent' | 'delivered' | 'read' | 'failed'
+  id: string;
+  authorType: ChatAuthorType;
+  body: string;
+  createdAt: string;
+  deliveryState?: 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
   /** ISO 8601 when the other side read it, null if they have not. Carried for tooltips and debugging — the tick itself keys off deliveryState alone. */
-  readAt?: string | null
-  visibility?: 'public' | 'internal'
-}
+  readAt?: string | null;
+  visibility?: 'public' | 'internal';
+};
 ```
 
 Map it in both `toChatMessage` functions — `SupportChat.tsx` (whose parameter type is inlined, so add `read_at: string | null` to it) and `ThreadPanel.tsx` (typed as `AgentMessageView`, so just read the field):
@@ -909,7 +989,7 @@ function toChatMessage(m: AgentMessageView): ChatMessage {
     deliveryState: m.delivery_state,
     readAt: m.read_at,
     visibility: m.visibility,
-  }
+  };
 }
 ```
 
@@ -918,17 +998,21 @@ function toChatMessage(m: AgentMessageView): ChatMessage {
 Import `DeliveryTicks` and add it after the existing `<time>` element, inside the same bubble div. Gate on own **and** public:
 
 ```tsx
-            <time dateTime={chatMessage.createdAt} className="mt-1 block text-xs opacity-80">
-              {new Date(chatMessage.createdAt).toLocaleTimeString()}
-            </time>
-            {/* Never on an internal note: the player cannot see the message, so
-                any receipt would be a claim about something they never got. */}
-            {isOwn && !isInternal && (
-              <span className="mt-0.5 block text-xs">
-                {/* sky-300, not the default sky-500: an own bubble here is slate-600, and the darker blue disappears against it. */}
-                <DeliveryTicks deliveryState={chatMessage.deliveryState} readClassName="text-sky-300" />
-              </span>
-            )}
+<time dateTime={chatMessage.createdAt} className="mt-1 block text-xs opacity-80">
+  {new Date(chatMessage.createdAt).toLocaleTimeString()}
+</time>;
+{
+  /* Never on an internal note: the player cannot see the message, so
+                any receipt would be a claim about something they never got. */
+}
+{
+  isOwn && !isInternal && (
+    <span className="mt-0.5 block text-xs">
+      {/* sky-300, not the default sky-500: an own bubble here is slate-600, and the darker blue disappears against it. */}
+      <DeliveryTicks deliveryState={chatMessage.deliveryState} readClassName="text-sky-300" />
+    </span>
+  );
+}
 ```
 
 - [ ] **Step 5: Render in `ChatBubbles.tsx`**
@@ -976,10 +1060,12 @@ git commit -m "feat: render delivery ticks in both thread renderers"
 Without this the ticks only change on an unrelated refetch. Each client listens for `message:read` and refetches the message list it already owns.
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/webview/pages/SupportChat.tsx:71-84` (socket effect)
 - Modify: `frontend/src/surfaces/agent-console/pages/Inbox/components/ThreadPanel.tsx:54-65` (socket effect)
 
 **Interfaces:**
+
 - Consumes: the `message:read` event from Task 3.
 - Produces: nothing new. Reuses the existing query keys `['playerMessages', sessionId]` and `['conversation', conversationId, 'messages']`.
 
@@ -988,16 +1074,16 @@ Without this the ticks only change on an unrelated refetch. Each client listens 
 In `SupportChat.tsx`, inside the existing socket effect, directly after the `message:new` handler:
 
 ```tsx
-    socket.on('message:new', () => {
-      void queryClient.invalidateQueries({ queryKey: ['playerMessages', boot.sessionId] })
-    })
-    // The payload's up_to_seq/read_at are deliberately unused. Refetching keeps
-    // the "which messages count as read" rule in exactly one place — the server.
-    // Patching the cache from the payload would duplicate that rule here, and it
-    // is asymmetric (each side only ever marks the other side's messages).
-    socket.on('message:read', () => {
-      void queryClient.invalidateQueries({ queryKey: ['playerMessages', boot.sessionId] })
-    })
+socket.on('message:new', () => {
+  void queryClient.invalidateQueries({ queryKey: ['playerMessages', boot.sessionId] });
+});
+// The payload's up_to_seq/read_at are deliberately unused. Refetching keeps
+// the "which messages count as read" rule in exactly one place — the server.
+// Patching the cache from the payload would duplicate that rule here, and it
+// is asymmetric (each side only ever marks the other side's messages).
+socket.on('message:read', () => {
+  void queryClient.invalidateQueries({ queryKey: ['playerMessages', boot.sessionId] });
+});
 ```
 
 - [ ] **Step 2: Add the handler in the agent console**
@@ -1005,12 +1091,12 @@ In `SupportChat.tsx`, inside the existing socket effect, directly after the `mes
 In `ThreadPanel.tsx`, same placement inside its socket effect:
 
 ```tsx
-    socket.on('message:new', () => {
-      void queryClient.invalidateQueries({ queryKey: ['conversation', conversationId, 'messages'] })
-    })
-    socket.on('message:read', () => {
-      void queryClient.invalidateQueries({ queryKey: ['conversation', conversationId, 'messages'] })
-    })
+socket.on('message:new', () => {
+  void queryClient.invalidateQueries({ queryKey: ['conversation', conversationId, 'messages'] });
+});
+socket.on('message:read', () => {
+  void queryClient.invalidateQueries({ queryKey: ['conversation', conversationId, 'messages'] });
+});
 ```
 
 Neither client filters on `reader_type`: the server already routes each receipt to the opposite audience's room, so a client never receives an echo of its own read.
@@ -1053,17 +1139,17 @@ git commit -m "feat: refetch messages on a read receipt so ticks flip live"
 
 ## Spec coverage
 
-| Spec section | Task |
-|---|---|
-| Semantics table (`sent` → one tick, `read` → two blue, `delivered` as `sent`) | 4 |
-| No tick on internal notes | 5 |
-| No tick on bot/system/other-side messages | 5 |
-| Blue means a human saw it (bot never flips it) | 2 — the mark-read predicates are unchanged, so bot ingestion still cannot set `read` |
-| `message.read_at`, first-read-wins | 1, 2 |
-| `read_at` in both serializers and the wire type | 1 |
-| `MessageReadEvent` + `message:read` routing | 3 |
-| Emit after commit, skip when nothing changed | 3 |
-| No body in the socket payload | 3 |
-| Shared `DeliveryTicks`, `currentColor`, a11y label | 4 |
-| Socket handlers on both clients | 6 |
-| `openapi.ts` needs no edit | n/a — verified: it registers paths only, no message response schema |
+| Spec section                                                                  | Task                                                                                 |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Semantics table (`sent` → one tick, `read` → two blue, `delivered` as `sent`) | 4                                                                                    |
+| No tick on internal notes                                                     | 5                                                                                    |
+| No tick on bot/system/other-side messages                                     | 5                                                                                    |
+| Blue means a human saw it (bot never flips it)                                | 2 — the mark-read predicates are unchanged, so bot ingestion still cannot set `read` |
+| `message.read_at`, first-read-wins                                            | 1, 2                                                                                 |
+| `read_at` in both serializers and the wire type                               | 1                                                                                    |
+| `MessageReadEvent` + `message:read` routing                                   | 3                                                                                    |
+| Emit after commit, skip when nothing changed                                  | 3                                                                                    |
+| No body in the socket payload                                                 | 3                                                                                    |
+| Shared `DeliveryTicks`, `currentColor`, a11y label                            | 4                                                                                    |
+| Socket handlers on both clients                                               | 6                                                                                    |
+| `openapi.ts` needs no edit                                                    | n/a — verified: it registers paths only, no message response schema                  |

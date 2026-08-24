@@ -1,11 +1,20 @@
-import { sql } from 'drizzle-orm'
-import { boolean, index, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
-import { declaredFieldType } from './enums.ts'
-import { agent, workspace } from './identity.ts'
-import { session } from './players.ts'
+import { sql } from 'drizzle-orm';
+import {
+  boolean,
+  index,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
+import { declaredFieldType } from './enums.ts';
+import { agent, workspace } from './identity.ts';
+import { session } from './players.ts';
 
-const tz = { withTimezone: true, mode: 'date' } as const
-const emptyJson = sql`'{}'::jsonb`
+const tz = { withTimezone: true, mode: 'date' } as const;
+const emptyJson = sql`'{}'::jsonb`;
 
 /**
  * The admin-promoted key set. The snapshot split reads this table at write time,
@@ -30,7 +39,7 @@ export const declaredField = pgTable(
     declaredBy: uuid('declared_by').references(() => agent.id, { onDelete: 'restrict' }),
   },
   (t) => [uniqueIndex('declared_field_workspace_key_uk').on(t.workspaceId, t.key)],
-)
+);
 
 /**
  * Keyed to the session, not the conversation — the SDK delivers it before any
@@ -64,4 +73,4 @@ export const playerStateSnapshot = pgTable(
     // Filter on any promoted key without an index per field.
     index('player_state_snapshot_declared_gin').using('gin', sql`${t.declared} jsonb_path_ops`),
   ],
-)
+);

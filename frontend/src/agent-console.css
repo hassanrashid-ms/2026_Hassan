@@ -8,18 +8,18 @@
  * surface even though it never asks for it.
  */
 
-@import "tailwindcss";
+@import 'tailwindcss';
 
 @theme {
-  --color-bg:          #ffffff;
-  --color-surface:     #f8fafc;  /* slate-50, agent-console's neutral card background */
-  --color-accent:      #475569;  /* slate-600, primary */
-  --color-accent-deep: #1e293b;  /* slate-800 */
-  --color-accent-soft: #f1f5f9;  /* slate-100, selected row / active tab background */
-  --color-accent-fg:   #ffffff;
-  --color-text:        #0f172a;  /* slate-900 */
-  --color-muted:       #64748b;  /* slate-500 */
-  --radius-card:       0.75rem;
+  --color-bg: #ffffff;
+  --color-surface: #f8fafc; /* slate-50, agent-console's neutral card background */
+  --color-accent: #475569; /* slate-600, primary */
+  --color-accent-deep: #1e293b; /* slate-800 */
+  --color-accent-soft: #f1f5f9; /* slate-100, selected row / active tab background */
+  --color-accent-fg: #ffffff;
+  --color-text: #0f172a; /* slate-900 */
+  --color-muted: #64748b; /* slate-500 */
+  --radius-card: 0.75rem;
 }
 
 body {

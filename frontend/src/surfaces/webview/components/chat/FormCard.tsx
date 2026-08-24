@@ -1,19 +1,19 @@
-import { useMemo, useState } from 'react'
-import type { FormField, PlayerFormView } from '@support/types'
-import { SupportButton } from '@/surfaces/webview/components/SupportButton'
-import { cn } from '@/surfaces/webview/lib/cn'
+import { useMemo, useState } from 'react';
+import type { FormField, PlayerFormView } from '@support/types';
+import { SupportButton } from '@/surfaces/webview/components/SupportButton';
+import { cn } from '@/surfaces/webview/lib/cn';
 
 type FormCardProps = {
-  form: PlayerFormView
-  onAnswer: (fieldKey: string, value: unknown) => Promise<unknown>
-  onSubmit: () => void
-  onSkip: () => void
-  busy: boolean
-}
+  form: PlayerFormView;
+  onAnswer: (fieldKey: string, value: unknown) => Promise<unknown>;
+  onSubmit: () => void;
+  onSkip: () => void;
+  busy: boolean;
+};
 
 /** Empty means "nothing to send": a blank value is never posted, required or not. */
 function isEmpty(value: unknown): boolean {
-  return value === undefined || value === null || value === ''
+  return value === undefined || value === null || value === '';
 }
 
 /**
@@ -28,51 +28,54 @@ function isEmpty(value: unknown): boolean {
  * reconnect resume at the right question rather than at question one.
  */
 export function FormCard({ form, onAnswer, onSubmit, onSkip, busy }: FormCardProps) {
-  const fields = useMemo(() => [...form.fields].sort((a, b) => a.position - b.position), [form.fields])
+  const fields = useMemo(
+    () => [...form.fields].sort((a, b) => a.position - b.position),
+    [form.fields],
+  );
 
   // The value the server already holds for each field. `draft` diverges from it
   // as the player types; the difference is exactly what decides whether Next
   // posts anything.
   const [committed, setCommitted] = useState<Record<string, unknown>>(() =>
     Object.fromEntries(form.answers.map((a) => [a.field_key, a.value])),
-  )
+  );
   const [draft, setDraft] = useState<Record<string, unknown>>(() =>
     Object.fromEntries(form.answers.map((a) => [a.field_key, a.value])),
-  )
+  );
   const [index, setIndex] = useState(() => {
-    const answered = new Set(form.answers.map((a) => a.field_key))
-    const first = fields.findIndex((f) => !answered.has(f.key))
-    return first === -1 ? Math.max(fields.length - 1, 0) : first
-  })
-  const [sending, setSending] = useState(false)
+    const answered = new Set(form.answers.map((a) => a.field_key));
+    const first = fields.findIndex((f) => !answered.has(f.key));
+    return first === -1 ? Math.max(fields.length - 1, 0) : first;
+  });
+  const [sending, setSending] = useState(false);
 
-  const field = fields[index]
-  if (!field) return null
+  const field = fields[index];
+  if (!field) return null;
 
-  const isLast = index === fields.length - 1
-  const value = draft[field.key]
-  const changed = !isEmpty(value) && value !== committed[field.key]
-  const disabled = busy || sending
+  const isLast = index === fields.length - 1;
+  const value = draft[field.key];
+  const changed = !isEmpty(value) && value !== committed[field.key];
+  const disabled = busy || sending;
 
   const advance = async () => {
-    setSending(true)
+    setSending(true);
     try {
       // Pressing Next on an unchanged prefilled answer writes nothing:
       // re-submitting an identical value would inflate the correction rate with
       // events that record no correction, and grow an append-only table with
       // rows that differ only by timestamp.
       if (changed) {
-        await onAnswer(field.key, value)
-        setCommitted((current) => ({ ...current, [field.key]: value }))
+        await onAnswer(field.key, value);
+        setCommitted((current) => ({ ...current, [field.key]: value }));
       }
-      if (isLast) onSubmit()
-      else setIndex((current) => current + 1)
+      if (isLast) onSubmit();
+      else setIndex((current) => current + 1);
     } finally {
-      setSending(false)
+      setSending(false);
     }
-  }
+  };
 
-  const set = (next: unknown) => setDraft((current) => ({ ...current, [field.key]: next }))
+  const set = (next: unknown) => setDraft((current) => ({ ...current, [field.key]: next }));
 
   return (
     <div role="group" aria-label={form.form_name} className="flex flex-col gap-4">
@@ -134,7 +137,7 @@ export function FormCard({ form, onAnswer, onSubmit, onSkip, busy }: FormCardPro
         Skip and talk to an agent
       </button>
     </div>
-  )
+  );
 }
 
 /**
@@ -149,19 +152,19 @@ function FieldInput({
   onChange,
   disabled,
 }: {
-  field: FormField
-  value: unknown
-  onChange: (next: unknown) => void
-  disabled: boolean
+  field: FormField;
+  value: unknown;
+  onChange: (next: unknown) => void;
+  disabled: boolean;
 }) {
   // Older form versions may not include a placeholder. Keep those inputs
   // actionable by using the field label as a frontend-only fallback.
-  const placeholder = field.placeholder ?? field.label
+  const placeholder = field.placeholder ?? field.label;
 
   const inputClass = cn(
     'min-h-11 w-full rounded-card bg-surface px-4 py-3 text-base text-text placeholder:text-muted',
     'border border-muted/30 focus:border-accent outline-none disabled:opacity-60',
-  )
+  );
 
   switch (field.type) {
     case 'choice':
@@ -183,7 +186,7 @@ function FieldInput({
             </button>
           ))}
         </div>
-      )
+      );
     case 'long_text':
       return (
         <textarea
@@ -195,7 +198,7 @@ function FieldInput({
           onChange={(e) => onChange(e.target.value)}
           className={cn(inputClass, 'resize-none')}
         />
-      )
+      );
     case 'number':
       return (
         <input
@@ -208,7 +211,7 @@ function FieldInput({
           onChange={(e) => onChange(e.target.value === '' ? undefined : Number(e.target.value))}
           className={inputClass}
         />
-      )
+      );
     case 'date':
       return (
         <input
@@ -224,7 +227,7 @@ function FieldInput({
           onChange={(e) => onChange(e.target.value === '' ? undefined : e.target.value)}
           className={inputClass}
         />
-      )
+      );
     case 'time':
       return (
         <input
@@ -235,11 +238,11 @@ function FieldInput({
           onChange={(e) => onChange(e.target.value === '' ? undefined : e.target.value)}
           className={inputClass}
         />
-      )
+      );
     case 'attachment':
       // Declared but inert until the attachment table exists. Rendering nothing
       // still leaves Next and Skip live, so it can never trap a player.
-      return <p className="text-sm text-muted">This question cannot be answered here yet.</p>
+      return <p className="text-sm text-muted">This question cannot be answered here yet.</p>;
     case 'short_text':
     default:
       return (
@@ -252,14 +255,14 @@ function FieldInput({
           onChange={(e) => onChange(e.target.value)}
           className={inputClass}
         />
-      )
+      );
   }
 }
 
 /** Local YYYY-MM-DD, matching the `<input type="date">` value format exactly. */
 function today(): string {
-  const d = new Date()
-  const month = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${d.getFullYear()}-${month}-${day}`
+  const d = new Date();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${month}-${day}`;
 }

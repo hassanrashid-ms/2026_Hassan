@@ -1,8 +1,17 @@
-import { foreignKey, integer, pgTable, text, timestamp, unique, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
-import { conversation } from './conversations.ts'
-import { workspace } from './identity.ts'
+import {
+  foreignKey,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+  unique,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
+import { conversation } from './conversations.ts';
+import { workspace } from './identity.ts';
 
-const tz = { withTimezone: true, mode: 'date' } as const
+const tz = { withTimezone: true, mode: 'date' } as const;
 
 export const tag = pgTable(
   'tag',
@@ -26,7 +35,7 @@ export const tag = pgTable(
     // together, see docs/decisions/2026-08-04-composite-foreign-keys-for-tenancy.md.
     unique('tag_workspace_id_uk').on(t.workspaceId, t.id),
   ],
-)
+);
 
 export const conversationTag = pgTable(
   'conversation_tag',
@@ -56,4 +65,4 @@ export const conversationTag = pgTable(
       foreignColumns: [tag.workspaceId, tag.id],
     }).onDelete('restrict'),
   ],
-)
+);

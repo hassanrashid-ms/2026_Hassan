@@ -4,7 +4,7 @@
 
 Team Leads and Admins gained a manual reassignment path today
 ([[2026-08-24-reassign-and-reclassify-design]]): `AssignPicker` lets them move a conversation to any
-active agent in the workspace. That picker has no view of *who to pick* — it's a flat name list with
+active agent in the workspace. That picker has no view of _who to pick_ — it's a flat name list with
 no signal for who's overloaded versus idle. This spec adds the missing view: a per-agent workload
 page showing current open-ticket count and recent resolution throughput for every agent in the
 workspace.
@@ -33,7 +33,7 @@ Per active agent in the workspace:
   "Mine"/"Agent Assigned" columns ([[2026-08-20-tickets-page-design]]) — no new definition of
   "currently owned."
 - **Resolved (7d)** — count of `resolution_cycle` rows where `resolved_at >= now() - interval '7
-  days'` and the parent conversation's `assigned_agent_id` was this agent. This naturally excludes
+days'` and the parent conversation's `assigned_agent_id` was this agent. This naturally excludes
   cycles resolved straight out of `bot_active` (no agent ever owned those) and correctly attributes a
   cycle to whichever agent owned the conversation at resolution time — a conversation reassigned
   mid-cycle counts toward the agent who held it when it resolved, not whoever held it earlier. Timed-
@@ -83,9 +83,7 @@ Response:
 
 ```jsonc
 {
-  "agents": [
-    { "agentId": "...", "agentName": "...", "openCount": 4, "resolved7d": 11 }
-  ]
+  "agents": [{ "agentId": "...", "agentName": "...", "openCount": 4, "resolved7d": 11 }],
 }
 ```
 
@@ -116,7 +114,7 @@ only when `canBuildForms(session)` is true (`lib/agentSession.ts`), the same rol
   it at `resolved_at`, per the join above, not whoever claimed it first.
 - **Non-team_lead/admin caller** — `403`, enforced by `requireTeamLeadOrAdmin`, matching every other
   route that middleware already guards.
-- **Deactivated agent** — excluded from the roster (left join is against *active* `workspace_member`
+- **Deactivated agent** — excluded from the roster (left join is against _active_ `workspace_member`
   rows only), consistent with the existing rule that a deactivated agent's open conversations return
   to the unassigned queue rather than staying attributed to them.
 

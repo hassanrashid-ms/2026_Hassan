@@ -1,4 +1,4 @@
-export {}
+export {};
 
 // One-off script: run manually against Weaviate Cloud to create the "Article" collection,
 // then seed the database (workspace, intents, subintents, articles) via the same `seed()`
@@ -20,22 +20,22 @@ export {}
 // `weaviate-client`, which is a backend-only dependency — a script outside the backend
 // workspace package can't resolve it. Run with:
 //   cd backend && node --experimental-strip-types scripts/setup-weaviate-collection.ts
-const { loadRootEnv } = await import('../src/env/loadRootEnv.ts')
-loadRootEnv(import.meta.url)
+const { loadRootEnv } = await import('../src/env/loadRootEnv.ts');
+loadRootEnv(import.meta.url);
 
-import weaviate, { configure, dataType, tokenization } from 'weaviate-client'
-import { getEnv } from '../src/env.ts'
+import weaviate, { configure, dataType, tokenization } from 'weaviate-client';
+import { getEnv } from '../src/env.ts';
 
 async function main() {
-  const env = getEnv()
+  const env = getEnv();
 
-  console.log('Setting up Weaviate collection...')
+  console.log('Setting up Weaviate collection...');
   const client = await weaviate.connectToWeaviateCloud(env.WEAVIATE_URL, {
     authCredentials: new weaviate.ApiKey(env.WEAVIATE_API_KEY),
-  })
+  });
 
-  const collections = await client.collections.listAll()
-  const articleCollectionExists = collections.some((c) => c.name === 'Article')
+  const collections = await client.collections.listAll();
+  const articleCollectionExists = collections.some((c) => c.name === 'Article');
 
   if (!articleCollectionExists) {
     await client.collections.create({
@@ -45,22 +45,37 @@ async function main() {
         { name: 'title', dataType: dataType.TEXT, tokenization: tokenization.TRIGRAM },
         { name: 'body', dataType: dataType.TEXT, tokenization: tokenization.TRIGRAM },
         { name: 'keywords', dataType: dataType.TEXT_ARRAY, tokenization: tokenization.TRIGRAM },
-        { name: 'intentId', dataType: dataType.TEXT, tokenization: tokenization.FIELD, skipVectorization: true },
-        { name: 'articleId', dataType: dataType.TEXT, tokenization: tokenization.FIELD, skipVectorization: true },
-        { name: 'workspaceId', dataType: dataType.TEXT, tokenization: tokenization.FIELD, skipVectorization: true },
+        {
+          name: 'intentId',
+          dataType: dataType.TEXT,
+          tokenization: tokenization.FIELD,
+          skipVectorization: true,
+        },
+        {
+          name: 'articleId',
+          dataType: dataType.TEXT,
+          tokenization: tokenization.FIELD,
+          skipVectorization: true,
+        },
+        {
+          name: 'workspaceId',
+          dataType: dataType.TEXT,
+          tokenization: tokenization.FIELD,
+          skipVectorization: true,
+        },
       ],
-    })
-    console.log('✓ Created "Article" collection in Weaviate Cloud.')
+    });
+    console.log('✓ Created "Article" collection in Weaviate Cloud.');
   } else {
-    console.log('✓ "Article" collection already exists in Weaviate Cloud.')
+    console.log('✓ "Article" collection already exists in Weaviate Cloud.');
   }
 
-  console.log('Seeding database (workspace, intents, subintents, articles)...')
-  const { seed } = await import('../src/shared/db/seed.ts')
-  const { closeDb } = await import('../src/shared/db/client.ts')
-  await seed()
-  await closeDb()
+  console.log('Seeding database (workspace, intents, subintents, articles)...');
+  const { seed } = await import('../src/shared/db/seed.ts');
+  const { closeDb } = await import('../src/shared/db/client.ts');
+  await seed();
+  await closeDb();
 }
 
-await main()
-console.log('\n✓ Setup complete: Weaviate collection created and database seeded.')
+await main();
+console.log('\n✓ Setup complete: Weaviate collection created and database seeded.');

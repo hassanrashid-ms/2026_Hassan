@@ -1,37 +1,37 @@
-import { useEffect } from 'react'
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { LayoutGrid, LogOut, ShieldCheck } from 'lucide-react'
+import { useEffect } from 'react';
+import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { LayoutGrid, LogOut, ShieldCheck } from 'lucide-react';
 // admin-console.css is imported HERE and nowhere else — never from main.tsx or
 // any statically-reachable module, so its Tailwind preflight never leaks into
 // the other two surfaces (mirrors AgentConsoleShell.tsx / WebviewShell.tsx).
-import '@/admin-console.css'
-import { clearAdminSession, loadAdminSession } from '../lib/adminSession.ts'
-import { Avatar, AvatarFallback } from './ui/avatar.tsx'
-import { Button } from './ui/button.tsx'
-import { Separator } from './ui/separator.tsx'
-import { cn } from '../lib/cn.ts'
+import '@/admin-console.css';
+import { clearAdminSession, loadAdminSession } from '../lib/adminSession.ts';
+import { Avatar, AvatarFallback } from './ui/avatar.tsx';
+import { Button } from './ui/button.tsx';
+import { Separator } from './ui/separator.tsx';
+import { cn } from '../lib/cn.ts';
 
 const NAV_ITEMS = [
   { to: '/dashboard/overview', label: 'Overview', icon: LayoutGrid },
   { to: '/dashboard/admins', label: 'Admins', icon: ShieldCheck },
-]
+];
 
 export function AdminConsoleShell() {
-  const navigate = useNavigate()
-  const session = loadAdminSession()
+  const navigate = useNavigate();
+  const session = loadAdminSession();
 
   useEffect(() => {
-    if (!session) navigate('/dashboard/login')
-  }, [session, navigate])
+    if (!session) navigate('/dashboard/login');
+  }, [session, navigate]);
 
-  if (!session) return null
+  if (!session) return null;
 
   const initials = session.displayName
     .split(' ')
     .map((part) => part[0])
     .slice(0, 2)
     .join('')
-    .toUpperCase()
+    .toUpperCase();
 
   return (
     <div className="flex h-screen w-screen bg-bg text-text">
@@ -70,8 +70,8 @@ export function AdminConsoleShell() {
             variant="ghost"
             size="sm"
             onClick={() => {
-              clearAdminSession()
-              navigate('/dashboard/login')
+              clearAdminSession();
+              navigate('/dashboard/login');
             }}
           >
             <LogOut className="size-4" />
@@ -84,5 +84,5 @@ export function AdminConsoleShell() {
         </main>
       </div>
     </div>
-  )
+  );
 }

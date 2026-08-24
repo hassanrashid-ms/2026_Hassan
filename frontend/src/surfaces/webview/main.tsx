@@ -1,9 +1,9 @@
-import { StrictMode, Suspense, lazy } from 'react'
-import { createRoot } from 'react-dom/client'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
-import { WebviewShell } from '@/surfaces/webview/components/WebviewShell'
-import { SupportHome } from '@/surfaces/webview/pages/SupportHome'
+import { StrictMode, Suspense, lazy } from 'react';
+import { createRoot } from 'react-dom/client';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { WebviewShell } from '@/surfaces/webview/components/WebviewShell';
+import { SupportHome } from '@/surfaces/webview/pages/SupportHome';
 
 /*
  * The player surface's entry point, mounted by webview.html.
@@ -23,15 +23,15 @@ import { SupportHome } from '@/surfaces/webview/pages/SupportHome'
  */
 const SupportSearch = lazy(async () => ({
   default: (await import('@/surfaces/webview/pages/SupportSearch')).SupportSearch,
-}))
+}));
 const SupportChat = lazy(async () => ({
   default: (await import('@/surfaces/webview/pages/SupportChat')).SupportChat,
-}))
+}));
 
-const root = document.getElementById('root')
-if (!root) throw new Error('#root is missing from webview.html')
+const root = document.getElementById('root');
+if (!root) throw new Error('#root is missing from webview.html');
 
-const queryClient = new QueryClient()
+const queryClient = new QueryClient();
 
 createRoot(root).render(
   <StrictMode>
@@ -88,4 +88,4 @@ createRoot(root).render(
       </BrowserRouter>
     </QueryClientProvider>
   </StrictMode>,
-)
+);

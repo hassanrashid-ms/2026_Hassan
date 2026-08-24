@@ -13,8 +13,8 @@ The admin-facing "Forms" tab described in `Docs/Customer Support Tool - CRM v2.t
 ("Bot settings · Forms") — the screen support uses to build the structured questions the bot
 shows before handing a conversation to an agent.
 
-This is the piece the 2026-08-11 data-model spec explicitly deferred: *"The admin form-builder UI
-and its authoring workflow. Nothing in this slice mints a `form_version` row or bumps a version."*
+This is the piece the 2026-08-11 data-model spec explicitly deferred: _"The admin form-builder UI
+and its authoring workflow. Nothing in this slice mints a `form_version` row or bumps a version."_
 That gap is what this spec closes. Everything the bot reads at runtime — `resolveSubintentForm`,
 the player-side form card, the agent context rail (forms slices 1–3) — already exists and is
 correct against the data model as written. This slice only adds the authoring surface on top of it.
@@ -55,29 +55,29 @@ Same shape as `taxonomyRouter.ts`: `requireWorkspaceRole` gates reads and drafti
 gates the two irreversible-ish actions.
 
 ```ts
-const canBuildForms = requireWorkspaceRole('team_lead', 'admin')
+const canBuildForms = requireWorkspaceRole('team_lead', 'admin');
 
-formsRouter.get('/forms', canBuildForms, listFormsHandler)
-formsRouter.post('/forms', canBuildForms, createFormHandler)
-formsRouter.get('/forms/:id', canBuildForms, getFormHandler)
-formsRouter.patch('/forms/:id', canBuildForms, updateFormHandler)
-formsRouter.post('/forms/:id/publish', requireAdminRole, publishFormHandler)
-formsRouter.post('/forms/:id/archive', requireAdminRole, archiveFormHandler)
-formsRouter.patch('/forms/:id/subintents', canBuildForms, setFormSubintentsHandler)
+formsRouter.get('/forms', canBuildForms, listFormsHandler);
+formsRouter.post('/forms', canBuildForms, createFormHandler);
+formsRouter.get('/forms/:id', canBuildForms, getFormHandler);
+formsRouter.patch('/forms/:id', canBuildForms, updateFormHandler);
+formsRouter.post('/forms/:id/publish', requireAdminRole, publishFormHandler);
+formsRouter.post('/forms/:id/archive', requireAdminRole, archiveFormHandler);
+formsRouter.patch('/forms/:id/subintents', canBuildForms, setFormSubintentsHandler);
 ```
 
 This mirrors the doc's permission matrix exactly:
 
-| Action | Team Lead | Admin |
-|---|---|---|
-| Build or edit a draft | ✓ | ✓ |
-| Map forms to subintents | ✓ | ✓ |
-| Publish a form | · | ✓ |
-| Archive a form | · | ✓ |
+| Action                  | Team Lead | Admin |
+| ----------------------- | --------- | ----- |
+| Build or edit a draft   | ✓         | ✓     |
+| Map forms to subintents | ✓         | ✓     |
+| Publish a form          | ·         | ✓     |
+| Archive a form          | ·         | ✓     |
 
 `PATCH` is used (not `POST`) for edit/mapping since these mutate an existing resource — this
 diverges from `botConfigRouter`'s POST-only note (that one was about the CORS allowlist for the
-*console's save button specifically*; these are still same-origin console calls, and every other
+_console's save button specifically_; these are still same-origin console calls, and every other
 admin route pattern in this repo — `taxonomyRouter`'s `POST` aside — doesn't yet establish a PATCH
 precedent, so confirm CORS allows PATCH before implementing, and fall back to POST-with-verb-suffix
 if it does not).
@@ -85,6 +85,7 @@ if it does not).
 ### Service — `backend/src/agent/services/formsService.ts`
 
 **`listForms(ctx)`** — one row per form:
+
 ```ts
 {
   id, name, archivedAt, createdAt,
@@ -133,6 +134,7 @@ admin might restore later (there is no "unarchive" in this slice, matching taxon
 one-way, so the mapping is left intact and inert rather than destroyed).
 
 **`setFormSubintents(ctx, formId, subintentIds)`** — in one transaction:
+
 1. Scoped `SELECT` to confirm every id in `subintentIds` belongs to this workspace and is not
    archived (client-supplied ids, so this pre-verification is mandatory per the FK-bypasses-RLS
    rule — same reasoning as the composite-FK ADR).
@@ -236,13 +238,13 @@ inline rather than round-tripping to the server for something Zod already expres
 
 Five types, matching `formFieldSchema`'s allowed set minus the two excluded here:
 
-| Type | Options editor shown? |
-|---|---|
-| `short_text` | no |
-| `long_text` | no |
-| `number` | no |
-| `date` | no |
-| `choice` | yes, ≥2 options |
+| Type         | Options editor shown? |
+| ------------ | --------------------- |
+| `short_text` | no                    |
+| `long_text`  | no                    |
+| `number`     | no                    |
+| `date`       | no                    |
+| `choice`     | yes, ≥2 options       |
 
 `attachment` and `time` are declared in `FORM_FIELD_TYPES` but never appear in this picker.
 
@@ -268,4 +270,4 @@ Five types, matching `formFieldSchema`'s allowed set minus the two excluded here
 - **Manual verification**: create a form, publish it, map it to a subintent, trigger the bot
   handoff for that subintent in the webview, confirm the published fields (not a later unpublished
   edit) are what the player sees — then edit the published form's fields and confirm the change
-  does *not* retroactively alter the in-flight submission's rendering in the agent context rail.
+  does _not_ retroactively alter the in-flight submission's rendering in the agent context rail.

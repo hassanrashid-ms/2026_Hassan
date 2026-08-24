@@ -1,7 +1,7 @@
-import { useQuery, useMutation } from '@tanstack/react-query'
-import { fetchBotConfigHistory, rollbackBotConfig } from '../../../api/agentApi.ts'
-import { Button } from '../../../components/ui/button.tsx'
-import { ScrollArea } from '../../../components/ui/scroll-area.tsx'
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { fetchBotConfigHistory, rollbackBotConfig } from '../../../api/agentApi.ts';
+import { Button } from '../../../components/ui/button.tsx';
+import { ScrollArea } from '../../../components/ui/scroll-area.tsx';
 
 /**
  * "Restore" always targets the entry's `before_value` — the state right
@@ -15,21 +15,22 @@ export function HistoryPanel({
   field,
   onRestored,
 }: {
-  token: string
-  field: 'prompt' | 'rules' | 'tools_config' | 'limits_config'
-  onRestored: () => void
+  token: string;
+  field: 'prompt' | 'rules' | 'tools_config' | 'limits_config';
+  onRestored: () => void;
 }) {
   const historyQuery = useQuery({
     queryKey: ['bot-config-history', field],
     queryFn: () => fetchBotConfigHistory(token, { field, limit: 20 }),
-  })
+  });
 
   const restore = useMutation({
-    mutationFn: (changeLogId: string) => rollbackBotConfig(token, { field, change_log_id: changeLogId, side: 'before' }),
+    mutationFn: (changeLogId: string) =>
+      rollbackBotConfig(token, { field, change_log_id: changeLogId, side: 'before' }),
     onSuccess: () => onRestored(),
-  })
+  });
 
-  const entries = historyQuery.data?.entries ?? []
+  const entries = historyQuery.data?.entries ?? [];
 
   return (
     <div className="flex w-64 shrink-0 flex-col gap-2 border-l border-slate-200 pl-3">
@@ -37,7 +38,10 @@ export function HistoryPanel({
       <ScrollArea className="min-h-0 flex-1">
         <ul className="flex flex-col gap-2">
           {entries.map((entry) => (
-            <li key={entry.id} className="flex flex-col gap-1 rounded-md border border-slate-200 p-2 text-xs">
+            <li
+              key={entry.id}
+              className="flex flex-col gap-1 rounded-md border border-slate-200 p-2 text-xs"
+            >
               <span className="font-medium">{entry.actor.display_name}</span>
               <span className="text-muted">{new Date(entry.changed_at).toLocaleString()}</span>
               <Button
@@ -56,5 +60,5 @@ export function HistoryPanel({
       </ScrollArea>
       {restore.isError && <p className="text-xs text-red-600">{restore.error?.message}</p>}
     </div>
-  )
+  );
 }

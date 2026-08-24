@@ -1,10 +1,10 @@
-import { sql } from 'drizzle-orm'
-import { z } from 'zod'
-import { db, type Db } from './client.ts'
+import { sql } from 'drizzle-orm';
+import { z } from 'zod';
+import { db, type Db } from './client.ts';
 
-export type Tx = Parameters<Parameters<Db['transaction']>[0]>[0]
+export type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 
-const uuidSchema = z.uuid()
+const uuidSchema = z.uuid();
 
 /**
  * Thrown by `withWorkspace` when the workspace id isn't a syntactically valid UUID.
@@ -16,12 +16,12 @@ const uuidSchema = z.uuid()
  * a clean 4xx before a transaction is ever opened.
  */
 export class InvalidWorkspaceId extends Error {
-  readonly workspaceId: string
+  readonly workspaceId: string;
 
   constructor(workspaceId: string) {
-    super(`Invalid workspace id: not a UUID`)
-    this.name = 'InvalidWorkspaceId'
-    this.workspaceId = workspaceId
+    super(`Invalid workspace id: not a UUID`);
+    this.name = 'InvalidWorkspaceId';
+    this.workspaceId = workspaceId;
   }
 }
 
@@ -39,14 +39,17 @@ export class InvalidWorkspaceId extends Error {
  * `InvalidWorkspaceId` — so a bad value fails fast and cleanly rather than
  * surfacing as a raw Postgres error partway through a transaction.
  */
-export async function withWorkspace<T>(workspaceId: string, fn: (tx: Tx) => Promise<T>): Promise<T> {
+export async function withWorkspace<T>(
+  workspaceId: string,
+  fn: (tx: Tx) => Promise<T>,
+): Promise<T> {
   if (!uuidSchema.safeParse(workspaceId).success) {
-    throw new InvalidWorkspaceId(workspaceId)
+    throw new InvalidWorkspaceId(workspaceId);
   }
   return db.transaction(async (tx) => {
-    await tx.execute(sql`select set_config('app.workspace_id', ${workspaceId}, true)`)
-    return fn(tx)
-  })
+    await tx.execute(sql`select set_config('app.workspace_id', ${workspaceId}, true)`);
+    return fn(tx);
+  });
 }
 
 /**
@@ -55,5 +58,5 @@ export async function withWorkspace<T>(workspaceId: string, fn: (tx: Tx) => Prom
  * look like missing data.
  */
 export async function withoutWorkspace<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
-  return db.transaction(fn)
+  return db.transaction(fn);
 }

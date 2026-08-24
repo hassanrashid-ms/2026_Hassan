@@ -1,11 +1,20 @@
-import { sql } from 'drizzle-orm'
-import { boolean, customType, integer, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
-import { agentStatus, workspaceRole } from './enums.ts'
+import { sql } from 'drizzle-orm';
+import {
+  boolean,
+  customType,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
+import { agentStatus, workspaceRole } from './enums.ts';
 
 /** Case-insensitive email, per the schema spec. Requires the citext extension. */
-const citext = customType<{ data: string }>({ dataType: () => 'citext' })
+const citext = customType<{ data: string }>({ dataType: () => 'citext' });
 
-const tz = { withTimezone: true, mode: 'date' } as const
+const tz = { withTimezone: true, mode: 'date' } as const;
 
 /** One of only two unscoped tables. No RLS policy, no workspace_id. */
 export const workspace = pgTable('workspace', {
@@ -30,7 +39,7 @@ export const workspace = pgTable('workspace', {
   /** Set to refuse token minting without deleting anything. */
   disabledAt: timestamp('disabled_at', tz),
   createdAt: timestamp('created_at', tz).notNull().defaultNow(),
-})
+});
 
 /**
  * The other unscoped table: one login per person, global across workspaces.
@@ -51,7 +60,7 @@ export const agent = pgTable('agent', {
   /** Global: may toggle isAdmin/isSuperAdmin on any agent. */
   isSuperAdmin: boolean('is_super_admin').notNull().default(false),
   createdAt: timestamp('created_at', tz).notNull().defaultNow(),
-})
+});
 
 /** The hinge: a global agent holds a per-workspace role. */
 export const workspaceMember = pgTable(
@@ -69,7 +78,7 @@ export const workspaceMember = pgTable(
     createdAt: timestamp('created_at', tz).notNull().defaultNow(),
   },
   (t) => [uniqueIndex('workspace_member_workspace_agent_uk').on(t.workspaceId, t.agentId)],
-)
+);
 
 /**
  * Replaces the single `workspace.secret_hash`. Rotation inserts a new row rather
@@ -87,4 +96,4 @@ export const workspaceSecret = pgTable('workspace_secret', {
   expiresAt: timestamp('expires_at', tz),
   /** Set only if an admin manually revokes ahead of expiry. */
   revokedAt: timestamp('revoked_at', tz),
-})
+});

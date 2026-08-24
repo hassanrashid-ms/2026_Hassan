@@ -53,29 +53,29 @@ GRANT UPDATE (ticket_seq) ON workspace TO support_app;
 
 ## File Structure
 
-| Path | Change |
-|---|---|
-| `backend/src/shared/db/schema/identity.ts` | add `workspace.ticketSeq` |
-| `backend/src/shared/db/schema/conversations.ts` | add `conversation.number` + unique index |
-| `backend/src/shared/db/sql/002_rls.sql` | column-scoped `GRANT UPDATE (ticket_seq)` |
-| `backend/drizzle/0003_ticket_number.sql` | hand-ordered migration, five steps |
-| `backend/drizzle/meta/_journal.json` | new entry (generated) |
-| `backend/src/domain/conversations/allocateTicketNumber.ts` | **new** — the one place that bumps `ticket_seq` |
-| `backend/src/domain/conversations/index.ts` | re-export the allocator |
-| `backend/src/surface/services/newTicketService.ts` | allocate number on insert |
-| `backend/src/surface/services/messagesService.ts` | allocate number on auto-create |
+| Path                                                       | Change                                           |
+| ---------------------------------------------------------- | ------------------------------------------------ |
+| `backend/src/shared/db/schema/identity.ts`                 | add `workspace.ticketSeq`                        |
+| `backend/src/shared/db/schema/conversations.ts`            | add `conversation.number` + unique index         |
+| `backend/src/shared/db/sql/002_rls.sql`                    | column-scoped `GRANT UPDATE (ticket_seq)`        |
+| `backend/drizzle/0003_ticket_number.sql`                   | hand-ordered migration, five steps               |
+| `backend/drizzle/meta/_journal.json`                       | new entry (generated)                            |
+| `backend/src/domain/conversations/allocateTicketNumber.ts` | **new** — the one place that bumps `ticket_seq`  |
+| `backend/src/domain/conversations/index.ts`                | re-export the allocator                          |
+| `backend/src/surface/services/newTicketService.ts`         | allocate number on insert                        |
+| `backend/src/surface/services/messagesService.ts`          | allocate number on auto-create                   |
 | `backend/src/agent/services/conversationContextService.ts` | **new** — detail + player state + ticket history |
-| `backend/src/agent/controllers/conversationsController.ts` | two handlers |
-| `backend/src/agent/routers/conversationsRouter.ts` | two routes |
-| `backend/src/docs/openapi.ts` | two paths + response schemas |
-| `packages/types/src/agent-context.ts` | **new** — the response types |
-| `packages/types/src/index.ts` | barrel export |
-| `backend/tests/helpers/db.ts` | `seedConversation` allocates a number |
-| `backend/tests/schema.test.ts` | raw insert needs a number |
-| `backend/tests/rls.test.ts` | two raw inserts need a number |
-| `backend/tests/ticketNumber.test.ts` | **new** |
-| `backend/tests/agent.conversationDetail.test.ts` | **new** |
-| `backend/tests/agent.conversationContext.test.ts` | **new** |
+| `backend/src/agent/controllers/conversationsController.ts` | two handlers                                     |
+| `backend/src/agent/routers/conversationsRouter.ts`         | two routes                                       |
+| `backend/src/docs/openapi.ts`                              | two paths + response schemas                     |
+| `packages/types/src/agent-context.ts`                      | **new** — the response types                     |
+| `packages/types/src/index.ts`                              | barrel export                                    |
+| `backend/tests/helpers/db.ts`                              | `seedConversation` allocates a number            |
+| `backend/tests/schema.test.ts`                             | raw insert needs a number                        |
+| `backend/tests/rls.test.ts`                                | two raw inserts need a number                    |
+| `backend/tests/ticketNumber.test.ts`                       | **new**                                          |
+| `backend/tests/agent.conversationDetail.test.ts`           | **new**                                          |
+| `backend/tests/agent.conversationContext.test.ts`          | **new**                                          |
 
 A new service file rather than growing `conversationsService.ts`, which is 82 lines of claim/list/messages and would roughly double with unrelated concerns.
 
@@ -84,6 +84,7 @@ A new service file rather than growing `conversationsService.ts`, which is 82 li
 ## Task 1: Schema, grant, and migration for ticket numbers
 
 **Files:**
+
 - Modify: `backend/src/shared/db/schema/identity.ts:11-20`
 - Modify: `backend/src/shared/db/schema/conversations.ts:24-67`
 - Modify: `backend/src/shared/db/sql/002_rls.sql:63`
@@ -91,6 +92,7 @@ A new service file rather than growing `conversationsService.ts`, which is 82 li
 - Test: `backend/tests/ticketNumber.test.ts`
 
 **Interfaces:**
+
 - Consumes: nothing.
 - Produces: `workspace.ticketSeq` (`integer('ticket_seq').notNull().default(0)`), `conversation.number` (`integer('number').notNull()`), unique index `conversation_workspace_number_uk` on `(workspace_id, number)`.
 
@@ -99,73 +101,82 @@ A new service file rather than growing `conversationsService.ts`, which is 82 li
 Create `backend/tests/ticketNumber.test.ts`. This task's tests cover the schema and the backfill only; allocation-on-create is Task 2.
 
 ```typescript
-import { readFileSync } from 'node:fs'
-import { randomUUID } from 'node:crypto'
-import { afterAll, beforeEach, describe, expect, it } from 'vitest'
-import { closeOwnerPool, ownerPool, seedPlayer, seedWorkspace, truncateAll } from './helpers/db.ts'
+import { readFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { closeOwnerPool, ownerPool, seedPlayer, seedWorkspace, truncateAll } from './helpers/db.ts';
 
 afterAll(async () => {
-  await closeOwnerPool()
-})
+  await closeOwnerPool();
+});
 
-beforeEach(truncateAll)
+beforeEach(truncateAll);
 
 describe('ticket number schema', () => {
   it('has ticket_seq on workspace defaulting to 0', async () => {
-    const workspaceId = await seedWorkspace()
+    const workspaceId = await seedWorkspace();
     const { rows } = await ownerPool.query<{ ticket_seq: number }>(
       `select ticket_seq from workspace where id = $1`,
       [workspaceId],
-    )
-    expect(rows[0]!.ticket_seq).toBe(0)
-  })
+    );
+    expect(rows[0]!.ticket_seq).toBe(0);
+  });
 
   it('rejects a second conversation with the same number in one workspace', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
     await ownerPool.query(
       `insert into conversation (workspace_id, player_id, number) values ($1, $2, 7)`,
       [workspaceId, playerId],
-    )
+    );
     await expect(
-      ownerPool.query(`insert into conversation (workspace_id, player_id, number) values ($1, $2, 7)`, [
+      ownerPool.query(
+        `insert into conversation (workspace_id, player_id, number) values ($1, $2, 7)`,
+        [workspaceId, playerId],
+      ),
+    ).rejects.toThrow(/conversation_workspace_number_uk/);
+  });
+
+  it('allows the same number in two different workspaces', async () => {
+    const wsA = await seedWorkspace();
+    const wsB = await seedWorkspace();
+    const playerA = await seedPlayer(wsA);
+    const playerB = await seedPlayer(wsB);
+    await ownerPool.query(
+      `insert into conversation (workspace_id, player_id, number) values ($1, $2, 1)`,
+      [wsA, playerA],
+    );
+    await expect(
+      ownerPool.query(
+        `insert into conversation (workspace_id, player_id, number) values ($1, $2, 1)`,
+        [wsB, playerB],
+      ),
+    ).resolves.toBeDefined();
+  });
+
+  it('rejects a conversation with no number', async () => {
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    await expect(
+      ownerPool.query(`insert into conversation (workspace_id, player_id) values ($1, $2)`, [
         workspaceId,
         playerId,
       ]),
-    ).rejects.toThrow(/conversation_workspace_number_uk/)
-  })
-
-  it('allows the same number in two different workspaces', async () => {
-    const wsA = await seedWorkspace()
-    const wsB = await seedWorkspace()
-    const playerA = await seedPlayer(wsA)
-    const playerB = await seedPlayer(wsB)
-    await ownerPool.query(`insert into conversation (workspace_id, player_id, number) values ($1, $2, 1)`, [wsA, playerA])
-    await expect(
-      ownerPool.query(`insert into conversation (workspace_id, player_id, number) values ($1, $2, 1)`, [wsB, playerB]),
-    ).resolves.toBeDefined()
-  })
-
-  it('rejects a conversation with no number', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    await expect(
-      ownerPool.query(`insert into conversation (workspace_id, player_id) values ($1, $2)`, [workspaceId, playerId]),
-    ).rejects.toThrow(/not-null/i)
-  })
+    ).rejects.toThrow(/not-null/i);
+  });
 
   it('grants support_app UPDATE on ticket_seq but not on secret_hash', async () => {
     const { rows: allowed } = await ownerPool.query<{ ok: boolean }>(
       `select has_column_privilege('support_app', 'workspace', 'ticket_seq', 'UPDATE') as ok`,
-    )
-    expect(allowed[0]!.ok).toBe(true)
+    );
+    expect(allowed[0]!.ok).toBe(true);
 
     const { rows: denied } = await ownerPool.query<{ ok: boolean }>(
       `select has_column_privilege('support_app', 'workspace', 'secret_hash', 'UPDATE') as ok`,
-    )
-    expect(denied[0]!.ok).toBe(false)
-  })
-})
+    );
+    expect(denied[0]!.ok).toBe(false);
+  });
+});
 
 // The migration's backfill, replayed against rows that were numbered before it
 // ran. NOT NULL is already on the column by the time tests run, so the
@@ -174,59 +185,62 @@ describe('ticket number schema', () => {
 // paraphrase of them.
 describe('ticket number backfill', () => {
   it('numbers each workspace contiguously from 1 by created_at and leaves ticket_seq at the max', async () => {
-    const wsA = await seedWorkspace()
-    const wsB = await seedWorkspace()
-    const playerA = await seedPlayer(wsA)
-    const playerB = await seedPlayer(wsB)
+    const wsA = await seedWorkspace();
+    const wsB = await seedWorkspace();
+    const playerA = await seedPlayer(wsA);
+    const playerB = await seedPlayer(wsB);
 
     const mk = async (workspaceId: string, playerId: string, createdAt: string) => {
-      const id = randomUUID()
+      const id = randomUUID();
       await ownerPool.query(
         `insert into conversation (id, workspace_id, player_id, number, created_at) values ($1, $2, $3, 999, $4)`,
         [id, workspaceId, playerId, createdAt],
-      )
-      return id
-    }
+      );
+      return id;
+    };
 
-    const a1 = await mk(wsA, playerA, '2026-01-01T00:00:00Z')
-    const a2 = await mk(wsA, playerA, '2026-01-02T00:00:00Z')
-    const a3 = await mk(wsA, playerA, '2026-01-03T00:00:00Z')
-    const b1 = await mk(wsB, playerB, '2026-01-05T00:00:00Z')
+    const a1 = await mk(wsA, playerA, '2026-01-01T00:00:00Z');
+    const a2 = await mk(wsA, playerA, '2026-01-02T00:00:00Z');
+    const a3 = await mk(wsA, playerA, '2026-01-03T00:00:00Z');
+    const b1 = await mk(wsB, playerB, '2026-01-05T00:00:00Z');
 
-    await ownerPool.query(`alter table conversation alter column number drop not null`)
+    await ownerPool.query(`alter table conversation alter column number drop not null`);
     try {
-      await ownerPool.query(`update conversation set number = null`)
-      await ownerPool.query(`update workspace set ticket_seq = 0`)
+      await ownerPool.query(`update conversation set number = null`);
+      await ownerPool.query(`update workspace set ticket_seq = 0`);
 
-      const sql = readFileSync(new URL('../drizzle/0003_ticket_number.sql', import.meta.url), 'utf8')
+      const sql = readFileSync(
+        new URL('../drizzle/0003_ticket_number.sql', import.meta.url),
+        'utf8',
+      );
       const backfill = sql
         .split('--> statement-breakpoint')
         .map((s) => s.trim())
-        .filter((s) => s.includes('BACKFILL'))
-      expect(backfill).toHaveLength(2)
-      for (const statement of backfill) await ownerPool.query(statement)
+        .filter((s) => s.includes('BACKFILL'));
+      expect(backfill).toHaveLength(2);
+      for (const statement of backfill) await ownerPool.query(statement);
 
       const { rows } = await ownerPool.query<{ id: string; number: number }>(
         `select id, number from conversation order by workspace_id, number`,
-      )
-      const byId = new Map(rows.map((r) => [r.id, r.number]))
-      expect(byId.get(a1)).toBe(1)
-      expect(byId.get(a2)).toBe(2)
-      expect(byId.get(a3)).toBe(3)
-      expect(byId.get(b1)).toBe(1)
+      );
+      const byId = new Map(rows.map((r) => [r.id, r.number]));
+      expect(byId.get(a1)).toBe(1);
+      expect(byId.get(a2)).toBe(2);
+      expect(byId.get(a3)).toBe(3);
+      expect(byId.get(b1)).toBe(1);
 
       const { rows: seqs } = await ownerPool.query<{ id: string; ticket_seq: number }>(
         `select id, ticket_seq from workspace`,
-      )
-      const seqById = new Map(seqs.map((r) => [r.id, r.ticket_seq]))
-      expect(seqById.get(wsA)).toBe(3)
-      expect(seqById.get(wsB)).toBe(1)
+      );
+      const seqById = new Map(seqs.map((r) => [r.id, r.ticket_seq]));
+      expect(seqById.get(wsA)).toBe(3);
+      expect(seqById.get(wsB)).toBe(1);
     } finally {
-      await ownerPool.query(`update conversation set number = 0 where number is null`)
-      await ownerPool.query(`alter table conversation alter column number set not null`)
+      await ownerPool.query(`update conversation set number = 0 where number is null`);
+      await ownerPool.query(`alter table conversation alter column number set not null`);
     }
-  })
-})
+  });
+});
 ```
 
 - [ ] **Step 2: Run the test to verify it fails**
@@ -254,7 +268,7 @@ export const workspace = pgTable('workspace', {
   ticketSeq: integer('ticket_seq').notNull().default(0),
   disabledAt: timestamp('disabled_at', tz),
   createdAt: timestamp('created_at', tz).notNull().defaultNow(),
-})
+});
 ```
 
 - [ ] **Step 4: Add `number` to the conversation schema**
@@ -360,25 +374,25 @@ Three existing call sites insert a conversation without a number and will now fa
 
 ```typescript
 export async function seedConversation(args: {
-  workspaceId: string
-  playerId: string
-  sessionId?: string | null
-  createdAt?: Date
+  workspaceId: string;
+  playerId: string;
+  sessionId?: string | null;
+  createdAt?: Date;
 }): Promise<string> {
-  const id = randomUUID()
+  const id = randomUUID();
   // Bumped the same way the request path bumps it, so a test that seeds three
   // conversations sees #1, #2, #3 rather than three rows fighting over one number.
   const { rows } = await ownerPool.query<{ ticket_seq: number }>(
     `update workspace set ticket_seq = ticket_seq + 1 where id = $1 returning ticket_seq`,
     [args.workspaceId],
-  )
-  const number = rows[0]!.ticket_seq
+  );
+  const number = rows[0]!.ticket_seq;
   await ownerPool.query(
     `insert into conversation (id, workspace_id, player_id, session_id, number, created_at)
      values ($1, $2, $3, $4, $5, coalesce($6, now()))`,
     [id, args.workspaceId, args.playerId, args.sessionId ?? null, number, args.createdAt ?? null],
-  )
-  return id
+  );
+  return id;
 }
 ```
 
@@ -394,7 +408,7 @@ export async function seedConversation(args: {
       `insert into conversation (workspace_id, player_id, session_id, number) values ($1, $2, $3, 1) returning id`,
 ```
 
-`backend/tests/rls.test.ts:296` — this one asserts an RLS *denial*, so the number just has to be present and not collide:
+`backend/tests/rls.test.ts:296` — this one asserts an RLS _denial_, so the number just has to be present and not collide:
 
 ```typescript
         sql: `insert into conversation (workspace_id, player_id, number) values ($1, $2, 1)`,
@@ -424,6 +438,7 @@ git commit -m "feat(db): per-workspace ticket numbers on conversation"
 ## Task 2: Allocate the number on both creation paths
 
 **Files:**
+
 - Create: `backend/src/domain/conversations/allocateTicketNumber.ts`
 - Modify: `backend/src/domain/conversations/index.ts`
 - Modify: `backend/src/surface/services/newTicketService.ts:82-86`
@@ -431,6 +446,7 @@ git commit -m "feat(db): per-workspace ticket numbers on conversation"
 - Test: `backend/tests/ticketNumber.test.ts` (append a describe block)
 
 **Interfaces:**
+
 - Consumes: `workspace.ticketSeq` and `conversation.number` from Task 1.
 - Produces: `allocateTicketNumber(tx: Tx, workspaceId: string): Promise<number>` — exported from `backend/src/domain/conversations/index.ts`. Must be called inside the caller's transaction, immediately before the conversation insert.
 
@@ -439,33 +455,35 @@ git commit -m "feat(db): per-workspace ticket numbers on conversation"
 Append to `backend/tests/ticketNumber.test.ts`. Add these imports to the file's existing import block:
 
 ```typescript
-import { createServer } from 'node:http'
-import { req as request } from './helpers/http.ts'
-import { app, mintToken } from './helpers/app.ts'
-import { closeDb } from '../src/shared/db/client.ts'
-import { closeSocketServer, createSocketServer } from '../src/shared/realtime/socketServer.ts'
-import { seedBotConfig, seedSession } from './helpers/db.ts'
-import { vi, beforeAll } from 'vitest'
+import { createServer } from 'node:http';
+import { req as request } from './helpers/http.ts';
+import { app, mintToken } from './helpers/app.ts';
+import { closeDb } from '../src/shared/db/client.ts';
+import { closeSocketServer, createSocketServer } from '../src/shared/realtime/socketServer.ts';
+import { seedBotConfig, seedSession } from './helpers/db.ts';
+import { vi, beforeAll } from 'vitest';
 ```
 
 Add the bot-turn mock at the top level of the file, alongside the other imports — `POST /surface/messages` enqueues a bot turn and this suite has no worker:
 
 ```typescript
-vi.mock('../src/shared/jobs/botTurns.ts', () => ({ enqueueBotTurn: vi.fn().mockResolvedValue(undefined) }))
+vi.mock('../src/shared/jobs/botTurns.ts', () => ({
+  enqueueBotTurn: vi.fn().mockResolvedValue(undefined),
+}));
 ```
 
 Widen the existing `afterAll` to also close the db and socket server, and add a `beforeAll` that creates one:
 
 ```typescript
 beforeAll(() => {
-  createSocketServer(createServer())
-})
+  createSocketServer(createServer());
+});
 
 afterAll(async () => {
-  await closeSocketServer()
-  await closeDb()
-  await closeOwnerPool()
-})
+  await closeSocketServer();
+  await closeDb();
+  await closeOwnerPool();
+});
 ```
 
 Then append:
@@ -473,75 +491,82 @@ Then append:
 ```typescript
 describe('ticket number allocation', () => {
   async function setupPlayer() {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    await seedSession({ workspaceId, playerId })
-    await seedBotConfig({ workspaceId, isProvisioned: false })
-    const token = await mintToken({ workspace_id: workspaceId, player_id: playerId, external_player_id: 'p1' })
-    return { workspaceId, playerId, token }
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    await seedSession({ workspaceId, playerId });
+    await seedBotConfig({ workspaceId, isProvisioned: false });
+    const token = await mintToken({
+      workspace_id: workspaceId,
+      player_id: playerId,
+      external_player_id: 'p1',
+    });
+    return { workspaceId, playerId, token };
   }
 
   async function numberOf(conversationId: string): Promise<number> {
-    const { rows } = await ownerPool.query<{ number: number }>(`select number from conversation where id = $1`, [
-      conversationId,
-    ])
-    return rows[0]!.number
+    const { rows } = await ownerPool.query<{ number: number }>(
+      `select number from conversation where id = $1`,
+      [conversationId],
+    );
+    return rows[0]!.number;
   }
 
   it('numbers the auto-created conversation from the first message', async () => {
-    const { token } = await setupPlayer()
+    const { token } = await setupPlayer();
     const res = await request(app)
       .post('/surface/messages')
       .set('Authorization', `Bearer ${token}`)
       .send({ body: 'hello' })
-      .expect(200)
-    expect(await numberOf(res.body.conversation_id)).toBe(1)
-  })
+      .expect(200);
+    expect(await numberOf(res.body.conversation_id)).toBe(1);
+  });
 
   it('numbers a new ticket, continuing the same workspace sequence', async () => {
-    const { workspaceId, token } = await setupPlayer()
+    const { workspaceId, token } = await setupPlayer();
     const first = await request(app)
       .post('/surface/messages')
       .set('Authorization', `Bearer ${token}`)
       .send({ body: 'hello' })
-      .expect(200)
+      .expect(200);
 
-    await ownerPool.query(`update conversation set status = 'resolved' where id = $1`, [first.body.conversation_id])
+    await ownerPool.query(`update conversation set status = 'resolved' where id = $1`, [
+      first.body.conversation_id,
+    ]);
 
     const second = await request(app)
       .post('/surface/new-ticket')
       .set('Authorization', `Bearer ${token}`)
       .send({})
-      .expect(200)
+      .expect(200);
 
-    expect(await numberOf(second.body.conversation_id)).toBe(2)
+    expect(await numberOf(second.body.conversation_id)).toBe(2);
 
     const { rows } = await ownerPool.query<{ ticket_seq: number }>(
       `select ticket_seq from workspace where id = $1`,
       [workspaceId],
-    )
-    expect(rows[0]!.ticket_seq).toBe(2)
-  })
+    );
+    expect(rows[0]!.ticket_seq).toBe(2);
+  });
 
   it('numbers two workspaces independently from 1', async () => {
-    const a = await setupPlayer()
-    const b = await setupPlayer()
+    const a = await setupPlayer();
+    const b = await setupPlayer();
 
     const resA = await request(app)
       .post('/surface/messages')
       .set('Authorization', `Bearer ${a.token}`)
       .send({ body: 'from a' })
-      .expect(200)
+      .expect(200);
     const resB = await request(app)
       .post('/surface/messages')
       .set('Authorization', `Bearer ${b.token}`)
       .send({ body: 'from b' })
-      .expect(200)
+      .expect(200);
 
-    expect(await numberOf(resA.body.conversation_id)).toBe(1)
-    expect(await numberOf(resB.body.conversation_id)).toBe(1)
-  })
-})
+    expect(await numberOf(resA.body.conversation_id)).toBe(1);
+    expect(await numberOf(resB.body.conversation_id)).toBe(1);
+  });
+});
 ```
 
 - [ ] **Step 2: Run the test to verify it fails**
@@ -554,9 +579,9 @@ Expected: FAIL — the conversation insert violates the `number` NOT NULL constr
 Create `backend/src/domain/conversations/allocateTicketNumber.ts`:
 
 ```typescript
-import { eq, sql } from 'drizzle-orm'
-import { workspace } from '../../shared/db/schema/index.ts'
-import type { Tx } from '../../shared/db/withWorkspace.ts'
+import { eq, sql } from 'drizzle-orm';
+import { workspace } from '../../shared/db/schema/index.ts';
+import type { Tx } from '../../shared/db/withWorkspace.ts';
 
 /**
  * The one place that bumps `workspace.ticket_seq`. Always in the caller's
@@ -578,12 +603,12 @@ export async function allocateTicketNumber(tx: Tx, workspaceId: string): Promise
     .update(workspace)
     .set({ ticketSeq: sql`${workspace.ticketSeq} + 1` })
     .where(eq(workspace.id, workspaceId))
-    .returning({ number: workspace.ticketSeq })
+    .returning({ number: workspace.ticketSeq });
 
   if (!bumped) {
-    throw new Error(`allocateTicketNumber: workspace ${workspaceId} not found`)
+    throw new Error(`allocateTicketNumber: workspace ${workspaceId} not found`);
   }
-  return bumped.number
+  return bumped.number;
 }
 ```
 
@@ -594,7 +619,7 @@ If `Tx` is not exported from `backend/src/shared/db/withWorkspace.ts`, export th
 Add to `backend/src/domain/conversations/index.ts`, following the export style already in that file:
 
 ```typescript
-export { allocateTicketNumber } from './allocateTicketNumber.ts'
+export { allocateTicketNumber } from './allocateTicketNumber.ts';
 ```
 
 - [ ] **Step 5: Allocate in `newTicketService.ts`**
@@ -602,18 +627,18 @@ export { allocateTicketNumber } from './allocateTicketNumber.ts'
 Replace lines 82-86 of `backend/src/surface/services/newTicketService.ts`:
 
 ```typescript
-    const number = await allocateTicketNumber(tx, ctx.workspaceId)
-    const [created] = await tx
-      .insert(conversation)
-      .values({ workspaceId: ctx.workspaceId, playerId: ctx.playerId, sessionId, number })
-      .returning({ id: conversation.id, status: conversation.status })
-    if (!created) throw new Error('openNewTicket: conversation insert returned nothing')
+const number = await allocateTicketNumber(tx, ctx.workspaceId);
+const [created] = await tx
+  .insert(conversation)
+  .values({ workspaceId: ctx.workspaceId, playerId: ctx.playerId, sessionId, number })
+  .returning({ id: conversation.id, status: conversation.status });
+if (!created) throw new Error('openNewTicket: conversation insert returned nothing');
 ```
 
 Add to that file's imports:
 
 ```typescript
-import { allocateTicketNumber } from '../../domain/conversations/index.ts'
+import { allocateTicketNumber } from '../../domain/conversations/index.ts';
 ```
 
 - [ ] **Step 6: Allocate in `messagesService.ts`**
@@ -621,12 +646,17 @@ import { allocateTicketNumber } from '../../domain/conversations/index.ts'
 Replace lines 77-81 of `backend/src/surface/services/messagesService.ts`:
 
 ```typescript
-      const number = await allocateTicketNumber(tx, ctx.workspaceId)
-      const [created] = await tx
-        .insert(conversation)
-        .values({ workspaceId: ctx.workspaceId, playerId: ctx.playerId, sessionId: originatingSessionId, number })
-        .returning({ id: conversation.id })
-      if (!created) throw new Error('conversation insert returned nothing')
+const number = await allocateTicketNumber(tx, ctx.workspaceId);
+const [created] = await tx
+  .insert(conversation)
+  .values({
+    workspaceId: ctx.workspaceId,
+    playerId: ctx.playerId,
+    sessionId: originatingSessionId,
+    number,
+  })
+  .returning({ id: conversation.id });
+if (!created) throw new Error('conversation insert returned nothing');
 ```
 
 Add `allocateTicketNumber` to that file's existing import from `../../domain/conversations/index.ts` if one is present; otherwise add the import line.
@@ -656,6 +686,7 @@ git commit -m "feat(surface): allocate a ticket number on both creation paths"
 ## Task 3: Shared types and `GET /agent/conversations/:id`
 
 **Files:**
+
 - Create: `packages/types/src/agent-context.ts`
 - Modify: `packages/types/src/index.ts`
 - Create: `backend/src/agent/services/conversationContextService.ts`
@@ -665,6 +696,7 @@ git commit -m "feat(surface): allocate a ticket number on both creation paths"
 - Test: `backend/tests/agent.conversationDetail.test.ts`
 
 **Interfaces:**
+
 - Consumes: `conversation.number` (Task 1).
 - Produces:
   - `AgentConversationDetail`, `AgentPlayerStateView`, `AgentTicketSummary`, `AgentConversationContextResponse` from `@support/types`.
@@ -675,11 +707,11 @@ git commit -m "feat(surface): allocate a ticket number on both creation paths"
 Create `packages/types/src/agent-context.ts`. All four types land here now so later tasks import rather than redefine.
 
 ```typescript
-import type { ConversationStatusValue } from './chat.ts'
-import type { DeclaredFieldType } from './player-state.ts'
+import type { ConversationStatusValue } from './chat.ts';
+import type { DeclaredFieldType } from './player-state.ts';
 
 /** The resolving side. Mirrors the `resolution_source` pg enum. */
-export type ResolutionSourceValue = 'bot' | 'agent'
+export type ResolutionSourceValue = 'bot' | 'agent';
 
 /**
  * The header row for one conversation, fetched by id.
@@ -690,21 +722,21 @@ export type ResolutionSourceValue = 'bot' | 'agent'
  * yields no header data at all.
  */
 export type AgentConversationDetail = {
-  id: string
-  number: number
-  player: { id: string; external_player_id: string }
-  status: ConversationStatusValue
-  subintent: { intent_name: string; subintent_name: string } | null
-  assigned_agent: { id: string; display_name: string } | null
-  resolution_source: ResolutionSourceValue | null
+  id: string;
+  number: number;
+  player: { id: string; external_player_id: string };
+  status: ConversationStatusValue;
+  subintent: { intent_name: string; subintent_name: string } | null;
+  assigned_agent: { id: string; display_name: string } | null;
+  resolution_source: ResolutionSourceValue | null;
   /**
    * The assigned agent's display name when `resolution_source` is 'agent',
    * null otherwise. There is no resolved_by column — this is what the schema
    * knows.
    */
-  resolved_by_agent_name: string | null
-  created_at: string
-}
+  resolved_by_agent_name: string | null;
+  created_at: string;
+};
 
 /**
  * Four distinguishable cases, not one nullable object. A single nullable field
@@ -717,25 +749,25 @@ export type AgentPlayerStateView =
   | { status: 'not_captured' }
   | { status: 'missing' }
   | {
-      status: 'captured'
-      declared: { key: string; label: string; type: DeclaredFieldType; value: unknown }[]
+      status: 'captured';
+      declared: { key: string; label: string; type: DeclaredFieldType; value: unknown }[];
       /** PII by default. Returned in full, not role-gated; the frontend renders it collapsed. */
-      raw: Record<string, unknown>
-      degraded_reason: string | null
-      captured_at: string
-    }
+      raw: Record<string, unknown>;
+      degraded_reason: string | null;
+      captured_at: string;
+    };
 
 /** One row of the player's ticket history. No message bodies, ever. */
 export type AgentTicketSummary = {
-  id: string
-  number: number
-  created_at: string
-  status: ConversationStatusValue
-  subintent: { intent_name: string; subintent_name: string } | null
-  resolution_source: ResolutionSourceValue | null
-  resolved_by_agent_name: string | null
-  reopen_count: number
-}
+  id: string;
+  number: number;
+  created_at: string;
+  status: ConversationStatusValue;
+  subintent: { intent_name: string; subintent_name: string } | null;
+  resolution_source: ResolutionSourceValue | null;
+  resolved_by_agent_name: string | null;
+  reopen_count: number;
+};
 
 /**
  * The whole context rail in one payload — one endpoint rather than two, because
@@ -743,17 +775,17 @@ export type AgentTicketSummary = {
  * same cache lifetime.
  */
 export type AgentConversationContextResponse = {
-  player_state: AgentPlayerStateView
-  tickets: AgentTicketSummary[]
+  player_state: AgentPlayerStateView;
+  tickets: AgentTicketSummary[];
   summary: {
     /** Excludes the current conversation. */
-    total_tickets: number
+    total_tickets: number;
     /** Reopens summed across that same population, not just the returned page. */
-    total_reopened: number
+    total_reopened: number;
     /** player.first_seen_at, ISO 8601. */
-    first_contact_at: string
-  }
-}
+    first_contact_at: string;
+  };
+};
 ```
 
 - [ ] **Step 2: Export from the barrel**
@@ -761,7 +793,7 @@ export type AgentConversationContextResponse = {
 Add to `packages/types/src/index.ts`, after the existing lines:
 
 ```typescript
-export * from './agent-context.ts'
+export * from './agent-context.ts';
 ```
 
 - [ ] **Step 3: Write the failing test**
@@ -769,16 +801,16 @@ export * from './agent-context.ts'
 Create `backend/tests/agent.conversationDetail.test.ts`:
 
 ```typescript
-import { createServer } from 'node:http'
-import express from 'express'
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import { req as request } from './helpers/http.ts'
-import { closeDb } from '../src/shared/db/client.ts'
-import { requireAgentSession } from '../src/shared/middleware/requireAgentSession.ts'
-import { errorMiddleware } from '../src/errors.ts'
-import { signAgentSession } from '../src/shared/auth/agentSession.ts'
-import { closeSocketServer, createSocketServer } from '../src/shared/realtime/socketServer.ts'
-import { conversationsRouter } from '../src/agent/routers/conversationsRouter.ts'
+import { createServer } from 'node:http';
+import express from 'express';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { req as request } from './helpers/http.ts';
+import { closeDb } from '../src/shared/db/client.ts';
+import { requireAgentSession } from '../src/shared/middleware/requireAgentSession.ts';
+import { errorMiddleware } from '../src/errors.ts';
+import { signAgentSession } from '../src/shared/auth/agentSession.ts';
+import { closeSocketServer, createSocketServer } from '../src/shared/realtime/socketServer.ts';
+import { conversationsRouter } from '../src/agent/routers/conversationsRouter.ts';
 import {
   closeOwnerPool,
   ownerPool,
@@ -788,52 +820,52 @@ import {
   seedSubintent,
   seedWorkspace,
   truncateAll,
-} from './helpers/db.ts'
+} from './helpers/db.ts';
 
 // A standalone app carrying just this router, gated by the real middleware —
 // the same pattern agent.conversations.test.ts uses.
-const app = express()
-app.use(express.json())
-app.use(requireAgentSession, conversationsRouter)
-app.use(errorMiddleware)
+const app = express();
+app.use(express.json());
+app.use(requireAgentSession, conversationsRouter);
+app.use(errorMiddleware);
 
 beforeAll(() => {
-  createSocketServer(createServer())
-})
+  createSocketServer(createServer());
+});
 
 afterAll(async () => {
-  await closeSocketServer()
-  await closeDb()
-  await closeOwnerPool()
-})
+  await closeSocketServer();
+  await closeDb();
+  await closeOwnerPool();
+});
 
-beforeEach(truncateAll)
+beforeEach(truncateAll);
 
 async function setupAgent(workspaceId: string, displayName = 'Sam Rivera') {
   const { rows } = await ownerPool.query<{ id: string }>(
     `insert into agent (email, display_name) values ($1, $2) returning id`,
     [`a-${Math.abs(displayName.length)}-${workspaceId.slice(0, 8)}@example.test`, displayName],
-  )
-  const agentId = rows[0]!.id
-  await ownerPool.query(`insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`, [
-    workspaceId,
-    agentId,
-  ])
-  const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId })
-  return { agentId, token }
+  );
+  const agentId = rows[0]!.id;
+  await ownerPool.query(
+    `insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`,
+    [workspaceId, agentId],
+  );
+  const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId });
+  return { agentId, token };
 }
 
 describe('GET /agent/conversations/:id', () => {
   it('returns the header row for a conversation in this workspace', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId, 'player-77')
-    const conversationId = await seedConversation({ workspaceId, playerId })
-    const { token } = await setupAgent(workspaceId)
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId, 'player-77');
+    const conversationId = await seedConversation({ workspaceId, playerId });
+    const { token } = await setupAgent(workspaceId);
 
     const res = await request(app)
       .get(`/conversations/${conversationId}`)
       .set('Authorization', `Bearer ${token}`)
-      .expect(200)
+      .expect(200);
 
     expect(res.body).toMatchObject({
       id: conversationId,
@@ -844,84 +876,96 @@ describe('GET /agent/conversations/:id', () => {
       assigned_agent: null,
       resolution_source: null,
       resolved_by_agent_name: null,
-    })
-    expect(typeof res.body.created_at).toBe('string')
-  })
+    });
+    expect(typeof res.body.created_at).toBe('string');
+  });
 
   it('names the intent and subintent when the conversation is classified', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const intentId = await seedIntent(workspaceId, 'Billing')
-    const subintentId = await seedSubintent({ workspaceId, intentId, name: 'Refund request' })
-    const conversationId = await seedConversation({ workspaceId, playerId })
-    await ownerPool.query(`update conversation set subintent_id = $1 where id = $2`, [subintentId, conversationId])
-    const { token } = await setupAgent(workspaceId)
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const intentId = await seedIntent(workspaceId, 'Billing');
+    const subintentId = await seedSubintent({ workspaceId, intentId, name: 'Refund request' });
+    const conversationId = await seedConversation({ workspaceId, playerId });
+    await ownerPool.query(`update conversation set subintent_id = $1 where id = $2`, [
+      subintentId,
+      conversationId,
+    ]);
+    const { token } = await setupAgent(workspaceId);
 
     const res = await request(app)
       .get(`/conversations/${conversationId}`)
       .set('Authorization', `Bearer ${token}`)
-      .expect(200)
+      .expect(200);
 
-    expect(res.body.subintent).toEqual({ intent_name: 'Billing', subintent_name: 'Refund request' })
-  })
+    expect(res.body.subintent).toEqual({
+      intent_name: 'Billing',
+      subintent_name: 'Refund request',
+    });
+  });
 
   it('names the resolving agent only when resolution_source is agent', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
-    const { agentId, token } = await setupAgent(workspaceId, 'Sam Rivera')
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
+    const { agentId, token } = await setupAgent(workspaceId, 'Sam Rivera');
     await ownerPool.query(
       `update conversation set assigned_agent_id = $1, status = 'resolved', resolution_source = 'agent' where id = $2`,
       [agentId, conversationId],
-    )
+    );
 
     const res = await request(app)
       .get(`/conversations/${conversationId}`)
       .set('Authorization', `Bearer ${token}`)
-      .expect(200)
+      .expect(200);
 
-    expect(res.body.assigned_agent).toEqual({ id: agentId, display_name: 'Sam Rivera' })
-    expect(res.body.resolved_by_agent_name).toBe('Sam Rivera')
-  })
+    expect(res.body.assigned_agent).toEqual({ id: agentId, display_name: 'Sam Rivera' });
+    expect(res.body.resolved_by_agent_name).toBe('Sam Rivera');
+  });
 
   it('leaves resolved_by_agent_name null when the bot resolved it', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
-    const { agentId, token } = await setupAgent(workspaceId, 'Sam Rivera')
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
+    const { agentId, token } = await setupAgent(workspaceId, 'Sam Rivera');
     await ownerPool.query(
       `update conversation set assigned_agent_id = $1, status = 'resolved', resolution_source = 'bot' where id = $2`,
       [agentId, conversationId],
-    )
+    );
 
     const res = await request(app)
       .get(`/conversations/${conversationId}`)
       .set('Authorization', `Bearer ${token}`)
-      .expect(200)
+      .expect(200);
 
-    expect(res.body.resolution_source).toBe('bot')
-    expect(res.body.resolved_by_agent_name).toBeNull()
-  })
+    expect(res.body.resolution_source).toBe('bot');
+    expect(res.body.resolved_by_agent_name).toBeNull();
+  });
 
   it('returns 404 for a conversation in another workspace', async () => {
-    const mine = await seedWorkspace()
-    const theirs = await seedWorkspace()
-    const theirPlayer = await seedPlayer(theirs)
-    const theirConversation = await seedConversation({ workspaceId: theirs, playerId: theirPlayer })
-    const { token } = await setupAgent(mine)
+    const mine = await seedWorkspace();
+    const theirs = await seedWorkspace();
+    const theirPlayer = await seedPlayer(theirs);
+    const theirConversation = await seedConversation({
+      workspaceId: theirs,
+      playerId: theirPlayer,
+    });
+    const { token } = await setupAgent(mine);
 
     await request(app)
       .get(`/conversations/${theirConversation}`)
       .set('Authorization', `Bearer ${token}`)
-      .expect(404)
-  })
+      .expect(404);
+  });
 
   it('returns 422 for an id that is not a uuid', async () => {
-    const workspaceId = await seedWorkspace()
-    const { token } = await setupAgent(workspaceId)
-    await request(app).get('/conversations/not-a-uuid').set('Authorization', `Bearer ${token}`).expect(422)
-  })
-})
+    const workspaceId = await seedWorkspace();
+    const { token } = await setupAgent(workspaceId);
+    await request(app)
+      .get('/conversations/not-a-uuid')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(422);
+  });
+});
 ```
 
 - [ ] **Step 4: Run the test to verify it fails**
@@ -934,11 +978,11 @@ Expected: FAIL — 404 on every case, because no such route is registered.
 Create `backend/src/agent/services/conversationContextService.ts`:
 
 ```typescript
-import { eq } from 'drizzle-orm'
-import type { AgentConversationDetail } from '@support/types'
-import { agent, conversation, intent, player, subintent } from '../../shared/db/schema/index.ts'
-import { withWorkspace } from '../../shared/db/withWorkspace.ts'
-import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts'
+import { eq } from 'drizzle-orm';
+import type { AgentConversationDetail } from '@support/types';
+import { agent, conversation, intent, player, subintent } from '../../shared/db/schema/index.ts';
+import { withWorkspace } from '../../shared/db/withWorkspace.ts';
+import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts';
 
 /**
  * One conversation's header row, by id.
@@ -972,9 +1016,9 @@ export async function getConversationDetail(
       .leftJoin(intent, eq(intent.id, subintent.intentId))
       .leftJoin(agent, eq(agent.id, conversation.assignedAgentId))
       .where(eq(conversation.id, conversationId))
-      .limit(1)
+      .limit(1);
 
-    if (!row) return null
+    if (!row) return null;
 
     return {
       id: row.id,
@@ -994,8 +1038,8 @@ export async function getConversationDetail(
       // when the source says an agent did; a bot resolution names nobody.
       resolved_by_agent_name: row.resolutionSource === 'agent' ? row.assignedAgentName : null,
       created_at: row.createdAt.toISOString(),
-    }
-  })
+    };
+  });
 }
 ```
 
@@ -1006,26 +1050,26 @@ export async function getConversationDetail(
 Add to `backend/src/agent/controllers/conversationsController.ts`. Extend the existing import from the services directory with a new line — do not touch the `conversationsService.ts` import:
 
 ```typescript
-import { getConversationDetail } from '../services/conversationContextService.ts'
+import { getConversationDetail } from '../services/conversationContextService.ts';
 ```
 
 Append the handler at the end of the file. It reuses the file's existing `ConversationIdParams` schema (line 11):
 
 ```typescript
 export const getConversationDetailHandler: RequestHandler = async (req, res) => {
-  const ctx = req.agent!
-  const params = ConversationIdParams.safeParse(req.params)
+  const ctx = req.agent!;
+  const params = ConversationIdParams.safeParse(req.params);
   if (!params.success) {
-    sendError(res, 422, 'invalid_request', 'id must be a uuid.')
-    return
+    sendError(res, 422, 'invalid_request', 'id must be a uuid.');
+    return;
   }
-  const detail = await getConversationDetail(ctx, params.data.id)
+  const detail = await getConversationDetail(ctx, params.data.id);
   if (!detail) {
-    sendError(res, 404, 'not_found', 'Conversation not found.')
-    return
+    sendError(res, 404, 'not_found', 'Conversation not found.');
+    return;
   }
-  res.status(200).json(detail)
-}
+  res.status(200).json(detail);
+};
 ```
 
 - [ ] **Step 7: Register the route**
@@ -1033,21 +1077,21 @@ export const getConversationDetailHandler: RequestHandler = async (req, res) => 
 In `backend/src/agent/routers/conversationsRouter.ts`, add `getConversationDetailHandler` to the import list and register the route. Order matters: `/conversations/:id` must come **after** `/conversations`, and Express will not confuse it with `/conversations/:id/messages`, but keep the detail route adjacent to its siblings for readability.
 
 ```typescript
-import { Router } from 'express'
+import { Router } from 'express';
 import {
   askResolvedHandler,
   claimConversationHandler,
   getConversationDetailHandler,
   getConversationMessagesHandler,
   listConversationsHandler,
-} from '../controllers/conversationsController.ts'
+} from '../controllers/conversationsController.ts';
 
-export const conversationsRouter = Router()
-conversationsRouter.get('/conversations', listConversationsHandler)
-conversationsRouter.get('/conversations/:id', getConversationDetailHandler)
-conversationsRouter.post('/conversations/:id/claim', claimConversationHandler)
-conversationsRouter.get('/conversations/:id/messages', getConversationMessagesHandler)
-conversationsRouter.post('/conversations/:id/ask-resolved', askResolvedHandler)
+export const conversationsRouter = Router();
+conversationsRouter.get('/conversations', listConversationsHandler);
+conversationsRouter.get('/conversations/:id', getConversationDetailHandler);
+conversationsRouter.post('/conversations/:id/claim', claimConversationHandler);
+conversationsRouter.get('/conversations/:id/messages', getConversationMessagesHandler);
+conversationsRouter.post('/conversations/:id/ask-resolved', askResolvedHandler);
 ```
 
 - [ ] **Step 8: Register in the OpenAPI document**
@@ -1057,19 +1101,27 @@ In `backend/src/docs/openapi.ts`, add after the existing `/agent/conversations` 
 ```typescript
 const AgentSubintentSchema = z
   .object({ intent_name: z.string(), subintent_name: z.string() })
-  .nullable()
+  .nullable();
 
 const AgentConversationDetailSchema = z.object({
   id: z.uuid(),
   number: z.number().int(),
   player: z.object({ id: z.uuid(), external_player_id: z.string() }),
-  status: z.enum(['new', 'bot_active', 'open', 'awaiting_player', 'escalated', 'resolved', 'closed']),
+  status: z.enum([
+    'new',
+    'bot_active',
+    'open',
+    'awaiting_player',
+    'escalated',
+    'resolved',
+    'closed',
+  ]),
   subintent: AgentSubintentSchema,
   assigned_agent: z.object({ id: z.uuid(), display_name: z.string() }).nullable(),
   resolution_source: z.enum(['bot', 'agent']).nullable(),
   resolved_by_agent_name: z.string().nullable(),
   created_at: z.string(),
-})
+});
 
 registry.registerPath({
   method: 'get',
@@ -1088,7 +1140,7 @@ registry.registerPath({
     },
     404: { description: 'Not found, or not in this workspace' },
   },
-})
+});
 ```
 
 `AgentSubintentSchema` is reused by Task 6 — leave it at module scope.
@@ -1119,10 +1171,12 @@ git commit -m "feat(agent): GET /agent/conversations/:id header endpoint"
 ## Task 4: The player-state reader
 
 **Files:**
+
 - Modify: `backend/src/agent/services/conversationContextService.ts`
 - Test: `backend/tests/agent.conversationContext.test.ts` (created here, extended in Task 6)
 
 **Interfaces:**
+
 - Consumes: `withWorkspace`, `AgentPlayerStateView` from Task 3.
 - Produces: `getPlayerStateView(tx: Tx, workspaceId: string, sessionId: string | null): Promise<AgentPlayerStateView>` — **not exported from the module's public surface**, but exported for the test. Takes an open `tx` so Task 6 can call it inside the context endpoint's single transaction.
 
@@ -1131,11 +1185,11 @@ git commit -m "feat(agent): GET /agent/conversations/:id header endpoint"
 Create `backend/tests/agent.conversationContext.test.ts`. This file grows in Task 6; the shared harness goes in now.
 
 ```typescript
-import { randomUUID } from 'node:crypto'
-import { afterAll, beforeEach, describe, expect, it } from 'vitest'
-import { closeDb } from '../src/shared/db/client.ts'
-import { withWorkspace } from '../src/shared/db/withWorkspace.ts'
-import { getPlayerStateView } from '../src/agent/services/conversationContextService.ts'
+import { randomUUID } from 'node:crypto';
+import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { closeDb } from '../src/shared/db/client.ts';
+import { withWorkspace } from '../src/shared/db/withWorkspace.ts';
+import { getPlayerStateView } from '../src/agent/services/conversationContextService.ts';
 import {
   closeOwnerPool,
   ownerPool,
@@ -1144,23 +1198,23 @@ import {
   seedSession,
   seedWorkspace,
   truncateAll,
-} from './helpers/db.ts'
+} from './helpers/db.ts';
 
 afterAll(async () => {
-  await closeDb()
-  await closeOwnerPool()
-})
+  await closeDb();
+  await closeOwnerPool();
+});
 
-beforeEach(truncateAll)
+beforeEach(truncateAll);
 
 async function seedSnapshot(args: {
-  workspaceId: string
-  sessionId: string
-  declared?: Record<string, unknown>
-  raw?: Record<string, unknown>
-  isMissing?: boolean
-  degradedReason?: string | null
-  capturedAt?: Date
+  workspaceId: string;
+  sessionId: string;
+  declared?: Record<string, unknown>;
+  raw?: Record<string, unknown>;
+  isMissing?: boolean;
+  degradedReason?: string | null;
+  capturedAt?: Date;
 }): Promise<void> {
   await ownerPool.query(
     `insert into player_state_snapshot (id, workspace_id, session_id, declared, raw, is_missing, degraded_reason, captured_at)
@@ -1175,93 +1229,129 @@ async function seedSnapshot(args: {
       args.degradedReason ?? null,
       args.capturedAt ?? new Date('2026-08-17T10:00:00Z'),
     ],
-  )
+  );
 }
 
 describe('getPlayerStateView', () => {
   it('reports no_session when the conversation carries no session', async () => {
-    const workspaceId = await seedWorkspace()
-    const view = await withWorkspace(workspaceId, (tx) => getPlayerStateView(tx, workspaceId, null))
-    expect(view).toEqual({ status: 'no_session' })
-  })
+    const workspaceId = await seedWorkspace();
+    const view = await withWorkspace(workspaceId, (tx) =>
+      getPlayerStateView(tx, workspaceId, null),
+    );
+    expect(view).toEqual({ status: 'no_session' });
+  });
 
   it('reports not_captured when the session exists but wrote no snapshot', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const sessionId = await seedSession({ workspaceId, playerId })
-    const view = await withWorkspace(workspaceId, (tx) => getPlayerStateView(tx, workspaceId, sessionId))
-    expect(view).toEqual({ status: 'not_captured' })
-  })
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const sessionId = await seedSession({ workspaceId, playerId });
+    const view = await withWorkspace(workspaceId, (tx) =>
+      getPlayerStateView(tx, workspaceId, sessionId),
+    );
+    expect(view).toEqual({ status: 'not_captured' });
+  });
 
   it('reports missing when the snapshot says the provider returned nothing usable', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const sessionId = await seedSession({ workspaceId, playerId })
-    await seedSnapshot({ workspaceId, sessionId, isMissing: true })
-    const view = await withWorkspace(workspaceId, (tx) => getPlayerStateView(tx, workspaceId, sessionId))
-    expect(view).toEqual({ status: 'missing' })
-  })
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const sessionId = await seedSession({ workspaceId, playerId });
+    await seedSnapshot({ workspaceId, sessionId, isMissing: true });
+    const view = await withWorkspace(workspaceId, (tx) =>
+      getPlayerStateView(tx, workspaceId, sessionId),
+    );
+    expect(view).toEqual({ status: 'missing' });
+  });
 
   it('labels and orders declared fields by joining declared_field', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const sessionId = await seedSession({ workspaceId, playerId })
-    await seedDeclaredFields(workspaceId, ['player_level', 'platform'])
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const sessionId = await seedSession({ workspaceId, playerId });
+    await seedDeclaredFields(workspaceId, ['player_level', 'platform']);
     await seedSnapshot({
       workspaceId,
       sessionId,
       declared: { platform: 'ios', player_level: 42 },
       raw: { fps: 58 },
-    })
+    });
 
-    const view = await withWorkspace(workspaceId, (tx) => getPlayerStateView(tx, workspaceId, sessionId))
-    if (view.status !== 'captured') throw new Error(`expected captured, got ${view.status}`)
+    const view = await withWorkspace(workspaceId, (tx) =>
+      getPlayerStateView(tx, workspaceId, sessionId),
+    );
+    if (view.status !== 'captured') throw new Error(`expected captured, got ${view.status}`);
 
     // seedDeclaredFields inserts in the order given, so declared_at ascending
     // is player_level then platform.
-    expect(view.declared.map((f) => f.key)).toEqual(['player_level', 'platform'])
-    expect(view.declared[0]).toEqual({ key: 'player_level', label: 'player_level', type: 'string', value: 42 })
-    expect(view.raw).toEqual({ fps: 58 })
-    expect(view.degraded_reason).toBeNull()
-    expect(view.captured_at).toBe('2026-08-17T10:00:00.000Z')
-  })
+    expect(view.declared.map((f) => f.key)).toEqual(['player_level', 'platform']);
+    expect(view.declared[0]).toEqual({
+      key: 'player_level',
+      label: 'player_level',
+      type: 'string',
+      value: 42,
+    });
+    expect(view.raw).toEqual({ fps: 58 });
+    expect(view.degraded_reason).toBeNull();
+    expect(view.captured_at).toBe('2026-08-17T10:00:00.000Z');
+  });
 
   it('appends a declared key with no declared_field row rather than dropping it', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const sessionId = await seedSession({ workspaceId, playerId })
-    await seedDeclaredFields(workspaceId, ['platform'])
-    await seedSnapshot({ workspaceId, sessionId, declared: { orphan_key: 'x', platform: 'android' } })
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const sessionId = await seedSession({ workspaceId, playerId });
+    await seedDeclaredFields(workspaceId, ['platform']);
+    await seedSnapshot({
+      workspaceId,
+      sessionId,
+      declared: { orphan_key: 'x', platform: 'android' },
+    });
 
-    const view = await withWorkspace(workspaceId, (tx) => getPlayerStateView(tx, workspaceId, sessionId))
-    if (view.status !== 'captured') throw new Error(`expected captured, got ${view.status}`)
+    const view = await withWorkspace(workspaceId, (tx) =>
+      getPlayerStateView(tx, workspaceId, sessionId),
+    );
+    if (view.status !== 'captured') throw new Error(`expected captured, got ${view.status}`);
 
-    expect(view.declared.map((f) => f.key)).toEqual(['platform', 'orphan_key'])
-    expect(view.declared[1]).toEqual({ key: 'orphan_key', label: 'orphan_key', type: 'string', value: 'x' })
-  })
+    expect(view.declared.map((f) => f.key)).toEqual(['platform', 'orphan_key']);
+    expect(view.declared[1]).toEqual({
+      key: 'orphan_key',
+      label: 'orphan_key',
+      type: 'string',
+      value: 'x',
+    });
+  });
 
   it('surfaces degraded_reason on a captured snapshot', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const sessionId = await seedSession({ workspaceId, playerId })
-    await seedSnapshot({ workspaceId, sessionId, degradedReason: 'provider threw on total_spend' })
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const sessionId = await seedSession({ workspaceId, playerId });
+    await seedSnapshot({ workspaceId, sessionId, degradedReason: 'provider threw on total_spend' });
 
-    const view = await withWorkspace(workspaceId, (tx) => getPlayerStateView(tx, workspaceId, sessionId))
-    if (view.status !== 'captured') throw new Error(`expected captured, got ${view.status}`)
-    expect(view.degraded_reason).toBe('provider threw on total_spend')
-  })
+    const view = await withWorkspace(workspaceId, (tx) =>
+      getPlayerStateView(tx, workspaceId, sessionId),
+    );
+    if (view.status !== 'captured') throw new Error(`expected captured, got ${view.status}`);
+    expect(view.degraded_reason).toBe('provider threw on total_spend');
+  });
 
   it('does not fall back to another session snapshot', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const thisSession = await seedSession({ workspaceId, playerId, startedAt: new Date('2026-01-01T00:00:00Z') })
-    const laterSession = await seedSession({ workspaceId, playerId, startedAt: new Date('2026-06-01T00:00:00Z') })
-    await seedSnapshot({ workspaceId, sessionId: laterSession, declared: { player_level: 99 } })
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const thisSession = await seedSession({
+      workspaceId,
+      playerId,
+      startedAt: new Date('2026-01-01T00:00:00Z'),
+    });
+    const laterSession = await seedSession({
+      workspaceId,
+      playerId,
+      startedAt: new Date('2026-06-01T00:00:00Z'),
+    });
+    await seedSnapshot({ workspaceId, sessionId: laterSession, declared: { player_level: 99 } });
 
-    const view = await withWorkspace(workspaceId, (tx) => getPlayerStateView(tx, workspaceId, thisSession))
-    expect(view).toEqual({ status: 'not_captured' })
-  })
-})
+    const view = await withWorkspace(workspaceId, (tx) =>
+      getPlayerStateView(tx, workspaceId, thisSession),
+    );
+    expect(view).toEqual({ status: 'not_captured' });
+  });
+});
 ```
 
 - [ ] **Step 2: Run the test to verify it fails**
@@ -1274,8 +1364,8 @@ Expected: FAIL — `getPlayerStateView is not a function`.
 Append to `backend/src/agent/services/conversationContextService.ts`. Extend the existing imports:
 
 ```typescript
-import { and, asc, eq } from 'drizzle-orm'
-import type { AgentConversationDetail, AgentPlayerStateView } from '@support/types'
+import { and, asc, eq } from 'drizzle-orm';
+import type { AgentConversationDetail, AgentPlayerStateView } from '@support/types';
 import {
   agent,
   conversation,
@@ -1284,8 +1374,8 @@ import {
   player,
   playerStateSnapshot,
   subintent,
-} from '../../shared/db/schema/index.ts'
-import type { Tx } from '../../shared/db/withWorkspace.ts'
+} from '../../shared/db/schema/index.ts';
+import type { Tx } from '../../shared/db/withWorkspace.ts';
 ```
 
 Then:
@@ -1308,7 +1398,7 @@ export async function getPlayerStateView(
   workspaceId: string,
   sessionId: string | null,
 ): Promise<AgentPlayerStateView> {
-  if (!sessionId) return { status: 'no_session' }
+  if (!sessionId) return { status: 'no_session' };
 
   const [snapshot] = await tx
     .select({
@@ -1320,10 +1410,10 @@ export async function getPlayerStateView(
     })
     .from(playerStateSnapshot)
     .where(eq(playerStateSnapshot.sessionId, sessionId))
-    .limit(1)
+    .limit(1);
 
-  if (!snapshot) return { status: 'not_captured' }
-  if (snapshot.isMissing) return { status: 'missing' }
+  if (!snapshot) return { status: 'not_captured' };
+  if (snapshot.isMissing) return { status: 'missing' };
 
   // Ordered by when the field was declared, so the seed order the game sees in
   // its own config is the order the agent reads down the panel.
@@ -1331,22 +1421,27 @@ export async function getPlayerStateView(
     .select({ key: declaredField.key, label: declaredField.label, type: declaredField.type })
     .from(declaredField)
     .where(eq(declaredField.workspaceId, workspaceId))
-    .orderBy(asc(declaredField.declaredAt), asc(declaredField.key))
+    .orderBy(asc(declaredField.declaredAt), asc(declaredField.key));
 
-  const blob = snapshot.declared
-  const declared: { key: string; label: string; type: (typeof fields)[number]['type']; value: unknown }[] = []
-  const seen = new Set<string>()
+  const blob = snapshot.declared;
+  const declared: {
+    key: string;
+    label: string;
+    type: (typeof fields)[number]['type'];
+    value: unknown;
+  }[] = [];
+  const seen = new Set<string>();
   for (const field of fields) {
-    if (!(field.key in blob)) continue
-    seen.add(field.key)
-    declared.push({ key: field.key, label: field.label, type: field.type, value: blob[field.key] })
+    if (!(field.key in blob)) continue;
+    seen.add(field.key);
+    declared.push({ key: field.key, label: field.label, type: field.type, value: blob[field.key] });
   }
   // A key in the blob with no declared_field row cannot normally occur —
   // nothing is ever deleted — but appending beats dropping: a value the agent
   // can see is worth more than a tidy list.
   for (const key of Object.keys(blob)) {
-    if (seen.has(key)) continue
-    declared.push({ key, label: key, type: 'string', value: blob[key] })
+    if (seen.has(key)) continue;
+    declared.push({ key, label: key, type: 'string', value: blob[key] });
   }
 
   return {
@@ -1355,7 +1450,7 @@ export async function getPlayerStateView(
     raw: snapshot.raw,
     degraded_reason: snapshot.degradedReason,
     captured_at: snapshot.capturedAt.toISOString(),
-  }
+  };
 }
 ```
 
@@ -1379,10 +1474,12 @@ git commit -m "feat(agent): tagged-union player state reader for the context rai
 ## Task 5: The ticket-history reader
 
 **Files:**
+
 - Modify: `backend/src/agent/services/conversationContextService.ts`
 - Test: `backend/tests/agent.conversationContext.test.ts` (append)
 
 **Interfaces:**
+
 - Consumes: `AgentTicketSummary` from Task 3, `conversation.number` from Task 1.
 - Produces: `getTicketHistory(tx: Tx, args: { playerId: string; excludeConversationId: string }): Promise<{ tickets: AgentTicketSummary[]; totalTickets: number; totalReopened: number }>`
 
@@ -1391,141 +1488,207 @@ git commit -m "feat(agent): tagged-union player state reader for the context rai
 Append to `backend/tests/agent.conversationContext.test.ts`. Extend the file's imports:
 
 ```typescript
-import { getTicketHistory } from '../src/agent/services/conversationContextService.ts'
-import { seedConversation, seedIntent, seedSubintent } from './helpers/db.ts'
+import { getTicketHistory } from '../src/agent/services/conversationContextService.ts';
+import { seedConversation, seedIntent, seedSubintent } from './helpers/db.ts';
 ```
 
 Then append:
 
 ```typescript
-async function seedReopen(workspaceId: string, conversationId: string, times: number): Promise<void> {
+async function seedReopen(
+  workspaceId: string,
+  conversationId: string,
+  times: number,
+): Promise<void> {
   for (let i = 0; i < times; i++) {
     await ownerPool.query(
       `insert into event (workspace_id, type, conversation_id, actor_type) values ($1, 'conversation_reopened', $2, 'player')`,
       [workspaceId, conversationId],
-    )
+    );
   }
 }
 
 describe('getTicketHistory', () => {
   it('excludes the current conversation and orders newest first', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const older = await seedConversation({ workspaceId, playerId, createdAt: new Date('2026-01-01T00:00:00Z') })
-    const newer = await seedConversation({ workspaceId, playerId, createdAt: new Date('2026-02-01T00:00:00Z') })
-    const current = await seedConversation({ workspaceId, playerId, createdAt: new Date('2026-03-01T00:00:00Z') })
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const older = await seedConversation({
+      workspaceId,
+      playerId,
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+    });
+    const newer = await seedConversation({
+      workspaceId,
+      playerId,
+      createdAt: new Date('2026-02-01T00:00:00Z'),
+    });
+    const current = await seedConversation({
+      workspaceId,
+      playerId,
+      createdAt: new Date('2026-03-01T00:00:00Z'),
+    });
 
     const result = await withWorkspace(workspaceId, (tx) =>
       getTicketHistory(tx, { playerId, excludeConversationId: current }),
-    )
+    );
 
-    expect(result.tickets.map((t) => t.id)).toEqual([newer, older])
-    expect(result.totalTickets).toBe(2)
-  })
+    expect(result.tickets.map((t) => t.id)).toEqual([newer, older]);
+    expect(result.totalTickets).toBe(2);
+  });
 
   it('numbers each ticket and carries its status', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const first = await seedConversation({ workspaceId, playerId, createdAt: new Date('2026-01-01T00:00:00Z') })
-    const current = await seedConversation({ workspaceId, playerId, createdAt: new Date('2026-02-01T00:00:00Z') })
-    await ownerPool.query(`update conversation set status = 'closed' where id = $1`, [first])
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const first = await seedConversation({
+      workspaceId,
+      playerId,
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+    });
+    const current = await seedConversation({
+      workspaceId,
+      playerId,
+      createdAt: new Date('2026-02-01T00:00:00Z'),
+    });
+    await ownerPool.query(`update conversation set status = 'closed' where id = $1`, [first]);
 
     const result = await withWorkspace(workspaceId, (tx) =>
       getTicketHistory(tx, { playerId, excludeConversationId: current }),
-    )
+    );
 
-    expect(result.tickets[0]).toMatchObject({ id: first, number: 1, status: 'closed' })
-    expect(typeof result.tickets[0]!.created_at).toBe('string')
-  })
+    expect(result.tickets[0]).toMatchObject({ id: first, number: 1, status: 'closed' });
+    expect(typeof result.tickets[0]!.created_at).toBe('string');
+  });
 
   it('counts reopen events per ticket and totals them', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const a = await seedConversation({ workspaceId, playerId, createdAt: new Date('2026-01-01T00:00:00Z') })
-    const b = await seedConversation({ workspaceId, playerId, createdAt: new Date('2026-02-01T00:00:00Z') })
-    const current = await seedConversation({ workspaceId, playerId, createdAt: new Date('2026-03-01T00:00:00Z') })
-    await seedReopen(workspaceId, a, 2)
-    await seedReopen(workspaceId, b, 1)
-    await seedReopen(workspaceId, current, 5) // the current one never counts
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const a = await seedConversation({
+      workspaceId,
+      playerId,
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+    });
+    const b = await seedConversation({
+      workspaceId,
+      playerId,
+      createdAt: new Date('2026-02-01T00:00:00Z'),
+    });
+    const current = await seedConversation({
+      workspaceId,
+      playerId,
+      createdAt: new Date('2026-03-01T00:00:00Z'),
+    });
+    await seedReopen(workspaceId, a, 2);
+    await seedReopen(workspaceId, b, 1);
+    await seedReopen(workspaceId, current, 5); // the current one never counts
 
     const result = await withWorkspace(workspaceId, (tx) =>
       getTicketHistory(tx, { playerId, excludeConversationId: current }),
-    )
+    );
 
-    const byId = new Map(result.tickets.map((t) => [t.id, t.reopen_count]))
-    expect(byId.get(a)).toBe(2)
-    expect(byId.get(b)).toBe(1)
-    expect(result.totalReopened).toBe(3)
-  })
+    const byId = new Map(result.tickets.map((t) => [t.id, t.reopen_count]));
+    expect(byId.get(a)).toBe(2);
+    expect(byId.get(b)).toBe(1);
+    expect(result.totalReopened).toBe(3);
+  });
 
   it('reports zero reopens for a ticket with no events', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const a = await seedConversation({ workspaceId, playerId, createdAt: new Date('2026-01-01T00:00:00Z') })
-    const current = await seedConversation({ workspaceId, playerId, createdAt: new Date('2026-02-01T00:00:00Z') })
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const a = await seedConversation({
+      workspaceId,
+      playerId,
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+    });
+    const current = await seedConversation({
+      workspaceId,
+      playerId,
+      createdAt: new Date('2026-02-01T00:00:00Z'),
+    });
 
     const result = await withWorkspace(workspaceId, (tx) =>
       getTicketHistory(tx, { playerId, excludeConversationId: current }),
-    )
+    );
 
-    expect(result.tickets.find((t) => t.id === a)!.reopen_count).toBe(0)
-    expect(result.totalReopened).toBe(0)
-  })
+    expect(result.tickets.find((t) => t.id === a)!.reopen_count).toBe(0);
+    expect(result.totalReopened).toBe(0);
+  });
 
   it('caps the list at 20 while total_tickets holds the true count', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
     for (let i = 0; i < 25; i++) {
       await seedConversation({
         workspaceId,
         playerId,
         createdAt: new Date(Date.UTC(2026, 0, i + 1)),
-      })
+      });
     }
-    const current = await seedConversation({ workspaceId, playerId, createdAt: new Date('2026-06-01T00:00:00Z') })
+    const current = await seedConversation({
+      workspaceId,
+      playerId,
+      createdAt: new Date('2026-06-01T00:00:00Z'),
+    });
 
     const result = await withWorkspace(workspaceId, (tx) =>
       getTicketHistory(tx, { playerId, excludeConversationId: current }),
-    )
+    );
 
-    expect(result.tickets).toHaveLength(20)
-    expect(result.totalTickets).toBe(25)
+    expect(result.tickets).toHaveLength(20);
+    expect(result.totalTickets).toBe(25);
     // Newest first, so the newest of the 25 is number 25.
-    expect(result.tickets[0]!.number).toBe(25)
-  })
+    expect(result.tickets[0]!.number).toBe(25);
+  });
 
   it('names the intent and subintent when a past ticket was classified', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const intentId = await seedIntent(workspaceId, 'Account')
-    const subintentId = await seedSubintent({ workspaceId, intentId, name: 'Lost progress' })
-    const past = await seedConversation({ workspaceId, playerId, createdAt: new Date('2026-01-01T00:00:00Z') })
-    const current = await seedConversation({ workspaceId, playerId, createdAt: new Date('2026-02-01T00:00:00Z') })
-    await ownerPool.query(`update conversation set subintent_id = $1 where id = $2`, [subintentId, past])
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const intentId = await seedIntent(workspaceId, 'Account');
+    const subintentId = await seedSubintent({ workspaceId, intentId, name: 'Lost progress' });
+    const past = await seedConversation({
+      workspaceId,
+      playerId,
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+    });
+    const current = await seedConversation({
+      workspaceId,
+      playerId,
+      createdAt: new Date('2026-02-01T00:00:00Z'),
+    });
+    await ownerPool.query(`update conversation set subintent_id = $1 where id = $2`, [
+      subintentId,
+      past,
+    ]);
 
     const result = await withWorkspace(workspaceId, (tx) =>
       getTicketHistory(tx, { playerId, excludeConversationId: current }),
-    )
+    );
 
-    expect(result.tickets[0]!.subintent).toEqual({ intent_name: 'Account', subintent_name: 'Lost progress' })
-  })
+    expect(result.tickets[0]!.subintent).toEqual({
+      intent_name: 'Account',
+      subintent_name: 'Lost progress',
+    });
+  });
 
   it('does not reach across workspaces', async () => {
-    const wsA = await seedWorkspace()
-    const wsB = await seedWorkspace()
-    const playerA = await seedPlayer(wsA, 'shared-external-id')
-    const playerB = await seedPlayer(wsB, 'shared-external-id')
-    await seedConversation({ workspaceId: wsB, playerId: playerB, createdAt: new Date('2026-01-01T00:00:00Z') })
-    const current = await seedConversation({ workspaceId: wsA, playerId: playerA })
+    const wsA = await seedWorkspace();
+    const wsB = await seedWorkspace();
+    const playerA = await seedPlayer(wsA, 'shared-external-id');
+    const playerB = await seedPlayer(wsB, 'shared-external-id');
+    await seedConversation({
+      workspaceId: wsB,
+      playerId: playerB,
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+    });
+    const current = await seedConversation({ workspaceId: wsA, playerId: playerA });
 
     const result = await withWorkspace(wsA, (tx) =>
       getTicketHistory(tx, { playerId: playerA, excludeConversationId: current }),
-    )
+    );
 
-    expect(result.tickets).toEqual([])
-    expect(result.totalTickets).toBe(0)
-  })
-})
+    expect(result.tickets).toEqual([]);
+    expect(result.totalTickets).toBe(0);
+  });
+});
 ```
 
 - [ ] **Step 2: Run the test to verify it fails**
@@ -1538,13 +1701,13 @@ Expected: FAIL — `getTicketHistory is not a function`.
 Append to `backend/src/agent/services/conversationContextService.ts`. Extend the imports with `desc`, `ne`, `sql`, `count` from `drizzle-orm`, `event` from the schema barrel, and `AgentTicketSummary` from `@support/types`.
 
 ```typescript
-const TICKET_CAP = 20
+const TICKET_CAP = 20;
 
 export type TicketHistory = {
-  tickets: AgentTicketSummary[]
-  totalTickets: number
-  totalReopened: number
-}
+  tickets: AgentTicketSummary[];
+  totalTickets: number;
+  totalReopened: number;
+};
 
 /**
  * This player's other conversations in this workspace, newest first, capped at
@@ -1578,9 +1741,14 @@ export async function getTicketHistory(
     .leftJoin(subintent, eq(subintent.id, conversation.subintentId))
     .leftJoin(intent, eq(intent.id, subintent.intentId))
     .leftJoin(agent, eq(agent.id, conversation.assignedAgentId))
-    .where(and(eq(conversation.playerId, args.playerId), ne(conversation.id, args.excludeConversationId)))
+    .where(
+      and(
+        eq(conversation.playerId, args.playerId),
+        ne(conversation.id, args.excludeConversationId),
+      ),
+    )
     .orderBy(desc(conversation.createdAt))
-    .limit(TICKET_CAP)
+    .limit(TICKET_CAP);
 
   // Grouped over the player's whole other-ticket population, not just the
   // capped page — summary.total_reopened has to describe the same set that
@@ -1596,14 +1764,14 @@ export async function getTicketHistory(
         ne(conversation.id, args.excludeConversationId),
       ),
     )
-    .groupBy(event.conversationId)
+    .groupBy(event.conversationId);
 
-  const reopenById = new Map<string, number>()
-  let totalReopened = 0
+  const reopenById = new Map<string, number>();
+  let totalReopened = 0;
   for (const row of reopens) {
-    if (!row.conversationId) continue
-    reopenById.set(row.conversationId, row.reopens)
-    totalReopened += row.reopens
+    if (!row.conversationId) continue;
+    reopenById.set(row.conversationId, row.reopens);
+    totalReopened += row.reopens;
   }
 
   const tickets: AgentTicketSummary[] = rows.map((row) => ({
@@ -1618,9 +1786,9 @@ export async function getTicketHistory(
     resolution_source: row.resolutionSource,
     resolved_by_agent_name: row.resolutionSource === 'agent' ? row.assignedAgentName : null,
     reopen_count: reopenById.get(row.id) ?? 0,
-  }))
+  }));
 
-  return { tickets, totalTickets: rows[0]?.totalCount ?? 0, totalReopened }
+  return { tickets, totalTickets: rows[0]?.totalCount ?? 0, totalReopened };
 }
 ```
 
@@ -1642,6 +1810,7 @@ git commit -m "feat(agent): ticket history reader with per-ticket reopen counts"
 ## Task 6: Wire `GET /agent/conversations/:id/context`
 
 **Files:**
+
 - Modify: `backend/src/agent/services/conversationContextService.ts`
 - Modify: `backend/src/agent/controllers/conversationsController.ts`
 - Modify: `backend/src/agent/routers/conversationsRouter.ts`
@@ -1649,6 +1818,7 @@ git commit -m "feat(agent): ticket history reader with per-ticket reopen counts"
 - Test: `backend/tests/agent.conversationContext.test.ts` (append an HTTP describe)
 
 **Interfaces:**
+
 - Consumes: `getPlayerStateView` (Task 4), `getTicketHistory` (Task 5), `AgentConversationContextResponse` (Task 3).
 - Produces: `getConversationContext(ctx: AgentContext, conversationId: string): Promise<AgentConversationContextResponse | null>`, and the route `GET /agent/conversations/:id/context`.
 
@@ -1657,47 +1827,47 @@ git commit -m "feat(agent): ticket history reader with per-ticket reopen counts"
 Append to `backend/tests/agent.conversationContext.test.ts`. Extend the imports with the standalone-app harness — the same shape `agent.conversationDetail.test.ts` uses:
 
 ```typescript
-import { createServer } from 'node:http'
-import express from 'express'
-import { beforeAll } from 'vitest'
-import { req as request } from './helpers/http.ts'
-import { requireAgentSession } from '../src/shared/middleware/requireAgentSession.ts'
-import { errorMiddleware } from '../src/errors.ts'
-import { signAgentSession } from '../src/shared/auth/agentSession.ts'
-import { closeSocketServer, createSocketServer } from '../src/shared/realtime/socketServer.ts'
-import { conversationsRouter } from '../src/agent/routers/conversationsRouter.ts'
+import { createServer } from 'node:http';
+import express from 'express';
+import { beforeAll } from 'vitest';
+import { req as request } from './helpers/http.ts';
+import { requireAgentSession } from '../src/shared/middleware/requireAgentSession.ts';
+import { errorMiddleware } from '../src/errors.ts';
+import { signAgentSession } from '../src/shared/auth/agentSession.ts';
+import { closeSocketServer, createSocketServer } from '../src/shared/realtime/socketServer.ts';
+import { conversationsRouter } from '../src/agent/routers/conversationsRouter.ts';
 ```
 
 Add the app and lifecycle at module scope, and widen the existing `afterAll`:
 
 ```typescript
-const app = express()
-app.use(express.json())
-app.use(requireAgentSession, conversationsRouter)
-app.use(errorMiddleware)
+const app = express();
+app.use(express.json());
+app.use(requireAgentSession, conversationsRouter);
+app.use(errorMiddleware);
 
 beforeAll(() => {
-  createSocketServer(createServer())
-})
+  createSocketServer(createServer());
+});
 
 afterAll(async () => {
-  await closeSocketServer()
-  await closeDb()
-  await closeOwnerPool()
-})
+  await closeSocketServer();
+  await closeDb();
+  await closeOwnerPool();
+});
 
 async function setupAgent(workspaceId: string) {
   const { rows } = await ownerPool.query<{ id: string }>(
     `insert into agent (email, display_name) values ($1, 'Agent One') returning id`,
     [`a-${workspaceId.slice(0, 8)}@example.test`],
-  )
-  const agentId = rows[0]!.id
-  await ownerPool.query(`insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`, [
-    workspaceId,
-    agentId,
-  ])
-  const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId })
-  return { agentId, token }
+  );
+  const agentId = rows[0]!.id;
+  await ownerPool.query(
+    `insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`,
+    [workspaceId, agentId],
+  );
+  const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId });
+  return { agentId, token };
 }
 ```
 
@@ -1706,109 +1876,124 @@ Then append:
 ```typescript
 describe('GET /agent/conversations/:id/context', () => {
   it('returns player state, tickets and summary in one payload', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
     await ownerPool.query(`update player set first_seen_at = $1 where id = $2`, [
       new Date('2025-11-02T08:30:00Z'),
       playerId,
-    ])
-    const sessionId = await seedSession({ workspaceId, playerId })
-    await seedDeclaredFields(workspaceId, ['player_level'])
-    await seedSnapshot({ workspaceId, sessionId, declared: { player_level: 42 }, raw: { fps: 58 } })
+    ]);
+    const sessionId = await seedSession({ workspaceId, playerId });
+    await seedDeclaredFields(workspaceId, ['player_level']);
+    await seedSnapshot({
+      workspaceId,
+      sessionId,
+      declared: { player_level: 42 },
+      raw: { fps: 58 },
+    });
 
-    const past = await seedConversation({ workspaceId, playerId, createdAt: new Date('2026-01-01T00:00:00Z') })
-    await seedReopen(workspaceId, past, 2)
+    const past = await seedConversation({
+      workspaceId,
+      playerId,
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+    });
+    await seedReopen(workspaceId, past, 2);
     const current = await seedConversation({
       workspaceId,
       playerId,
       sessionId,
       createdAt: new Date('2026-02-01T00:00:00Z'),
-    })
-    const { token } = await setupAgent(workspaceId)
+    });
+    const { token } = await setupAgent(workspaceId);
 
     const res = await request(app)
       .get(`/conversations/${current}/context`)
       .set('Authorization', `Bearer ${token}`)
-      .expect(200)
+      .expect(200);
 
-    expect(res.body.player_state.status).toBe('captured')
-    expect(res.body.player_state.declared[0]).toMatchObject({ key: 'player_level', value: 42 })
-    expect(res.body.player_state.raw).toEqual({ fps: 58 })
-    expect(res.body.tickets).toHaveLength(1)
-    expect(res.body.tickets[0]).toMatchObject({ id: past, reopen_count: 2 })
+    expect(res.body.player_state.status).toBe('captured');
+    expect(res.body.player_state.declared[0]).toMatchObject({ key: 'player_level', value: 42 });
+    expect(res.body.player_state.raw).toEqual({ fps: 58 });
+    expect(res.body.tickets).toHaveLength(1);
+    expect(res.body.tickets[0]).toMatchObject({ id: past, reopen_count: 2 });
     expect(res.body.summary).toEqual({
       total_tickets: 1,
       total_reopened: 2,
       first_contact_at: '2025-11-02T08:30:00.000Z',
-    })
-  })
+    });
+  });
 
   it('returns 200 with no_session when the conversation has no session', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const current = await seedConversation({ workspaceId, playerId })
-    const { token } = await setupAgent(workspaceId)
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const current = await seedConversation({ workspaceId, playerId });
+    const { token } = await setupAgent(workspaceId);
 
     const res = await request(app)
       .get(`/conversations/${current}/context`)
       .set('Authorization', `Bearer ${token}`)
-      .expect(200)
+      .expect(200);
 
-    expect(res.body.player_state).toEqual({ status: 'no_session' })
-    expect(res.body.tickets).toEqual([])
-    expect(res.body.summary.total_tickets).toBe(0)
-  })
+    expect(res.body.player_state).toEqual({ status: 'no_session' });
+    expect(res.body.tickets).toEqual([]);
+    expect(res.body.summary.total_tickets).toBe(0);
+  });
 
   it('returns 200 with missing when the provider returned nothing usable', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const sessionId = await seedSession({ workspaceId, playerId })
-    await seedSnapshot({ workspaceId, sessionId, isMissing: true })
-    const current = await seedConversation({ workspaceId, playerId, sessionId })
-    const { token } = await setupAgent(workspaceId)
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const sessionId = await seedSession({ workspaceId, playerId });
+    await seedSnapshot({ workspaceId, sessionId, isMissing: true });
+    const current = await seedConversation({ workspaceId, playerId, sessionId });
+    const { token } = await setupAgent(workspaceId);
 
     const res = await request(app)
       .get(`/conversations/${current}/context`)
       .set('Authorization', `Bearer ${token}`)
-      .expect(200)
+      .expect(200);
 
-    expect(res.body.player_state).toEqual({ status: 'missing' })
-  })
+    expect(res.body.player_state).toEqual({ status: 'missing' });
+  });
 
   it('returns 200 with not_captured when the session wrote no snapshot', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const sessionId = await seedSession({ workspaceId, playerId })
-    const current = await seedConversation({ workspaceId, playerId, sessionId })
-    const { token } = await setupAgent(workspaceId)
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const sessionId = await seedSession({ workspaceId, playerId });
+    const current = await seedConversation({ workspaceId, playerId, sessionId });
+    const { token } = await setupAgent(workspaceId);
 
     const res = await request(app)
       .get(`/conversations/${current}/context`)
       .set('Authorization', `Bearer ${token}`)
-      .expect(200)
+      .expect(200);
 
-    expect(res.body.player_state).toEqual({ status: 'not_captured' })
-  })
+    expect(res.body.player_state).toEqual({ status: 'not_captured' });
+  });
 
   it('returns 404 for a conversation in another workspace', async () => {
-    const mine = await seedWorkspace()
-    const theirs = await seedWorkspace()
-    const theirPlayer = await seedPlayer(theirs)
-    const theirConversation = await seedConversation({ workspaceId: theirs, playerId: theirPlayer })
-    const { token } = await setupAgent(mine)
+    const mine = await seedWorkspace();
+    const theirs = await seedWorkspace();
+    const theirPlayer = await seedPlayer(theirs);
+    const theirConversation = await seedConversation({
+      workspaceId: theirs,
+      playerId: theirPlayer,
+    });
+    const { token } = await setupAgent(mine);
 
     await request(app)
       .get(`/conversations/${theirConversation}/context`)
       .set('Authorization', `Bearer ${token}`)
-      .expect(404)
-  })
+      .expect(404);
+  });
 
   it('returns 422 for an id that is not a uuid', async () => {
-    const workspaceId = await seedWorkspace()
-    const { token } = await setupAgent(workspaceId)
-    await request(app).get('/conversations/not-a-uuid/context').set('Authorization', `Bearer ${token}`).expect(422)
-  })
-})
+    const workspaceId = await seedWorkspace();
+    const { token } = await setupAgent(workspaceId);
+    await request(app)
+      .get('/conversations/not-a-uuid/context')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(422);
+  });
+});
 ```
 
 - [ ] **Step 2: Run the test to verify it fails**
@@ -1843,15 +2028,15 @@ export async function getConversationContext(
       .from(conversation)
       .innerJoin(player, eq(player.id, conversation.playerId))
       .where(eq(conversation.id, conversationId))
-      .limit(1)
+      .limit(1);
 
-    if (!current) return null
+    if (!current) return null;
 
-    const playerState = await getPlayerStateView(tx, ctx.workspaceId, current.sessionId)
+    const playerState = await getPlayerStateView(tx, ctx.workspaceId, current.sessionId);
     const history = await getTicketHistory(tx, {
       playerId: current.playerId,
       excludeConversationId: conversationId,
-    })
+    });
 
     return {
       player_state: playerState,
@@ -1861,8 +2046,8 @@ export async function getConversationContext(
         total_reopened: history.totalReopened,
         first_contact_at: current.firstSeenAt.toISOString(),
       },
-    }
-  })
+    };
+  });
 }
 ```
 
@@ -1872,21 +2057,21 @@ Add `getConversationContext` to the existing `conversationContextService.ts` imp
 
 ```typescript
 export const getConversationContextHandler: RequestHandler = async (req, res) => {
-  const ctx = req.agent!
-  const params = ConversationIdParams.safeParse(req.params)
+  const ctx = req.agent!;
+  const params = ConversationIdParams.safeParse(req.params);
   if (!params.success) {
-    sendError(res, 422, 'invalid_request', 'id must be a uuid.')
-    return
+    sendError(res, 422, 'invalid_request', 'id must be a uuid.');
+    return;
   }
-  const context = await getConversationContext(ctx, params.data.id)
+  const context = await getConversationContext(ctx, params.data.id);
   if (!context) {
-    sendError(res, 404, 'not_found', 'Conversation not found.')
-    return
+    sendError(res, 404, 'not_found', 'Conversation not found.');
+    return;
   }
   // All four player_state branches are 200. Missing player state is a state,
   // not an error — never reject a conversation because of it.
-  res.status(200).json(context)
-}
+  res.status(200).json(context);
+};
 ```
 
 - [ ] **Step 5: Register the route**
@@ -1894,7 +2079,7 @@ export const getConversationContextHandler: RequestHandler = async (req, res) =>
 In `backend/src/agent/routers/conversationsRouter.ts`, add `getConversationContextHandler` to the import list and register it alongside the other `:id` routes:
 
 ```typescript
-conversationsRouter.get('/conversations/:id/context', getConversationContextHandler)
+conversationsRouter.get('/conversations/:id/context', getConversationContextHandler);
 ```
 
 - [ ] **Step 6: Register in the OpenAPI document**
@@ -1920,18 +2105,26 @@ const AgentPlayerStateSchema = z.union([
     degraded_reason: z.string().nullable(),
     captured_at: z.string(),
   }),
-])
+]);
 
 const AgentTicketSummarySchema = z.object({
   id: z.uuid(),
   number: z.number().int(),
   created_at: z.string(),
-  status: z.enum(['new', 'bot_active', 'open', 'awaiting_player', 'escalated', 'resolved', 'closed']),
+  status: z.enum([
+    'new',
+    'bot_active',
+    'open',
+    'awaiting_player',
+    'escalated',
+    'resolved',
+    'closed',
+  ]),
   subintent: AgentSubintentSchema,
   resolution_source: z.enum(['bot', 'agent']).nullable(),
   resolved_by_agent_name: z.string().nullable(),
   reopen_count: z.number().int(),
-})
+});
 
 registry.registerPath({
   method: 'get',
@@ -1962,7 +2155,7 @@ registry.registerPath({
     },
     404: { description: 'Not found, or not in this workspace' },
   },
-})
+});
 ```
 
 - [ ] **Step 7: Run the tests**
@@ -1995,32 +2188,32 @@ git commit -m "feat(agent): GET /agent/conversations/:id/context for the context
 
 ## Spec coverage
 
-| Spec requirement | Task |
-|---|---|
-| `workspace.ticket_seq` | 1 |
-| `conversation.number` + unique per `(workspace_id, number)` | 1 |
-| Five-step migration order, backfill by `created_at` | 1 |
-| Backfill leaves `ticket_seq` at each workspace max | 1 |
-| Allocated inside the conversation-insert transaction | 2 |
-| Both creation paths allocate | 2 |
-| Two workspaces number independently from 1 | 2 |
-| `GET /agent/conversations/:id` header row | 3 |
-| Cross-workspace `:id` → 404 on both endpoints | 3, 6 |
-| Four `player_state` branches, each 200 | 4, 6 |
-| `declared` ordered and labelled; orphan keys appended | 4 |
-| `raw` returned in full, not role-gated, no event written | 4 |
-| `degraded_reason` on a captured response | 4 |
-| No fallback to a later snapshot | 4 |
-| `tickets` exclude the current conversation, newest first | 5 |
-| Cap at 20 with the true `total_tickets` | 5 |
-| `reopen_count` per ticket | 5 |
-| Two queries regardless of ticket count | 5 |
-| No message bodies; `message` table never touched | 5 |
-| Outcome facts only — no composed labels | 3, 5 |
-| No cross-workspace player history | 5 |
-| `GET /agent/conversations/:id/context` single payload | 6 |
-| `summary.first_contact_at` from `player.first_seen_at` | 6 |
-| Both routes in `openapi.ts` | 3, 6 |
-| Everything inside `withWorkspace` | 3, 4, 5, 6 |
+| Spec requirement                                            | Task       |
+| ----------------------------------------------------------- | ---------- |
+| `workspace.ticket_seq`                                      | 1          |
+| `conversation.number` + unique per `(workspace_id, number)` | 1          |
+| Five-step migration order, backfill by `created_at`         | 1          |
+| Backfill leaves `ticket_seq` at each workspace max          | 1          |
+| Allocated inside the conversation-insert transaction        | 2          |
+| Both creation paths allocate                                | 2          |
+| Two workspaces number independently from 1                  | 2          |
+| `GET /agent/conversations/:id` header row                   | 3          |
+| Cross-workspace `:id` → 404 on both endpoints               | 3, 6       |
+| Four `player_state` branches, each 200                      | 4, 6       |
+| `declared` ordered and labelled; orphan keys appended       | 4          |
+| `raw` returned in full, not role-gated, no event written    | 4          |
+| `degraded_reason` on a captured response                    | 4          |
+| No fallback to a later snapshot                             | 4          |
+| `tickets` exclude the current conversation, newest first    | 5          |
+| Cap at 20 with the true `total_tickets`                     | 5          |
+| `reopen_count` per ticket                                   | 5          |
+| Two queries regardless of ticket count                      | 5          |
+| No message bodies; `message` table never touched            | 5          |
+| Outcome facts only — no composed labels                     | 3, 5       |
+| No cross-workspace player history                           | 5          |
+| `GET /agent/conversations/:id/context` single payload       | 6          |
+| `summary.first_contact_at` from `player.first_seen_at`      | 6          |
+| Both routes in `openapi.ts`                                 | 3, 6       |
+| Everything inside `withWorkspace`                           | 3, 4, 5, 6 |
 
 Out of scope, per the spec, and absent from every task: custom fields, compensation tracking, filtering over the `declared` GIN index, cross-workspace history.

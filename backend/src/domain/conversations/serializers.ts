@@ -1,11 +1,11 @@
-import type { AgentMessageView, PlayerMessageView } from '@support/types'
-import type { PostedMessageRow } from './postMessage.ts'
+import type { AgentMessageView, PlayerMessageView } from '@support/types';
+import type { PostedMessageRow } from './postMessage.ts';
 
 function authorName(row: PostedMessageRow): string {
-  if (row.authorType === 'bot') return 'Support Bot'
-  if (row.authorType === 'system') return 'System'
-  if (row.authorType === 'agent') return row.authorAgentName ?? 'Agent'
-  return row.authorPlayerName ?? 'Player'
+  if (row.authorType === 'bot') return 'Support Bot';
+  if (row.authorType === 'system') return 'System';
+  if (row.authorType === 'agent') return row.authorAgentName ?? 'Agent';
+  return row.authorPlayerName ?? 'Player';
 }
 
 /**
@@ -16,7 +16,7 @@ function authorName(row: PostedMessageRow): string {
  * fetched whole and this function is the only place that decides.
  */
 export function toPlayerView(row: PostedMessageRow): PlayerMessageView | null {
-  if (row.visibility !== 'public') return null
+  if (row.visibility !== 'public') return null;
   return {
     id: row.id,
     seq: row.seq,
@@ -27,7 +27,7 @@ export function toPlayerView(row: PostedMessageRow): PlayerMessageView | null {
     read_at: row.readAt ? row.readAt.toISOString() : null,
     created_at: row.createdAt.toISOString(),
     article_id: row.articleId,
-  }
+  };
 }
 
 /** Permissive: every field, every visibility. Only backend/src/agent/** may import this. */
@@ -44,5 +44,5 @@ export function toAgentView(row: PostedMessageRow): AgentMessageView {
     read_at: row.readAt ? row.readAt.toISOString() : null,
     created_at: row.createdAt.toISOString(),
     article_id: row.articleId,
-  }
+  };
 }

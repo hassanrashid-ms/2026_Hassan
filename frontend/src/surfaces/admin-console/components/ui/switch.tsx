@@ -1,6 +1,6 @@
-import * as React from 'react'
-import * as SwitchPrimitive from '@radix-ui/react-switch'
-import { cn } from '../../lib/cn.ts'
+import * as React from 'react';
+import * as SwitchPrimitive from '@radix-ui/react-switch';
+import { cn } from '../../lib/cn.ts';
 
 function Switch({ className, ...props }: React.ComponentProps<typeof SwitchPrimitive.Root>) {
   return (
@@ -20,7 +20,7 @@ function Switch({ className, ...props }: React.ComponentProps<typeof SwitchPrimi
         )}
       />
     </SwitchPrimitive.Root>
-  )
+  );
 }
 
-export { Switch }
+export { Switch };

@@ -1,9 +1,9 @@
-import { pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
-import { articleState } from './enums.ts'
-import { agent, workspace } from './identity.ts'
-import { intent } from './taxonomy.ts'
+import { pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { articleState } from './enums.ts';
+import { agent, workspace } from './identity.ts';
+import { intent } from './taxonomy.ts';
 
-const tz = { withTimezone: true, mode: 'date' } as const
+const tz = { withTimezone: true, mode: 'date' } as const;
 
 export const article = pgTable('article', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -22,7 +22,7 @@ export const article = pgTable('article', {
   publishedBy: uuid('published_by').references(() => agent.id, { onDelete: 'restrict' }),
   publishedAt: timestamp('published_at', tz),
   createdAt: timestamp('created_at', tz).notNull().defaultNow(),
-})
+});
 
 /** Schema-only in this slice — no upload endpoint, storage_key stays null. */
 export const articleAttachment = pgTable('article_attachment', {
@@ -37,4 +37,4 @@ export const articleAttachment = pgTable('article_attachment', {
   storageKey: text('storage_key'),
   status: text('status').notNull().default('pending'),
   createdAt: timestamp('created_at', tz).notNull().defaultNow(),
-})
+});

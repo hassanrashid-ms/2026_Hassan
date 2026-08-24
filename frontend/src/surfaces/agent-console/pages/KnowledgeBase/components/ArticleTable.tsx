@@ -1,16 +1,23 @@
-import { useQuery } from '@tanstack/react-query'
-import type { ArticleStateValue } from '@support/types'
-import { fetchArticles } from '../../../api/agentApi.ts'
-import { Badge } from '../../../components/ui/badge.tsx'
-import { Button } from '../../../components/ui/button.tsx'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../components/ui/table.tsx'
-import { cn } from '../../../lib/cn.ts'
+import { useQuery } from '@tanstack/react-query';
+import type { ArticleStateValue } from '@support/types';
+import { fetchArticles } from '../../../api/agentApi.ts';
+import { Badge } from '../../../components/ui/badge.tsx';
+import { Button } from '../../../components/ui/button.tsx';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '../../../components/ui/table.tsx';
+import { cn } from '../../../lib/cn.ts';
 
 const STATE_BADGE_VARIANT: Record<ArticleStateValue, 'secondary' | 'success' | 'outline'> = {
   draft: 'secondary',
   published: 'success',
   archived: 'outline',
-}
+};
 
 export function ArticleTable({
   token,
@@ -18,12 +25,12 @@ export function ArticleTable({
   onSelect,
   onNew,
 }: {
-  token: string
-  selectedId: string | null
-  onSelect: (id: string) => void
-  onNew: () => void
+  token: string;
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  onNew: () => void;
 }) {
-  const articles = useQuery({ queryKey: ['admin-articles'], queryFn: () => fetchArticles(token) })
+  const articles = useQuery({ queryKey: ['admin-articles'], queryFn: () => fetchArticles(token) });
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -62,5 +69,5 @@ export function ArticleTable({
         </Table>
       </div>
     </div>
-  )
+  );
 }

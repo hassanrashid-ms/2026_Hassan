@@ -1,13 +1,13 @@
-import { describe, expect, it, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { Taxonomy } from './Taxonomy.tsx'
-import * as agentApi from '../../api/agentApi.ts'
-import * as agentSession from '../../lib/agentSession.ts'
+import { describe, expect, it, vi } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Taxonomy } from './Taxonomy.tsx';
+import * as agentApi from '../../api/agentApi.ts';
+import * as agentSession from '../../lib/agentSession.ts';
 
 function renderWithClient(ui: React.ReactElement) {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>)
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
 }
 
 describe('Taxonomy', () => {
@@ -18,7 +18,7 @@ describe('Taxonomy', () => {
       displayName: 'A',
       workspaceSlug: 'ws',
       role: 'admin',
-    })
+    });
     vi.spyOn(agentApi, 'fetchIntents').mockResolvedValue({
       intents: [
         {
@@ -27,18 +27,25 @@ describe('Taxonomy', () => {
           isSystem: false,
           archivedAt: null,
           subintents: [
-            { id: 's1', name: 'Refunds', formId: null, archivedAt: null, defaultPriority: null, mergedIntoId: null },
+            {
+              id: 's1',
+              name: 'Refunds',
+              formId: null,
+              archivedAt: null,
+              defaultPriority: null,
+              mergedIntoId: null,
+            },
           ],
         },
       ],
-    })
+    });
 
-    renderWithClient(<Taxonomy />)
+    renderWithClient(<Taxonomy />);
 
-    expect(await screen.findByText('Billing')).toBeInTheDocument()
-    expect(await screen.findByText('Refunds')).toBeInTheDocument()
-    expect(screen.getByText('+ Add intent')).toBeInTheDocument()
-  })
+    expect(await screen.findByText('Billing')).toBeInTheDocument();
+    expect(await screen.findByText('Refunds')).toBeInTheDocument();
+    expect(screen.getByText('+ Add intent')).toBeInTheDocument();
+  });
 
   it('hides "+ Add intent" for a non-admin', async () => {
     vi.spyOn(agentSession, 'loadAgentSession').mockReturnValue({
@@ -47,12 +54,12 @@ describe('Taxonomy', () => {
       displayName: 'A',
       workspaceSlug: 'ws',
       role: 'agent',
-    })
-    vi.spyOn(agentApi, 'fetchIntents').mockResolvedValue({ intents: [] })
+    });
+    vi.spyOn(agentApi, 'fetchIntents').mockResolvedValue({ intents: [] });
 
-    renderWithClient(<Taxonomy />)
+    renderWithClient(<Taxonomy />);
 
-    await screen.findByText('Taxonomy')
-    expect(screen.queryByText('+ Add intent')).not.toBeInTheDocument()
-  })
-})
+    await screen.findByText('Taxonomy');
+    expect(screen.queryByText('+ Add intent')).not.toBeInTheDocument();
+  });
+});

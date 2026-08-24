@@ -37,14 +37,16 @@ The existing `bot_config` table (`backend/src/shared/db/schema/bot.ts`) already 
 
 ```ts
 export const botConfig = pgTable('bot_config', {
-  workspaceId: uuid('workspace_id').primaryKey().references(() => workspace.id, { onDelete: 'restrict' }),
+  workspaceId: uuid('workspace_id')
+    .primaryKey()
+    .references(() => workspace.id, { onDelete: 'restrict' }),
   isProvisioned: boolean('is_provisioned').notNull().default(false),
-  prompt: text('prompt').notNull(),               // CHANGED: was nullable, now always a real value
-  rules: jsonb('rules').notNull(),                // CHANGED: was nullable text, now RuleEntry[], always populated
-  toolsConfig: jsonb('tools_config').notNull(),   // NEW: ToolToggle[], always populated
+  prompt: text('prompt').notNull(), // CHANGED: was nullable, now always a real value
+  rules: jsonb('rules').notNull(), // CHANGED: was nullable text, now RuleEntry[], always populated
+  toolsConfig: jsonb('tools_config').notNull(), // NEW: ToolToggle[], always populated
   createdAt: timestamp('created_at', tz).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', tz).notNull().defaultNow(),
-})
+});
 ```
 
 This is a deliberate change from the current nullable/"resolve to default" model: `prompt`,
@@ -55,18 +57,18 @@ special NULL-out case.
 
 ```ts
 type RuleEntry = {
-  key: string          // stable id; builtin keys match DEFAULT_BOT_RULES catalog entries
-  text: string          // rendered into the prompt's rules block, verbatim
-  enabled: boolean
-  locked: boolean        // true only for the 2 built-in hard-constraint rules
-  source: 'builtin' | 'custom'
-  enforcement: 'code' | 'prompt'  // display-only; see "Enforcement honesty" below
-}
+  key: string; // stable id; builtin keys match DEFAULT_BOT_RULES catalog entries
+  text: string; // rendered into the prompt's rules block, verbatim
+  enabled: boolean;
+  locked: boolean; // true only for the 2 built-in hard-constraint rules
+  source: 'builtin' | 'custom';
+  enforcement: 'code' | 'prompt'; // display-only; see "Enforcement honesty" below
+};
 
 type ToolToggle = {
-  tool: string          // one of TOOL_DEFS names, excluding 'handoff'
-  enabled: boolean
-}
+  tool: string; // one of TOOL_DEFS names, excluding 'handoff'
+  enabled: boolean;
+};
 ```
 
 Every `RuleEntry` with `source: 'builtin'` must always be present in the stored array — the save
@@ -78,24 +80,24 @@ Seeding, below).
 ## Built-in rule catalog
 
 **Behavior parity is the hard constraint here.** `docs/specs/...` mockup text and the product doc's
-Rules screen show *illustrative* rule wording (6 short rules, one off by default) — that is not
+Rules screen show _illustrative_ rule wording (6 short rules, one off by default) — that is not
 what `DEFAULT_BOT_RULES` actually says today. The earlier draft of this spec mistakenly used the
 doc's illustrative wording as the catalog. That is now corrected: the catalog is a **verbatim
 split of the real `DEFAULT_BOT_RULES` string**, in its current order, all enabled by default,
 because that string is what every workspace's bot has been running on. The doc's screen only
-supplies the *shape* (toggleable list, some locked, custom rules addable) — never the wording or
+supplies the _shape_ (toggleable list, some locked, custom rules addable) — never the wording or
 the defaults, which come from the actual shipped constant:
 
-| key | text (verbatim from `DEFAULT_BOT_RULES`) | default enabled | locked | enforcement |
-|---|---|---|---|---|
-| `no_invented_facts` | Never invent a fact about the game, an account, a purchase, a refund, or a balance. If the articles do not say it, you do not know it. | on | no | `code` — backed by `scoreGrounding`/`isGrounded` (≥90% grounded), independent of this sentence being present |
-| `handoff_immediate` | If the player asks for a human, mentions a legal or safety issue, or is upset with you rather than with the game, hand off immediately, without searching first. | on | **yes** | `prompt` |
-| `search_before_financial_handoff` | If the player reports a financial loss or a setback they did not cause, search before you hand off. A published article on the exact problem is faster than a queue, and answering from it costs the player nothing — they can still say it did not help, which hands them off. Never resolve or dismiss the complaint yourself. | on | no | `prompt` |
-| `handoff_after_empty_search` | If a search comes back with nothing that answers the question, hand off. A fast handoff is a good outcome, not a failure — but "fast" means after one search, not instead of one. | on | no | `prompt` |
-| `no_promises` | Never promise a compensation, a refund, a timeline, or an outcome. A human decides those. | on | no | `prompt` |
-| `no_credentials` | Never ask the player for a password, a payment detail, or a one-time code. | on | **yes** | `prompt` |
-| `language_and_length` | Reply in the player's language. Keep an ordinary reply to at most three short sentences — this is a chat window on a phone, not an email. An answer drawn from an article may run longer when its steps need the room: never drop or merge a step to fit, and never pad past what the article says. | on | no | `prompt` |
-| `no_regreet` | Do not greet the player again if the conversation is already underway. | on | no | `prompt` |
+| key                               | text (verbatim from `DEFAULT_BOT_RULES`)                                                                                                                                                                                                                                                                                         | default enabled | locked  | enforcement                                                                                                  |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- | ------- | ------------------------------------------------------------------------------------------------------------ |
+| `no_invented_facts`               | Never invent a fact about the game, an account, a purchase, a refund, or a balance. If the articles do not say it, you do not know it.                                                                                                                                                                                           | on              | no      | `code` — backed by `scoreGrounding`/`isGrounded` (≥90% grounded), independent of this sentence being present |
+| `handoff_immediate`               | If the player asks for a human, mentions a legal or safety issue, or is upset with you rather than with the game, hand off immediately, without searching first.                                                                                                                                                                 | on              | **yes** | `prompt`                                                                                                     |
+| `search_before_financial_handoff` | If the player reports a financial loss or a setback they did not cause, search before you hand off. A published article on the exact problem is faster than a queue, and answering from it costs the player nothing — they can still say it did not help, which hands them off. Never resolve or dismiss the complaint yourself. | on              | no      | `prompt`                                                                                                     |
+| `handoff_after_empty_search`      | If a search comes back with nothing that answers the question, hand off. A fast handoff is a good outcome, not a failure — but "fast" means after one search, not instead of one.                                                                                                                                                | on              | no      | `prompt`                                                                                                     |
+| `no_promises`                     | Never promise a compensation, a refund, a timeline, or an outcome. A human decides those.                                                                                                                                                                                                                                        | on              | no      | `prompt`                                                                                                     |
+| `no_credentials`                  | Never ask the player for a password, a payment detail, or a one-time code.                                                                                                                                                                                                                                                       | on              | **yes** | `prompt`                                                                                                     |
+| `language_and_length`             | Reply in the player's language. Keep an ordinary reply to at most three short sentences — this is a chat window on a phone, not an email. An answer drawn from an article may run longer when its steps need the room: never drop or merge a step to fit, and never pad past what the article says.                              | on              | no      | `prompt`                                                                                                     |
+| `no_regreet`                      | Do not greet the player again if the conversation is already underway.                                                                                                                                                                                                                                                           | on              | no      | `prompt`                                                                                                     |
 
 All 8 default to `enabled: true` — today there is no on/off distinction, every bullet always
 ships. `handoff_immediate` and `no_credentials` are the 2 locked rules (closest existing match to
@@ -134,20 +136,45 @@ export const TOOL_CATALOG = [
   // Declared in the same order as ALWAYS_AVAILABLE_TOOLS today: search_articles,
   // classify, answer_from_article, handoff (locked, listed for completeness but
   // never filtered), then confirm_resolution when the phase includes it.
-  { name: 'search_articles', lockable: true, defaultEnabled: true, consequence: 'Bot can never look anything up; every turn ends in classify-only or handoff.' },
-  { name: 'classify', lockable: true, defaultEnabled: true, consequence: 'Conversations stay unclassified from the bot; agents classify manually.' },
-  { name: 'answer_from_article', lockable: true, defaultEnabled: true, consequence: 'Bot can search/classify but never answers itself — always hands off after searching.' },
+  {
+    name: 'search_articles',
+    lockable: true,
+    defaultEnabled: true,
+    consequence: 'Bot can never look anything up; every turn ends in classify-only or handoff.',
+  },
+  {
+    name: 'classify',
+    lockable: true,
+    defaultEnabled: true,
+    consequence: 'Conversations stay unclassified from the bot; agents classify manually.',
+  },
+  {
+    name: 'answer_from_article',
+    lockable: true,
+    defaultEnabled: true,
+    consequence:
+      'Bot can search/classify but never answers itself — always hands off after searching.',
+  },
   // handoff is intentionally absent from the toggleable list: always available, never configurable.
-  { name: 'confirm_resolution', lockable: true, defaultEnabled: true, consequence: 'Article answers are never confirmed by the player; bot_active exits only via handoff or the turn cap.' },
-] as const
+  {
+    name: 'confirm_resolution',
+    lockable: true,
+    defaultEnabled: true,
+    consequence:
+      'Article answers are never confirmed by the player; bot_active exits only via handoff or the turn cap.',
+  },
+] as const;
 
 export function toolsForPhase(phase: ToolPhase, enabledTools: ReadonlySet<string>): unknown[] {
-  const base = [...ALWAYS_AVAILABLE_TOOLS, ...(phase === 'bot_article' ? [CONFIRM_RESOLUTION_TOOL] : [])]
+  const base = [
+    ...ALWAYS_AVAILABLE_TOOLS,
+    ...(phase === 'bot_article' ? [CONFIRM_RESOLUTION_TOOL] : []),
+  ];
   // Filter in place — DO NOT reorder. handoff's name is never checked against
   // enabledTools, so it always passes the filter and stays exactly where
   // ALWAYS_AVAILABLE_TOOLS already puts it (today: 4th). Every other tool is
   // dropped only if its name isn't in enabledTools.
-  return base.filter((t) => t.function.name === 'handoff' || enabledTools.has(t.function.name))
+  return base.filter((t) => t.function.name === 'handoff' || enabledTools.has(t.function.name));
 }
 ```
 
@@ -177,7 +204,7 @@ default:
   `prompt` (non-null today) is seeded only for the still-`NULL` `tools_config` column — the
   existing custom prompt is left untouched and gets no synthetic "version 1" entry, since it
   already has real history. A workspace with a non-null legacy free-text `rules` value is migrated
-  by seeding the full builtin catalog at its defaults *plus* one extra `source: 'custom'` entry
+  by seeding the full builtin catalog at its defaults _plus_ one extra `source: 'custom'` entry
   wrapping the old free-text value verbatim, so no admin's existing customisation is silently
   dropped — the old text simply becomes one custom rule alongside the new toggleable catalog.
 - `DEFAULT_BOT_RULES_CATALOG` and `DEFAULT_BOT_PROMPT` remain the single source of truth in code
@@ -223,18 +250,22 @@ per save, append-only. This spec adds:
 `packages/types/src/bot.ts`:
 
 ```ts
-const RuleEntrySchema = z.object({
-  key: z.string(),
-  text: z.string().min(1),
-  enabled: z.boolean(),
-  locked: z.boolean(),
-  source: z.enum(['builtin', 'custom']),
-}).strict()
+const RuleEntrySchema = z
+  .object({
+    key: z.string(),
+    text: z.string().min(1),
+    enabled: z.boolean(),
+    locked: z.boolean(),
+    source: z.enum(['builtin', 'custom']),
+  })
+  .strict();
 
-const ToolToggleSchema = z.object({
-  tool: z.enum(TOGGLEABLE_TOOL_NAMES), // excludes 'handoff'
-  enabled: z.boolean(),
-}).strict()
+const ToolToggleSchema = z
+  .object({
+    tool: z.enum(TOGGLEABLE_TOOL_NAMES), // excludes 'handoff'
+    enabled: z.boolean(),
+  })
+  .strict();
 ```
 
 `enforcement` is never client-settable — it's not part of `RuleEntrySchema`. The server derives
@@ -243,16 +274,19 @@ rules, and hardcodes `prompt` for any `source: 'custom'` entry, before returning
 This keeps an admin from mislabeling a rule as code-enforced when it isn't.
 
 ```ts
-export const SaveBotConfigBody = z.object({
-  is_provisioned: z.boolean().optional(),
-  prompt: z.string().nullable().optional(),
-  rules: z.array(RuleEntrySchema).nullable().optional(),
-  tools_config: z.array(ToolToggleSchema).nullable().optional(),
-}).strict()
-  .refine(body => Object.values(body).some(v => v !== undefined))
+export const SaveBotConfigBody = z
+  .object({
+    is_provisioned: z.boolean().optional(),
+    prompt: z.string().nullable().optional(),
+    rules: z.array(RuleEntrySchema).nullable().optional(),
+    tools_config: z.array(ToolToggleSchema).nullable().optional(),
+  })
+  .strict()
+  .refine((body) => Object.values(body).some((v) => v !== undefined));
 ```
 
 Save-time domain validation (`saveBotConfig`, not just Zod shape):
+
 - Reject if any locked builtin key (`handoff_on_request`, `no_credentials`) is missing or has
   `enabled: false`.
 - Reject if any `source: 'builtin'` key from `DEFAULT_BOT_RULES_CATALOG` is missing from the
@@ -289,7 +323,7 @@ No existing frontend code to preserve here — no Bot Config UI exists today (co
 ## Testing
 
 - **Parity test (write this first, before any refactor lands):** a snapshot test that captures
-  `buildSystemPrompt(DEFAULT_BOT_PROMPT, DEFAULT_BOT_RULES)`'s current output *before* touching any
+  `buildSystemPrompt(DEFAULT_BOT_PROMPT, DEFAULT_BOT_RULES)`'s current output _before_ touching any
   code, then asserts the new `buildSystemPrompt(seeded.prompt, seeded.rules)` produces the
   identical string post-migration. Same for `toolsForPhase('bot_article')` and
   `toolsForPhase('agent_ask')` (or whatever the non-confirm phase value is) — capture today's

@@ -1,6 +1,6 @@
-import type { ErrorRequestHandler, Response } from 'express'
-import { InvalidWorkspaceId } from './shared/db/withWorkspace.ts'
-import { logger } from './shared/logging/logger.ts'
+import type { ErrorRequestHandler, Response } from 'express';
+import { InvalidWorkspaceId } from './shared/db/withWorkspace.ts';
+import { logger } from './shared/logging/logger.ts';
 
 export type ErrorCode =
   | 'unauthorized'
@@ -24,10 +24,10 @@ export type ErrorCode =
   | 'invalid_status'
   | 'agent_not_found'
   | 'agent_not_active'
-  | 'invalid_subintent'
+  | 'invalid_subintent';
 
 export function sendError(res: Response, status: number, code: ErrorCode, message: string): void {
-  res.status(status).json({ error: { code, message } })
+  res.status(status).json({ error: { code, message } });
 }
 
 /**
@@ -44,27 +44,32 @@ export function sendError(res: Response, status: number, code: ErrorCode, messag
  */
 export const errorMiddleware: ErrorRequestHandler = (error, _req, res, _next) => {
   // express.json() throws this for malformed JSON and for a body over the limit.
-  if (error && typeof error === 'object' && 'type' in error && error.type === 'entity.parse.failed') {
-    sendError(res, 400, 'unparseable_body', 'Request body is not valid JSON.')
-    return
+  if (
+    error &&
+    typeof error === 'object' &&
+    'type' in error &&
+    error.type === 'entity.parse.failed'
+  ) {
+    sendError(res, 400, 'unparseable_body', 'Request body is not valid JSON.');
+    return;
   }
   if (error && typeof error === 'object' && 'type' in error && error.type === 'entity.too.large') {
-    sendError(res, 413, 'unparseable_body', 'Request body is too large.')
-    return
+    sendError(res, 413, 'unparseable_body', 'Request body is too large.');
+    return;
   }
 
   // Mapped to a generic 400 without ever reading `.workspaceId` — that field
   // exists for code to inspect, not for a response or a log line to echo.
   if (error instanceof InvalidWorkspaceId) {
-    logger.error('error', `${error.name}: ${error.message}`)
-    sendError(res, 400, 'invalid_request', 'Invalid workspace id.')
-    return
+    logger.error('error', `${error.name}: ${error.message}`);
+    sendError(res, 400, 'invalid_request', 'Invalid workspace id.');
+    return;
   }
 
   if (error instanceof Error) {
-    logger.error('error', `${error.name}: ${error.message}`, { stack: error.stack })
+    logger.error('error', `${error.name}: ${error.message}`, { stack: error.stack });
   } else {
-    logger.error('error', 'non-Error thrown', { type: typeof error })
+    logger.error('error', 'non-Error thrown', { type: typeof error });
   }
-  sendError(res, 500, 'internal', 'Something went wrong.')
-}
+  sendError(res, 500, 'internal', 'Something went wrong.');
+};

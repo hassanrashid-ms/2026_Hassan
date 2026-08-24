@@ -1,8 +1,8 @@
-import * as React from 'react'
-import * as TabsPrimitive from '@radix-ui/react-tabs'
-import { cn } from '@/surfaces/webview/lib/cn'
+import * as React from 'react';
+import * as TabsPrimitive from '@radix-ui/react-tabs';
+import { cn } from '@/surfaces/webview/lib/cn';
 
-const Tabs = TabsPrimitive.Root
+const Tabs = TabsPrimitive.Root;
 
 // Divergence from stock shadcn: TabsList is a horizontally scrollable pill strip
 // (no-scrollbar utility from webview.css) instead of a fixed-width grid — there is
@@ -13,7 +13,7 @@ function TabsList({ className, ...props }: React.ComponentProps<typeof TabsPrimi
       className={cn('flex w-full overflow-x-auto no-scrollbar gap-2', className)}
       {...props}
     />
-  )
+  );
 }
 
 // Divergence from stock shadcn: pill chips (bg-surface/bg-accent) instead of the
@@ -29,11 +29,11 @@ function TabsTrigger({ className, ...props }: React.ComponentProps<typeof TabsPr
       )}
       {...props}
     />
-  )
+  );
 }
 
 function TabsContent({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.Content>) {
-  return <TabsPrimitive.Content className={cn('outline-none', className)} {...props} />
+  return <TabsPrimitive.Content className={cn('outline-none', className)} {...props} />;
 }
 
-export { Tabs, TabsList, TabsTrigger, TabsContent }
+export { Tabs, TabsList, TabsTrigger, TabsContent };

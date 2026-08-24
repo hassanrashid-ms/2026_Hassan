@@ -1,15 +1,15 @@
-import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { TopBar } from '@/surfaces/webview/components/TopBar'
-import { ChatBubbles } from '@/surfaces/webview/components/chat/ChatBubbles'
-import { ChatComposer } from '@/surfaces/webview/components/chat/ChatComposer'
-import { SupportButton } from '@/surfaces/webview/components/SupportButton'
-import { BootstrapFailedScreen } from '@/surfaces/webview/components/StateScreens'
-import { useSupport } from '@/surfaces/webview/components/SupportContext'
-import { FormCard } from '@/surfaces/webview/components/chat/FormCard'
-import { ArticleSheet } from '@/surfaces/webview/components/ArticleSheet'
-import { useCloseOverlay } from '@/surfaces/webview/hooks/useCloseOverlay'
+import { useEffect, useState } from 'react';
+import { useParams } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { TopBar } from '@/surfaces/webview/components/TopBar';
+import { ChatBubbles } from '@/surfaces/webview/components/chat/ChatBubbles';
+import { ChatComposer } from '@/surfaces/webview/components/chat/ChatComposer';
+import { SupportButton } from '@/surfaces/webview/components/SupportButton';
+import { BootstrapFailedScreen } from '@/surfaces/webview/components/StateScreens';
+import { useSupport } from '@/surfaces/webview/components/SupportContext';
+import { FormCard } from '@/surfaces/webview/components/chat/FormCard';
+import { ArticleSheet } from '@/surfaces/webview/components/ArticleSheet';
+import { useCloseOverlay } from '@/surfaces/webview/hooks/useCloseOverlay';
 import {
   answerResolution,
   fetchPlayerMessages,
@@ -19,21 +19,21 @@ import {
   sendPlayerMessage,
   skipForm,
   submitForm,
-} from '@/features/chat/api/playerChatApi'
-import { createSocket } from '@/features/chat/api/socket'
-import { reconcilePending, type PendingMessage } from '@/features/chat/hooks/chatReconcile'
-import { showBotTyping } from './showBotTyping.ts'
-import type { ChatMessage } from '@/features/chat/components/types'
+} from '@/features/chat/api/playerChatApi';
+import { createSocket } from '@/features/chat/api/socket';
+import { reconcilePending, type PendingMessage } from '@/features/chat/hooks/chatReconcile';
+import { showBotTyping } from './showBotTyping.ts';
+import type { ChatMessage } from '@/features/chat/components/types';
 
 function toChatMessage(m: {
-  id: string
-  author_type: ChatMessage['authorType']
-  author_name?: string
-  body: string
-  created_at: string
-  delivery_state: NonNullable<ChatMessage['deliveryState']>
-  read_at: string | null
-  article_id: string | null
+  id: string;
+  author_type: ChatMessage['authorType'];
+  author_name?: string;
+  body: string;
+  created_at: string;
+  delivery_state: NonNullable<ChatMessage['deliveryState']>;
+  read_at: string | null;
+  article_id: string | null;
 }): ChatMessage {
   return {
     id: m.id,
@@ -44,7 +44,7 @@ function toChatMessage(m: {
     deliveryState: m.delivery_state,
     readAt: m.read_at,
     articleId: m.article_id,
-  }
+  };
 }
 
 /**
@@ -53,7 +53,7 @@ function toChatMessage(m: {
  * because the two differ only in their contents, and a one-prop wrapper would
  * hide that they must stay visually identical.
  */
-const BANNER_CLASS = 'shrink-0 rounded-t-card border-t border-text/10 bg-surface px-4 pt-5 pb-5'
+const BANNER_CLASS = 'shrink-0 rounded-t-card border-t border-text/10 bg-surface px-4 pt-5 pb-5';
 
 /**
  * The chat that used to be a panel inside the support surface, now its own route.
@@ -72,9 +72,9 @@ const BANNER_CLASS = 'shrink-0 rounded-t-card border-t border-text/10 bg-surface
  * send.
  */
 export function SupportChat() {
-  const { boot, error, retry } = useSupport()
-  const queryClient = useQueryClient()
-  const [pending, setPending] = useState<PendingMessage[]>([])
+  const { boot, error, retry } = useSupport();
+  const queryClient = useQueryClient();
+  const [pending, setPending] = useState<PendingMessage[]>([]);
 
   /*
    * The article sheet is a route, not state, so Android's back button closes it —
@@ -82,24 +82,31 @@ export function SupportChat() {
    * screen. The socket stays connected, the thread keeps its scroll position, and
    * a bot or agent message arriving mid-read still lands.
    */
-  const { id: articleId } = useParams<{ id: string }>()
-  const closeArticle = useCloseOverlay('/embed/support/chat')
+  const { id: articleId } = useParams<{ id: string }>();
+  const closeArticle = useCloseOverlay('/embed/support/chat');
 
   const messagesQuery = useQuery({
     queryKey: ['playerMessages', boot?.sessionId],
     queryFn: () => fetchPlayerMessages(boot!.token, boot!.sessionId),
     enabled: boot !== null,
-  })
+  });
 
   const send = useMutation({
     mutationFn: (body: string) => sendPlayerMessage(boot!.token, body, boot!.sessionId),
     onMutate: (body: string) => {
-      const tempId = `temp-${Date.now()}-${Math.random()}`
+      const tempId = `temp-${Date.now()}-${Math.random()}`;
       setPending((current) => [
         ...current,
-        { tempId, id: tempId, authorType: 'player', body, createdAt: new Date().toISOString(), deliveryState: 'sending' },
-      ])
-      return { tempId }
+        {
+          tempId,
+          id: tempId,
+          authorType: 'player',
+          body,
+          createdAt: new Date().toISOString(),
+          deliveryState: 'sending',
+        },
+      ]);
+      return { tempId };
     },
     onSuccess: (data, _body, context) => {
       // Deliberately does not clear `pending` here: stamping the server's id on
@@ -111,24 +118,26 @@ export function SupportChat() {
       // typing indicator could not tell an in-flight send from a delivered one.
       setPending((current) =>
         current.map((p) =>
-          p.tempId === context?.tempId ? { ...p, serverId: data.message.id, deliveryState: 'sent' } : p,
+          p.tempId === context?.tempId
+            ? { ...p, serverId: data.message.id, deliveryState: 'sent' }
+            : p,
         ),
-      )
-      void queryClient.invalidateQueries({ queryKey: ['playerMessages', boot?.sessionId] })
+      );
+      void queryClient.invalidateQueries({ queryKey: ['playerMessages', boot?.sessionId] });
     },
     onError: (_error, _body, context) => {
       setPending((current) =>
         current.map((p) => (p.tempId === context?.tempId ? { ...p, deliveryState: 'failed' } : p)),
-      )
+      );
     },
-  })
+  });
 
   const answer = useMutation({
     mutationFn: (helped: boolean) => answerResolution(boot!.token, helped, boot!.sessionId),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['playerMessages', boot?.sessionId] })
+      void queryClient.invalidateQueries({ queryKey: ['playerMessages', boot?.sessionId] });
     },
-  })
+  });
 
   /**
    * Deliberately does not invalidate the messages query. The card owns its own
@@ -139,17 +148,19 @@ export function SupportChat() {
   const formAnswer = useMutation({
     mutationFn: ({ fieldKey, value }: { fieldKey: string; value: unknown }) =>
       postFormAnswer(boot!.token, fieldKey, value, boot!.sessionId),
-  })
+  });
 
   const formTerminate = useMutation({
     mutationFn: (action: 'submit' | 'skip') =>
-      action === 'submit' ? submitForm(boot!.token, boot!.sessionId) : skipForm(boot!.token, boot!.sessionId),
+      action === 'submit'
+        ? submitForm(boot!.token, boot!.sessionId)
+        : skipForm(boot!.token, boot!.sessionId),
     onSuccess: () => {
       // The terminate posts the summary card and flips the status, so the whole
       // thread is stale — unlike an answer, which changes nothing on screen.
-      void queryClient.invalidateQueries({ queryKey: ['playerMessages', boot?.sessionId] })
+      void queryClient.invalidateQueries({ queryKey: ['playerMessages', boot?.sessionId] });
     },
-  })
+  });
 
   const newTicket = useMutation({
     mutationFn: () => openNewTicket(boot!.token, boot!.sessionId),
@@ -158,64 +169,66 @@ export function SupportChat() {
       // would otherwise still hold the closed ticket's messages while the
       // refetch is in flight — the player would watch the old thread linger.
       // Removing the entry first drops straight to the "Say hello" empty state.
-      queryClient.removeQueries({ queryKey: ['playerMessages', boot?.sessionId] })
+      queryClient.removeQueries({ queryKey: ['playerMessages', boot?.sessionId] });
       // Optimistic bubbles belong to the conversation that just closed; nothing
       // in the new thread will ever reconcile them.
-      setPending([])
-      void queryClient.invalidateQueries({ queryKey: ['playerMessages', boot?.sessionId] })
+      setPending([]);
+      void queryClient.invalidateQueries({ queryKey: ['playerMessages', boot?.sessionId] });
     },
-  })
+  });
 
   const onRetry = (failed: ChatMessage) => {
-    setPending((current) => current.filter((p) => p.id !== failed.id))
-    send.mutate(failed.body)
-  }
+    setPending((current) => current.filter((p) => p.id !== failed.id));
+    send.mutate(failed.body);
+  };
 
   useEffect(() => {
-    if (!boot) return
-    const socket = createSocket(boot.token, 'player')
+    if (!boot) return;
+    const socket = createSocket(boot.token, 'player');
     socket.on('connect', () => {
-      const conversationId = messagesQuery.data?.conversation_id
-      if (conversationId) socket.emit('join_conversation', { conversation_id: conversationId })
-    })
+      const conversationId = messagesQuery.data?.conversation_id;
+      if (conversationId) socket.emit('join_conversation', { conversation_id: conversationId });
+    });
     socket.on('message:new', () => {
-      void queryClient.invalidateQueries({ queryKey: ['playerMessages', boot.sessionId] })
-    })
+      void queryClient.invalidateQueries({ queryKey: ['playerMessages', boot.sessionId] });
+    });
     // The only signal for a decline: it posts no message and changes no status,
     // so nothing else would tell this screen to drop the banner.
     socket.on('conversation:phase_changed', () => {
-      void queryClient.invalidateQueries({ queryKey: ['playerMessages', boot.sessionId] })
-    })
+      void queryClient.invalidateQueries({ queryKey: ['playerMessages', boot.sessionId] });
+    });
     // The payload's up_to_seq/read_at are deliberately unused. Refetching keeps
     // the "which messages count as read" rule in exactly one place — the server.
     socket.on('message:read', () => {
-      void queryClient.invalidateQueries({ queryKey: ['playerMessages', boot.sessionId] })
-    })
+      void queryClient.invalidateQueries({ queryKey: ['playerMessages', boot.sessionId] });
+    });
     return () => {
-      socket.close()
-    }
-  }, [boot, messagesQuery.data?.conversation_id, queryClient])
+      socket.close();
+    };
+  }, [boot, messagesQuery.data?.conversation_id, queryClient]);
 
   useEffect(() => {
-    const messages = messagesQuery.data?.messages
-    if (!boot || !messages || messages.length === 0) return
-    const lastSeq = Math.max(...messages.map((m) => m.seq))
-    void markPlayerMessagesRead(boot.token, lastSeq)
-  }, [boot, messagesQuery.data])
+    const messages = messagesQuery.data?.messages;
+    if (!boot || !messages || messages.length === 0) return;
+    const lastSeq = Math.max(...messages.map((m) => m.seq));
+    void markPlayerMessagesRead(boot.token, lastSeq);
+  }, [boot, messagesQuery.data]);
 
-  const serverMessages: ChatMessage[] = messagesQuery.data?.messages.map(toChatMessage) ?? []
-  const chatMessages = reconcilePending(serverMessages, pending)
+  const serverMessages: ChatMessage[] = messagesQuery.data?.messages.map(toChatMessage) ?? [];
+  const chatMessages = reconcilePending(serverMessages, pending);
 
-  const settled = messagesQuery.data?.status === 'resolved' || messagesQuery.data?.status === 'closed'
+  const settled =
+    messagesQuery.data?.status === 'resolved' || messagesQuery.data?.status === 'closed';
   // Explicit, not `!== 'none'`. The old check made every future enum value render
   // the yes/no banner by default, and 'form' is the value that proved it: the
   // banner would have appeared underneath the form card asking about an article
   // nobody had offered. So every new phase that IS a yes/no has to be added here
   // by hand — 'inactivity_ask' is one, and the inactivity clock's stage 1 is
   // unanswerable without it.
-  const phase = messagesQuery.data?.confirm_phase ?? 'none'
-  const confirmPending = phase === 'bot_article' || phase === 'agent_ask' || phase === 'inactivity_ask'
-  const activeForm = phase === 'form' ? (messagesQuery.data?.form ?? null) : null
+  const phase = messagesQuery.data?.confirm_phase ?? 'none';
+  const confirmPending =
+    phase === 'bot_article' || phase === 'agent_ask' || phase === 'inactivity_ask';
+  const activeForm = phase === 'form' ? (messagesQuery.data?.form ?? null) : null;
 
   /**
    * Two independent signals for the same condition, because either can be the
@@ -231,9 +244,12 @@ export function SupportChat() {
   // reach the server already surfaces per-message as "Not sent. Retry" rather
   // than silently — so tearing the whole screen down would lose real content to
   // report a failure that is already reported.
-  const unreachable = error !== null || (messagesQuery.isError && messagesQuery.data === undefined)
+  const unreachable = error !== null || (messagesQuery.isError && messagesQuery.data === undefined);
   const unreachableMessage =
-    error ?? (messagesQuery.error instanceof Error ? messagesQuery.error.message : 'Could not reach support. Check your connection and try again.')
+    error ??
+    (messagesQuery.error instanceof Error
+      ? messagesQuery.error.message
+      : 'Could not reach support. Check your connection and try again.');
 
   const isTyping = showBotTyping({
     lastMessage: chatMessages[chatMessages.length - 1],
@@ -241,14 +257,14 @@ export function SupportChat() {
     settled,
     confirmPending,
     hasActiveForm: activeForm !== null,
-  })
+  });
 
   const onRetryConnection = () => {
     // Both, for the same reason both are checked above: whichever failed needs
     // re-arming, and retrying the one that did not is harmless.
-    retry()
-    void messagesQuery.refetch()
-  }
+    retry();
+    void messagesQuery.refetch();
+  };
 
   if (unreachable) {
     return (
@@ -260,7 +276,7 @@ export function SupportChat() {
           <BootstrapFailedScreen message={unreachableMessage} onRetry={onRetryConnection} />
         </div>
       </>
-    )
+    );
   }
 
   return (
@@ -273,17 +289,22 @@ export function SupportChat() {
         {messagesQuery.isPending ? null : chatMessages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 px-8 text-center">
             <p className="text-lg font-semibold text-text">Say hello</p>
-            <p className="text-base text-muted">Tell us what happened and we'll pick it up from here.</p>
+            <p className="text-base text-muted">
+              Tell us what happened and we'll pick it up from here.
+            </p>
           </div>
         ) : (
           <ChatBubbles messages={chatMessages} isTyping={isTyping} onRetry={onRetry} />
         )}
       </div>
 
-
-
       {activeForm && (
-        <div role="dialog" aria-modal="true" aria-label={activeForm.form_name} className={BANNER_CLASS}>
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={activeForm.form_name}
+          className={BANNER_CLASS}
+        >
           {/* Keyed by the submission so an unrelated refetch — a socket
               message:new, a read receipt — cannot reset the player's progress. */}
           <FormCard
@@ -298,9 +319,16 @@ export function SupportChat() {
       )}
 
       {confirmPending && (
-        <div role="dialog" aria-modal="true" aria-label="Is your issue resolved?" className={BANNER_CLASS}>
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Is your issue resolved?"
+          className={BANNER_CLASS}
+        >
           <p className="text-lg font-semibold text-text">Is your issue resolved?</p>
-          <p className="mt-1 text-sm text-muted">Let us know so we can close this or keep helping.</p>
+          <p className="mt-1 text-sm text-muted">
+            Let us know so we can close this or keep helping.
+          </p>
           <div className="mt-4 flex items-center gap-3">
             <SupportButton
               variant="primary"
@@ -323,7 +351,12 @@ export function SupportChat() {
       )}
 
       {settled && (
-        <div role="dialog" aria-modal="true" aria-label="Your ticket is resolved." className={BANNER_CLASS}>
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Your ticket is resolved."
+          className={BANNER_CLASS}
+        >
           <p className="text-lg font-semibold text-text">Your ticket is resolved.</p>
           {/* Two exits, not one question with a Yes: reopen this thread, or end
               it and start a clean one. The old row only ever offered the reopen,
@@ -357,12 +390,11 @@ export function SupportChat() {
         disabled={send.isPending || confirmPending || activeForm !== null || settled}
       />
 
-
       {/* ArticleSheet fires its own once-per-session reportArticleRead and
           `article_read` bridge post. Correct: a player reading from a bot answer
           did read the article, and this is simply a third entry point to that
           signal. */}
       <ArticleSheet articleId={articleId ?? null} onClose={closeArticle} />
     </>
-  )
+  );
 }

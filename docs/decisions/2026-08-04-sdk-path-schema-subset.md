@@ -19,8 +19,8 @@ conversation slice.
   absent, and the status machine is a default rather than a machine. Nothing in this
   slice creates a conversation.
 - **The `Other` intent and its catch-all subintent are not seeded**, because `intent`
-  and `subintent` do not exist. The build order asks step 1 to seed *"one workspace and
-  the `Other` taxonomy"*; the taxonomy half moves to migration `002` and is the first
+  and `subintent` do not exist. The build order asks step 1 to seed _"one workspace and
+  the `Other` taxonomy"_; the taxonomy half moves to migration `002` and is the first
   task of that slice. **This is the one deferral with a real risk of being forgotten** —
   conversations store a subintent, so without the catch-all there is nowhere for
   "anything it can't place" to land.

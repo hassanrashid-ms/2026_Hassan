@@ -1,13 +1,13 @@
-import type { LimitKey, LimitToggleValue } from '@support/types'
+import type { LimitKey, LimitToggleValue } from '@support/types';
 
 export type LimitCatalogEntry = {
-  key: LimitKey
-  label: string
-  consequence: string
-  defaultValue: number
-  min: number
-  max: number
-}
+  key: LimitKey;
+  label: string;
+  consequence: string;
+  defaultValue: number;
+  min: number;
+  max: number;
+};
 
 /**
  * Defaults are today's hardcoded constants (MAX_BOT_MESSAGES=8,
@@ -21,7 +21,8 @@ export const LIMIT_CATALOG: readonly LimitCatalogEntry[] = [
   {
     key: 'max_bot_messages',
     label: 'Max bot messages per conversation',
-    consequence: 'Conversation force-hands-off once the bot has sent this many messages, regardless of progress.',
+    consequence:
+      'Conversation force-hands-off once the bot has sent this many messages, regardless of progress.',
     defaultValue: 8,
     min: 3,
     max: 20,
@@ -37,7 +38,8 @@ export const LIMIT_CATALOG: readonly LimitCatalogEntry[] = [
   {
     key: 'max_articles_per_turn',
     label: 'Max article searches per turn',
-    consequence: 'Additional search_articles calls in the same turn are rejected with a limit-reached message.',
+    consequence:
+      'Additional search_articles calls in the same turn are rejected with a limit-reached message.',
     defaultValue: 3,
     min: 1,
     max: 10,
@@ -51,18 +53,18 @@ export const LIMIT_CATALOG: readonly LimitCatalogEntry[] = [
     min: 1,
     max: 8,
   },
-] as const
+] as const;
 
 /** "Version 1" — what a freshly seeded or reset-to-default workspace's limits look like. */
 export function buildBaselineLimits(): LimitToggleValue[] {
-  return LIMIT_CATALOG.map((l) => ({ key: l.key, value: l.defaultValue }))
+  return LIMIT_CATALOG.map((l) => ({ key: l.key, value: l.defaultValue }));
 }
 
 export function clampLimitBounds(
   key: LimitKey,
   value: number,
 ): { ok: true } | { ok: false; min: number; max: number } {
-  const entry = LIMIT_CATALOG.find((l) => l.key === key)!
-  if (value < entry.min || value > entry.max) return { ok: false, min: entry.min, max: entry.max }
-  return { ok: true }
+  const entry = LIMIT_CATALOG.find((l) => l.key === key)!;
+  if (value < entry.min || value > entry.max) return { ok: false, min: entry.min, max: entry.max };
+  return { ok: true };
 }

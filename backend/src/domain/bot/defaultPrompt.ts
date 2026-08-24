@@ -1,4 +1,4 @@
-import type { RuleEntry } from './rulesCatalog.ts'
+import type { RuleEntry } from './rulesCatalog.ts';
 
 /**
  * The four substitutions the orchestrator performs before sending. Exported so a
@@ -9,7 +9,7 @@ export const BOT_PROMPT_PLACEHOLDERS = [
   '{{articles}}',
   '{{player_level}}',
   '{{spend_tier}}',
-] as const
+] as const;
 
 /**
  * The prompt every workspace's bot runs on until an admin customises one.
@@ -75,7 +75,7 @@ not say will be refused and you will be asked to write it again.
 To hand off, call the handoff tool. The tool is what actually connects the player to a human, and it
 tells them so in our own words, so the call is the whole of your turn — you do not need to write the
 handoff sentence yourself, and a reply that only describes a handoff does not perform one. It leaves
-the player waiting on a bot that has already given up. Do not keep asking questions to fill the gap.`
+the player waiting on a bot that has already given up. Do not keep asking questions to fill the gap.`;
 
 /**
  * The behavioural constraints every workspace's bot runs on until an admin
@@ -97,11 +97,11 @@ export const DEFAULT_BOT_RULES = `- Never invent a fact about the game, an accou
 - Never promise a compensation, a refund, a timeline, or an outcome. A human decides those.
 - Never ask the player for a password, a payment detail, or a one-time code.
 - Reply in the player's language. Keep an ordinary reply to at most three short sentences — this is a chat window on a phone, not an email. An answer drawn from an article may run longer when its steps need the room: never drop or merge a step to fit, and never pad past what the article says.
-- Do not greet the player again if the conversation is already underway.`
+- Do not greet the player again if the conversation is already underway.`;
 
 /** The heading the rules are joined under. Exported so a test asserts the seam
  *  rather than hard-coding the string in two places. */
-export const BOT_RULES_HEADING = 'Rules:'
+export const BOT_RULES_HEADING = 'Rules:';
 
 /**
  * The single place `prompt` and `rules` become one system prompt. Rules go
@@ -117,6 +117,6 @@ export function buildSystemPrompt(prompt: string, rules: RuleEntry[]): string {
   const rulesBlock = rules
     .filter((r) => r.enabled)
     .map((r) => `- ${r.text}`)
-    .join('\n')
-  return `${prompt.trimEnd()}\n\n${BOT_RULES_HEADING}\n${rulesBlock.trim()}`
+    .join('\n');
+  return `${prompt.trimEnd()}\n\n${BOT_RULES_HEADING}\n${rulesBlock.trim()}`;
 }

@@ -55,16 +55,12 @@
       "uniqueConstraints": {
         "agent_email_unique": {
           "name": "agent_email_unique",
-          "columns": [
-            "email"
-          ],
+          "columns": ["email"],
           "nullsNotDistinct": false
         },
         "agent_google_subject_unique": {
           "name": "agent_google_subject_unique",
-          "columns": [
-            "google_subject"
-          ],
+          "columns": ["google_subject"],
           "nullsNotDistinct": false
         }
       },
@@ -121,9 +117,7 @@
       "uniqueConstraints": {
         "workspace_slug_unique": {
           "name": "workspace_slug_unique",
-          "columns": [
-            "slug"
-          ],
+          "columns": ["slug"],
           "nullsNotDistinct": false
         }
       },
@@ -202,26 +196,18 @@
         "workspace_member_workspace_id_workspace_id_fk": {
           "name": "workspace_member_workspace_id_workspace_id_fk",
           "tableFrom": "workspace_member",
-          "columnsFrom": [
-            "workspace_id"
-          ],
+          "columnsFrom": ["workspace_id"],
           "tableTo": "workspace",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "restrict"
         },
         "workspace_member_agent_id_agent_id_fk": {
           "name": "workspace_member_agent_id_agent_id_fk",
           "tableFrom": "workspace_member",
-          "columnsFrom": [
-            "agent_id"
-          ],
+          "columnsFrom": ["agent_id"],
           "tableTo": "agent",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "restrict"
         }
@@ -297,13 +283,9 @@
         "player_workspace_id_workspace_id_fk": {
           "name": "player_workspace_id_workspace_id_fk",
           "tableFrom": "player",
-          "columnsFrom": [
-            "workspace_id"
-          ],
+          "columnsFrom": ["workspace_id"],
           "tableTo": "workspace",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "restrict"
         }
@@ -412,26 +394,18 @@
         "session_workspace_id_workspace_id_fk": {
           "name": "session_workspace_id_workspace_id_fk",
           "tableFrom": "session",
-          "columnsFrom": [
-            "workspace_id"
-          ],
+          "columnsFrom": ["workspace_id"],
           "tableTo": "workspace",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "restrict"
         },
         "session_player_id_player_id_fk": {
           "name": "session_player_id_player_id_fk",
           "tableFrom": "session",
-          "columnsFrom": [
-            "player_id"
-          ],
+          "columnsFrom": ["player_id"],
           "tableTo": "player",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "restrict"
         }
@@ -519,26 +493,18 @@
         "declared_field_workspace_id_workspace_id_fk": {
           "name": "declared_field_workspace_id_workspace_id_fk",
           "tableFrom": "declared_field",
-          "columnsFrom": [
-            "workspace_id"
-          ],
+          "columnsFrom": ["workspace_id"],
           "tableTo": "workspace",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "restrict"
         },
         "declared_field_declared_by_agent_id_fk": {
           "name": "declared_field_declared_by_agent_id_fk",
           "tableFrom": "declared_field",
-          "columnsFrom": [
-            "declared_by"
-          ],
+          "columnsFrom": ["declared_by"],
           "tableTo": "agent",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "restrict"
         }
@@ -649,26 +615,18 @@
         "player_state_snapshot_workspace_id_workspace_id_fk": {
           "name": "player_state_snapshot_workspace_id_workspace_id_fk",
           "tableFrom": "player_state_snapshot",
-          "columnsFrom": [
-            "workspace_id"
-          ],
+          "columnsFrom": ["workspace_id"],
           "tableTo": "workspace",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "restrict"
         },
         "player_state_snapshot_session_id_session_id_fk": {
           "name": "player_state_snapshot_session_id_session_id_fk",
           "tableFrom": "player_state_snapshot",
-          "columnsFrom": [
-            "session_id"
-          ],
+          "columnsFrom": ["session_id"],
           "tableTo": "session",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "restrict"
         }
@@ -821,67 +779,45 @@
         "conversation_workspace_id_workspace_id_fk": {
           "name": "conversation_workspace_id_workspace_id_fk",
           "tableFrom": "conversation",
-          "columnsFrom": [
-            "workspace_id"
-          ],
+          "columnsFrom": ["workspace_id"],
           "tableTo": "workspace",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "restrict"
         },
         "conversation_player_id_player_id_fk": {
           "name": "conversation_player_id_player_id_fk",
           "tableFrom": "conversation",
-          "columnsFrom": [
-            "player_id"
-          ],
+          "columnsFrom": ["player_id"],
           "tableTo": "player",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "restrict"
         },
         "conversation_session_id_session_id_fk": {
           "name": "conversation_session_id_session_id_fk",
           "tableFrom": "conversation",
-          "columnsFrom": [
-            "session_id"
-          ],
+          "columnsFrom": ["session_id"],
           "tableTo": "session",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "restrict"
         },
         "conversation_assigned_agent_id_agent_id_fk": {
           "name": "conversation_assigned_agent_id_agent_id_fk",
           "tableFrom": "conversation",
-          "columnsFrom": [
-            "assigned_agent_id"
-          ],
+          "columnsFrom": ["assigned_agent_id"],
           "tableTo": "agent",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "restrict"
         },
         "conversation_subintent_fk": {
           "name": "conversation_subintent_fk",
           "tableFrom": "conversation",
-          "columnsFrom": [
-            "workspace_id",
-            "subintent_id"
-          ],
+          "columnsFrom": ["workspace_id", "subintent_id"],
           "tableTo": "subintent",
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsTo": ["workspace_id", "id"],
           "onUpdate": "no action",
           "onDelete": "restrict"
         }
@@ -1024,39 +960,27 @@
         "message_workspace_id_workspace_id_fk": {
           "name": "message_workspace_id_workspace_id_fk",
           "tableFrom": "message",
-          "columnsFrom": [
-            "workspace_id"
-          ],
+          "columnsFrom": ["workspace_id"],
           "tableTo": "workspace",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "restrict"
         },
         "message_conversation_id_conversation_id_fk": {
           "name": "message_conversation_id_conversation_id_fk",
           "tableFrom": "message",
-          "columnsFrom": [
-            "conversation_id"
-          ],
+          "columnsFrom": ["conversation_id"],
           "tableTo": "conversation",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "restrict"
         },
         "message_author_agent_id_agent_id_fk": {
           "name": "message_author_agent_id_agent_id_fk",
           "tableFrom": "message",
-          "columnsFrom": [
-            "author_agent_id"
-          ],
+          "columnsFrom": ["author_agent_id"],
           "tableTo": "agent",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "restrict"
         }
@@ -1192,39 +1116,27 @@
         "event_workspace_id_workspace_id_fk": {
           "name": "event_workspace_id_workspace_id_fk",
           "tableFrom": "event",
-          "columnsFrom": [
-            "workspace_id"
-          ],
+          "columnsFrom": ["workspace_id"],
           "tableTo": "workspace",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "restrict"
         },
         "event_conversation_id_conversation_id_fk": {
           "name": "event_conversation_id_conversation_id_fk",
           "tableFrom": "event",
-          "columnsFrom": [
-            "conversation_id"
-          ],
+          "columnsFrom": ["conversation_id"],
           "tableTo": "conversation",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "restrict"
         },
         "event_session_id_session_id_fk": {
           "name": "event_session_id_session_id_fk",
           "tableFrom": "event",
-          "columnsFrom": [
-            "session_id"
-          ],
+          "columnsFrom": ["session_id"],
           "tableTo": "session",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "restrict"
         }
@@ -1306,13 +1218,9 @@
         "intent_workspace_id_workspace_id_fk": {
           "name": "intent_workspace_id_workspace_id_fk",
           "tableFrom": "intent",
-          "columnsFrom": [
-            "workspace_id"
-          ],
+          "columnsFrom": ["workspace_id"],
           "tableTo": "workspace",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "restrict"
         }
@@ -1418,39 +1326,27 @@
         "subintent_workspace_id_workspace_id_fk": {
           "name": "subintent_workspace_id_workspace_id_fk",
           "tableFrom": "subintent",
-          "columnsFrom": [
-            "workspace_id"
-          ],
+          "columnsFrom": ["workspace_id"],
           "tableTo": "workspace",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "restrict"
         },
         "subintent_intent_id_intent_id_fk": {
           "name": "subintent_intent_id_intent_id_fk",
           "tableFrom": "subintent",
-          "columnsFrom": [
-            "intent_id"
-          ],
+          "columnsFrom": ["intent_id"],
           "tableTo": "intent",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "restrict"
         },
         "subintent_merged_into_id_subintent_id_fk": {
           "name": "subintent_merged_into_id_subintent_id_fk",
           "tableFrom": "subintent",
-          "columnsFrom": [
-            "merged_into_id"
-          ],
+          "columnsFrom": ["merged_into_id"],
           "tableTo": "subintent",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "restrict"
         }
@@ -1459,10 +1355,7 @@
       "uniqueConstraints": {
         "subintent_workspace_id_uk": {
           "name": "subintent_workspace_id_uk",
-          "columns": [
-            "workspace_id",
-            "id"
-          ],
+          "columns": ["workspace_id", "id"],
           "nullsNotDistinct": false
         }
       },
@@ -1551,52 +1444,36 @@
         "article_workspace_id_workspace_id_fk": {
           "name": "article_workspace_id_workspace_id_fk",
           "tableFrom": "article",
-          "columnsFrom": [
-            "workspace_id"
-          ],
+          "columnsFrom": ["workspace_id"],
           "tableTo": "workspace",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "restrict"
         },
         "article_intent_id_intent_id_fk": {
           "name": "article_intent_id_intent_id_fk",
           "tableFrom": "article",
-          "columnsFrom": [
-            "intent_id"
-          ],
+          "columnsFrom": ["intent_id"],
           "tableTo": "intent",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "restrict"
         },
         "article_created_by_agent_id_fk": {
           "name": "article_created_by_agent_id_fk",
           "tableFrom": "article",
-          "columnsFrom": [
-            "created_by"
-          ],
+          "columnsFrom": ["created_by"],
           "tableTo": "agent",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "restrict"
         },
         "article_published_by_agent_id_fk": {
           "name": "article_published_by_agent_id_fk",
           "tableFrom": "article",
-          "columnsFrom": [
-            "published_by"
-          ],
+          "columnsFrom": ["published_by"],
           "tableTo": "agent",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "restrict"
         }
@@ -1662,26 +1539,18 @@
         "article_attachment_workspace_id_workspace_id_fk": {
           "name": "article_attachment_workspace_id_workspace_id_fk",
           "tableFrom": "article_attachment",
-          "columnsFrom": [
-            "workspace_id"
-          ],
+          "columnsFrom": ["workspace_id"],
           "tableTo": "workspace",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "restrict"
         },
         "article_attachment_article_id_article_id_fk": {
           "name": "article_attachment_article_id_article_id_fk",
           "tableFrom": "article_attachment",
-          "columnsFrom": [
-            "article_id"
-          ],
+          "columnsFrom": ["article_id"],
           "tableTo": "article",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "restrict"
         }
@@ -1741,13 +1610,9 @@
         "bot_config_workspace_id_workspace_id_fk": {
           "name": "bot_config_workspace_id_workspace_id_fk",
           "tableFrom": "bot_config",
-          "columnsFrom": [
-            "workspace_id"
-          ],
+          "columnsFrom": ["workspace_id"],
           "tableTo": "workspace",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "restrict"
         }
@@ -1872,26 +1737,18 @@
         "change_log_workspace_id_workspace_id_fk": {
           "name": "change_log_workspace_id_workspace_id_fk",
           "tableFrom": "change_log",
-          "columnsFrom": [
-            "workspace_id"
-          ],
+          "columnsFrom": ["workspace_id"],
           "tableTo": "workspace",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "restrict"
         },
         "change_log_actor_id_agent_id_fk": {
           "name": "change_log_actor_id_agent_id_fk",
           "tableFrom": "change_log",
-          "columnsFrom": [
-            "actor_id"
-          ],
+          "columnsFrom": ["actor_id"],
           "tableTo": "agent",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "restrict"
         }
@@ -1912,133 +1769,72 @@
     "public.agent_status": {
       "name": "agent_status",
       "schema": "public",
-      "values": [
-        "active",
-        "on_leave",
-        "deactivated"
-      ]
+      "values": ["active", "on_leave", "deactivated"]
     },
     "public.article_state": {
       "name": "article_state",
       "schema": "public",
-      "values": [
-        "draft",
-        "published",
-        "archived"
-      ]
+      "values": ["draft", "published", "archived"]
     },
     "public.bot_phase": {
       "name": "bot_phase",
       "schema": "public",
-      "values": [
-        "none",
-        "article_confirm"
-      ]
+      "values": ["none", "article_confirm"]
     },
     "public.classification_source": {
       "name": "classification_source",
       "schema": "public",
-      "values": [
-        "bot",
-        "agent"
-      ]
+      "values": ["bot", "agent"]
     },
     "public.conversation_priority": {
       "name": "conversation_priority",
       "schema": "public",
-      "values": [
-        "p1",
-        "p2",
-        "p3",
-        "p4"
-      ]
+      "values": ["p1", "p2", "p3", "p4"]
     },
     "public.conversation_status": {
       "name": "conversation_status",
       "schema": "public",
-      "values": [
-        "new",
-        "bot_active",
-        "open",
-        "awaiting_player",
-        "escalated",
-        "resolved",
-        "closed"
-      ]
+      "values": ["new", "bot_active", "open", "awaiting_player", "escalated", "resolved", "closed"]
     },
     "public.declared_field_type": {
       "name": "declared_field_type",
       "schema": "public",
-      "values": [
-        "string",
-        "number",
-        "boolean",
-        "timestamp"
-      ]
+      "values": ["string", "number", "boolean", "timestamp"]
     },
     "public.event_actor_type": {
       "name": "event_actor_type",
       "schema": "public",
-      "values": [
-        "player",
-        "agent",
-        "bot",
-        "system"
-      ]
+      "values": ["player", "agent", "bot", "system"]
     },
     "public.message_author_type": {
       "name": "message_author_type",
       "schema": "public",
-      "values": [
-        "player",
-        "agent",
-        "bot",
-        "system"
-      ]
+      "values": ["player", "agent", "bot", "system"]
     },
     "public.message_delivery_state": {
       "name": "message_delivery_state",
       "schema": "public",
-      "values": [
-        "sending",
-        "sent",
-        "delivered",
-        "read",
-        "failed"
-      ]
+      "values": ["sending", "sent", "delivered", "read", "failed"]
     },
     "public.message_visibility": {
       "name": "message_visibility",
       "schema": "public",
-      "values": [
-        "public",
-        "internal"
-      ]
+      "values": ["public", "internal"]
     },
     "public.resolution_source": {
       "name": "resolution_source",
       "schema": "public",
-      "values": [
-        "bot",
-        "agent"
-      ]
+      "values": ["bot", "agent"]
     },
     "public.session_end_reason": {
       "name": "session_end_reason",
       "schema": "public",
-      "values": [
-        "client",
-        "timeout"
-      ]
+      "values": ["client", "timeout"]
     },
     "public.workspace_role": {
       "name": "workspace_role",
       "schema": "public",
-      "values": [
-        "agent",
-        "team_lead",
-        "admin"
-      ]
+      "values": ["agent", "team_lead", "admin"]
     }
   },
   "schemas": {},

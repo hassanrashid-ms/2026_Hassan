@@ -82,6 +82,7 @@ with `WHERE inactivity_due_at < now()` instead of a `MAX()` subquery over `messa
 
 **Cycle open** — insert `resolution_cycle` (cycle_no = 1, or max+1 on reopen, `inactivity_due_at`
 NULL since a fresh cycle starts at `bot_active`, not `open`):
+
 - `surface/services/messagesService.ts` — new-conversation branch (line ~92-98) and reopen branch
   (line ~126-148)
 - `surface/services/newTicketService.ts` — `openNewTicket`'s creation of the replacement conversation
@@ -96,6 +97,7 @@ worker's own "did this help?" post, and a manual agent ask-resolved post — no 
 to know about the clock.
 
 **Clock pause/resume** — no message is involved, so these need direct calls:
+
 - `escalationService.ts` `escalateConversation`: set `inactivity_due_at = NULL` on the open cycle
   (matches the documented trap: "On escalated: set `inactivity_due_at = NULL` so the worker skips
   it").
@@ -104,6 +106,7 @@ to know about the clock.
   clock to ever run again on an unescalated conversation.
 
 **Cycle close** (`resolved_at = now()`, `resolution_kind = <kind>`, `inactivity_due_at = NULL`):
+
 - `domain/bot/applyBotTurn.ts` resolve case (line ~74-89) → kind `'bot'`
 - `domain/conversations/resolutionAnswer.ts` `agent_ask` + `helped` branch (line ~73-100) → kind
   `'agent'`

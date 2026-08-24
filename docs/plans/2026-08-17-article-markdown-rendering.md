@@ -31,11 +31,13 @@
 Installs the two dependencies and creates the component with the text-level half of the `components` map. Links, images, and tables come in Tasks 2 and 3.
 
 **Files:**
+
 - Modify: `frontend/package.json` (via `pnpm add` — do not hand-edit)
 - Create: `frontend/src/features/articles/components/ArticleBody.tsx`
 - Test: `frontend/src/features/articles/components/ArticleBody.test.tsx`
 
 **Interfaces:**
+
 - Consumes: nothing.
 - Produces: `export function ArticleBody({ markdown }: { markdown: string }): JSX.Element` from `@/features/articles/components/ArticleBody`. Its **entire** public interface is the one `markdown` prop. Later tasks add entries to its internal `components` map; none of them change this signature.
 
@@ -54,47 +56,49 @@ Both are runtime dependencies, not dev dependencies — they ship in the player 
 Create `frontend/src/features/articles/components/ArticleBody.test.tsx`:
 
 ```tsx
-import { describe, expect, it } from 'vitest'
-import { render, screen } from '@testing-library/react'
-import { ArticleBody } from './ArticleBody.tsx'
+import { describe, expect, it } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import { ArticleBody } from './ArticleBody.tsx';
 
 describe('ArticleBody block markdown', () => {
   it('renders a heading as a real heading, not as literal hashes', () => {
-    render(<ArticleBody markdown={'## Refund policy\n\nSome text.'} />)
+    render(<ArticleBody markdown={'## Refund policy\n\nSome text.'} />);
 
-    expect(screen.getByRole('heading', { name: 'Refund policy' })).toBeInTheDocument()
-    expect(screen.queryByText(/##/)).not.toBeInTheDocument()
-  })
+    expect(screen.getByRole('heading', { name: 'Refund policy' })).toBeInTheDocument();
+    expect(screen.queryByText(/##/)).not.toBeInTheDocument();
+  });
 
   it('renders emphasis as elements, not as literal asterisks', () => {
-    const { container } = render(<ArticleBody markdown={'We refund within **30 days**.'} />)
+    const { container } = render(<ArticleBody markdown={'We refund within **30 days**.'} />);
 
-    expect(container.querySelector('strong')?.textContent).toBe('30 days')
-    expect(container.textContent).not.toContain('**')
-  })
+    expect(container.querySelector('strong')?.textContent).toBe('30 days');
+    expect(container.textContent).not.toContain('**');
+  });
 
   it('renders a bulleted list as list items', () => {
-    render(<ArticleBody markdown={'- First\n- Second'} />)
+    render(<ArticleBody markdown={'- First\n- Second'} />);
 
-    const items = screen.getAllByRole('listitem')
-    expect(items.map((item) => item.textContent)).toEqual(['First', 'Second'])
-  })
+    const items = screen.getAllByRole('listitem');
+    expect(items.map((item) => item.textContent)).toEqual(['First', 'Second']);
+  });
 
   it('renders a blockquote and inline code', () => {
-    const { container } = render(<ArticleBody markdown={'> Quoted line\n\nRun `npm test` first.'} />)
+    const { container } = render(
+      <ArticleBody markdown={'> Quoted line\n\nRun `npm test` first.'} />,
+    );
 
-    expect(container.querySelector('blockquote')?.textContent).toContain('Quoted line')
-    expect(container.querySelector('code')?.textContent).toBe('npm test')
-  })
+    expect(container.querySelector('blockquote')?.textContent).toContain('Quoted line');
+    expect(container.querySelector('code')?.textContent).toBe('npm test');
+  });
 
   // No rehype-raw: content must never become markup.
   it('renders raw HTML as literal text', () => {
-    const { container } = render(<ArticleBody markdown={'<script>alert(1)</script>'} />)
+    const { container } = render(<ArticleBody markdown={'<script>alert(1)</script>'} />);
 
-    expect(container.querySelector('script')).toBeNull()
-    expect(container.textContent).toContain('<script>alert(1)</script>')
-  })
-})
+    expect(container.querySelector('script')).toBeNull();
+    expect(container.textContent).toContain('<script>alert(1)</script>');
+  });
+});
 ```
 
 - [ ] **Step 3: Run the test to verify it fails**
@@ -112,8 +116,8 @@ Expected: FAIL — `Failed to resolve import "./ArticleBody.tsx"`.
 Create `frontend/src/features/articles/components/ArticleBody.tsx`:
 
 ```tsx
-import Markdown, { type Components } from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import Markdown, { type Components } from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 /*
  * Agents author bodies in a WYSIWYG markdown editor. Players used to get the raw
@@ -130,12 +134,34 @@ import remarkGfm from 'remark-gfm'
  * the clamp() on `html` that the entire rem-based scale rides on.
  */
 const components: Components = {
-  h1: ({ children }) => <h1 className="mt-6 mb-2 text-2xl leading-snug font-semibold text-text first:mt-0">{children}</h1>,
-  h2: ({ children }) => <h2 className="mt-6 mb-2 text-xl leading-snug font-semibold text-text first:mt-0">{children}</h2>,
-  h3: ({ children }) => <h3 className="mt-5 mb-2 text-lg leading-snug font-semibold text-text first:mt-0">{children}</h3>,
-  p: ({ children }) => <p className="mb-3 text-base leading-relaxed text-text last:mb-0">{children}</p>,
-  ul: ({ children }) => <ul className="mb-3 list-disc space-y-1 pl-5 text-base leading-relaxed text-text">{children}</ul>,
-  ol: ({ children }) => <ol className="mb-3 list-decimal space-y-1 pl-5 text-base leading-relaxed text-text">{children}</ol>,
+  h1: ({ children }) => (
+    <h1 className="mt-6 mb-2 text-2xl leading-snug font-semibold text-text first:mt-0">
+      {children}
+    </h1>
+  ),
+  h2: ({ children }) => (
+    <h2 className="mt-6 mb-2 text-xl leading-snug font-semibold text-text first:mt-0">
+      {children}
+    </h2>
+  ),
+  h3: ({ children }) => (
+    <h3 className="mt-5 mb-2 text-lg leading-snug font-semibold text-text first:mt-0">
+      {children}
+    </h3>
+  ),
+  p: ({ children }) => (
+    <p className="mb-3 text-base leading-relaxed text-text last:mb-0">{children}</p>
+  ),
+  ul: ({ children }) => (
+    <ul className="mb-3 list-disc space-y-1 pl-5 text-base leading-relaxed text-text">
+      {children}
+    </ul>
+  ),
+  ol: ({ children }) => (
+    <ol className="mb-3 list-decimal space-y-1 pl-5 text-base leading-relaxed text-text">
+      {children}
+    </ol>
+  ),
   li: ({ children }) => <li className="pl-0.5">{children}</li>,
   blockquote: ({ children }) => (
     <blockquote className="mb-3 border-l-2 border-accent-soft pl-3 text-base leading-relaxed text-muted">
@@ -144,12 +170,16 @@ const components: Components = {
   ),
   hr: () => <hr className="my-5 border-0 border-t border-accent-soft" />,
   code: ({ children }) => (
-    <code className="rounded bg-surface px-1 py-0.5 font-mono text-[0.9em] text-text">{children}</code>
+    <code className="rounded bg-surface px-1 py-0.5 font-mono text-[0.9em] text-text">
+      {children}
+    </code>
   ),
   // A fenced block is a <pre> wrapping the <code> above; the block scrolls
   // within itself rather than making the drawer scroll sideways.
-  pre: ({ children }) => <pre className="mb-3 overflow-x-auto rounded-card bg-surface p-3 text-sm">{children}</pre>,
-}
+  pre: ({ children }) => (
+    <pre className="mb-3 overflow-x-auto rounded-card bg-surface p-3 text-sm">{children}</pre>
+  ),
+};
 
 export function ArticleBody({ markdown }: { markdown: string }) {
   return (
@@ -158,7 +188,7 @@ export function ArticleBody({ markdown }: { markdown: string }) {
         {markdown}
       </Markdown>
     </div>
-  )
+  );
 }
 ```
 
@@ -193,10 +223,12 @@ git commit -m "feat(webview): render article markdown blocks with react-markdown
 Adds the two `components` entries that need structure rather than only classes. The `img` entry is the seam the future media project extends.
 
 **Files:**
+
 - Modify: `frontend/src/features/articles/components/ArticleBody.tsx`
 - Test: `frontend/src/features/articles/components/ArticleBody.test.tsx` (append)
 
 **Interfaces:**
+
 - Consumes: `ArticleBody` from Task 1, unchanged signature.
 - Produces: no new exports. `ArticleImage` is module-private; the future media project changes its internals, not its position in the map.
 
@@ -208,7 +240,7 @@ First widen the existing Testing Library import at the top of the file — do no
 second `import` statement further down:
 
 ```tsx
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react';
 ```
 
 Then append:
@@ -216,46 +248,52 @@ Then append:
 ```tsx
 describe('ArticleBody tables', () => {
   it('renders a GFM table inside its own horizontally scrolling container', () => {
-    const markdown = ['| Plan | Price |', '| --- | --- |', '| Free | $0 |'].join('\n')
-    const { container } = render(<ArticleBody markdown={markdown} />)
+    const markdown = ['| Plan | Price |', '| --- | --- |', '| Free | $0 |'].join('\n');
+    const { container } = render(<ArticleBody markdown={markdown} />);
 
-    const table = container.querySelector('table')
-    expect(table).not.toBeNull()
+    const table = container.querySelector('table');
+    expect(table).not.toBeNull();
     // A wide table must scroll within itself, not make the whole drawer
     // scroll sideways.
-    expect(table?.parentElement?.className).toContain('overflow-x-auto')
-    expect(screen.getByRole('cell', { name: '$0' })).toBeInTheDocument()
-  })
-})
+    expect(table?.parentElement?.className).toContain('overflow-x-auto');
+    expect(screen.getByRole('cell', { name: '$0' })).toBeInTheDocument();
+  });
+});
 
 describe('ArticleBody images', () => {
   it('renders an image lazily at its natural size, capped to the container', () => {
-    const { container } = render(<ArticleBody markdown={'![A happy cat](https://cdn.example.com/cat.gif)'} />)
+    const { container } = render(
+      <ArticleBody markdown={'![A happy cat](https://cdn.example.com/cat.gif)'} />,
+    );
 
-    const img = container.querySelector('img')
-    expect(img?.getAttribute('src')).toBe('https://cdn.example.com/cat.gif')
-    expect(img?.getAttribute('loading')).toBe('lazy')
-    expect(img?.className).toContain('max-w-full')
-  })
+    const img = container.querySelector('img');
+    expect(img?.getAttribute('src')).toBe('https://cdn.example.com/cat.gif');
+    expect(img?.getAttribute('loading')).toBe('lazy');
+    expect(img?.className).toContain('max-w-full');
+  });
 
   // Third-party image hosts rot. Degrade to the alt text, not to a broken glyph.
   it('falls back to the alt text when the image fails to load', () => {
-    const { container } = render(<ArticleBody markdown={'![A happy cat](https://cdn.example.com/gone.gif)'} />)
+    const { container } = render(
+      <ArticleBody markdown={'![A happy cat](https://cdn.example.com/gone.gif)'} />,
+    );
 
-    fireEvent.error(container.querySelector('img')!)
+    fireEvent.error(container.querySelector('img')!);
 
-    expect(container.querySelector('img')).toBeNull()
-    expect(screen.getByText('A happy cat')).toBeInTheDocument()
-  })
+    expect(container.querySelector('img')).toBeNull();
+    expect(screen.getByText('A happy cat')).toBeInTheDocument();
+  });
 
   it('renders nothing at all when a broken image has no alt text', () => {
-    const { container } = render(<ArticleBody markdown={'![](https://cdn.example.com/gone.gif)'} />)
+    const { container } = render(
+      <ArticleBody markdown={'![](https://cdn.example.com/gone.gif)'} />,
+    );
 
-    fireEvent.error(container.querySelector('img')!)
+    fireEvent.error(container.querySelector('img')!);
 
-    expect(container.querySelector('img')).toBeNull()
-  })
-})
+    expect(container.querySelector('img')).toBeNull();
+  });
+});
 ```
 
 - [ ] **Step 2: Run the tests to verify they fail**
@@ -271,7 +309,7 @@ Expected: FAIL — the table test fails on `parentElement.className` not contain
 In `frontend/src/features/articles/components/ArticleBody.tsx`, add the import and the component above the `components` map:
 
 ```tsx
-import { useState } from 'react'
+import { useState } from 'react';
 ```
 
 ```tsx
@@ -286,10 +324,10 @@ import { useState } from 'react'
  * leaving a broken-image glyph in the middle of a help article.
  */
 function ArticleImage({ src, alt }: { src?: string; alt?: string }) {
-  const [failed, setFailed] = useState(false)
+  const [failed, setFailed] = useState(false);
 
   if (failed) {
-    return alt ? <span className="mb-3 block text-sm text-muted italic">{alt}</span> : null
+    return alt ? <span className="mb-3 block text-sm text-muted italic">{alt}</span> : null;
   }
 
   return (
@@ -300,7 +338,7 @@ function ArticleImage({ src, alt }: { src?: string; alt?: string }) {
       onError={() => setFailed(true)}
       className="mb-3 h-auto max-w-full rounded-card"
     />
-  )
+  );
 }
 ```
 
@@ -355,11 +393,13 @@ git commit -m "feat(webview): render article tables and inline images"
 A bare `<a href>` in a webview navigates in place, replacing the whole support surface with the target page — no back button, no chrome, no way home. The player is stranded inside the game's help view. This task prevents that.
 
 **Files:**
+
 - Modify: `frontend/src/services/bridgeService.ts`
 - Modify: `frontend/src/features/articles/components/ArticleBody.tsx`
 - Test: `frontend/src/features/articles/components/ArticleBody.test.tsx` (append)
 
 **Interfaces:**
+
 - Consumes: `post` from `@/services/bridgeService`.
 - Produces: a new `BridgeMessage` variant `{ type: 'open_url'; url: string }`. Task 5's SDK handler is the other half of this contract — the `type` string and the `url` field name must match exactly.
 
@@ -370,7 +410,7 @@ Append to `frontend/src/features/articles/components/ArticleBody.test.tsx`:
 Widen the existing vitest import at the top of the file rather than adding a second one:
 
 ```tsx
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest';
 ```
 
 Then append:
@@ -378,40 +418,40 @@ Then append:
 ```tsx
 /** Stands in for the bridge the SDK injects, recording what the page posts. */
 function installBridge(): unknown[] {
-  const posted: unknown[] = []
-  ;(window as { SupportBridge?: unknown }).SupportBridge = {
+  const posted: unknown[] = [];
+  (window as { SupportBridge?: unknown }).SupportBridge = {
     post: (message: unknown) => posted.push(message),
-  }
-  return posted
+  };
+  return posted;
 }
 
 describe('ArticleBody links', () => {
   beforeEach(() => {
-    delete (window as { SupportBridge?: unknown }).SupportBridge
-  })
+    delete (window as { SupportBridge?: unknown }).SupportBridge;
+  });
 
   it('posts open_url and suppresses navigation when the bridge is present', () => {
-    const posted = installBridge()
-    render(<ArticleBody markdown={'See [our terms](https://example.com/terms).'} />)
+    const posted = installBridge();
+    render(<ArticleBody markdown={'See [our terms](https://example.com/terms).'} />);
 
     // fireEvent.click returns false when the handler called preventDefault —
     // which is what stops the webview navigating away from the support surface.
-    const notCancelled = fireEvent.click(screen.getByRole('link', { name: 'our terms' }))
+    const notCancelled = fireEvent.click(screen.getByRole('link', { name: 'our terms' }));
 
-    expect(posted).toEqual([{ type: 'open_url', url: 'https://example.com/terms' }])
-    expect(notCancelled).toBe(false)
-  })
+    expect(posted).toEqual([{ type: 'open_url', url: 'https://example.com/terms' }]);
+    expect(notCancelled).toBe(false);
+  });
 
   it('behaves as a normal new-tab link with no bridge, for desktop development', () => {
-    render(<ArticleBody markdown={'See [our terms](https://example.com/terms).'} />)
+    render(<ArticleBody markdown={'See [our terms](https://example.com/terms).'} />);
 
-    const link = screen.getByRole('link', { name: 'our terms' })
-    expect(link.getAttribute('href')).toBe('https://example.com/terms')
-    expect(link.getAttribute('target')).toBe('_blank')
-    expect(link.getAttribute('rel')).toBe('noopener noreferrer')
-    expect(fireEvent.click(link)).toBe(true)
-  })
-})
+    const link = screen.getByRole('link', { name: 'our terms' });
+    expect(link.getAttribute('href')).toBe('https://example.com/terms');
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(fireEvent.click(link)).toBe(true);
+  });
+});
 ```
 
 - [ ] **Step 2: Run the tests to verify they fail**
@@ -448,7 +488,7 @@ In `frontend/src/services/bridgeService.ts`, add to the `BridgeMessage` union, a
 In `ArticleBody.tsx`, add the import:
 
 ```tsx
-import { post } from '@/services/bridgeService'
+import { post } from '@/services/bridgeService';
 ```
 
 and this entry to the `components` object:
@@ -511,10 +551,12 @@ git commit -m "feat(webview): open article links in the system browser via the b
 The one-line call-site change that closes the user-facing bug. Everything else in the sheet — the loading skeleton, the error state, the `article_read` emit, the keyword badges — is untouched.
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/webview/components/ArticleSheet.tsx:67`
 - Test: `frontend/src/surfaces/webview/components/ArticleSheet.test.tsx` (create)
 
 **Interfaces:**
+
 - Consumes: `ArticleBody` from `@/features/articles/components/ArticleBody` (Task 1), unchanged since.
 - Produces: nothing new.
 
@@ -523,10 +565,10 @@ The one-line call-site change that closes the user-facing bug. Everything else i
 Create `frontend/src/surfaces/webview/components/ArticleSheet.test.tsx`:
 
 ```tsx
-import { describe, expect, it, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
-import { ArticleSheet } from './ArticleSheet.tsx'
-import { SupportContextProvider } from './SupportContext.tsx'
+import { describe, expect, it, vi } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import { ArticleSheet } from './ArticleSheet.tsx';
+import { SupportContextProvider } from './SupportContext.tsx';
 
 /*
  * The hook is a real useQuery, so it is mocked at the module boundary rather than
@@ -547,7 +589,7 @@ vi.mock('@/surfaces/webview/hooks/useArticleDetail', () => ({
     },
     isError: false,
   }),
-}))
+}));
 
 describe('ArticleSheet body', () => {
   it('renders the body as formatted markdown, not as raw syntax', () => {
@@ -555,15 +597,15 @@ describe('ArticleSheet body', () => {
       <SupportContextProvider value={{ boot: null, data: null, error: null, retry: vi.fn() }}>
         <ArticleSheet articleId="art-1" onClose={vi.fn()} />
       </SupportContextProvider>,
-    )
+    );
 
-    expect(screen.getByRole('heading', { name: 'When we refund' })).toBeInTheDocument()
-    expect(screen.getByText('30 days').tagName).toBe('STRONG')
+    expect(screen.getByRole('heading', { name: 'When we refund' })).toBeInTheDocument();
+    expect(screen.getByText('30 days').tagName).toBe('STRONG');
     // The bug this closes: players used to see the literal markers.
-    expect(screen.queryByText(/\*\*/)).not.toBeInTheDocument()
-    expect(screen.queryByText(/##/)).not.toBeInTheDocument()
-  })
-})
+    expect(screen.queryByText(/\*\*/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/##/)).not.toBeInTheDocument();
+  });
+});
 ```
 
 If `useArticleDetail`'s real return type makes the `mockReturnValue` cast awkward, or `SupportContextProvider`'s value type has more required fields, match the shape used in `frontend/src/surfaces/webview/components/TopBar.test.tsx` — it is the established pattern in this directory. Do not change `useArticleDetail` or `SupportContext` to make the test easier.
@@ -581,19 +623,19 @@ Expected: FAIL — no heading role is found, because the body is still a single 
 In `frontend/src/surfaces/webview/components/ArticleSheet.tsx`, add the import:
 
 ```tsx
-import { ArticleBody } from '@/features/articles/components/ArticleBody'
+import { ArticleBody } from '@/features/articles/components/ArticleBody';
 ```
 
 and replace line 67:
 
 ```tsx
-              <p className="text-base leading-relaxed whitespace-pre-wrap text-text">{article.data.body}</p>
+<p className="text-base leading-relaxed whitespace-pre-wrap text-text">{article.data.body}</p>
 ```
 
 with:
 
 ```tsx
-              <ArticleBody markdown={article.data.body} />
+<ArticleBody markdown={article.data.body} />
 ```
 
 Change nothing else in this file.
@@ -613,7 +655,7 @@ pnpm exec vitest run src/surfaces/webview src/features/articles
 pnpm typecheck
 ```
 
-Expected: the `ArticleBody`, `ArticleSheet`, `WebviewShell`, `useSurfaceReadySignal`, `SupportHome`, and `articleSearch` tests pass. `TopBar` (2), `SupportHero` (2), and `SupportChat` (1) still fail — those 5 are pre-existing and out of scope. If any *other* test fails, it is yours; stop and fix it.
+Expected: the `ArticleBody`, `ArticleSheet`, `WebviewShell`, `useSurfaceReadySignal`, `SupportHome`, and `articleSearch` tests pass. `TopBar` (2), `SupportHero` (2), and `SupportChat` (1) still fail — those 5 are pre-existing and out of scope. If any _other_ test fails, it is yours; stop and fix it.
 
 - [ ] **Step 6: Commit**
 
@@ -634,11 +676,13 @@ git commit -m "fix(webview): show article bodies as formatted markdown to player
 The guard is a standalone static class so it compiles and unit-tests regardless of the `SUPPORT_UNITY_WEBVIEW` define that wraps the surface class.
 
 **Files:**
+
 - Create: `Assets/Support/Surface/ExternalUrlPolicy.cs`
 - Create: `Assets/Support/Tests/EditMode/ExternalUrlPolicyTests.cs`
 - Modify: `Assets/Support/Surface/UnityWebViewSupportSurface.cs` (the `OnMessage` switch, currently around line 227)
 
 **Interfaces:**
+
 - Consumes: the wire contract from Task 3 — message `type` is exactly `"open_url"` and the URL field is exactly `"url"`.
 - Produces: `public static bool Support.Sdk.Surface.ExternalUrlPolicy.IsOpenable(string url)` — true only for absolute `http`/`https` URLs.
 

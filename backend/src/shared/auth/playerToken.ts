@@ -1,17 +1,17 @@
-import { SignJWT, jwtVerify } from 'jose'
-import { getEnv } from '../../env.ts'
+import { SignJWT, jwtVerify } from 'jose';
+import { getEnv } from '../../env.ts';
 
-const ISSUER = 'support-crm'
-const AUDIENCE = 'support-player'
+const ISSUER = 'support-crm';
+const AUDIENCE = 'support-player';
 
 export type PlayerClaims = {
-  workspace_id: string
-  player_id: string
-  external_player_id: string
-}
+  workspace_id: string;
+  player_id: string;
+  external_player_id: string;
+};
 
 function key(): Uint8Array {
-  return new TextEncoder().encode(getEnv().PLAYER_JWT_SECRET)
+  return new TextEncoder().encode(getEnv().PLAYER_JWT_SECRET);
 }
 
 /**
@@ -29,30 +29,30 @@ export async function signPlayerToken(
     .setAudience(AUDIENCE)
     .setIssuedAt()
     .setExpirationTime(`${ttlSeconds}s`)
-    .sign(key())
+    .sign(key());
 }
 
 export class InvalidPlayerToken extends Error {}
 
 export async function verifyPlayerToken(token: string): Promise<PlayerClaims> {
-  let payload: Record<string, unknown>
+  let payload: Record<string, unknown>;
   try {
-    ;({ payload } = await jwtVerify(token, key(), {
+    ({ payload } = await jwtVerify(token, key(), {
       issuer: ISSUER,
       audience: AUDIENCE,
       algorithms: ['HS256'],
-    }))
+    }));
   } catch (error) {
-    throw new InvalidPlayerToken(error instanceof Error ? error.message : 'token rejected')
+    throw new InvalidPlayerToken(error instanceof Error ? error.message : 'token rejected');
   }
 
-  const { workspace_id, player_id, external_player_id } = payload
+  const { workspace_id, player_id, external_player_id } = payload;
   if (
     typeof workspace_id !== 'string' ||
     typeof player_id !== 'string' ||
     typeof external_player_id !== 'string'
   ) {
-    throw new InvalidPlayerToken('token is missing a required claim')
+    throw new InvalidPlayerToken('token is missing a required claim');
   }
-  return { workspace_id, player_id, external_player_id }
+  return { workspace_id, player_id, external_player_id };
 }

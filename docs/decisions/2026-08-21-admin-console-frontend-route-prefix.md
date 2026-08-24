@@ -11,7 +11,7 @@ frontend (`:5173`) and the backend API (`:4000`), routing by a fixed path-prefix
 `backend/src/app.ts`'s mounts:
 
 ```js
-const API_PREFIXES = ['/docs', '/auth', '/sdk', '/surface', '/agent', '/admin', '/socket.io']
+const API_PREFIXES = ['/docs', '/auth', '/sdk', '/surface', '/agent', '/admin', '/socket.io'];
 ```
 
 Anything under `/admin/*` is proxied straight to the Express backend. But the admin console's

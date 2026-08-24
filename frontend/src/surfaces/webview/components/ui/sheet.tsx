@@ -1,16 +1,19 @@
-import * as React from 'react'
-import * as SheetPrimitive from '@radix-ui/react-dialog'
-import { X } from 'lucide-react'
-import { cn } from '@/surfaces/webview/lib/cn'
+import * as React from 'react';
+import * as SheetPrimitive from '@radix-ui/react-dialog';
+import { X } from 'lucide-react';
+import { cn } from '@/surfaces/webview/lib/cn';
 
-const Sheet = SheetPrimitive.Root
-const SheetTrigger = SheetPrimitive.Trigger
-const SheetClose = SheetPrimitive.Close
-const SheetPortal = SheetPrimitive.Portal
+const Sheet = SheetPrimitive.Root;
+const SheetTrigger = SheetPrimitive.Trigger;
+const SheetClose = SheetPrimitive.Close;
+const SheetPortal = SheetPrimitive.Portal;
 
 // Divergence from stock shadcn: overlay uses our fade keyframes (webview-fade-in/out)
 // driven off Radix's data-state, instead of shadcn's default tailwindcss-animate classes.
-function SheetOverlay({ className, ...props }: React.ComponentProps<typeof SheetPrimitive.Overlay>) {
+function SheetOverlay({
+  className,
+  ...props
+}: React.ComponentProps<typeof SheetPrimitive.Overlay>) {
   return (
     <SheetPrimitive.Overlay
       className={cn(
@@ -21,12 +24,12 @@ function SheetOverlay({ className, ...props }: React.ComponentProps<typeof Sheet
       )}
       {...props}
     />
-  )
+  );
 }
 
 type SheetContentProps = React.ComponentProps<typeof SheetPrimitive.Content> & {
-  side?: 'bottom' | 'top'
-}
+  side?: 'bottom' | 'top';
+};
 
 // Divergence from stock shadcn: only bottom/top sides exist (mobile sheet, no left/right
 // desktop drawer), and every color class is remapped onto our @theme tokens (bg-bg instead
@@ -66,23 +69,28 @@ function SheetContent({ side = 'bottom', className, children, ...props }: SheetC
         </SheetPrimitive.Close>
       </SheetPrimitive.Content>
     </SheetPortal>
-  )
+  );
 }
 
 function SheetHeader({ className, ...props }: React.ComponentProps<'div'>) {
-  return <div className={cn('flex flex-col gap-1.5 p-4', className)} {...props} />
+  return <div className={cn('flex flex-col gap-1.5 p-4', className)} {...props} />;
 }
 
 function SheetFooter({ className, ...props }: React.ComponentProps<'div'>) {
-  return <div className={cn('flex flex-col gap-2 p-4', className)} {...props} />
+  return <div className={cn('flex flex-col gap-2 p-4', className)} {...props} />;
 }
 
 function SheetTitle({ className, ...props }: React.ComponentProps<typeof SheetPrimitive.Title>) {
-  return <SheetPrimitive.Title className={cn('text-lg font-semibold text-text', className)} {...props} />
+  return (
+    <SheetPrimitive.Title className={cn('text-lg font-semibold text-text', className)} {...props} />
+  );
 }
 
-function SheetDescription({ className, ...props }: React.ComponentProps<typeof SheetPrimitive.Description>) {
-  return <SheetPrimitive.Description className={cn('text-sm text-muted', className)} {...props} />
+function SheetDescription({
+  className,
+  ...props
+}: React.ComponentProps<typeof SheetPrimitive.Description>) {
+  return <SheetPrimitive.Description className={cn('text-sm text-muted', className)} {...props} />;
 }
 
 export {
@@ -96,4 +104,4 @@ export {
   SheetFooter,
   SheetTitle,
   SheetDescription,
-}
+};

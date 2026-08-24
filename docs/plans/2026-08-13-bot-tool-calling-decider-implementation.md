@@ -25,7 +25,7 @@
 
 The spec was read in full alongside the current codebase (specs 1–2 already shipped; spec 3 deleted). Three points the spec leaves ambiguous or unresolved against what's actually in the repo, resolved as follows — confirmed with the project owner:
 
-1. **Reopen's "previous resolution source" (spec §10).** No code path in this repo sets an agent-resolved or `closed` status yet — `applyBotTurn`'s new `resolve` case is the *only* writer of `resolved` in this slice. Rather than deriving this from an event lookup, `conversation` gains a `resolution_source` column (`bot | agent`, nullable), written whenever a conversation becomes `resolved`/`closed`. This slice writes it only from the `resolve` outcome (`'bot'`); a future agent-resolve action writes `'agent'`. Reopen reads it back and clears it.
+1. **Reopen's "previous resolution source" (spec §10).** No code path in this repo sets an agent-resolved or `closed` status yet — `applyBotTurn`'s new `resolve` case is the _only_ writer of `resolved` in this slice. Rather than deriving this from an event lookup, `conversation` gains a `resolution_source` column (`bot | agent`, nullable), written whenever a conversation becomes `resolved`/`closed`. This slice writes it only from the `resolve` outcome (`'bot'`); a future agent-resolve action writes `'agent'`. Reopen reads it back and clears it.
 2. **Parallel tool calls.** The OpenAI API can return more than one `tool_call` per response. Rather than disabling parallel calling, `toolLoop` processes `tool_calls` in array order and counts **each individual call** against `MAX_TOOL_CALLS_PER_TURN` (not one per response). A terminal tool (`offer_article`, `confirm_resolution`, `handoff`) executing mid-array stops processing the rest of that array. If budget would be exceeded mid-array, remaining calls in the array are not executed and the loop forces `handoff('unsure')`.
 3. **"Other" naming.** Spec 3 (which originated this) is deleted from `docs/specs/`. Seeded as: one `intent` row named `Other` with `is_system = true`, containing exactly one `subintent` row also named `Other` — the catch-all `classify` resolves to.
 
@@ -33,29 +33,29 @@ The spec was read in full alongside the current codebase (specs 1–2 already sh
 
 ## File map
 
-| File | Status | Responsibility |
-|---|---|---|
-| `backend/src/shared/db/schema/enums.ts` | modify | `botPhase`, `resolutionSource` enums |
-| `backend/src/shared/db/schema/conversations.ts` | modify | `bot_phase`, `resolution_source` columns |
-| `backend/src/env.ts` | modify | `OPENAI_MODEL` required env var |
-| `backend/package.json` | modify | `openai` dependency |
-| `.env.example` | modify | `OPENAI_MODEL=gpt-5.4-mini` |
-| `backend/src/shared/db/seedTaxonomy.ts` | modify | add `Other` as a seeded system intent |
-| `backend/src/shared/db/seed.ts` | modify | seed the `Other` intent idempotently |
-| `backend/src/domain/bot/fallbackSubintent.ts` | **create** | `resolveFallbackSubintent(tx, workspaceId)` |
-| `backend/src/domain/bot/botTurn.ts` | modify | `HandoffReason`, `UnavailableReason`, `BotTurnDecision`, `BotTurnInput` deltas; `stubDecider` removed at the end |
-| `backend/src/domain/bot/contextAssembly.ts` | **create** | `buildMessages(input)` — state block, pinning, windowing, subintent index, article catalogue |
-| `backend/src/domain/bot/openaiClient.ts` | **create** | `callModel(messages, tools)` |
-| `backend/src/domain/bot/tools.ts` | **create** | `TOOL_DEFS`, `toolsForPhase(phase)`, tool handlers |
-| `backend/src/domain/bot/toolLoop.ts` | **create** | `toolLoopDecider: BotDecider` |
-| `backend/src/domain/bot/defaultPrompt.ts` | modify | drop player-context block from `DEFAULT_BOT_PROMPT` |
-| `backend/src/domain/bot/applyBotTurn.ts` | modify | `resolve` outcome, `bot_phase` writes, article events, `resolution_source` write |
-| `backend/src/domain/bot/orchestrator.ts` | modify | `gather()` adds `botPhase`, `botMessageCount`, `lastPlayerMessageAt` |
-| `backend/src/domain/bot/messages.ts` | modify | `SILENT_UNAVAILABLE_REASONS` drops `'not_implemented'` |
-| `backend/src/domain/bot/index.ts` | modify | export new modules |
-| `backend/src/shared/jobs/botTurns.ts` | modify | default decider becomes `toolLoopDecider` |
-| `backend/src/surface/services/messagesService.ts` | modify | reopen branch: `HANDOFF_PLAYER_MESSAGE`, §10 assignment, `resolution_source` read+clear |
-| `backend/tests/*` | modify/create | see per-task Verification |
+| File                                              | Status        | Responsibility                                                                                                   |
+| ------------------------------------------------- | ------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `backend/src/shared/db/schema/enums.ts`           | modify        | `botPhase`, `resolutionSource` enums                                                                             |
+| `backend/src/shared/db/schema/conversations.ts`   | modify        | `bot_phase`, `resolution_source` columns                                                                         |
+| `backend/src/env.ts`                              | modify        | `OPENAI_MODEL` required env var                                                                                  |
+| `backend/package.json`                            | modify        | `openai` dependency                                                                                              |
+| `.env.example`                                    | modify        | `OPENAI_MODEL=gpt-5.4-mini`                                                                                      |
+| `backend/src/shared/db/seedTaxonomy.ts`           | modify        | add `Other` as a seeded system intent                                                                            |
+| `backend/src/shared/db/seed.ts`                   | modify        | seed the `Other` intent idempotently                                                                             |
+| `backend/src/domain/bot/fallbackSubintent.ts`     | **create**    | `resolveFallbackSubintent(tx, workspaceId)`                                                                      |
+| `backend/src/domain/bot/botTurn.ts`               | modify        | `HandoffReason`, `UnavailableReason`, `BotTurnDecision`, `BotTurnInput` deltas; `stubDecider` removed at the end |
+| `backend/src/domain/bot/contextAssembly.ts`       | **create**    | `buildMessages(input)` — state block, pinning, windowing, subintent index, article catalogue                     |
+| `backend/src/domain/bot/openaiClient.ts`          | **create**    | `callModel(messages, tools)`                                                                                     |
+| `backend/src/domain/bot/tools.ts`                 | **create**    | `TOOL_DEFS`, `toolsForPhase(phase)`, tool handlers                                                               |
+| `backend/src/domain/bot/toolLoop.ts`              | **create**    | `toolLoopDecider: BotDecider`                                                                                    |
+| `backend/src/domain/bot/defaultPrompt.ts`         | modify        | drop player-context block from `DEFAULT_BOT_PROMPT`                                                              |
+| `backend/src/domain/bot/applyBotTurn.ts`          | modify        | `resolve` outcome, `bot_phase` writes, article events, `resolution_source` write                                 |
+| `backend/src/domain/bot/orchestrator.ts`          | modify        | `gather()` adds `botPhase`, `botMessageCount`, `lastPlayerMessageAt`                                             |
+| `backend/src/domain/bot/messages.ts`              | modify        | `SILENT_UNAVAILABLE_REASONS` drops `'not_implemented'`                                                           |
+| `backend/src/domain/bot/index.ts`                 | modify        | export new modules                                                                                               |
+| `backend/src/shared/jobs/botTurns.ts`             | modify        | default decider becomes `toolLoopDecider`                                                                        |
+| `backend/src/surface/services/messagesService.ts` | modify        | reopen branch: `HANDOFF_PLAYER_MESSAGE`, §10 assignment, `resolution_source` read+clear                          |
+| `backend/tests/*`                                 | modify/create | see per-task Verification                                                                                        |
 
 No new HTTP routes land in this slice, so `backend/src/docs/openapi.ts` is untouched.
 
@@ -64,11 +64,13 @@ No new HTTP routes land in this slice, so `backend/src/docs/openapi.ts` is untou
 ### Task 1: Schema — `bot_phase` and `resolution_source`
 
 **Files:**
+
 - Modify: `backend/src/shared/db/schema/enums.ts`
 - Modify: `backend/src/shared/db/schema/conversations.ts`
 - Test: `backend/tests/schema.test.ts`
 
 **Interfaces:**
+
 - Produces: `botPhase` pgEnum (`'none' | 'article_confirm'`), `resolutionSource` pgEnum (`'bot' | 'agent'`); `conversation.botPhase: 'none'|'article_confirm'` (not null, default `'none'`), `conversation.resolutionSource: 'bot'|'agent'|null`.
 
 - [ ] **Step 1: Add the two enums**
@@ -76,8 +78,8 @@ No new HTTP routes land in this slice, so `backend/src/docs/openapi.ts` is untou
 In `backend/src/shared/db/schema/enums.ts`, add after `articleState`:
 
 ```typescript
-export const botPhase = pgEnum('bot_phase', ['none', 'article_confirm'])
-export const resolutionSource = pgEnum('resolution_source', ['bot', 'agent'])
+export const botPhase = pgEnum('bot_phase', ['none', 'article_confirm']);
+export const resolutionSource = pgEnum('resolution_source', ['bot', 'agent']);
 ```
 
 - [ ] **Step 2: Add the two columns**
@@ -94,7 +96,7 @@ import {
   messageVisibility,
   botPhase,
   resolutionSource,
-} from './enums.ts'
+} from './enums.ts';
 ```
 
 Add, right after `subintentId`:
@@ -117,13 +119,13 @@ it('conversation.bot_phase defaults to none and rejects an unknown value', async
   const [row] = await db.execute(sql`
     insert into conversation (workspace_id, player_id) values (${workspaceId}, ${playerId})
     returning bot_phase
-  `)
-  expect(row.bot_phase).toBe('none')
+  `);
+  expect(row.bot_phase).toBe('none');
 
   await expect(
     db.execute(sql`update conversation set bot_phase = 'bogus' where id = ${conversationId}`),
-  ).rejects.toThrow()
-})
+  ).rejects.toThrow();
+});
 ```
 
 - [ ] **Step 4: Generate and apply the migration**
@@ -147,12 +149,14 @@ git commit -m "feat(bot): add conversation.bot_phase and conversation.resolution
 ### Task 2: Environment — `OPENAI_MODEL` and the `openai` dependency
 
 **Files:**
+
 - Modify: `backend/src/env.ts`
 - Modify: `backend/package.json`
 - Modify: `.env.example`
 - Test: `backend/tests/env.test.ts`
 
 **Interfaces:**
+
 - Produces: `Env.OPENAI_MODEL: string` (required, no default).
 
 - [ ] **Step 1: Install `openai`**
@@ -180,9 +184,9 @@ In `backend/tests/env.test.ts`, add (matching the file's existing pattern for re
 
 ```typescript
 it('fails validation when OPENAI_MODEL is missing', () => {
-  const { OPENAI_MODEL, ...rest } = validEnv
-  expect(() => loadEnv(rest)).toThrow(/OPENAI_MODEL/)
-})
+  const { OPENAI_MODEL, ...rest } = validEnv;
+  expect(() => loadEnv(rest)).toThrow(/OPENAI_MODEL/);
+});
 ```
 
 Also add `OPENAI_MODEL: 'gpt-5.4-mini'` to whatever `validEnv` fixture object the file already uses for a passing baseline.
@@ -204,12 +208,14 @@ git commit -m "feat(bot): add openai dependency and required OPENAI_MODEL env va
 ### Task 3: Seed the `Other` intent, and `fallbackSubintent.ts`
 
 **Files:**
+
 - Modify: `backend/src/shared/db/seed.ts`
 - Create: `backend/src/domain/bot/fallbackSubintent.ts`
 - Test: `backend/tests/seed.test.ts`
 - Test: `backend/tests/bot.fallbackSubintent.test.ts`
 
 **Interfaces:**
+
 - Produces: `resolveFallbackSubintent(tx: Tx, workspaceId: string): Promise<string>` — returns the seeded `Other` subintent's id, throws if it has not been seeded for that workspace.
 - Consumes: `intent`, `subintent` tables (`backend/src/shared/db/schema/taxonomy.ts`), `Tx` from `backend/src/shared/db/withWorkspace.ts`.
 
@@ -218,29 +224,34 @@ git commit -m "feat(bot): add openai dependency and required OPENAI_MODEL env va
 Create `backend/tests/bot.fallbackSubintent.test.ts`:
 
 ```typescript
-import { describe, it, expect, beforeEach } from 'vitest'
-import { withWorkspace } from '../src/shared/db/withWorkspace.ts'
-import { resolveFallbackSubintent } from '../src/domain/bot/fallbackSubintent.ts'
-import { intent, subintent } from '../src/shared/db/schema/index.ts'
-import { makeWorkspace } from './helpers/fixtures.ts' // use whatever fixture helper the existing bot tests already import
+import { describe, it, expect, beforeEach } from 'vitest';
+import { withWorkspace } from '../src/shared/db/withWorkspace.ts';
+import { resolveFallbackSubintent } from '../src/domain/bot/fallbackSubintent.ts';
+import { intent, subintent } from '../src/shared/db/schema/index.ts';
+import { makeWorkspace } from './helpers/fixtures.ts'; // use whatever fixture helper the existing bot tests already import
 
 describe('resolveFallbackSubintent', () => {
   it('resolves the seeded Other/Other pair', async () => {
-    const workspaceId = await makeWorkspace()
+    const workspaceId = await makeWorkspace();
     await withWorkspace(workspaceId, async (tx) => {
-      const [other] = await tx.insert(intent).values({ workspaceId, name: 'Other', isSystem: true }).returning({ id: intent.id })
-      await tx.insert(subintent).values({ workspaceId, intentId: other!.id, name: 'Other' })
-    })
+      const [other] = await tx
+        .insert(intent)
+        .values({ workspaceId, name: 'Other', isSystem: true })
+        .returning({ id: intent.id });
+      await tx.insert(subintent).values({ workspaceId, intentId: other!.id, name: 'Other' });
+    });
 
-    const id = await withWorkspace(workspaceId, (tx) => resolveFallbackSubintent(tx, workspaceId))
-    expect(id).toBeTypeOf('string')
-  })
+    const id = await withWorkspace(workspaceId, (tx) => resolveFallbackSubintent(tx, workspaceId));
+    expect(id).toBeTypeOf('string');
+  });
 
   it('throws when Other has not been seeded for this workspace', async () => {
-    const workspaceId = await makeWorkspace()
-    await expect(withWorkspace(workspaceId, (tx) => resolveFallbackSubintent(tx, workspaceId))).rejects.toThrow(/Other/)
-  })
-})
+    const workspaceId = await makeWorkspace();
+    await expect(
+      withWorkspace(workspaceId, (tx) => resolveFallbackSubintent(tx, workspaceId)),
+    ).rejects.toThrow(/Other/);
+  });
+});
 ```
 
 (Match the actual fixture helper name used by `backend/tests/bot.turnSeam.test.ts` for creating a workspace — read that file's imports first and reuse the same helper rather than inventing `makeWorkspace`.)
@@ -254,13 +265,13 @@ Expected: FAIL — module does not exist.
 
 ```typescript
 // backend/src/domain/bot/fallbackSubintent.ts
-import { and, eq } from 'drizzle-orm'
-import type { Tx } from '../../shared/db/withWorkspace.ts'
-import { intent, subintent } from '../../shared/db/schema/index.ts'
+import { and, eq } from 'drizzle-orm';
+import type { Tx } from '../../shared/db/withWorkspace.ts';
+import { intent, subintent } from '../../shared/db/schema/index.ts';
 
 /** The one name this slice's `Other` classification carries. Seeded in seed.ts. */
-export const OTHER_INTENT_NAME = 'Other'
-export const OTHER_SUBINTENT_NAME = 'Other'
+export const OTHER_INTENT_NAME = 'Other';
+export const OTHER_SUBINTENT_NAME = 'Other';
 
 /**
  * The subintent `classify` resolves to when the model picks the `Other` index,
@@ -281,12 +292,14 @@ export async function resolveFallbackSubintent(tx: Tx, workspaceId: string): Pro
         eq(subintent.name, OTHER_SUBINTENT_NAME),
       ),
     )
-    .limit(1)
+    .limit(1);
 
   if (!row) {
-    throw new Error(`resolveFallbackSubintent: workspace ${workspaceId} has no seeded "Other" subintent`)
+    throw new Error(
+      `resolveFallbackSubintent: workspace ${workspaceId} has no seeded "Other" subintent`,
+    );
   }
-  return row.id
+  return row.id;
 }
 ```
 
@@ -300,20 +313,24 @@ Expected: PASS
 In `backend/src/shared/db/seed.ts`, add the import:
 
 ```typescript
-const { OTHER_INTENT_NAME, OTHER_SUBINTENT_NAME } = await import('../../domain/bot/fallbackSubintent.ts')
+const { OTHER_INTENT_NAME, OTHER_SUBINTENT_NAME } =
+  await import('../../domain/bot/fallbackSubintent.ts');
 ```
 
 Immediately after the `for (const intentData of SEED_TAXONOMY) { ... }` loop closes (still inside the same `withWorkspace` block), add:
 
 ```typescript
-    const [otherIntent] = await tx
-      .insert(intent)
-      .values({ workspaceId, name: OTHER_INTENT_NAME, isSystem: true })
-      .onConflictDoNothing()
-      .returning({ id: intent.id })
-    if (otherIntent) {
-      await tx.insert(subintent).values({ workspaceId, intentId: otherIntent.id, name: OTHER_SUBINTENT_NAME }).onConflictDoNothing()
-    }
+const [otherIntent] = await tx
+  .insert(intent)
+  .values({ workspaceId, name: OTHER_INTENT_NAME, isSystem: true })
+  .onConflictDoNothing()
+  .returning({ id: intent.id });
+if (otherIntent) {
+  await tx
+    .insert(subintent)
+    .values({ workspaceId, intentId: otherIntent.id, name: OTHER_SUBINTENT_NAME })
+    .onConflictDoNothing();
+}
 ```
 
 - [ ] **Step 6: Write the failing test for idempotent seeding**
@@ -322,14 +339,23 @@ In `backend/tests/seed.test.ts`, add:
 
 ```typescript
 it('seeds exactly one is_system intent named Other, and re-running does not duplicate it', async () => {
-  await seed()
-  await seed()
+  await seed();
+  await seed();
 
   const rows = await withWorkspace(workspaceIdUnderTest, (tx) =>
-    tx.select({ id: intent.id }).from(intent).where(and(eq(intent.workspaceId, workspaceIdUnderTest), eq(intent.isSystem, true), eq(intent.name, 'Other'))),
-  )
-  expect(rows).toHaveLength(1)
-})
+    tx
+      .select({ id: intent.id })
+      .from(intent)
+      .where(
+        and(
+          eq(intent.workspaceId, workspaceIdUnderTest),
+          eq(intent.isSystem, true),
+          eq(intent.name, 'Other'),
+        ),
+      ),
+  );
+  expect(rows).toHaveLength(1);
+});
 ```
 
 (Match the existing `seed.test.ts` file's actual workspace-lookup pattern — it already re-runs `seed()` for its idempotency assertions on articles; follow that same structure rather than introducing a new one.)
@@ -351,31 +377,36 @@ git commit -m "feat(bot): seed the Other intent/subintent and add resolveFallbac
 ### Task 4: `botTurn.ts` type deltas
 
 **Files:**
+
 - Modify: `backend/src/domain/bot/botTurn.ts`
 - Modify: `backend/tests/bot.turnSeam.test.ts`
 
 **Interfaces:**
+
 - Produces:
+
   ```typescript
-  export type HandoffReason = 'asked_for_person' | 'article_rejected' | 'no_article' | 'sensitive' | 'unsure' | 'turn_cap'
-  export type UnavailableReason = 'not_provisioned' | 'error' | 'timeout' | 'invalid_response'
+  export type HandoffReason =
+    'asked_for_person' | 'article_rejected' | 'no_article' | 'sensitive' | 'unsure' | 'turn_cap';
+  export type UnavailableReason = 'not_provisioned' | 'error' | 'timeout' | 'invalid_response';
   export type BotTurnDecision =
     | { kind: 'noop' }
     | { kind: 'answer'; reply: string; subintentId: string | null; articleId?: string }
     | { kind: 'resolve'; subintentId: string | null }
     | { kind: 'handoff'; reason: HandoffReason; subintentId: string | null }
-    | { kind: 'unavailable'; reason: UnavailableReason }
+    | { kind: 'unavailable'; reason: UnavailableReason };
   export type BotTurnInput = {
-    workspaceId: string
-    conversationId: string
-    subintentId: string | null
-    botPhase: 'none' | 'article_confirm'
-    botMessageCount: number
-    lastPlayerMessageAt: Date | null
-    history: PlayerMessageView[]
-  }
-  export type BotDecider = (input: BotTurnInput) => Promise<BotTurnDecision>
+    workspaceId: string;
+    conversationId: string;
+    subintentId: string | null;
+    botPhase: 'none' | 'article_confirm';
+    botMessageCount: number;
+    lastPlayerMessageAt: Date | null;
+    history: PlayerMessageView[];
+  };
+  export type BotDecider = (input: BotTurnInput) => Promise<BotTurnDecision>;
   ```
+
   `stubDecider` and `SILENT_UNAVAILABLE_REASONS` are kept in this task (still referenced by `botTurns.ts`); they are removed/updated in Task 10 once `toolLoopDecider` exists to replace the default.
 
   Note: `answer.subintentId` widens from `string` to `string | null` — a greeting that triggers no `classify` call still exits `answer` with no classification, per spec's own example (`§8`). This is a real (narrow) behavior correction over spec 1's original signature, required by spec 4's control flow (`No tool call → exit with { kind: 'answer', reply }` — no subintentId at all in that case). `applyBotTurn`'s `classifyIfUnset` call in the `answer` branch must be guarded on non-null, matching the existing guard already written for the `handoff` branch (Task 9 handles this).
@@ -387,7 +418,7 @@ Replace the top of `backend/src/domain/bot/botTurn.ts` (down through the `BotDec
 ```typescript
 // backend/src/domain/bot/botTurn.ts
 
-import type { PlayerMessageView } from '@support/types'
+import type { PlayerMessageView } from '@support/types';
 
 /**
  * Model-chosen (`asked_for_person`, `no_article`, `sensitive` — passed directly
@@ -395,35 +426,36 @@ import type { PlayerMessageView } from '@support/types'
  * from `confirm_resolution(false)`), or forced by a budget with no model call
  * involved at all (`unsure`, `turn_cap`).
  */
-export type HandoffReason = 'asked_for_person' | 'article_rejected' | 'no_article' | 'sensitive' | 'unsure' | 'turn_cap'
+export type HandoffReason =
+  'asked_for_person' | 'article_rejected' | 'no_article' | 'sensitive' | 'unsure' | 'turn_cap';
 
 export type UnavailableReason =
   | 'not_provisioned' // admin has the bot switched off
   | 'error' // a turn failed after its retries were exhausted
   | 'timeout' // callModel exceeded its 15s budget
-  | 'invalid_response' // a refusal or an unparseable tool argument — not retried
+  | 'invalid_response'; // a refusal or an unparseable tool argument — not retried
 
 export type BotTurnDecision =
   | { kind: 'noop' }
   | { kind: 'answer'; reply: string; subintentId: string | null; articleId?: string }
   | { kind: 'resolve'; subintentId: string | null }
   | { kind: 'handoff'; reason: HandoffReason; subintentId: string | null }
-  | { kind: 'unavailable'; reason: UnavailableReason }
+  | { kind: 'unavailable'; reason: UnavailableReason };
 
 export type BotTurnInput = {
-  workspaceId: string
-  conversationId: string
-  subintentId: string | null
+  workspaceId: string;
+  conversationId: string;
+  subintentId: string | null;
   /** Guards whether confirm_resolution is offered to the model this turn. */
-  botPhase: 'none' | 'article_confirm'
+  botPhase: 'none' | 'article_confirm';
   /** Bot-authored messages so far, in this conversation. Drives MAX_BOT_MESSAGES. */
-  botMessageCount: number
+  botMessageCount: number;
   /** Null if the player has never sent a message (should not happen once a turn runs). */
-  lastPlayerMessageAt: Date | null
-  history: PlayerMessageView[]
-}
+  lastPlayerMessageAt: Date | null;
+  history: PlayerMessageView[];
+};
 
-export type BotDecider = (input: BotTurnInput) => Promise<BotTurnDecision>
+export type BotDecider = (input: BotTurnInput) => Promise<BotTurnDecision>;
 ```
 
 Leave `stubDecider` and `SILENT_UNAVAILABLE_REASONS` below unchanged for now, except `SILENT_UNAVAILABLE_REASONS`'s type annotation still compiles against the narrowed `UnavailableReason` (it already only references `'not_provisioned'` and `'not_implemented'` — `'not_implemented'` is removed from the union in this step, so this line now fails to typecheck).
@@ -437,10 +469,12 @@ Leave `stubDecider` and `SILENT_UNAVAILABLE_REASONS` below unchanged for now, ex
  * The scaffolding decider, replaced by `toolLoopDecider` in Task 10. Kept here
  * until that task so `botTurns.ts` still compiles between tasks.
  */
-export const stubDecider: BotDecider = async () => ({ kind: 'unavailable', reason: 'error' })
+export const stubDecider: BotDecider = async () => ({ kind: 'unavailable', reason: 'error' });
 
 /** Only an admin's deliberate choice is silent. Every other reason gets an internal note. */
-export const SILENT_UNAVAILABLE_REASONS: ReadonlySet<UnavailableReason> = new Set(['not_provisioned'])
+export const SILENT_UNAVAILABLE_REASONS: ReadonlySet<UnavailableReason> = new Set([
+  'not_provisioned',
+]);
 ```
 
 - [ ] **Step 3: Fix `bot.turnSeam.test.ts`'s now-invalid `reason: 'model'` literals**
@@ -469,25 +503,28 @@ git commit -m "feat(bot): widen BotTurnDecision/BotTurnInput/HandoffReason for t
 ### Task 5: `contextAssembly.ts` — `buildMessages`
 
 **Files:**
+
 - Create: `backend/src/domain/bot/contextAssembly.ts`
 - Test: `backend/tests/bot.contextAssembly.test.ts`
 
 **Interfaces:**
+
 - Consumes: `BotTurnInput` (Task 4), `ResolvedBotConfig.systemPrompt` (existing `resolveBotConfig`), `subintent`/`intent`/`article` tables, `Tx`.
 - Produces:
+
   ```typescript
-  export type ChatRole = 'system' | 'user' | 'assistant'
-  export type ChatMessage = { role: ChatRole; content: string }
-  export type SubintentOption = { index: number; subintentId: string; label: string }
+  export type ChatRole = 'system' | 'user' | 'assistant';
+  export type ChatMessage = { role: ChatRole; content: string };
+  export type SubintentOption = { index: number; subintentId: string; label: string };
   export type BuildMessagesResult = {
-    messages: ChatMessage[]
+    messages: ChatMessage[];
     /** Ordered options presented in the {{subintents}} block, ending with the Other entry. tools.ts maps classify's subintent_index against this array. */
-    subintentOptions: SubintentOption[]
+    subintentOptions: SubintentOption[];
     /** Article ids the player-visible catalogue names — for logging/debug only, never used to validate offer_article (that's this turn's search results, see tools.ts). */
-    catalogueArticleCount: number
-  }
-  export const MAX_HISTORY_MESSAGES = 20
-  export async function buildMessages(tx: Tx, input: BotTurnInput): Promise<BuildMessagesResult>
+    catalogueArticleCount: number;
+  };
+  export const MAX_HISTORY_MESSAGES = 20;
+  export async function buildMessages(tx: Tx, input: BotTurnInput): Promise<BuildMessagesResult>;
   ```
 
 - [ ] **Step 1: Write the failing tests**
@@ -495,10 +532,10 @@ git commit -m "feat(bot): widen BotTurnDecision/BotTurnInput/HandoffReason for t
 Create `backend/tests/bot.contextAssembly.test.ts` (read `backend/tests/bot.orchestrator.test.ts` first for the fixture/workspace-setup helper this repo already uses, and reuse it rather than reinventing one):
 
 ```typescript
-import { describe, it, expect } from 'vitest'
-import { withWorkspace } from '../src/shared/db/withWorkspace.ts'
-import { buildMessages, MAX_HISTORY_MESSAGES } from '../src/domain/bot/contextAssembly.ts'
-import { postMessage } from '../src/domain/conversations/postMessage.ts'
+import { describe, it, expect } from 'vitest';
+import { withWorkspace } from '../src/shared/db/withWorkspace.ts';
+import { buildMessages, MAX_HISTORY_MESSAGES } from '../src/domain/bot/contextAssembly.ts';
+import { postMessage } from '../src/domain/conversations/postMessage.ts';
 // ...import whatever fixture helpers bot.orchestrator.test.ts already uses for workspace/conversation setup
 
 describe('buildMessages', () => {
@@ -509,7 +546,7 @@ describe('buildMessages', () => {
     // assert: the rendered state-block message's content contains the subintent
     // name and the article title, and contains no substring that isn't derived
     // from a column/event value the test itself set up
-  })
+  });
 
   it('with 40 messages, keeps the first player message, the last 20, and an elision marker with the dropped count', async () => {
     // arrange: post 40 alternating player/bot messages
@@ -517,24 +554,24 @@ describe('buildMessages', () => {
     // bodies, and exactly one content string matching /19 messages? omitted|elided/
     // (assert on MAX_HISTORY_MESSAGES=20, not a hardcoded 20, so this test breaks
     // loudly if the constant changes without the test being updated)
-  })
+  });
 
   it('never includes an internal-visibility message, at any window size', async () => {
     // arrange: an internal note among the transcript
     // assert: no returned message's content includes that note's body
-  })
+  });
 
   it('emits no system-role message after the first', async () => {
     // assert: messages.filter(m => m.role === 'system').length === 1
-  })
+  });
 
   it('produces the same state block after a simulated five-day gap, plus the gap line', async () => {
     // arrange: same conversation twice, one with lastPlayerMessageAt = now,
     // one with lastPlayerMessageAt = 5 days ago
     // assert: the two results' messages are identical except the recent one
     // has no "last here N days ago" line and the old one does
-  })
-})
+  });
+});
 ```
 
 Fill in the arrange/act/assert bodies using this repo's actual fixture helpers and `appendEvent`/`postMessage` signatures (already read in Tasks above) — do not leave these as comments in the committed test file.
@@ -548,74 +585,90 @@ Expected: FAIL — module does not exist.
 
 ```typescript
 // backend/src/domain/bot/contextAssembly.ts
-import { and, asc, desc, eq } from 'drizzle-orm'
-import type { Tx } from '../../shared/db/withWorkspace.ts'
-import type { BotTurnInput } from './botTurn.ts'
-import { resolveBotConfig } from './botConfig.ts'
-import { article, event, intent, message, subintent } from '../../shared/db/schema/index.ts'
+import { and, asc, desc, eq } from 'drizzle-orm';
+import type { Tx } from '../../shared/db/withWorkspace.ts';
+import type { BotTurnInput } from './botTurn.ts';
+import { resolveBotConfig } from './botConfig.ts';
+import { article, event, intent, message, subintent } from '../../shared/db/schema/index.ts';
 
-export type ChatRole = 'system' | 'user' | 'assistant'
-export type ChatMessage = { role: ChatRole; content: string }
-export type SubintentOption = { index: number; subintentId: string; label: string }
+export type ChatRole = 'system' | 'user' | 'assistant';
+export type ChatMessage = { role: ChatRole; content: string };
+export type SubintentOption = { index: number; subintentId: string; label: string };
 export type BuildMessagesResult = {
-  messages: ChatMessage[]
-  subintentOptions: SubintentOption[]
-  catalogueArticleCount: number
-}
+  messages: ChatMessage[];
+  subintentOptions: SubintentOption[];
+  catalogueArticleCount: number;
+};
 
-export const MAX_HISTORY_MESSAGES = 20
+export const MAX_HISTORY_MESSAGES = 20;
 
-const PLAYER_CONTEXT_LINE = 'This message is reported by the game client, not verified.'
+const PLAYER_CONTEXT_LINE = 'This message is reported by the game client, not verified.';
 
 async function loadSubintentOptions(tx: Tx, workspaceId: string): Promise<SubintentOption[]> {
   const rows = await tx
-    .select({ subintentId: subintent.id, subintentName: subintent.name, intentName: intent.name, isSystem: intent.isSystem })
+    .select({
+      subintentId: subintent.id,
+      subintentName: subintent.name,
+      intentName: intent.name,
+      isSystem: intent.isSystem,
+    })
     .from(subintent)
     .innerJoin(intent, eq(intent.id, subintent.intentId))
-    .where(and(eq(subintent.workspaceId, workspaceId), eq(intent.archivedAt, null as unknown as Date)))
-    .orderBy(asc(intent.name), asc(subintent.name))
+    .where(
+      and(eq(subintent.workspaceId, workspaceId), eq(intent.archivedAt, null as unknown as Date)),
+    )
+    .orderBy(asc(intent.name), asc(subintent.name));
 
   // The seeded Other/Other pair is presented last, under its own fixed label,
   // never mixed alphabetically into the real taxonomy — the model always
   // finds it in the same place.
-  const real = rows.filter((r) => !r.isSystem)
+  const real = rows.filter((r) => !r.isSystem);
   const options: SubintentOption[] = real.map((r, i) => ({
     index: i,
     subintentId: r.subintentId,
     label: `${r.intentName} → ${r.subintentName}`,
-  }))
+  }));
 
-  const other = rows.find((r) => r.isSystem)
+  const other = rows.find((r) => r.isSystem);
   if (other) {
-    options.push({ index: options.length, subintentId: other.subintentId, label: 'Other (none of these fit)' })
+    options.push({
+      index: options.length,
+      subintentId: other.subintentId,
+      label: 'Other (none of these fit)',
+    });
   }
-  return options
+  return options;
 }
 
 function renderSubintents(options: SubintentOption[]): string {
-  return options.map((o) => `${o.index}. ${o.label}`).join('\n')
+  return options.map((o) => `${o.index}. ${o.label}`).join('\n');
 }
 
-async function renderArticleCatalogue(tx: Tx, workspaceId: string): Promise<{ text: string; count: number }> {
+async function renderArticleCatalogue(
+  tx: Tx,
+  workspaceId: string,
+): Promise<{ text: string; count: number }> {
   const rows = await tx
     .select({ title: article.title, intentName: intent.name })
     .from(article)
     .leftJoin(intent, eq(intent.id, article.intentId))
     .where(and(eq(article.workspaceId, workspaceId), eq(article.state, 'published')))
-    .orderBy(asc(intent.name), asc(article.title))
+    .orderBy(asc(intent.name), asc(article.title));
 
-  const grouped = new Map<string, string[]>()
+  const grouped = new Map<string, string[]>();
   for (const row of rows) {
-    const key = row.intentName ?? 'Uncategorized'
-    grouped.set(key, [...(grouped.get(key) ?? []), row.title])
+    const key = row.intentName ?? 'Uncategorized';
+    grouped.set(key, [...(grouped.get(key) ?? []), row.title]);
   }
 
-  const text = [...grouped.entries()].map(([intentName, titles]) => `${intentName}:\n${titles.map((t) => `- ${t}`).join('\n')}`).join('\n\n')
-  return { text, count: rows.length }
+  const text = [...grouped.entries()]
+    .map(([intentName, titles]) => `${intentName}:\n${titles.map((t) => `- ${t}`).join('\n')}`)
+    .join('\n\n');
+  return { text, count: rows.length };
 }
 
 async function renderStateBlock(tx: Tx, input: BotTurnInput): Promise<string> {
-  const lines: string[] = ['── conversation state ──']
+  const lines: string[] = ['── conversation state ──'];
 
   if (input.subintentId) {
     const [row] = await tx
@@ -623,40 +676,46 @@ async function renderStateBlock(tx: Tx, input: BotTurnInput): Promise<string> {
       .from(subintent)
       .innerJoin(intent, eq(intent.id, subintent.intentId))
       .where(eq(subintent.id, input.subintentId))
-      .limit(1)
-    if (row) lines.push(`Classified as: ${row.intentName} → ${row.subintentName}`)
+      .limit(1);
+    if (row) lines.push(`Classified as: ${row.intentName} → ${row.subintentName}`);
   }
 
   const [lastArticleEvent] = await tx
     .select({ type: event.type, payload: event.payload })
     .from(event)
-    .where(and(eq(event.conversationId, input.conversationId), eq(event.type, 'bot_article_offered')))
+    .where(
+      and(eq(event.conversationId, input.conversationId), eq(event.type, 'bot_article_offered')),
+    )
     .orderBy(desc(event.occurredAt))
-    .limit(1)
+    .limit(1);
   if (lastArticleEvent) {
-    const title = (lastArticleEvent.payload as { article_title?: string }).article_title ?? 'an article'
+    const title =
+      (lastArticleEvent.payload as { article_title?: string }).article_title ?? 'an article';
     const [rejection] = await tx
       .select({ id: event.id })
       .from(event)
-      .where(and(eq(event.conversationId, input.conversationId), eq(event.type, 'bot_article_rejected')))
+      .where(
+        and(eq(event.conversationId, input.conversationId), eq(event.type, 'bot_article_rejected')),
+      )
       .orderBy(desc(event.occurredAt))
-      .limit(1)
-    lines.push(`Article offered: "${title}"${rejection ? ' — rejected' : ''}`)
+      .limit(1);
+    lines.push(`Article offered: "${title}"${rejection ? ' — rejected' : ''}`);
   }
 
   if (input.lastPlayerMessageAt) {
-    const gapMs = Date.now() - input.lastPlayerMessageAt.getTime()
-    const gapDays = Math.floor(gapMs / (24 * 60 * 60 * 1000))
-    if (gapDays >= 1) lines.push(`Player was last here ${gapDays} day${gapDays === 1 ? '' : 's'} ago`)
+    const gapMs = Date.now() - input.lastPlayerMessageAt.getTime();
+    const gapDays = Math.floor(gapMs / (24 * 60 * 60 * 1000));
+    if (gapDays >= 1)
+      lines.push(`Player was last here ${gapDays} day${gapDays === 1 ? '' : 's'} ago`);
   }
 
-  return lines.join('\n')
+  return lines.join('\n');
 }
 
 function toChatRole(authorType: string): ChatRole | null {
-  if (authorType === 'player') return 'user'
-  if (authorType === 'bot') return 'assistant'
-  return null // system/agent messages never enter the model's transcript
+  if (authorType === 'player') return 'user';
+  if (authorType === 'bot') return 'assistant';
+  return null; // system/agent messages never enter the model's transcript
 }
 
 /**
@@ -666,36 +725,44 @@ function toChatRole(authorType: string): ChatRole | null {
  * did not, the exact failure this block exists to prevent.
  */
 export async function buildMessages(tx: Tx, input: BotTurnInput): Promise<BuildMessagesResult> {
-  const config = await resolveBotConfig(tx, input.workspaceId)
-  const subintentOptions = await loadSubintentOptions(tx, input.workspaceId)
-  const catalogue = await renderArticleCatalogue(tx, input.workspaceId)
-  const stateBlock = await renderStateBlock(tx, input)
+  const config = await resolveBotConfig(tx, input.workspaceId);
+  const subintentOptions = await loadSubintentOptions(tx, input.workspaceId);
+  const catalogue = await renderArticleCatalogue(tx, input.workspaceId);
+  const stateBlock = await renderStateBlock(tx, input);
 
-  const systemPrompt = config.systemPrompt.replace('{{subintents}}', renderSubintents(subintentOptions)).replace('{{articles}}', catalogue.text)
+  const systemPrompt = config.systemPrompt
+    .replace('{{subintents}}', renderSubintents(subintentOptions))
+    .replace('{{articles}}', catalogue.text);
 
-  const rows = await tx.select().from(message).where(eq(message.conversationId, input.conversationId)).orderBy(asc(message.seq))
+  const rows = await tx
+    .select()
+    .from(message)
+    .where(eq(message.conversationId, input.conversationId))
+    .orderBy(asc(message.seq));
 
   const transcript = rows
     .filter((r) => r.visibility === 'public')
     .map((r) => ({ role: toChatRole(r.authorType), body: r.body }))
-    .filter((m): m is { role: ChatRole; body: string } => m.role !== null)
+    .filter((m): m is { role: ChatRole; body: string } => m.role !== null);
 
-  const first = transcript[0]
-  const rest = transcript.slice(1)
-  const windowed = rest.length > MAX_HISTORY_MESSAGES ? rest.slice(rest.length - MAX_HISTORY_MESSAGES) : rest
-  const droppedCount = rest.length - windowed.length
+  const first = transcript[0];
+  const rest = transcript.slice(1);
+  const windowed =
+    rest.length > MAX_HISTORY_MESSAGES ? rest.slice(rest.length - MAX_HISTORY_MESSAGES) : rest;
+  const droppedCount = rest.length - windowed.length;
 
   const messages: ChatMessage[] = [
     { role: 'system', content: systemPrompt },
     { role: 'user', content: PLAYER_CONTEXT_LINE },
     { role: 'user', content: stateBlock },
-  ]
+  ];
 
-  if (first) messages.push({ role: first.role, content: first.body })
-  if (droppedCount > 0) messages.push({ role: 'user', content: `[${droppedCount} messages elided]` })
-  for (const m of windowed) messages.push({ role: m.role, content: m.body })
+  if (first) messages.push({ role: first.role, content: first.body });
+  if (droppedCount > 0)
+    messages.push({ role: 'user', content: `[${droppedCount} messages elided]` });
+  for (const m of windowed) messages.push({ role: m.role, content: m.body });
 
-  return { messages, subintentOptions, catalogueArticleCount: catalogue.count }
+  return { messages, subintentOptions, catalogueArticleCount: catalogue.count };
 }
 ```
 
@@ -716,19 +783,26 @@ git commit -m "feat(bot): add contextAssembly.buildMessages"
 ### Task 6: `openaiClient.ts`
 
 **Files:**
+
 - Create: `backend/src/domain/bot/openaiClient.ts`
 - Test: `backend/tests/bot.openaiClient.test.ts`
 
 **Interfaces:**
+
 - Consumes: `ChatMessage` (Task 5), `getEnv()` (`OPENAI_APIKEY`, `OPENAI_MODEL`).
 - Produces:
+
   ```typescript
-  export type ToolCall = { id: string; name: string; arguments: string }
-  export type ModelResponse = { toolCalls: ToolCall[]; text: string | null }
+  export type ToolCall = { id: string; name: string; arguments: string };
+  export type ModelResponse = { toolCalls: ToolCall[]; text: string | null };
   export class ModelTimeoutError extends Error {}
   export class ModelRefusalError extends Error {}
-  export async function callModel(messages: ChatMessage[], tools: unknown[]): Promise<ModelResponse>
+  export async function callModel(
+    messages: ChatMessage[],
+    tools: unknown[],
+  ): Promise<ModelResponse>;
   ```
+
   Any other failure (non-2xx, network) throws the SDK's own error type unmodified — `toolLoop` (Task 8) is the layer that maps thrown errors to `unavailable` reasons, not this file.
 
 - [ ] **Step 1: Write the failing tests**
@@ -736,56 +810,74 @@ git commit -m "feat(bot): add contextAssembly.buildMessages"
 Create `backend/tests/bot.openaiClient.test.ts`:
 
 ```typescript
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const mockCreate = vi.fn()
+const mockCreate = vi.fn();
 vi.mock('openai', () => ({
   default: class {
-    chat = { completions: { create: mockCreate } }
+    chat = { completions: { create: mockCreate } };
   },
-}))
+}));
 
-import { callModel, ModelTimeoutError, ModelRefusalError } from '../src/domain/bot/openaiClient.ts'
+import { callModel, ModelTimeoutError, ModelRefusalError } from '../src/domain/bot/openaiClient.ts';
 
 describe('callModel', () => {
-  beforeEach(() => mockCreate.mockReset())
+  beforeEach(() => mockCreate.mockReset());
 
   it('returns tool calls from the response', async () => {
     mockCreate.mockResolvedValue({
-      choices: [{ message: { tool_calls: [{ id: 't1', function: { name: 'search_articles', arguments: '{"query":"x"}' } }] } }],
-    })
-    const result = await callModel([{ role: 'user', content: 'hi' }], [])
-    expect(result.toolCalls).toEqual([{ id: 't1', name: 'search_articles', arguments: '{"query":"x"}' }])
-    expect(result.text).toBeNull()
-  })
+      choices: [
+        {
+          message: {
+            tool_calls: [
+              { id: 't1', function: { name: 'search_articles', arguments: '{"query":"x"}' } },
+            ],
+          },
+        },
+      ],
+    });
+    const result = await callModel([{ role: 'user', content: 'hi' }], []);
+    expect(result.toolCalls).toEqual([
+      { id: 't1', name: 'search_articles', arguments: '{"query":"x"}' },
+    ]);
+    expect(result.text).toBeNull();
+  });
 
   it('returns text when there is no tool call', async () => {
-    mockCreate.mockResolvedValue({ choices: [{ message: { content: 'hello', tool_calls: undefined } }] })
-    const result = await callModel([{ role: 'user', content: 'hi' }], [])
-    expect(result.text).toBe('hello')
-    expect(result.toolCalls).toEqual([])
-  })
+    mockCreate.mockResolvedValue({
+      choices: [{ message: { content: 'hello', tool_calls: undefined } }],
+    });
+    const result = await callModel([{ role: 'user', content: 'hi' }], []);
+    expect(result.text).toBe('hello');
+    expect(result.toolCalls).toEqual([]);
+  });
 
   it('throws ModelRefusalError on a refusal', async () => {
-    mockCreate.mockResolvedValue({ choices: [{ message: { refusal: 'cannot help', tool_calls: undefined, content: null } }] })
-    await expect(callModel([], [])).rejects.toThrow(ModelRefusalError)
-  })
+    mockCreate.mockResolvedValue({
+      choices: [{ message: { refusal: 'cannot help', tool_calls: undefined, content: null } }],
+    });
+    await expect(callModel([], [])).rejects.toThrow(ModelRefusalError);
+  });
 
   it('throws ModelTimeoutError when the call exceeds 15s', async () => {
-    mockCreate.mockImplementation(() => new Promise(() => {})) // never resolves
-    vi.useFakeTimers()
-    const promise = callModel([], [])
-    vi.advanceTimersByTime(15_001)
-    await expect(promise).rejects.toThrow(ModelTimeoutError)
-    vi.useRealTimers()
-  })
+    mockCreate.mockImplementation(() => new Promise(() => {})); // never resolves
+    vi.useFakeTimers();
+    const promise = callModel([], []);
+    vi.advanceTimersByTime(15_001);
+    await expect(promise).rejects.toThrow(ModelTimeoutError);
+    vi.useRealTimers();
+  });
 
   it('passes temperature 0 and the configured model', async () => {
-    mockCreate.mockResolvedValue({ choices: [{ message: { content: 'ok', tool_calls: undefined } }] })
-    await callModel([], [])
-    expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({ temperature: 0, model: expect.any(String) }))
-  })
-})
+    mockCreate.mockResolvedValue({
+      choices: [{ message: { content: 'ok', tool_calls: undefined } }],
+    });
+    await callModel([], []);
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ temperature: 0, model: expect.any(String) }),
+    );
+  });
+});
 ```
 
 - [ ] **Step 2: Run, confirm failure**
@@ -797,49 +889,49 @@ Expected: FAIL — module does not exist.
 
 ```typescript
 // backend/src/domain/bot/openaiClient.ts
-import OpenAI from 'openai'
-import { getEnv } from '../../env.ts'
-import type { ChatMessage } from './contextAssembly.ts'
+import OpenAI from 'openai';
+import { getEnv } from '../../env.ts';
+import type { ChatMessage } from './contextAssembly.ts';
 
-export type ToolCall = { id: string; name: string; arguments: string }
-export type ModelResponse = { toolCalls: ToolCall[]; text: string | null }
+export type ToolCall = { id: string; name: string; arguments: string };
+export type ModelResponse = { toolCalls: ToolCall[]; text: string | null };
 
 export class ModelTimeoutError extends Error {
   constructor() {
-    super('OpenAI call exceeded 15000ms')
-    this.name = 'ModelTimeoutError'
+    super('OpenAI call exceeded 15000ms');
+    this.name = 'ModelTimeoutError';
   }
 }
 
 export class ModelRefusalError extends Error {
   constructor(refusal: string) {
-    super(`Model refused: ${refusal}`)
-    this.name = 'ModelRefusalError'
+    super(`Model refused: ${refusal}`);
+    this.name = 'ModelRefusalError';
   }
 }
 
-const CALL_TIMEOUT_MS = 15_000
+const CALL_TIMEOUT_MS = 15_000;
 
-let client: OpenAI | undefined
+let client: OpenAI | undefined;
 function getClient(): OpenAI {
-  client ??= new OpenAI({ apiKey: getEnv().OPENAI_APIKEY })
-  return client
+  client ??= new OpenAI({ apiKey: getEnv().OPENAI_APIKEY });
+  return client;
 }
 
 function withTimeout<T>(promise: Promise<T>): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new ModelTimeoutError()), CALL_TIMEOUT_MS)
+    const timer = setTimeout(() => reject(new ModelTimeoutError()), CALL_TIMEOUT_MS);
     promise.then(
       (v) => {
-        clearTimeout(timer)
-        resolve(v)
+        clearTimeout(timer);
+        resolve(v);
       },
       (e) => {
-        clearTimeout(timer)
-        reject(e)
+        clearTimeout(timer);
+        reject(e);
       },
-    )
-  })
+    );
+  });
 }
 
 /**
@@ -854,14 +946,28 @@ export async function callModel(messages: ChatMessage[], tools: unknown[]): Prom
       temperature: 0,
       messages: messages as never,
       tools: tools as never,
-    }) as unknown as Promise<{ choices: [{ message: { content: string | null; refusal?: string | null; tool_calls?: { id: string; function: { name: string; arguments: string } }[] } }] }>,
-  )
+    }) as unknown as Promise<{
+      choices: [
+        {
+          message: {
+            content: string | null;
+            refusal?: string | null;
+            tool_calls?: { id: string; function: { name: string; arguments: string } }[];
+          };
+        },
+      ];
+    }>,
+  );
 
-  const msg = response.choices[0].message
-  if (msg.refusal) throw new ModelRefusalError(msg.refusal)
+  const msg = response.choices[0].message;
+  if (msg.refusal) throw new ModelRefusalError(msg.refusal);
 
-  const toolCalls = (msg.tool_calls ?? []).map((tc) => ({ id: tc.id, name: tc.function.name, arguments: tc.function.arguments }))
-  return { toolCalls, text: toolCalls.length === 0 ? msg.content : null }
+  const toolCalls = (msg.tool_calls ?? []).map((tc) => ({
+    id: tc.id,
+    name: tc.function.name,
+    arguments: tc.function.arguments,
+  }));
+  return { toolCalls, text: toolCalls.length === 0 ? msg.content : null };
 }
 ```
 
@@ -882,61 +988,78 @@ git commit -m "feat(bot): add openaiClient.callModel"
 ### Task 7: `tools.ts`, and drop the player-context block from `defaultPrompt.ts`
 
 **Files:**
+
 - Create: `backend/src/domain/bot/tools.ts`
 - Modify: `backend/src/domain/bot/defaultPrompt.ts`
 - Test: `backend/tests/bot.tools.test.ts`
 - Test: `backend/tests/bot.config.test.ts` (update)
 
 **Interfaces:**
+
 - Consumes: `SubintentOption[]` (Task 5), `searchArticleIds` (`backend/src/shared/weaviate/articlesIndex.ts`), `resolveFallbackSubintent` (Task 3), `article` schema.
 - Produces:
+
   ```typescript
-  export type ToolPhase = 'none' | 'article_confirm'
-  export const TOOL_DEFS: Record<string, unknown> // OpenAI tool-def shape, strict schemas, keyed by tool name
-  export function toolsForPhase(phase: ToolPhase): unknown[]
-  export type SearchArticlesResult = { id: string; title: string; body: string }[]
-  export async function searchArticles(tx: Tx, workspaceId: string, query: string): Promise<SearchArticlesResult>
-  export function resolveClassifyIndex(options: SubintentOption[], index: number): SubintentOption | null
-  export const CONFIRM_RESOLUTION_TOOL_NAME = 'confirm_resolution'
+  export type ToolPhase = 'none' | 'article_confirm';
+  export const TOOL_DEFS: Record<string, unknown>; // OpenAI tool-def shape, strict schemas, keyed by tool name
+  export function toolsForPhase(phase: ToolPhase): unknown[];
+  export type SearchArticlesResult = { id: string; title: string; body: string }[];
+  export async function searchArticles(
+    tx: Tx,
+    workspaceId: string,
+    query: string,
+  ): Promise<SearchArticlesResult>;
+  export function resolveClassifyIndex(
+    options: SubintentOption[],
+    index: number,
+  ): SubintentOption | null;
+  export const CONFIRM_RESOLUTION_TOOL_NAME = 'confirm_resolution';
   ```
-  `tools.ts` exposes tool *definitions* and small pure/DB-reading helpers (`searchArticles`, `resolveClassifyIndex`). It does not touch `bot_phase`, budgets, or the fallback-subintent DB write path — `toolLoop.ts` (Task 8) owns sequencing and calls these.
+
+  `tools.ts` exposes tool _definitions_ and small pure/DB-reading helpers (`searchArticles`, `resolveClassifyIndex`). It does not touch `bot_phase`, budgets, or the fallback-subintent DB write path — `toolLoop.ts` (Task 8) owns sequencing and calls these.
 
 - [ ] **Step 1: Write the failing tests**
 
 Create `backend/tests/bot.tools.test.ts`:
 
 ```typescript
-import { describe, it, expect } from 'vitest'
-import { toolsForPhase, resolveClassifyIndex, CONFIRM_RESOLUTION_TOOL_NAME } from '../src/domain/bot/tools.ts'
+import { describe, it, expect } from 'vitest';
+import {
+  toolsForPhase,
+  resolveClassifyIndex,
+  CONFIRM_RESOLUTION_TOOL_NAME,
+} from '../src/domain/bot/tools.ts';
 
 describe('toolsForPhase', () => {
   it('omits confirm_resolution when phase is none', () => {
-    const names = toolsForPhase('none').map((t: any) => t.function.name)
-    expect(names).not.toContain(CONFIRM_RESOLUTION_TOOL_NAME)
-    expect(names).toEqual(expect.arrayContaining(['search_articles', 'classify', 'offer_article', 'handoff']))
-  })
+    const names = toolsForPhase('none').map((t: any) => t.function.name);
+    expect(names).not.toContain(CONFIRM_RESOLUTION_TOOL_NAME);
+    expect(names).toEqual(
+      expect.arrayContaining(['search_articles', 'classify', 'offer_article', 'handoff']),
+    );
+  });
 
   it('includes confirm_resolution when phase is article_confirm', () => {
-    const names = toolsForPhase('article_confirm').map((t: any) => t.function.name)
-    expect(names).toContain(CONFIRM_RESOLUTION_TOOL_NAME)
-  })
-})
+    const names = toolsForPhase('article_confirm').map((t: any) => t.function.name);
+    expect(names).toContain(CONFIRM_RESOLUTION_TOOL_NAME);
+  });
+});
 
 describe('resolveClassifyIndex', () => {
   const options = [
     { index: 0, subintentId: 'a', label: 'A' },
     { index: 1, subintentId: 'b', label: 'B' },
-  ]
+  ];
 
   it('resolves a valid index', () => {
-    expect(resolveClassifyIndex(options, 1)).toEqual(options[1])
-  })
+    expect(resolveClassifyIndex(options, 1)).toEqual(options[1]);
+  });
 
   it('returns null for an out-of-range index', () => {
-    expect(resolveClassifyIndex(options, 99)).toBeNull()
-    expect(resolveClassifyIndex(options, -1)).toBeNull()
-  })
-})
+    expect(resolveClassifyIndex(options, 99)).toBeNull();
+    expect(resolveClassifyIndex(options, -1)).toBeNull();
+  });
+});
 ```
 
 - [ ] **Step 2: Run, confirm failure**
@@ -946,7 +1069,7 @@ Expected: FAIL — module does not exist.
 
 - [ ] **Step 3: Remove the player-context block from `defaultPrompt.ts`**
 
-In `backend/src/domain/bot/defaultPrompt.ts`, change `DEFAULT_BOT_PROMPT` to drop the `Context about this player` block (keep `BOT_PROMPT_PLACEHOLDERS` listing all four — it validates what an admin-customised prompt is *allowed* to reference, not what the default ships):
+In `backend/src/domain/bot/defaultPrompt.ts`, change `DEFAULT_BOT_PROMPT` to drop the `Context about this player` block (keep `BOT_PROMPT_PLACEHOLDERS` listing all four — it validates what an admin-customised prompt is _allowed_ to reference, not what the default ships):
 
 ```typescript
 export const DEFAULT_BOT_PROMPT = `You are the first-line support assistant inside a mobile game's help window. You are talking to a player, in the game, right now.
@@ -962,7 +1085,7 @@ Classify the player's problem into one of these categories:
 Use only these help articles as your source of truth:
 {{articles}}
 
-When you hand off, say plainly that you are passing this to the support team, and stop. Do not keep asking questions to fill the gap.`
+When you hand off, say plainly that you are passing this to the support team, and stop. Do not keep asking questions to fill the gap.`;
 ```
 
 - [ ] **Step 4: Update `bot.config.test.ts`**
@@ -971,58 +1094,81 @@ Find the existing assertion that `DEFAULT_BOT_PROMPT` contains all four placehol
 
 ```typescript
 it('DEFAULT_BOT_PROMPT contains {{subintents}} and {{articles}}, not {{player_level}} or {{spend_tier}}', () => {
-  expect(DEFAULT_BOT_PROMPT).toContain('{{subintents}}')
-  expect(DEFAULT_BOT_PROMPT).toContain('{{articles}}')
-  expect(DEFAULT_BOT_PROMPT).not.toContain('{{player_level}}')
-  expect(DEFAULT_BOT_PROMPT).not.toContain('{{spend_tier}}')
-})
+  expect(DEFAULT_BOT_PROMPT).toContain('{{subintents}}');
+  expect(DEFAULT_BOT_PROMPT).toContain('{{articles}}');
+  expect(DEFAULT_BOT_PROMPT).not.toContain('{{player_level}}');
+  expect(DEFAULT_BOT_PROMPT).not.toContain('{{spend_tier}}');
+});
 
 it('BOT_PROMPT_PLACEHOLDERS still lists all four', () => {
-  expect(BOT_PROMPT_PLACEHOLDERS).toEqual(['{{subintents}}', '{{articles}}', '{{player_level}}', '{{spend_tier}}'])
-})
+  expect(BOT_PROMPT_PLACEHOLDERS).toEqual([
+    '{{subintents}}',
+    '{{articles}}',
+    '{{player_level}}',
+    '{{spend_tier}}',
+  ]);
+});
 ```
 
 - [ ] **Step 5: Implement `tools.ts`**
 
 ```typescript
 // backend/src/domain/bot/tools.ts
-import { eq } from 'drizzle-orm'
-import type { Tx } from '../../shared/db/withWorkspace.ts'
-import { article } from '../../shared/db/schema/index.ts'
-import { searchArticleIds } from '../../shared/weaviate/articlesIndex.ts'
-import type { SubintentOption } from './contextAssembly.ts'
+import { eq } from 'drizzle-orm';
+import type { Tx } from '../../shared/db/withWorkspace.ts';
+import { article } from '../../shared/db/schema/index.ts';
+import { searchArticleIds } from '../../shared/weaviate/articlesIndex.ts';
+import type { SubintentOption } from './contextAssembly.ts';
 
-export type ToolPhase = 'none' | 'article_confirm'
+export type ToolPhase = 'none' | 'article_confirm';
 
-export const CONFIRM_RESOLUTION_TOOL_NAME = 'confirm_resolution'
-const MAX_ARTICLES_PER_TURN = 3
+export const CONFIRM_RESOLUTION_TOOL_NAME = 'confirm_resolution';
+const MAX_ARTICLES_PER_TURN = 3;
 
 const ALWAYS_AVAILABLE_TOOLS = [
   {
     type: 'function',
     function: {
       name: 'search_articles',
-      description: 'Search published help articles by natural-language query. No side effects. Call at most 3 times per turn.',
+      description:
+        'Search published help articles by natural-language query. No side effects. Call at most 3 times per turn.',
       strict: true,
-      parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'], additionalProperties: false },
+      parameters: {
+        type: 'object',
+        properties: { query: { type: 'string' } },
+        required: ['query'],
+        additionalProperties: false,
+      },
     },
   },
   {
     type: 'function',
     function: {
       name: 'classify',
-      description: 'Record which category the player\'s problem falls into. Write-once: a second call in this conversation is ignored.',
+      description:
+        "Record which category the player's problem falls into. Write-once: a second call in this conversation is ignored.",
       strict: true,
-      parameters: { type: 'object', properties: { subintent_index: { type: 'integer' } }, required: ['subintent_index'], additionalProperties: false },
+      parameters: {
+        type: 'object',
+        properties: { subintent_index: { type: 'integer' } },
+        required: ['subintent_index'],
+        additionalProperties: false,
+      },
     },
   },
   {
     type: 'function',
     function: {
       name: 'offer_article',
-      description: 'Post one of the articles returned by search_articles this turn to the player, and ask if it solved their problem.',
+      description:
+        'Post one of the articles returned by search_articles this turn to the player, and ask if it solved their problem.',
       strict: true,
-      parameters: { type: 'object', properties: { article_id: { type: 'string' } }, required: ['article_id'], additionalProperties: false },
+      parameters: {
+        type: 'object',
+        properties: { article_id: { type: 'string' } },
+        required: ['article_id'],
+        additionalProperties: false,
+      },
     },
   },
   {
@@ -1033,51 +1179,73 @@ const ALWAYS_AVAILABLE_TOOLS = [
       strict: true,
       parameters: {
         type: 'object',
-        properties: { reason: { type: 'string', enum: ['asked_for_person', 'no_article', 'sensitive'] } },
+        properties: {
+          reason: { type: 'string', enum: ['asked_for_person', 'no_article', 'sensitive'] },
+        },
         required: ['reason'],
         additionalProperties: false,
       },
     },
   },
-] as const
+] as const;
 
 const CONFIRM_RESOLUTION_TOOL = {
   type: 'function',
   function: {
     name: CONFIRM_RESOLUTION_TOOL_NAME,
-    description: 'Record whether the offered article solved the player\'s problem. Only call this in direct response to the player answering "did this solve it?".',
+    description:
+      'Record whether the offered article solved the player\'s problem. Only call this in direct response to the player answering "did this solve it?".',
     strict: true,
-    parameters: { type: 'object', properties: { helped: { type: 'boolean' } }, required: ['helped'], additionalProperties: false },
+    parameters: {
+      type: 'object',
+      properties: { helped: { type: 'boolean' } },
+      required: ['helped'],
+      additionalProperties: false,
+    },
   },
-} as const
+} as const;
 
-export const TOOL_DEFS = [...ALWAYS_AVAILABLE_TOOLS, CONFIRM_RESOLUTION_TOOL]
+export const TOOL_DEFS = [...ALWAYS_AVAILABLE_TOOLS, CONFIRM_RESOLUTION_TOOL];
 
 /**
  * confirm_resolution is offered to the model only while bot_phase =
  * 'article_confirm' — a property of the request, not of the prompt (spec §3).
  */
 export function toolsForPhase(phase: ToolPhase): unknown[] {
-  return phase === 'article_confirm' ? [...ALWAYS_AVAILABLE_TOOLS, CONFIRM_RESOLUTION_TOOL] : [...ALWAYS_AVAILABLE_TOOLS]
+  return phase === 'article_confirm'
+    ? [...ALWAYS_AVAILABLE_TOOLS, CONFIRM_RESOLUTION_TOOL]
+    : [...ALWAYS_AVAILABLE_TOOLS];
 }
 
-export { MAX_ARTICLES_PER_TURN }
+export { MAX_ARTICLES_PER_TURN };
 
-export type SearchArticlesResult = { id: string; title: string; body: string }[]
+export type SearchArticlesResult = { id: string; title: string; body: string }[];
 
 /** Hybrid retrieval fired against the model's own phrased query, not the player's raw words (spec §3). */
-export async function searchArticles(tx: Tx, workspaceId: string, query: string): Promise<SearchArticlesResult> {
-  const ids = await searchArticleIds(query, { workspaceId, limit: 5 })
-  if (ids.length === 0) return []
+export async function searchArticles(
+  tx: Tx,
+  workspaceId: string,
+  query: string,
+): Promise<SearchArticlesResult> {
+  const ids = await searchArticleIds(query, { workspaceId, limit: 5 });
+  if (ids.length === 0) return [];
 
-  const rows = await tx.select({ id: article.id, title: article.title, body: article.body }).from(article).where(eq(article.workspaceId, workspaceId))
-  const byId = new Map(rows.map((r) => [r.id, r]))
-  return ids.map((id) => byId.get(id)).filter((r): r is { id: string; title: string; body: string } => r !== undefined)
+  const rows = await tx
+    .select({ id: article.id, title: article.title, body: article.body })
+    .from(article)
+    .where(eq(article.workspaceId, workspaceId));
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  return ids
+    .map((id) => byId.get(id))
+    .filter((r): r is { id: string; title: string; body: string } => r !== undefined);
 }
 
 /** Null on an out-of-range index — toolLoop maps that to the Other fallback, same as an explicit Other choice. */
-export function resolveClassifyIndex(options: SubintentOption[], index: number): SubintentOption | null {
-  return options.find((o) => o.index === index) ?? null
+export function resolveClassifyIndex(
+  options: SubintentOption[],
+  index: number,
+): SubintentOption | null {
+  return options.find((o) => o.index === index) ?? null;
 }
 ```
 
@@ -1100,10 +1268,12 @@ git commit -m "feat(bot): add the five tool definitions and drop the player-cont
 This is the core of the slice. Read `docs/specs/2026-08-12-bot-tool-calling-decider-design.md`'s "Control flow" and "Verification → New tests/bot.toolLoop.test.ts" sections again immediately before starting this task.
 
 **Files:**
+
 - Create: `backend/src/domain/bot/toolLoop.ts`
 - Test: `backend/tests/bot.toolLoop.test.ts`
 
 **Interfaces:**
+
 - Consumes: `BotTurnInput`/`BotTurnDecision`/`BotDecider` (Task 4), `buildMessages` (Task 5), `callModel`/`ModelTimeoutError`/`ModelRefusalError` (Task 6), `toolsForPhase`/`searchArticles`/`resolveClassifyIndex`/`CONFIRM_RESOLUTION_TOOL_NAME` (Task 7), `resolveFallbackSubintent` (Task 3), `withWorkspace`/`Tx`.
 - Produces: `export const toolLoopDecider: BotDecider`, `export const MAX_TOOL_CALLS_PER_TURN = 4`, `export const MAX_BOT_MESSAGES = 8`.
 
@@ -1219,29 +1389,41 @@ Expected: FAIL — module does not exist.
 
 ```typescript
 // backend/src/domain/bot/toolLoop.ts
-import { withWorkspace } from '../../shared/db/withWorkspace.ts'
-import type { BotDecider, BotTurnDecision, HandoffReason } from './botTurn.ts'
-import { buildMessages, type ChatMessage } from './contextAssembly.ts'
-import { callModel, ModelRefusalError, ModelTimeoutError } from './openaiClient.ts'
-import { CONFIRM_RESOLUTION_TOOL_NAME, MAX_ARTICLES_PER_TURN, resolveClassifyIndex, searchArticles, toolsForPhase, type SearchArticlesResult } from './tools.ts'
-import { resolveFallbackSubintent } from './fallbackSubintent.ts'
+import { withWorkspace } from '../../shared/db/withWorkspace.ts';
+import type { BotDecider, BotTurnDecision, HandoffReason } from './botTurn.ts';
+import { buildMessages, type ChatMessage } from './contextAssembly.ts';
+import { callModel, ModelRefusalError, ModelTimeoutError } from './openaiClient.ts';
+import {
+  CONFIRM_RESOLUTION_TOOL_NAME,
+  MAX_ARTICLES_PER_TURN,
+  resolveClassifyIndex,
+  searchArticles,
+  toolsForPhase,
+  type SearchArticlesResult,
+} from './tools.ts';
+import { resolveFallbackSubintent } from './fallbackSubintent.ts';
 
-export const MAX_TOOL_CALLS_PER_TURN = 4
-export const MAX_BOT_MESSAGES = 8
+export const MAX_TOOL_CALLS_PER_TURN = 4;
+export const MAX_BOT_MESSAGES = 8;
 
-const MODEL_HANDOFF_REASONS: ReadonlySet<string> = new Set(['asked_for_person', 'no_article', 'sensitive'])
+const MODEL_HANDOFF_REASONS: ReadonlySet<string> = new Set([
+  'asked_for_person',
+  'no_article',
+  'sensitive',
+]);
 
-type ParsedToolCall = { id: string; name: string; args: Record<string, unknown> }
+type ParsedToolCall = { id: string; name: string; args: Record<string, unknown> };
 
 function parseToolCall(raw: { id: string; name: string; arguments: string }): ParsedToolCall {
-  let args: unknown
+  let args: unknown;
   try {
-    args = JSON.parse(raw.arguments)
+    args = JSON.parse(raw.arguments);
   } catch {
-    throw new InvalidResponseError(`unparseable arguments for ${raw.name}`)
+    throw new InvalidResponseError(`unparseable arguments for ${raw.name}`);
   }
-  if (typeof args !== 'object' || args === null) throw new InvalidResponseError(`non-object arguments for ${raw.name}`)
-  return { id: raw.id, name: raw.name, args: args as Record<string, unknown> }
+  if (typeof args !== 'object' || args === null)
+    throw new InvalidResponseError(`non-object arguments for ${raw.name}`);
+  return { id: raw.id, name: raw.name, args: args as Record<string, unknown> };
 }
 
 class InvalidResponseError extends Error {}
@@ -1256,100 +1438,137 @@ class InvalidResponseError extends Error {}
  */
 export const toolLoopDecider: BotDecider = async (input) => {
   if (input.botMessageCount >= MAX_BOT_MESSAGES) {
-    return { kind: 'handoff', reason: 'turn_cap', subintentId: null }
+    return { kind: 'handoff', reason: 'turn_cap', subintentId: null };
   }
 
   try {
     return await withWorkspace(input.workspaceId, async (tx) => {
-      const { messages, subintentOptions } = await buildMessages(tx, input)
+      const { messages, subintentOptions } = await buildMessages(tx, input);
 
-      let classifiedSubintentId = input.subintentId
-      let searchedArticleIds = new Set<string>()
-      let searchCallCount = 0
-      let toolCallCount = 0
-      const conversationMessages: ChatMessage[] = [...messages]
+      let classifiedSubintentId = input.subintentId;
+      let searchedArticleIds = new Set<string>();
+      let searchCallCount = 0;
+      let toolCallCount = 0;
+      const conversationMessages: ChatMessage[] = [...messages];
 
       while (toolCallCount < MAX_TOOL_CALLS_PER_TURN) {
-        const response = await callModel(conversationMessages, toolsForPhase(input.botPhase))
+        const response = await callModel(conversationMessages, toolsForPhase(input.botPhase));
 
         if (response.toolCalls.length === 0) {
-          return { kind: 'answer', reply: response.text ?? '', subintentId: classifiedSubintentId }
+          return { kind: 'answer', reply: response.text ?? '', subintentId: classifiedSubintentId };
         }
 
         for (const raw of response.toolCalls) {
           if (toolCallCount >= MAX_TOOL_CALLS_PER_TURN) {
-            return { kind: 'handoff', reason: 'unsure', subintentId: classifiedSubintentId }
+            return { kind: 'handoff', reason: 'unsure', subintentId: classifiedSubintentId };
           }
-          toolCallCount++
+          toolCallCount++;
 
-          const call = parseToolCall(raw)
+          const call = parseToolCall(raw);
 
           if (call.name === 'search_articles') {
-            searchCallCount++
+            searchCallCount++;
             if (searchCallCount > MAX_ARTICLES_PER_TURN) {
-              conversationMessages.push({ role: 'user', content: `[search_articles limit reached this turn]` })
-              continue
+              conversationMessages.push({
+                role: 'user',
+                content: `[search_articles limit reached this turn]`,
+              });
+              continue;
             }
-            const query = call.args.query
-            if (typeof query !== 'string') throw new InvalidResponseError('search_articles missing query')
-            const results: SearchArticlesResult = await searchArticles(tx, input.workspaceId, query)
-            for (const r of results) searchedArticleIds.add(r.id)
-            conversationMessages.push({ role: 'assistant', content: `[search_articles("${query}")]` })
-            conversationMessages.push({ role: 'user', content: JSON.stringify(results.map((r) => ({ id: r.id, title: r.title, body: r.body }))) })
-            continue
+            const query = call.args.query;
+            if (typeof query !== 'string')
+              throw new InvalidResponseError('search_articles missing query');
+            const results: SearchArticlesResult = await searchArticles(
+              tx,
+              input.workspaceId,
+              query,
+            );
+            for (const r of results) searchedArticleIds.add(r.id);
+            conversationMessages.push({
+              role: 'assistant',
+              content: `[search_articles("${query}")]`,
+            });
+            conversationMessages.push({
+              role: 'user',
+              content: JSON.stringify(
+                results.map((r) => ({ id: r.id, title: r.title, body: r.body })),
+              ),
+            });
+            continue;
           }
 
           if (call.name === 'classify') {
-            const index = call.args.subintent_index
-            if (typeof index !== 'number') throw new InvalidResponseError('classify missing subintent_index')
+            const index = call.args.subintent_index;
+            if (typeof index !== 'number')
+              throw new InvalidResponseError('classify missing subintent_index');
             if (classifiedSubintentId === null) {
-              const resolved = resolveClassifyIndex(subintentOptions, index)
-              classifiedSubintentId = resolved ? resolved.subintentId : await resolveFallbackSubintent(tx, input.workspaceId)
+              const resolved = resolveClassifyIndex(subintentOptions, index);
+              classifiedSubintentId = resolved
+                ? resolved.subintentId
+                : await resolveFallbackSubintent(tx, input.workspaceId);
             }
-            conversationMessages.push({ role: 'assistant', content: `[classify(${index})]` })
-            conversationMessages.push({ role: 'user', content: '[acknowledged]' })
-            continue
+            conversationMessages.push({ role: 'assistant', content: `[classify(${index})]` });
+            conversationMessages.push({ role: 'user', content: '[acknowledged]' });
+            continue;
           }
 
           if (call.name === 'offer_article') {
-            const articleId = call.args.article_id
-            if (typeof articleId !== 'string') throw new InvalidResponseError('offer_article missing article_id')
+            const articleId = call.args.article_id;
+            if (typeof articleId !== 'string')
+              throw new InvalidResponseError('offer_article missing article_id');
             if (!searchedArticleIds.has(articleId)) {
-              conversationMessages.push({ role: 'assistant', content: `[offer_article(${articleId})]` })
-              conversationMessages.push({ role: 'user', content: '[rejected: article_id was not returned by search_articles this turn]' })
-              continue
+              conversationMessages.push({
+                role: 'assistant',
+                content: `[offer_article(${articleId})]`,
+              });
+              conversationMessages.push({
+                role: 'user',
+                content: '[rejected: article_id was not returned by search_articles this turn]',
+              });
+              continue;
             }
-            return { kind: 'answer', reply: `Here's an article that might help.`, subintentId: classifiedSubintentId, articleId }
+            return {
+              kind: 'answer',
+              reply: `Here's an article that might help.`,
+              subintentId: classifiedSubintentId,
+              articleId,
+            };
           }
 
           if (call.name === CONFIRM_RESOLUTION_TOOL_NAME) {
-            const helped = call.args.helped
-            if (typeof helped !== 'boolean') throw new InvalidResponseError('confirm_resolution missing helped')
+            const helped = call.args.helped;
+            if (typeof helped !== 'boolean')
+              throw new InvalidResponseError('confirm_resolution missing helped');
             return helped
               ? { kind: 'resolve', subintentId: classifiedSubintentId }
-              : { kind: 'handoff', reason: 'article_rejected', subintentId: classifiedSubintentId }
+              : { kind: 'handoff', reason: 'article_rejected', subintentId: classifiedSubintentId };
           }
 
           if (call.name === 'handoff') {
-            const reason = call.args.reason
-            if (typeof reason !== 'string' || !MODEL_HANDOFF_REASONS.has(reason)) throw new InvalidResponseError('handoff missing/invalid reason')
-            return { kind: 'handoff', reason: reason as HandoffReason, subintentId: classifiedSubintentId }
+            const reason = call.args.reason;
+            if (typeof reason !== 'string' || !MODEL_HANDOFF_REASONS.has(reason))
+              throw new InvalidResponseError('handoff missing/invalid reason');
+            return {
+              kind: 'handoff',
+              reason: reason as HandoffReason,
+              subintentId: classifiedSubintentId,
+            };
           }
 
-          throw new InvalidResponseError(`unknown tool ${call.name}`)
+          throw new InvalidResponseError(`unknown tool ${call.name}`);
         }
       }
 
-      return { kind: 'handoff', reason: 'unsure', subintentId: classifiedSubintentId }
-    })
+      return { kind: 'handoff', reason: 'unsure', subintentId: classifiedSubintentId };
+    });
   } catch (err) {
     if (err instanceof ModelRefusalError || err instanceof InvalidResponseError) {
-      return { kind: 'unavailable', reason: 'invalid_response' }
+      return { kind: 'unavailable', reason: 'invalid_response' };
     }
-    if (err instanceof ModelTimeoutError) throw err
-    throw err
+    if (err instanceof ModelTimeoutError) throw err;
+    throw err;
   }
-}
+};
 ```
 
 - [ ] **Step 4: Run tests, verify they pass, iterating on the implementation as needed**
@@ -1369,11 +1588,13 @@ git commit -m "feat(bot): add toolLoopDecider — the real BotDecider"
 ### Task 9: `applyBotTurn.ts` — `resolve`, `bot_phase`, article events, `resolution_source`
 
 **Files:**
+
 - Modify: `backend/src/domain/bot/applyBotTurn.ts`
 - Test: `backend/tests/bot.turnSeam.test.ts` (extend)
 - Test: `backend/tests/bot.phase.test.ts` (create)
 
 **Interfaces:**
+
 - Consumes: `BotTurnDecision` (Task 4, now includes `resolve` and `answer.articleId`).
 - Produces: `applyBotTurn` unchanged signature; writes `bot_phase = 'article_confirm'` when `answer.articleId` is set, `resolution_source = 'bot'` + `status = 'resolved'` + `bot_phase = 'none'` on `resolve`, and the two article events.
 
@@ -1425,23 +1646,27 @@ Expected: FAIL — `resolve` case not handled, `articleId` ignored.
 - [ ] **Step 3: Implement the changes in `applyBotTurn.ts`**
 
 ```typescript
-import { and, eq, isNull } from 'drizzle-orm'
-import type { BotTurnDecision } from './botTurn.ts'
-import { SILENT_UNAVAILABLE_REASONS } from './botTurn.ts'
-import { botFailureNote, HANDOFF_PLAYER_MESSAGE } from './messages.ts'
-import { assignOnHandoff } from './assignOnHandoff.ts'
-import { postMessage, type PostedMessageRow } from '../conversations/postMessage.ts'
-import { appendEvent } from '../../shared/events/appendEvent.ts'
-import type { Tx } from '../../shared/db/withWorkspace.ts'
-import { article, conversation, intent, subintent } from '../../shared/db/schema/index.ts'
+import { and, eq, isNull } from 'drizzle-orm';
+import type { BotTurnDecision } from './botTurn.ts';
+import { SILENT_UNAVAILABLE_REASONS } from './botTurn.ts';
+import { botFailureNote, HANDOFF_PLAYER_MESSAGE } from './messages.ts';
+import { assignOnHandoff } from './assignOnHandoff.ts';
+import { postMessage, type PostedMessageRow } from '../conversations/postMessage.ts';
+import { appendEvent } from '../../shared/events/appendEvent.ts';
+import type { Tx } from '../../shared/db/withWorkspace.ts';
+import { article, conversation, intent, subintent } from '../../shared/db/schema/index.ts';
 
-export type ApplyBotTurnContext = { workspaceId: string; conversationId: string }
-export type ApplyBotTurnResult = { posted: PostedMessageRow[]; statusChanged: boolean }
+export type ApplyBotTurnContext = { workspaceId: string; conversationId: string };
+export type ApplyBotTurnResult = { posted: PostedMessageRow[]; statusChanged: boolean };
 
-export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: BotTurnDecision): Promise<ApplyBotTurnResult> {
+export async function applyBotTurn(
+  tx: Tx,
+  ctx: ApplyBotTurnContext,
+  decision: BotTurnDecision,
+): Promise<ApplyBotTurnResult> {
   switch (decision.kind) {
     case 'noop':
-      return { posted: [], statusChanged: false }
+      return { posted: [], statusChanged: false };
 
     case 'answer': {
       const posted = await postMessage(tx, {
@@ -1451,11 +1676,18 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
         actorId: null,
         body: decision.reply,
         visibility: 'public',
-      })
-      if (decision.subintentId) await classifyIfUnset(tx, ctx, decision.subintentId)
+      });
+      if (decision.subintentId) await classifyIfUnset(tx, ctx, decision.subintentId);
       if (decision.articleId) {
-        await tx.update(conversation).set({ botPhase: 'article_confirm' }).where(eq(conversation.id, ctx.conversationId))
-        const [row] = await tx.select({ title: article.title }).from(article).where(eq(article.id, decision.articleId)).limit(1)
+        await tx
+          .update(conversation)
+          .set({ botPhase: 'article_confirm' })
+          .where(eq(conversation.id, ctx.conversationId));
+        const [row] = await tx
+          .select({ title: article.title })
+          .from(article)
+          .where(eq(article.id, decision.articleId))
+          .limit(1);
         await appendEvent(tx, {
           workspaceId: ctx.workspaceId,
           type: 'bot_article_offered',
@@ -1463,14 +1695,17 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
           actorId: null,
           actorType: 'bot',
           payload: { article_id: decision.articleId, article_title: row?.title ?? null },
-        })
+        });
       }
-      return { posted: [posted], statusChanged: false }
+      return { posted: [posted], statusChanged: false };
     }
 
     case 'resolve': {
-      if (decision.subintentId) await classifyIfUnset(tx, ctx, decision.subintentId)
-      await tx.update(conversation).set({ status: 'resolved', botPhase: 'none', resolutionSource: 'bot' }).where(eq(conversation.id, ctx.conversationId))
+      if (decision.subintentId) await classifyIfUnset(tx, ctx, decision.subintentId);
+      await tx
+        .update(conversation)
+        .set({ status: 'resolved', botPhase: 'none', resolutionSource: 'bot' })
+        .where(eq(conversation.id, ctx.conversationId));
       await appendEvent(tx, {
         workspaceId: ctx.workspaceId,
         type: 'conversation_resolved',
@@ -1478,8 +1713,8 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
         actorId: null,
         actorType: 'bot',
         payload: { source: 'bot', confirmed_by: 'player' },
-      })
-      return { posted: [], statusChanged: true }
+      });
+      return { posted: [], statusChanged: true };
     }
 
     case 'handoff': {
@@ -1490,10 +1725,13 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
         actorId: null,
         body: HANDOFF_PLAYER_MESSAGE,
         visibility: 'public',
-      })
-      if (decision.subintentId) await classifyIfUnset(tx, ctx, decision.subintentId)
-      const assignedAgentId = await assignOnHandoff(tx, ctx.workspaceId)
-      await tx.update(conversation).set({ status: 'open', botPhase: 'none', assignedAgentId }).where(eq(conversation.id, ctx.conversationId))
+      });
+      if (decision.subintentId) await classifyIfUnset(tx, ctx, decision.subintentId);
+      const assignedAgentId = await assignOnHandoff(tx, ctx.workspaceId);
+      await tx
+        .update(conversation)
+        .set({ status: 'open', botPhase: 'none', assignedAgentId })
+        .where(eq(conversation.id, ctx.conversationId));
       if (decision.reason === 'article_rejected') {
         await appendEvent(tx, {
           workspaceId: ctx.workspaceId,
@@ -1502,7 +1740,7 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
           actorId: null,
           actorType: 'bot',
           payload: {},
-        })
+        });
       }
       await appendEvent(tx, {
         workspaceId: ctx.workspaceId,
@@ -1511,8 +1749,8 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
         actorId: null,
         actorType: 'bot',
         payload: { reason: decision.reason, assigned_agent_id: assignedAgentId },
-      })
-      return { posted: [posted], statusChanged: true }
+      });
+      return { posted: [posted], statusChanged: true };
     }
 
     case 'unavailable': {
@@ -1525,7 +1763,7 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
           body: HANDOFF_PLAYER_MESSAGE,
           visibility: 'public',
         }),
-      ]
+      ];
       if (!SILENT_UNAVAILABLE_REASONS.has(decision.reason)) {
         posted.push(
           await postMessage(tx, {
@@ -1536,10 +1774,13 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
             body: botFailureNote(decision.reason),
             visibility: 'internal',
           }),
-        )
+        );
       }
-      const assignedAgentId = await assignOnHandoff(tx, ctx.workspaceId)
-      await tx.update(conversation).set({ status: 'open', botPhase: 'none', assignedAgentId }).where(eq(conversation.id, ctx.conversationId))
+      const assignedAgentId = await assignOnHandoff(tx, ctx.workspaceId);
+      await tx
+        .update(conversation)
+        .set({ status: 'open', botPhase: 'none', assignedAgentId })
+        .where(eq(conversation.id, ctx.conversationId));
       await appendEvent(tx, {
         workspaceId: ctx.workspaceId,
         type: 'bot_unavailable',
@@ -1547,27 +1788,31 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
         actorId: null,
         actorType: 'bot',
         payload: { reason: decision.reason },
-      })
-      return { posted, statusChanged: true }
+      });
+      return { posted, statusChanged: true };
     }
   }
 }
 
-async function classifyIfUnset(tx: Tx, ctx: ApplyBotTurnContext, subintentId: string): Promise<void> {
+async function classifyIfUnset(
+  tx: Tx,
+  ctx: ApplyBotTurnContext,
+  subintentId: string,
+): Promise<void> {
   const updated = await tx
     .update(conversation)
     .set({ subintentId, classificationSource: 'bot' })
     .where(and(eq(conversation.id, ctx.conversationId), isNull(conversation.subintentId)))
-    .returning({ id: conversation.id })
+    .returning({ id: conversation.id });
 
-  if (updated.length === 0) return
+  if (updated.length === 0) return;
 
   const [names] = await tx
     .select({ subintentName: subintent.name, intentName: intent.name })
     .from(subintent)
     .innerJoin(intent, eq(intent.id, subintent.intentId))
     .where(eq(subintent.id, subintentId))
-    .limit(1)
+    .limit(1);
 
   await appendEvent(tx, {
     workspaceId: ctx.workspaceId,
@@ -1575,8 +1820,12 @@ async function classifyIfUnset(tx: Tx, ctx: ApplyBotTurnContext, subintentId: st
     conversationId: ctx.conversationId,
     actorId: null,
     actorType: 'bot',
-    payload: { source: 'bot', subintent_name: names?.subintentName ?? null, intent_name: names?.intentName ?? null },
-  })
+    payload: {
+      source: 'bot',
+      subintent_name: names?.subintentName ?? null,
+      intent_name: names?.intentName ?? null,
+    },
+  });
 }
 ```
 
@@ -1599,6 +1848,7 @@ git commit -m "feat(bot): applyBotTurn resolve outcome, bot_phase writes, articl
 ### Task 10: Wire `toolLoopDecider` in as the real decider
 
 **Files:**
+
 - Modify: `backend/src/domain/bot/orchestrator.ts`
 - Modify: `backend/src/domain/bot/botTurn.ts` (delete `stubDecider`, `SILENT_UNAVAILABLE_REASONS` stays)
 - Modify: `backend/src/domain/bot/messages.ts`
@@ -1608,52 +1858,74 @@ git commit -m "feat(bot): applyBotTurn resolve outcome, bot_phase writes, articl
 - Test: `backend/tests/bot.orchestrator.test.ts` (update)
 
 **Interfaces:**
+
 - Consumes: `toolLoopDecider` (Task 8).
 - Produces: `gather()` in `orchestrator.ts` returns `botPhase`, `botMessageCount`, `lastPlayerMessageAt` alongside the existing `status`/`subintentId`; `registerBotTurnWorker`'s default decider is `toolLoopDecider`, not `stubDecider`.
 
 - [ ] **Step 1: Extend `gather()` in `orchestrator.ts`**
 
 ```typescript
-import { asc, desc, eq, sql } from 'drizzle-orm'
+import { asc, desc, eq, sql } from 'drizzle-orm';
 // ...
 
 type GatherResult = {
-  status: string
-  subintentId: string | null
-  botPhase: 'none' | 'article_confirm'
-} | null
+  status: string;
+  subintentId: string | null;
+  botPhase: 'none' | 'article_confirm';
+} | null;
 
 async function gather(
   tx: Tx,
   conversationId: string,
-): Promise<{ conv: GatherResult; history: PlayerMessageView[]; botMessageCount: number; lastPlayerMessageAt: Date | null }> {
+): Promise<{
+  conv: GatherResult;
+  history: PlayerMessageView[];
+  botMessageCount: number;
+  lastPlayerMessageAt: Date | null;
+}> {
   const [conv] = await tx
-    .select({ status: conversation.status, subintentId: conversation.subintentId, botPhase: conversation.botPhase })
+    .select({
+      status: conversation.status,
+      subintentId: conversation.subintentId,
+      botPhase: conversation.botPhase,
+    })
     .from(conversation)
     .where(eq(conversation.id, conversationId))
-    .limit(1)
+    .limit(1);
 
   const rows: PostedMessageRow[] = await tx
     .select()
     .from(message)
     .where(eq(message.conversationId, conversationId))
-    .orderBy(asc(message.seq))
+    .orderBy(asc(message.seq));
 
-  const history = rows.map(toPlayerView).filter((m): m is PlayerMessageView => m !== null)
-  const botMessageCount = rows.filter((r) => r.authorType === 'bot').length
-  const lastPlayer = rows.filter((r) => r.authorType === 'player').at(-1)
+  const history = rows.map(toPlayerView).filter((m): m is PlayerMessageView => m !== null);
+  const botMessageCount = rows.filter((r) => r.authorType === 'bot').length;
+  const lastPlayer = rows.filter((r) => r.authorType === 'player').at(-1);
 
-  return { conv: conv ?? null, history, botMessageCount, lastPlayerMessageAt: lastPlayer?.createdAt ?? null }
+  return {
+    conv: conv ?? null,
+    history,
+    botMessageCount,
+    lastPlayerMessageAt: lastPlayer?.createdAt ?? null,
+  };
 }
 ```
 
 Update `runBotTurn` to pass the new fields through:
 
 ```typescript
-export async function runBotTurn(workspaceId: string, conversationId: string, decider: BotDecider): Promise<void> {
-  const { conv, history, botMessageCount, lastPlayerMessageAt } = await withWorkspace(workspaceId, (tx) => gather(tx, conversationId))
+export async function runBotTurn(
+  workspaceId: string,
+  conversationId: string,
+  decider: BotDecider,
+): Promise<void> {
+  const { conv, history, botMessageCount, lastPlayerMessageAt } = await withWorkspace(
+    workspaceId,
+    (tx) => gather(tx, conversationId),
+  );
 
-  if (!conv || conv.status !== 'bot_active') return
+  if (!conv || conv.status !== 'bot_active') return;
 
   const decision = await decider({
     workspaceId,
@@ -1663,9 +1935,9 @@ export async function runBotTurn(workspaceId: string, conversationId: string, de
     botMessageCount,
     lastPlayerMessageAt,
     history,
-  })
+  });
 
-  await applyDecisionIfBotActive(workspaceId, conversationId, decision)
+  await applyDecisionIfBotActive(workspaceId, conversationId, decision);
 }
 ```
 
@@ -1678,7 +1950,7 @@ Wherever the test constructs an expected decider-input object or asserts on the 
 In `backend/src/domain/bot/botTurn.ts`, remove:
 
 ```typescript
-export const stubDecider: BotDecider = async () => ({ kind: 'unavailable', reason: 'error' })
+export const stubDecider: BotDecider = async () => ({ kind: 'unavailable', reason: 'error' });
 ```
 
 Keep `SILENT_UNAVAILABLE_REASONS` (still consumed by `applyBotTurn.ts`).
@@ -1702,18 +1974,18 @@ Read the file's existing "worker executes the decider" test. It currently constr
 - [ ] **Step 6: Export new modules from `index.ts`**
 
 ```typescript
-export * from './botTurn.ts'
-export * from './applyBotTurn.ts'
-export * from './orchestrator.ts'
-export * from './assignOnHandoff.ts'
-export * from './messages.ts'
-export * from './defaultPrompt.ts'
-export * from './botConfig.ts'
-export * from './contextAssembly.ts'
-export * from './openaiClient.ts'
-export * from './tools.ts'
-export * from './toolLoop.ts'
-export * from './fallbackSubintent.ts'
+export * from './botTurn.ts';
+export * from './applyBotTurn.ts';
+export * from './orchestrator.ts';
+export * from './assignOnHandoff.ts';
+export * from './messages.ts';
+export * from './defaultPrompt.ts';
+export * from './botConfig.ts';
+export * from './contextAssembly.ts';
+export * from './openaiClient.ts';
+export * from './tools.ts';
+export * from './toolLoop.ts';
+export * from './fallbackSubintent.ts';
 ```
 
 (Match whatever export style — `export *` vs named re-exports — the current `index.ts` already uses; keep it consistent rather than mixing styles.)
@@ -1738,10 +2010,12 @@ git commit -m "feat(bot): wire toolLoopDecider in as the default BotDecider; del
 ### Task 11: Reopen — `HANDOFF_PLAYER_MESSAGE`, §10 assignment, `resolution_source`
 
 **Files:**
+
 - Modify: `backend/src/surface/services/messagesService.ts`
 - Test: `backend/tests/bot.reopen.test.ts` (create)
 
 **Interfaces:**
+
 - Consumes: `HANDOFF_PLAYER_MESSAGE` (`messages.ts`), `assignOnHandoff` (`assignOnHandoff.ts`), `agent.status` (`identity.ts` schema).
 - Produces: reopen from `resolved`/`closed` posts `HANDOFF_PLAYER_MESSAGE`, assigns per §10, writes `conversation_reopened` with `previous_resolution_source`, and clears `resolution_source`. `awaiting_player → open` is untouched (no message).
 
@@ -1867,18 +2141,23 @@ import { agent, conversation, message, session } from '../../shared/db/schema/in
       } else if (existing.status === 'awaiting_player') {
 ```
 
-Note: the reopen system message (`HANDOFF_PLAYER_MESSAGE`) is now posted from inside this function directly, ahead of the player's own message that follows below in the existing code — check the returned/emitted shape: `sendPlayerMessage` currently only emits+returns the *player's* posted message. The reopen's system message also needs a socket emit. Extend the function's return/apply shape to carry an optional second posted row:
+Note: the reopen system message (`HANDOFF_PLAYER_MESSAGE`) is now posted from inside this function directly, ahead of the player's own message that follows below in the existing code — check the returned/emitted shape: `sendPlayerMessage` currently only emits+returns the _player's_ posted message. The reopen's system message also needs a socket emit. Extend the function's return/apply shape to carry an optional second posted row:
 
 ```typescript
-    return { conversationId, posted, reopenPosted, inboxStatus, shouldEnqueue }
+return { conversationId, posted, reopenPosted, inboxStatus, shouldEnqueue };
 ```
 
 (add `let reopenPosted: PostedMessageRow | undefined` alongside the existing `let inboxStatus` declaration, set it in the reopen branch above), and after the existing `emitMessageToRooms(getIo(), result.conversationId, playerView, agentView)` call in the outer function body:
 
 ```typescript
-  if (result.reopenPosted) {
-    emitMessageToRooms(getIo(), result.conversationId, toPlayerView(result.reopenPosted), toAgentView(result.reopenPosted))
-  }
+if (result.reopenPosted) {
+  emitMessageToRooms(
+    getIo(),
+    result.conversationId,
+    toPlayerView(result.reopenPosted),
+    toAgentView(result.reopenPosted),
+  );
+}
 ```
 
 - [ ] **Step 4: Run tests, verify they pass**

@@ -10,7 +10,7 @@ Six issues in the player-facing resolution flow (`frontend/src/surfaces/webview/
 1. The confirm banner ("Did this solve it?") reads awkwardly and should be rephrased.
 2. A player can keep typing and sending messages while either banner (`confirmPending` or `settled`) is showing, even though the banner is asking for a decision first.
 3. The resolved banner offers only one path back into the conversation ("Still facing issues? → Yes"), which just reopens the same thread. There's no way to start over.
-4. On reopen, the system's handoff message ("You're being connected to our support team.") is inserted into the database *before* the player's own message that triggered the reopen, so it renders above the player's message instead of after it — reading as if support responded before the player said anything.
+4. On reopen, the system's handoff message ("You're being connected to our support team.") is inserted into the database _before_ the player's own message that triggered the reopen, so it renders above the player's message instead of after it — reading as if support responded before the player said anything.
 5. The agent-triggered "Did this solve it?" message is correctly stored as `authorType: 'system'`, but the agent console's shared bubble component (`ChatThread.tsx`) only has two visual states — "own" (agent) vs "not own" — so it renders identically to a real player message. Agents can't tell it apart from something the player actually typed.
 6. Tapping "No" on the agent-ask confirm banner posts no message at all — `resolutionAnswer.ts`'s decline branch only flips `confirm_phase` back to `none` and logs a silent event. The agent's open thread doesn't even refetch, so there's no visible signal in the transcript that the player declined.
 

@@ -1,4 +1,4 @@
-import { clearAdminSession } from './adminSession.ts'
+import { clearAdminSession } from './adminSession.ts';
 
 /**
  * Mirrors agent-console's authErrorHandling.ts. Fires from contexts outside the
@@ -7,8 +7,8 @@ import { clearAdminSession } from './adminSession.ts'
  * query cache survives an invalid session.
  */
 export function handleAdminSessionExpired(): void {
-  clearAdminSession()
+  clearAdminSession();
   if (window.location.pathname !== '/dashboard/login') {
-    window.location.assign('/dashboard/login')
+    window.location.assign('/dashboard/login');
   }
 }

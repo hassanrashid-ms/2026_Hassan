@@ -1,26 +1,26 @@
-const STORAGE_KEY = 'support_admin_session'
+const STORAGE_KEY = 'support_admin_session';
 
 export type StoredAdminSession = {
-  token: string
-  agentId: string
-  displayName: string
-  isSuperAdmin: boolean
-}
+  token: string;
+  agentId: string;
+  displayName: string;
+  isSuperAdmin: boolean;
+};
 
 export function loadAdminSession(): StoredAdminSession | null {
-  const raw = localStorage.getItem(STORAGE_KEY)
-  if (!raw) return null
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) return null;
   try {
-    return JSON.parse(raw) as StoredAdminSession
+    return JSON.parse(raw) as StoredAdminSession;
   } catch {
-    return null
+    return null;
   }
 }
 
 export function saveAdminSession(session: StoredAdminSession): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(session))
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
 }
 
 export function clearAdminSession(): void {
-  localStorage.removeItem(STORAGE_KEY)
+  localStorage.removeItem(STORAGE_KEY);
 }

@@ -163,7 +163,7 @@ No such fixed string exists: the bot's ask is generated inside the model-written
 accompanies `offer_article`, and `messages.ts` only holds `HANDOFF_PLAYER_MESSAGE`.
 
 **Decision:** Add a new fixed `RESOLUTION_CHECK_MESSAGE` for the agent path; the bot path is
-unchanged and keeps phrasing its own ask. The player-facing *banner* is what is genuinely shared
+unchanged and keeps phrasing its own ask. The player-facing _banner_ is what is genuinely shared
 between the two paths, not the message text.
 See `docs/specs/2026-08-13-resolution-confirmation-design.md`.
 
@@ -177,7 +177,7 @@ See `docs/specs/2026-08-13-resolution-confirmation-design.md`.
 not the event.
 
 **Decision:** The outcome the spec wants is right, the mechanism it describes is not. The
-`agent_ask` Yes branch writes `resolution_source = 'agent'` on the `conversation` row *and*
+`agent_ask` Yes branch writes `resolution_source = 'agent'` on the `conversation` row _and_
 `source: 'agent'` in the event payload — reopen keys off the column, per contradiction 17.
 See `docs/specs/2026-08-13-resolution-confirmation-design.md`.
 
@@ -227,8 +227,8 @@ not in any response, not in the frozen SDK contract. Implemented in
 ### 19. The "same fixed string the bot's flow posts"
 
 **Conflict:** The spec says the agent-triggered ask reuses "the same string the bot's flow posts,"
-but there is no fixed "Did this solve it?" string in the shipped bot path. The bot's ask is *inside
-the model-written reply* that accompanies `offer_article`; `messages.ts` only holds
+but there is no fixed "Did this solve it?" string in the shipped bot path. The bot's ask is _inside
+the model-written reply_ that accompanies `offer_article`; `messages.ts` only holds
 `HANDOFF_PLAYER_MESSAGE` — there is nothing to be the same as.
 
 **Decision:** Add `RESOLUTION_CHECK_MESSAGE = 'Did this solve it?'` for the agent path only; the bot
@@ -247,7 +247,7 @@ genuinely shared between the two paths, not the copy. Implemented in
 the spec describes is right; the mechanism it names is not.
 
 **Decision:** The `agent_ask` Yes branch writes `resolution_source = 'agent'` on the `conversation`
-row *and* `source: 'agent'` in the `conversation_resolved` event payload — the column is what reopen
+row _and_ `source: 'agent'` in the `conversation_resolved` event payload — the column is what reopen
 actually reads, the event is the audit trail. Implemented in
 `backend/src/domain/conversations/resolutionAnswer.ts`. See
 `docs/plans/2026-08-13-resolution-confirmation-implementation.md`.
@@ -327,7 +327,7 @@ These have not been resolved. Do not silently pick a side — add a decision her
 ### 7. Player state: tab or panel?
 
 **Conflict:** The console wireframes show player state as a tab
-(`Conversation | Custom fields | Player state | Other issues`). The prose insists it is *not* a
+(`Conversation | Custom fields | Player state | Other issues`). The prose insists it is _not_ a
 tab: "putting it one click away reintroduces the problem in miniature." Two incompatible layouts
 for the same screen.
 
@@ -376,7 +376,7 @@ permission matrix explicitly allows Admin to delete an article.
 three turns, not after a failed answer." Yet a switchable "hand off after three unhelpful
 replies" rule ships on by default.
 
-**Likely compatible** — the locked rule covers *voluntarily asking* for a person; the
+**Likely compatible** — the locked rule covers _voluntarily asking_ for a person; the
 switchable rule is about bot failure to help. But the wording collides.
 
 ---
@@ -384,7 +384,7 @@ switchable rule is about bot failure to help. But the wording collides.
 ### 14. Article `summary` field — rejected, not missing
 
 **Conflict:** `project-overview.md` gives an article five fields and labels `Summary` as
-*"search + bot"*, and the editor wireframe renders it. The `article` table has `title`, `body`,
+_"search + bot"_, and the editor wireframe renders it. The `article` table has `title`, `body`,
 `keywords`, `intent_id`, `state` — no `summary`, and no slice plans one.
 
 **Decided 2026-08-12 — the field is not wanted.** A summary is a second copy of the answer that
@@ -393,14 +393,14 @@ the copy the bot reads. `keywords` covers the machine-reader case it was meant t
 indexed in Weaviate and boosted `^2` in the query, so the retrieval benefit arrives through
 ranking rather than through prompt tokens.
 
-`{{articles}}` therefore renders titles grouped by intent, not *"titles and summaries"*. See
+`{{articles}}` therefore renders titles grouped by intent, not _"titles and summaries"_. See
 `2026-08-11-bot-retrieval-and-prompt-assembly-design.md` §10.
 
 **Do not add it back on the strength of the wireframe.**
 
 ---
 
-### 15. Session as a *gate* vs. session as *attribution*
+### 15. Session as a _gate_ vs. session as _attribution_
 
 **Conflict:** The chat module treated `session_id` on `GET /surface/messages` as an authorisation
 gate — no session row, no thread — while the schema treats `event.session_id` as attribution data
@@ -411,7 +411,7 @@ the gate reading won.
 
 - **A session is never an authorisation gate.** Reads are scoped by the token's `player_id` under
   RLS. A session id that is unknown, foreign, or simply not uploaded yet is accepted and ignored,
-  never a 404. The Outbox makes "not uploaded yet" the *normal* early state, so gating on it fails
+  never a 404. The Outbox makes "not uploaded yet" the _normal_ early state, so gating on it fails
   exactly the players who most need the thread.
 - **A session is attribution, and attribution never blocks a write.** A client-supplied
   `session_id` is verified with a scoped `(id, player_id)` lookup — mandatory, because FK checks

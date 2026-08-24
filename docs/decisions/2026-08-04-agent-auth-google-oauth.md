@@ -13,19 +13,19 @@ organisation. **There are no passwords in the product.**
 
 `agent` therefore holds a Google identity, not a credential:
 
-| Column | Purpose |
-|---|---|
-| `email` (citext, unique) | The Google account address. Case-insensitive because Google addresses are. |
+| Column                                    | Purpose                                                                                                          |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `email` (citext, unique)                  | The Google account address. Case-insensitive because Google addresses are.                                       |
 | `google_subject` (text, unique, nullable) | The Google `sub` claim — the stable per-account identifier. Nullable only until a seeded row's first real login. |
-| `display_name` | From the Google profile, refreshed on login. |
-| `status` | `active` / `on_leave` / `deactivated`, unchanged. |
+| `display_name`                            | From the Google profile, refreshed on login.                                                                     |
+| `status`                                  | `active` / `on_leave` / `deactivated`, unchanged.                                                                |
 
 `password_hash` is **removed**. It never held a password and would have been a permanent trap: the
 seed wrote the literal string `set-me-when-agent-auth-ships` into a `NOT NULL` column.
 
 ## Why the domain check is separate from the OAuth check
 
-OAuth proves *who* someone is. It does not prove *where they work*. Any Google account can complete
+OAuth proves _who_ someone is. It does not prove _where they work_. Any Google account can complete
 an OAuth flow against our client id, so without an explicit organisation check, `anyone@gmail.com`
 would authenticate successfully and — depending on the handler — could be upserted as an agent.
 
@@ -33,7 +33,7 @@ The check must be **server-side, on every login**, against the token's verified 
 not be:
 
 - a client-side filter (trivially bypassed — the browser is not a trust boundary),
-- the `hd` parameter on the authorisation request (a *hint* to Google's account chooser, not an
+- the `hd` parameter on the authorisation request (a _hint_ to Google's account chooser, not an
   enforcement; the returned token still needs verifying),
 - inferred from the email string's suffix alone, without validating the token's issuer and audience
   first.

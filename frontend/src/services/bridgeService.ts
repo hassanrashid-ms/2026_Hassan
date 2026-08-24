@@ -27,11 +27,11 @@ export type BridgeMessage =
    * load-bearing: dropping it does not degrade the experience, it hides the
    * surface until the SDK's grace timer gives up.
    */
-  | { type: 'surface_ready' }
+  | { type: 'surface_ready' };
 
 declare global {
   interface Window {
-    SupportBridge?: { post(message: unknown): void }
+    SupportBridge?: { post(message: unknown): void };
   }
 }
 
@@ -44,15 +44,15 @@ declare global {
  * mode, not an error — log and carry on.
  */
 export function post(message: BridgeMessage): void {
-  const bridge = window.SupportBridge
+  const bridge = window.SupportBridge;
   if (!bridge) {
-    console.warn('[surface] no SupportBridge on this platform; would have posted', message)
-    return
+    console.warn('[surface] no SupportBridge on this platform; would have posted', message);
+    return;
   }
   try {
-    bridge.post(message)
+    bridge.post(message);
   } catch (error) {
-    console.error('[surface] bridge post failed', error)
+    console.error('[surface] bridge post failed', error);
   }
 }
 
@@ -66,23 +66,23 @@ export function post(message: BridgeMessage): void {
  */
 export function onBridgeReady(callback: () => void): () => void {
   if (window.SupportBridge) {
-    callback()
-    return () => {}
+    callback();
+    return () => {};
   }
 
-  let done = false
+  let done = false;
   const once = () => {
-    if (done) return
-    done = true
-    unsubscribe()
-    callback()
-  }
+    if (done) return;
+    done = true;
+    unsubscribe();
+    callback();
+  };
   const unsubscribe = () => {
-    window.removeEventListener('supportbridgeready', once)
-    document.removeEventListener('supportbridgeready', once)
-  }
+    window.removeEventListener('supportbridgeready', once);
+    document.removeEventListener('supportbridgeready', once);
+  };
 
-  window.addEventListener('supportbridgeready', once)
-  document.addEventListener('supportbridgeready', once)
-  return unsubscribe
+  window.addEventListener('supportbridgeready', once);
+  document.addEventListener('supportbridgeready', once);
+  return unsubscribe;
 }

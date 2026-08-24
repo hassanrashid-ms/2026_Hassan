@@ -1,18 +1,25 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { EllipsisVertical } from 'lucide-react'
-import { archiveForm, fetchForms } from '../../../api/agentApi.ts'
-import { isAdmin, type StoredAgentSession } from '../../../lib/agentSession.ts'
-import { formStatusLabel, formStatusVariant } from '../formForm.ts'
-import { Badge } from '../../../components/ui/badge.tsx'
-import { Button } from '../../../components/ui/button.tsx'
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { EllipsisVertical } from 'lucide-react';
+import { archiveForm, fetchForms } from '../../../api/agentApi.ts';
+import { isAdmin, type StoredAgentSession } from '../../../lib/agentSession.ts';
+import { formStatusLabel, formStatusVariant } from '../formForm.ts';
+import { Badge } from '../../../components/ui/badge.tsx';
+import { Button } from '../../../components/ui/button.tsx';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '../../../components/ui/dropdown-menu.tsx'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../components/ui/table.tsx'
-import { cn } from '../../../lib/cn.ts'
+} from '../../../components/ui/dropdown-menu.tsx';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '../../../components/ui/table.tsx';
+import { cn } from '../../../lib/cn.ts';
 
 export function FormTable({
   token,
@@ -21,21 +28,21 @@ export function FormTable({
   onSelect,
   onNew,
 }: {
-  token: string
-  session: StoredAgentSession
-  selectedId: string | null
-  onSelect: (id: string) => void
-  onNew: () => void
+  token: string;
+  session: StoredAgentSession;
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  onNew: () => void;
 }) {
-  const queryClient = useQueryClient()
-  const forms = useQuery({ queryKey: ['admin-forms'], queryFn: () => fetchForms(token) })
-  const canArchive = isAdmin(session)
+  const queryClient = useQueryClient();
+  const forms = useQuery({ queryKey: ['admin-forms'], queryFn: () => fetchForms(token) });
+  const canArchive = isAdmin(session);
 
   const onArchive = async (id: string) => {
-    await archiveForm(token, id)
-    void queryClient.invalidateQueries({ queryKey: ['admin-forms'] })
-    void queryClient.invalidateQueries({ queryKey: ['admin-form', id] })
-  }
+    await archiveForm(token, id);
+    void queryClient.invalidateQueries({ queryKey: ['admin-forms'] });
+    void queryClient.invalidateQueries({ queryKey: ['admin-form', id] });
+  };
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -66,7 +73,8 @@ export function FormTable({
                 <TableCell>
                   {form.mappedSubintentCount > 0 ? (
                     <Badge variant="secondary">
-                      {form.mappedSubintentCount} subintent{form.mappedSubintentCount === 1 ? '' : 's'}
+                      {form.mappedSubintentCount} subintent
+                      {form.mappedSubintentCount === 1 ? '' : 's'}
                     </Badge>
                   ) : (
                     <span className="text-xs text-muted">Not shown</span>
@@ -79,12 +87,19 @@ export function FormTable({
                   {canArchive && form.archivedAt === null && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button type="button" variant="ghost" size="icon" aria-label={`Actions for ${form.name}`}>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Actions for ${form.name}`}
+                        >
                           <EllipsisVertical className="size-4" />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => void onArchive(form.id)}>Archive</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => void onArchive(form.id)}>
+                          Archive
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   )}
@@ -95,5 +110,5 @@ export function FormTable({
         </Table>
       </div>
     </div>
-  )
+  );
 }

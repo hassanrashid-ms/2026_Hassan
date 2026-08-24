@@ -1,18 +1,18 @@
-import type { Tx } from '../db/withWorkspace.ts'
-import { event } from '../db/schema/index.ts'
+import type { Tx } from '../db/withWorkspace.ts';
+import { event } from '../db/schema/index.ts';
 
-export type EventActorType = 'player' | 'agent' | 'bot' | 'system'
+export type EventActorType = 'player' | 'agent' | 'bot' | 'system';
 
 export type EventInput = {
-  workspaceId: string
-  type: string
-  conversationId?: string | null
-  sessionId?: string | null
-  actorId?: string | null
-  actorType: EventActorType
-  payload?: Record<string, unknown>
-  occurredAt?: Date
-}
+  workspaceId: string;
+  type: string;
+  conversationId?: string | null;
+  sessionId?: string | null;
+  actorId?: string | null;
+  actorType: EventActorType;
+  payload?: Record<string, unknown>;
+  occurredAt?: Date;
+};
 
 /**
  * Events are a projection, not the source of truth — every state change writes both
@@ -37,5 +37,5 @@ export async function appendEvent(tx: Tx, input: EventInput): Promise<void> {
     actorType: input.actorType,
     payload: input.payload ?? {},
     ...(input.occurredAt ? { occurredAt: input.occurredAt } : {}),
-  })
+  });
 }

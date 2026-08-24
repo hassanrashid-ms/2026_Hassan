@@ -1,19 +1,19 @@
-import { and, eq, isNull, lt } from 'drizzle-orm'
-import { conversation, formSubmission, workspace } from '../db/schema/index.ts'
-import { withWorkspace, withoutWorkspace } from '../db/withWorkspace.ts'
-import { completeFormAndHandoff, emitFormTerminated } from '../../domain/forms/index.ts'
-import { logger } from '../logging/logger.ts'
+import { and, eq, isNull, lt } from 'drizzle-orm';
+import { conversation, formSubmission, workspace } from '../db/schema/index.ts';
+import { withWorkspace, withoutWorkspace } from '../db/withWorkspace.ts';
+import { completeFormAndHandoff, emitFormTerminated } from '../../domain/forms/index.ts';
+import { logger } from '../logging/logger.ts';
 
 /**
  * Far longer than any plausible fill time, far shorter than a support SLA. A
  * constant in one file, tunable without a schema change.
  */
-export const FORM_TIMEOUT_MINUTES = 30
+export const FORM_TIMEOUT_MINUTES = 30;
 
 export type SweepAbandonedFormsOptions = {
-  now?: Date
-  timeoutMinutes?: number
-}
+  now?: Date;
+  timeoutMinutes?: number;
+};
 
 /**
  * Gating the status transition creates a failure mode that does not exist
@@ -32,16 +32,18 @@ export type SweepAbandonedFormsOptions = {
  * single bad row must not roll back and strand every other player in the
  * workspace.
  */
-export async function sweepAbandonedForms(options: SweepAbandonedFormsOptions = {}): Promise<number> {
-  const now = options.now ?? new Date()
-  const timeoutMinutes = options.timeoutMinutes ?? FORM_TIMEOUT_MINUTES
-  const cutoff = new Date(now.getTime() - timeoutMinutes * 60_000)
+export async function sweepAbandonedForms(
+  options: SweepAbandonedFormsOptions = {},
+): Promise<number> {
+  const now = options.now ?? new Date();
+  const timeoutMinutes = options.timeoutMinutes ?? FORM_TIMEOUT_MINUTES;
+  const cutoff = new Date(now.getTime() - timeoutMinutes * 60_000);
 
   const workspaces = await withoutWorkspace(async (tx) =>
     tx.select({ id: workspace.id }).from(workspace).where(isNull(workspace.disabledAt)),
-  )
+  );
 
-  let terminated = 0
+  let terminated = 0;
   for (const ws of workspaces) {
     const stale = await withWorkspace(ws.id, async (tx) =>
       tx
@@ -55,7 +57,7 @@ export async function sweepAbandonedForms(options: SweepAbandonedFormsOptions = 
             eq(conversation.confirmPhase, 'form'),
           ),
         ),
-    )
+    );
 
     for (const row of stale) {
       try {
@@ -74,12 +76,12 @@ export async function sweepAbandonedForms(options: SweepAbandonedFormsOptions = 
             },
             'timeout',
           ),
-        )
+        );
         // null means the player terminated it between the select and here. Not
         // an error — the ticket reached the queue either way.
-        if (!result) continue
-        terminated += 1
-        emitFormTerminated(ws.id, result)
+        if (!result) continue;
+        terminated += 1;
+        emitFormTerminated(ws.id, result);
       } catch (error) {
         // One stranded conversation must not strand the rest. Until real
         // alerting exists, this log is the alert.
@@ -87,10 +89,10 @@ export async function sweepAbandonedForms(options: SweepAbandonedFormsOptions = 
           workspaceId: ws.id,
           conversationId: row.conversationId,
           error: error instanceof Error ? `${error.name} ${error.message}` : String(error),
-        })
+        });
       }
     }
   }
 
-  return terminated
+  return terminated;
 }

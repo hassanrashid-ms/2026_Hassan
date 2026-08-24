@@ -1,14 +1,14 @@
-import { and, desc, eq, isNotNull, isNull } from 'drizzle-orm'
-import type { FormField } from '@support/types'
-import { form, formVersion, subintent } from '../../shared/db/schema/index.ts'
-import type { Tx } from '../../shared/db/withWorkspace.ts'
+import { and, desc, eq, isNotNull, isNull } from 'drizzle-orm';
+import type { FormField } from '@support/types';
+import { form, formVersion, subintent } from '../../shared/db/schema/index.ts';
+import type { Tx } from '../../shared/db/withWorkspace.ts';
 
 export type ResolvedForm = {
-  formId: string
-  formName: string
-  version: number
-  fields: FormField[]
-}
+  formId: string;
+  formName: string;
+  version: number;
+  fields: FormField[];
+};
 
 /**
  * Does this subintent show a form, and if so which version?
@@ -32,7 +32,10 @@ export type ResolvedForm = {
  * Scoping is the caller's transaction: `tx` comes from `withWorkspace`, so RLS
  * already restricts every table below to one workspace.
  */
-export async function resolveSubintentForm(tx: Tx, subintentId: string): Promise<ResolvedForm | null> {
+export async function resolveSubintentForm(
+  tx: Tx,
+  subintentId: string,
+): Promise<ResolvedForm | null> {
   const [row] = await tx
     .select({
       formId: form.id,
@@ -45,11 +48,17 @@ export async function resolveSubintentForm(tx: Tx, subintentId: string): Promise
     // matches nothing, so it needs no separate branch.
     .innerJoin(form, eq(form.id, subintent.formId))
     .innerJoin(formVersion, eq(formVersion.formId, form.id))
-    .where(and(eq(subintent.id, subintentId), isNull(form.archivedAt), isNotNull(formVersion.publishedAt)))
+    .where(
+      and(
+        eq(subintent.id, subintentId),
+        isNull(form.archivedAt),
+        isNotNull(formVersion.publishedAt),
+      ),
+    )
     .orderBy(desc(formVersion.version))
-    .limit(1)
+    .limit(1);
 
-  if (!row) return null
+  if (!row) return null;
 
   return {
     formId: row.formId,
@@ -59,5 +68,5 @@ export async function resolveSubintentForm(tx: Tx, subintentId: string): Promise
     // order the card and the agent rail both read, and slice 2 snapshots it into
     // event payloads. One sort site beats three callers each remembering to.
     fields: [...row.fields].sort((a, b) => a.position - b.position),
-  }
+  };
 }

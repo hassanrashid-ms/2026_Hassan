@@ -77,26 +77,31 @@ Deleted at the end of this plan: `pages/AgentInbox.tsx`, `pages/AgentConversatio
 ### Task 1: Foundation — dependencies, shadcn config, scoped CSS, cn utility
 
 **Files:**
+
 - Create: `frontend/agent-console-components.json`
 - Create: `frontend/src/agent-console.css`
 - Create: `frontend/src/surfaces/agent-console/lib/cn.ts`
 - Modify: `frontend/package.json` (add dependencies)
 
 **Interfaces:**
+
 - Produces: `cn(...inputs: ClassValue[]): string` from `frontend/src/surfaces/agent-console/lib/cn.ts` — every later component imports this, not the webview's `cn`.
 - Produces: `agent-console.css` importable via `import '@/agent-console.css'` — consumed by Task 4's shell.
 
 - [ ] **Step 1: Add new dependencies**
 
 Run:
+
 ```bash
 cd frontend && pnpm add @radix-ui/react-select @radix-ui/react-avatar @radix-ui/react-dropdown-menu @radix-ui/react-separator @mdxeditor/editor
 ```
 
 `@radix-ui/react-tabs`, `@radix-ui/react-dialog`, `@radix-ui/react-scroll-area` are already present (webview already ships `tabs`, `dialog`/`sheet`, `scroll-area`) — confirm with:
+
 ```bash
 grep -E '"@radix-ui/react-(tabs|dialog|scroll-area)"' frontend/package.json
 ```
+
 Expected: all three present. If any is missing, add it with `pnpm add @radix-ui/react-<name>`.
 
 - [ ] **Step 2: Create the agent-console shadcn config**
@@ -144,18 +149,18 @@ Create `frontend/src/agent-console.css`:
  * surface even though it never asks for it.
  */
 
-@import "tailwindcss";
+@import 'tailwindcss';
 
 @theme {
-  --color-bg:          #ffffff;
-  --color-surface:     #f8fafc;  /* slate-50, agent-console's neutral card background */
-  --color-accent:      #475569;  /* slate-600, primary */
-  --color-accent-deep: #1e293b;  /* slate-800 */
-  --color-accent-soft: #f1f5f9;  /* slate-100, selected row / active tab background */
-  --color-accent-fg:   #ffffff;
-  --color-text:        #0f172a;  /* slate-900 */
-  --color-muted:       #64748b;  /* slate-500 */
-  --radius-card:       0.75rem;
+  --color-bg: #ffffff;
+  --color-surface: #f8fafc; /* slate-50, agent-console's neutral card background */
+  --color-accent: #475569; /* slate-600, primary */
+  --color-accent-deep: #1e293b; /* slate-800 */
+  --color-accent-soft: #f1f5f9; /* slate-100, selected row / active tab background */
+  --color-accent-fg: #ffffff;
+  --color-text: #0f172a; /* slate-900 */
+  --color-muted: #64748b; /* slate-500 */
+  --radius-card: 0.75rem;
 }
 
 body {
@@ -177,13 +182,13 @@ body {
 Create `frontend/src/surfaces/agent-console/lib/cn.ts`:
 
 ```typescript
-import { clsx, type ClassValue } from 'clsx'
-import { twMerge } from 'tailwind-merge'
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
 
 /** shadcn's class merger. Lives inside the agent-console surface, not shared
  *  lib/ or the webview's copy, so each surface's Tailwind config stays isolated. */
 export function cn(...inputs: ClassValue[]): string {
-  return twMerge(clsx(inputs))
+  return twMerge(clsx(inputs));
 }
 ```
 
@@ -204,6 +209,7 @@ git commit -m "feat(agent-console): add Tailwind v4 + shadcn foundation for reva
 ### Task 2: shadcn primitives — button, input, textarea, badge, card, separator, avatar
 
 **Files:**
+
 - Create: `frontend/src/surfaces/agent-console/components/ui/button.tsx`
 - Create: `frontend/src/surfaces/agent-console/components/ui/input.tsx`
 - Create: `frontend/src/surfaces/agent-console/components/ui/textarea.tsx`
@@ -213,6 +219,7 @@ git commit -m "feat(agent-console): add Tailwind v4 + shadcn foundation for reva
 - Create: `frontend/src/surfaces/agent-console/components/ui/avatar.tsx`
 
 **Interfaces:**
+
 - Consumes: `cn` from `../../lib/cn.ts` (Task 1).
 - Produces: `Button`, `buttonVariants`, `Input`, `Textarea`, `Badge`, `badgeVariants`, `Card`/`CardHeader`/`CardTitle`/`CardDescription`/`CardContent`/`CardFooter`, `Separator`, `Avatar`/`AvatarImage`/`AvatarFallback` — consumed by every page task below.
 
@@ -452,6 +459,7 @@ git commit -m "feat(agent-console): add button/input/textarea/badge/card/separat
 ### Task 3: shadcn primitives — tabs, sheet, dialog, table, scroll-area, select, dropdown-menu
 
 **Files:**
+
 - Create: `frontend/src/surfaces/agent-console/components/ui/tabs.tsx`
 - Create: `frontend/src/surfaces/agent-console/components/ui/sheet.tsx`
 - Create: `frontend/src/surfaces/agent-console/components/ui/dialog.tsx`
@@ -461,6 +469,7 @@ git commit -m "feat(agent-console): add button/input/textarea/badge/card/separat
 - Create: `frontend/src/surfaces/agent-console/components/ui/dropdown-menu.tsx`
 
 **Interfaces:**
+
 - Consumes: `cn` from `../../lib/cn.ts` (Task 1).
 - Produces: `Tabs`/`TabsList`/`TabsTrigger`/`TabsContent`, `Sheet` family, `Dialog` family, `Table` family, `ScrollArea`, `Select` family, `DropdownMenu` family — consumed by Task 6 (ThreadPanel tabs), Task 7 (Inbox tabs), Task 10 (ArticleEditorSheet), Task 9 (ArticleTable).
 
@@ -921,10 +930,12 @@ git commit -m "feat(agent-console): add tabs/sheet/dialog/table/scroll-area/sele
 ### Task 4: AgentConsoleShell + routing
 
 **Files:**
+
 - Create: `frontend/src/surfaces/agent-console/components/AgentConsoleShell.tsx`
 - Modify: `frontend/src/routes/AppRoutes.tsx`
 
 **Interfaces:**
+
 - Consumes: `loadAgentSession`, `clearAgentSession` from `../lib/agentSession.ts`; `Button`, `Avatar`/`AvatarFallback`, `Separator` from `./ui/*`.
 - Produces: `AgentConsoleShell` — a layout route rendered via `<Outlet />`, redirects to `/login` if no session, renders left nav (Inbox, Knowledge Base) + topbar (agent name, logout).
 
@@ -1115,6 +1126,7 @@ Note: `Inbox` renders for both `/inbox` and `/inbox/:conversationId` (Task 7 rea
 Since `Inbox.tsx` and `KnowledgeBase.tsx` don't exist until Tasks 7 and 11, this task cannot fully typecheck in isolation. Create temporary placeholder stubs so Task 4 is independently testable, to be overwritten by Tasks 7 and 11:
 
 Create `frontend/src/surfaces/agent-console/pages/Inbox/Inbox.tsx`:
+
 ```typescript
 export function Inbox() {
   return <div className="p-4 text-sm text-muted">Inbox placeholder</div>
@@ -1122,6 +1134,7 @@ export function Inbox() {
 ```
 
 Create `frontend/src/surfaces/agent-console/pages/KnowledgeBase/KnowledgeBase.tsx`:
+
 ```typescript
 export function KnowledgeBase() {
   return <div className="p-4 text-sm text-muted">Knowledge Base placeholder</div>
@@ -1134,6 +1147,7 @@ Expected: no errors.
 - [ ] **Step 4: Manual verification**
 
 Run: `pnpm dev` (from repo root, per README) and in a browser:
+
 1. Go to `/login`, pick a dev agent.
 2. Confirm redirect to `/inbox` renders the shell (left nav with Inbox/Knowledge Base, topbar with your name and Log out) around the "Inbox placeholder" text.
 3. Click "Knowledge Base" nav item, confirm URL becomes `/articles` and shows "Knowledge Base placeholder".
@@ -1151,11 +1165,13 @@ git commit -m "feat(agent-console): add AgentConsoleShell layout and merged inbo
 ### Task 5: ConversationRow + ConversationList
 
 **Files:**
+
 - Create: `frontend/src/surfaces/agent-console/pages/Inbox/components/ConversationRow.tsx`
 - Create: `frontend/src/surfaces/agent-console/pages/Inbox/components/ConversationList.tsx`
 - Create: `frontend/src/surfaces/agent-console/pages/Inbox/components/ConversationList.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `fetchInbox`, `claimConversation` from `../../../api/agentApi.ts`; `AgentConversationSummary`, `ConversationStatusValue` from `@support/types`; `Tabs`/`TabsList`/`TabsTrigger`/`TabsContent`, `Badge`, `ScrollArea`, `Button` from `../../../components/ui/*`.
 - Produces: `ConversationList({ token, selectedId, onSelect }: { token: string; selectedId: string | null; onSelect: (id: string) => void })` — consumed by Task 7's `Inbox.tsx`.
 - Produces: `ConversationRow({ conversation, selected, onSelect, onClaim, claiming }: { conversation: AgentConversationSummary; selected: boolean; onSelect: () => void; onClaim?: () => void; claiming?: boolean })`.
@@ -1425,9 +1441,11 @@ git commit -m "feat(agent-console): add ConversationList/ConversationRow with cl
 ### Task 6: ThreadPanel
 
 **Files:**
+
 - Create: `frontend/src/surfaces/agent-console/pages/Inbox/components/ThreadPanel.tsx`
 
 **Interfaces:**
+
 - Consumes: `fetchConversationMessages`, `markAgentMessagesRead`, `sendAgentMessage` from `../../../api/agentApi.ts`; `createSocket` from `../../../../../features/chat/api/socket.ts`; `ChatThread`, `Composer` from `../../../../../features/chat/components/*`; `ChatMessage` type from same; `AgentMessageView`, `ConversationStatusValue` from `@support/types`; `Badge` from `../../../components/ui/badge.tsx`; `STATUS_BADGE_VARIANT` from `./ConversationRow.tsx`.
 - Produces: `ThreadPanel({ token, conversationId, playerExternalId, status, onBack }: { token: string; conversationId: string | null; playerExternalId?: string; status?: ConversationStatusValue; onBack?: () => void })` — consumed by Task 7's `Inbox.tsx`. Renders an empty state when `conversationId` is `null`.
 
@@ -1555,9 +1573,11 @@ git commit -m "feat(agent-console): add ThreadPanel with chat/socket logic moved
 ### Task 7: Inbox.tsx page (merged split view)
 
 **Files:**
+
 - Create: `frontend/src/surfaces/agent-console/pages/Inbox/Inbox.tsx` (overwrites Task 4's placeholder)
 
 **Interfaces:**
+
 - Consumes: `ConversationList` (Task 5), `ThreadPanel` (Task 6), `loadAgentSession` from `../../lib/agentSession.ts`, `fetchInbox` from `../../api/agentApi.ts` (to look up the selected conversation's player id/status for `ThreadPanel`'s header).
 - Produces: route element for `/inbox` and `/inbox/:conversationId`.
 
@@ -1633,6 +1653,7 @@ Expected: no errors.
 - [ ] **Step 3: Manual verification**
 
 Run `pnpm dev`, log in, on `/inbox`:
+
 1. Confirm the list shows in the left rail with Unassigned/Mine tabs.
 2. Click a conversation row, confirm URL becomes `/inbox/<id>` and the thread renders on the right with header (player id + status badge), messages, and composer.
 3. Narrow the browser window below `md` (768px): confirm the list disappears and the thread takes the full width with a working back button that returns to the list.
@@ -1650,9 +1671,11 @@ git commit -m "feat(agent-console): implement merged Inbox split view"
 ### Task 8: CategorySidebar
 
 **Files:**
+
 - Create: `frontend/src/surfaces/agent-console/pages/KnowledgeBase/components/CategorySidebar.tsx`
 
 **Interfaces:**
+
 - Consumes: `fetchIntents`, `createIntent`, `createSubintent` from `../../../api/agentApi.ts`; `IntentsResponse` from `@support/types`; `Input`, `Button` from `../../../components/ui/*`.
 - Produces: `CategorySidebar({ token }: { token: string })` — consumed by Task 11's `KnowledgeBase.tsx`. Same data/behavior as today's intents tree in `AdminArticles.tsx`.
 
@@ -1735,9 +1758,11 @@ git commit -m "feat(agent-console): add CategorySidebar for Knowledge Base"
 ### Task 9: ArticleTable
 
 **Files:**
+
 - Create: `frontend/src/surfaces/agent-console/pages/KnowledgeBase/components/ArticleTable.tsx`
 
 **Interfaces:**
+
 - Consumes: `fetchArticles` from `../../../api/agentApi.ts`; `AgentArticleSummary` from `@support/types`; `Table`/`TableHeader`/`TableBody`/`TableRow`/`TableHead`/`TableCell`, `Badge`, `Button` from `../../../components/ui/*`.
 - Produces: `ArticleTable({ token, selectedId, onSelect, onNew }: { token: string; selectedId: string | null; onSelect: (id: string) => void; onNew: () => void })` — consumed by Task 11's `KnowledgeBase.tsx`.
 
@@ -1829,10 +1854,12 @@ git commit -m "feat(agent-console): add ArticleTable for Knowledge Base"
 ### Task 10: ArticleEditorSheet with MDXEditor
 
 **Files:**
+
 - Create: `frontend/src/surfaces/agent-console/pages/KnowledgeBase/components/ArticleEditorSheet.tsx`
 - Create: `frontend/src/surfaces/agent-console/pages/KnowledgeBase/components/ArticleEditorSheet.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `fetchArticle`, `createArticle`, `updateArticle`, `publishArticle`, `archiveArticle`, `fetchIntents` from `../../../api/agentApi.ts`; `canEditFields`, `canPublish`, `parseKeywordsInput` from `../articleForm.ts` (Task 11 moves this file first — see note below); `Sheet`/`SheetContent`/`SheetHeader`/`SheetTitle`/`SheetFooter`, `Input`, `Select`/`SelectTrigger`/`SelectValue`/`SelectContent`/`SelectItem`, `Button` from `../../../components/ui/*`; MDXEditor's `MDXEditor`, `headingsPlugin`, `listsPlugin`, `linkPlugin`, `quotePlugin`, `codeBlockPlugin`, `toolbarPlugin`, `BoldItalicUnderlineToggles`, `ListsToggle`, `BlockTypeSelect`, `CreateLink`, `InsertCodeBlock` from `@mdxeditor/editor`.
 - Produces: `ArticleEditorSheet({ token, articleId, open, onOpenChange, onCreated }: { token: string; articleId: string | null; open: boolean; onOpenChange: (open: boolean) => void; onCreated: (id: string) => void })` — consumed by Task 11's `KnowledgeBase.tsx`. `articleId === null` means "new article" mode.
 
@@ -2154,11 +2181,13 @@ git commit -m "feat(agent-console): add ArticleEditorSheet with MDXEditor and ro
 ### Task 11: KnowledgeBase.tsx page + move articleForm
 
 **Files:**
+
 - Move: `frontend/src/surfaces/agent-console/pages/articleForm.ts` → `frontend/src/surfaces/agent-console/pages/KnowledgeBase/articleForm.ts`
 - Move: `frontend/src/surfaces/agent-console/pages/articleForm.test.ts` → `frontend/src/surfaces/agent-console/pages/KnowledgeBase/articleForm.test.ts`
 - Create: `frontend/src/surfaces/agent-console/pages/KnowledgeBase/KnowledgeBase.tsx` (overwrites Task 4's placeholder)
 
 **Interfaces:**
+
 - Consumes: `CategorySidebar` (Task 8), `ArticleTable` (Task 9), `ArticleEditorSheet` (Task 10), `loadAgentSession` from `../../lib/agentSession.ts`.
 - Produces: route element for `/articles`.
 
@@ -2237,6 +2266,7 @@ Expected: no errors.
 - [ ] **Step 5: Manual verification**
 
 Run `pnpm dev`, navigate to `/articles`:
+
 1. Confirm the category tree renders in the left sidebar, and "Add Category" works.
 2. Confirm the article table lists title/state/updated date.
 3. Click "+ New", confirm the Sheet slides in from the right with empty fields and the MDXEditor toolbar.
@@ -2256,6 +2286,7 @@ git commit -m "feat(agent-console): implement Knowledge Base page, move articleF
 ### Task 12: Delete superseded files
 
 **Files:**
+
 - Delete: `frontend/src/surfaces/agent-console/pages/AgentInbox.tsx`
 - Delete: `frontend/src/surfaces/agent-console/pages/AgentConversation.tsx`
 - Delete: `frontend/src/surfaces/agent-console/pages/AdminArticles.tsx`
@@ -2265,9 +2296,11 @@ git commit -m "feat(agent-console): implement Knowledge Base page, move articleF
 - [ ] **Step 1: Confirm nothing else references the old files**
 
 Run:
+
 ```bash
 grep -rn "AgentInbox\|AgentConversation\|AdminArticles" frontend/src --include='*.ts' --include='*.tsx'
 ```
+
 Expected: no matches outside the three files themselves (Task 4's `AppRoutes.tsx` rewrite already removed their imports).
 
 - [ ] **Step 2: Delete the files**
@@ -2279,10 +2312,12 @@ git rm frontend/src/surfaces/agent-console/pages/AgentInbox.tsx frontend/src/sur
 - [ ] **Step 3: Full verification pass**
 
 Run, from repo root:
+
 ```bash
 pnpm typecheck
 pnpm --filter <frontend-package-name> test  # or `cd frontend && pnpm test`, matching whatever `pnpm test` resolves to for this workspace
 ```
+
 Expected: typecheck clean; all frontend tests pass, including `articleForm.test.ts`, `ConversationList.test.tsx`, `ArticleEditorSheet.test.tsx`, and pre-existing suites (`chatReconcile.test.ts`, `articleSearch.test.ts`) untouched by this plan.
 
 - [ ] **Step 4: Manual smoke test of the full flow**

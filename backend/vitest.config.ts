@@ -1,7 +1,7 @@
-import { fileURLToPath } from 'node:url'
-import { dirname, resolve } from 'node:path'
-import { config as loadDotenv } from 'dotenv'
-import { defineConfig } from 'vitest/config'
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
+import { config as loadDotenv } from 'dotenv';
+import { defineConfig } from 'vitest/config';
 
 // Loaded at the top level of the config file (main process), not inside globalSetup or a
 // test file, so it runs exactly once and vitest forwards the mutated process.env to worker
@@ -12,8 +12,8 @@ import { defineConfig } from 'vitest/config'
 // package, not in `backend/`. `pnpm --filter @support/api test` sets cwd to `backend/`, so a
 // plain relative path here would silently miss the file — resolve from this file's own
 // location instead of trusting cwd.
-const here = dirname(fileURLToPath(import.meta.url))
-loadDotenv({ path: resolve(here, '../.env.test') })
+const here = dirname(fileURLToPath(import.meta.url));
+loadDotenv({ path: resolve(here, '../.env.test') });
 
 export default defineConfig({
   test: {
@@ -33,4 +33,4 @@ export default defineConfig({
     hookTimeout: 60_000,
     testTimeout: 20_000,
   },
-})
+});

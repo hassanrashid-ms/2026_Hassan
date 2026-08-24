@@ -2,8 +2,8 @@
 
 ## Why
 
-The product spec calls this concept a "label": *"a flat marker an agent or rule attaches to a
-ticket. Unlike a subintent, a ticket can carry many."* It's referenced in the queue and
+The product spec calls this concept a "label": _"a flat marker an agent or rule attaches to a
+ticket. Unlike a subintent, a ticket can carry many."_ It's referenced in the queue and
 conversation-view mockups but never built — `conversations.ts` even carries a comment noting
 `labels` will arrive "once the taxonomy tables exist." This spec builds it, calling it **tags**
 (the two terms name the same feature; this doc uses "tag" throughout).
@@ -23,7 +23,7 @@ already follow (`archivedAt`, never a row deletion).
 So "delete" here means **archive**, exactly like intent/subintent:
 
 - An archived tag disappears from the create/search picker for new attachments.
-- It is *not* stripped off conversations that already carry it — the badge keeps rendering, same
+- It is _not_ stripped off conversations that already carry it — the badge keeps rendering, same
   as an archived subintent stays visible on the tickets that already had it.
 - Typing the same name again un-archives it instead of creating a duplicate, so from the agent's
   seat it still feels like "delete, then just make it again if you need it" — the simplicity you
@@ -38,39 +38,49 @@ New file `backend/src/shared/db/schema/tags.ts`, same shape and conventions as
 `taxonomy.ts` (composite FKs for tenancy, per docs/decisions/2026-08-04-composite-foreign-keys-for-tenancy.md).
 
 ```ts
-export const tag = pgTable('tag', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  workspaceId: uuid('workspace_id').notNull().references(() => workspace.id, { onDelete: 'restrict' }),
-  name: text('name').notNull(),               // as typed, for display
-  normalizedName: text('normalized_name').notNull(), // trim + lowercase, for dedup/lookup
-  colorIndex: integer('color_index').notNull(), // 0..N-1 into the fixed palette, set once at creation
-  archivedAt: timestamp('archived_at', tz),
-  createdAt: timestamp('created_at', tz).notNull().defaultNow(),
-}, (t) => [
-  uniqueIndex('tag_workspace_normalized_name_uk').on(t.workspaceId, t.normalizedName),
-  unique('tag_workspace_id_uk').on(t.workspaceId, t.id), // composite-FK parent key
-])
+export const tag = pgTable(
+  'tag',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspace.id, { onDelete: 'restrict' }),
+    name: text('name').notNull(), // as typed, for display
+    normalizedName: text('normalized_name').notNull(), // trim + lowercase, for dedup/lookup
+    colorIndex: integer('color_index').notNull(), // 0..N-1 into the fixed palette, set once at creation
+    archivedAt: timestamp('archived_at', tz),
+    createdAt: timestamp('created_at', tz).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('tag_workspace_normalized_name_uk').on(t.workspaceId, t.normalizedName),
+    unique('tag_workspace_id_uk').on(t.workspaceId, t.id), // composite-FK parent key
+  ],
+);
 
-export const conversationTag = pgTable('conversation_tag', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  workspaceId: uuid('workspace_id').notNull(),
-  conversationId: uuid('conversation_id').notNull(),
-  tagId: uuid('tag_id').notNull(),
-  createdAt: timestamp('created_at', tz).notNull().defaultNow(),
-  removedAt: timestamp('removed_at', tz), // null = currently attached
-}, (t) => [
-  uniqueIndex('conversation_tag_pair_uk').on(t.conversationId, t.tagId), // one row per pair, ever
-  foreignKey({
-    name: 'conversation_tag_conversation_fk',
-    columns: [t.workspaceId, t.conversationId],
-    foreignColumns: [conversation.workspaceId, conversation.id],
-  }).onDelete('restrict'),
-  foreignKey({
-    name: 'conversation_tag_tag_fk',
-    columns: [t.workspaceId, t.tagId],
-    foreignColumns: [tag.workspaceId, tag.id],
-  }).onDelete('restrict'),
-])
+export const conversationTag = pgTable(
+  'conversation_tag',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id').notNull(),
+    conversationId: uuid('conversation_id').notNull(),
+    tagId: uuid('tag_id').notNull(),
+    createdAt: timestamp('created_at', tz).notNull().defaultNow(),
+    removedAt: timestamp('removed_at', tz), // null = currently attached
+  },
+  (t) => [
+    uniqueIndex('conversation_tag_pair_uk').on(t.conversationId, t.tagId), // one row per pair, ever
+    foreignKey({
+      name: 'conversation_tag_conversation_fk',
+      columns: [t.workspaceId, t.conversationId],
+      foreignColumns: [conversation.workspaceId, conversation.id],
+    }).onDelete('restrict'),
+    foreignKey({
+      name: 'conversation_tag_tag_fk',
+      columns: [t.workspaceId, t.tagId],
+      foreignColumns: [tag.workspaceId, tag.id],
+    }).onDelete('restrict'),
+  ],
+);
 ```
 
 One row per `(conversation, tag)` pair for the life of the conversation — attach clears
@@ -91,14 +101,14 @@ this feature.
 New `backend/src/agent/routers/tagsRouter.ts`, mounted in `agent/router.ts` alongside the others.
 New `tagsController.ts` / `tagsService.ts` following the existing controller→service split.
 
-| Endpoint | Behaviour |
-|---|---|
-| `GET /agent/tags?query=` | Search active (non-archived) workspace tags by `normalizedName` prefix. `query` optional — empty returns all active tags, alphabetical. Response: `{id, name, colorIndex}[]`. Backs the popover's live search. |
-| `POST /agent/tags` | Body `{name}`. Normalizes. If an active tag with that `normalizedName` exists, returns it (200, no-op create). If an archived one matches, un-archives it and returns it (200). Otherwise creates a new one with a freshly computed `colorIndex` (201). |
-| `PATCH /agent/tags/:id` | Body `{name}`. Renames (updates both `name` and `normalizedName`). 409 if the new `normalizedName` collides with a *different* active tag in the workspace. |
-| `POST /agent/tags/:id/archive` | Sets `archivedAt`. No preconditions — any tag can be archived at any time, including ones currently attached to conversations (their badges keep rendering; see Deviation section). |
-| `POST /agent/conversations/:id/tags` | Body `{tagId}`. Attaches: upserts the `conversation_tag` row, clearing `removedAt` if the pair already existed. 404 if `tagId` isn't visible in this workspace (confirmed with an explicit scoped `SELECT` first, per the FK-bypasses-RLS rule). Idempotent if already attached. |
-| `DELETE /agent/conversations/:id/tags/:tagId` | Sets `removedAt = now()` on the active row. No-op (200) if it wasn't attached. |
+| Endpoint                                      | Behaviour                                                                                                                                                                                                                                                                        |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /agent/tags?query=`                      | Search active (non-archived) workspace tags by `normalizedName` prefix. `query` optional — empty returns all active tags, alphabetical. Response: `{id, name, colorIndex}[]`. Backs the popover's live search.                                                                   |
+| `POST /agent/tags`                            | Body `{name}`. Normalizes. If an active tag with that `normalizedName` exists, returns it (200, no-op create). If an archived one matches, un-archives it and returns it (200). Otherwise creates a new one with a freshly computed `colorIndex` (201).                          |
+| `PATCH /agent/tags/:id`                       | Body `{name}`. Renames (updates both `name` and `normalizedName`). 409 if the new `normalizedName` collides with a _different_ active tag in the workspace.                                                                                                                      |
+| `POST /agent/tags/:id/archive`                | Sets `archivedAt`. No preconditions — any tag can be archived at any time, including ones currently attached to conversations (their badges keep rendering; see Deviation section).                                                                                              |
+| `POST /agent/conversations/:id/tags`          | Body `{tagId}`. Attaches: upserts the `conversation_tag` row, clearing `removedAt` if the pair already existed. 404 if `tagId` isn't visible in this workspace (confirmed with an explicit scoped `SELECT` first, per the FK-bypasses-RLS rule). Idempotent if already attached. |
+| `DELETE /agent/conversations/:id/tags/:tagId` | Sets `removedAt = now()` on the active row. No-op (200) if it wasn't attached.                                                                                                                                                                                                   |
 
 Every new route registered in `backend/src/docs/openapi.ts` per repo convention.
 

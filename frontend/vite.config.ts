@@ -1,13 +1,13 @@
-import { fileURLToPath, URL } from 'node:url'
-import react from '@vitejs/plugin-react'
-import tailwindcss from '@tailwindcss/vite'
-import compression from 'compression'
-import type { Connect } from 'vite'
+import { fileURLToPath, URL } from 'node:url';
+import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
+import compression from 'compression';
+import type { Connect } from 'vite';
 // The brief's `import { defineConfig } from 'vite'` no longer typechecks against the
 // installed vite@8/vitest@4: vite's own UserConfig type has no `test` field. vitest/config
 // re-exports vite's defineConfig after augmenting that type with the `test` block, which is
 // the documented way to merge the two config shapes — same runtime behaviour, correct types.
-import { defineConfig, type Plugin } from 'vitest/config'
+import { defineConfig, type Plugin } from 'vitest/config';
 
 /*
  * Serves webview.html for every /embed/support path.
@@ -24,25 +24,25 @@ import { defineConfig, type Plugin } from 'vitest/config'
  * straight at Vite. Whatever eventually hosts the build must do this same
  * rewrite, or /embed/support will serve the console's HTML.
  */
-const EMBED_PREFIX = '/embed/support'
+const EMBED_PREFIX = '/embed/support';
 
 function serveWebviewEntry(): Plugin {
   const rewrite = (req: { url?: string }) => {
     // Path only — the SDK's token rides in the URL fragment and never reaches a
     // server, and query strings are not read by any webview route.
-    const path = req.url?.split('?')[0]
+    const path = req.url?.split('?')[0];
     if (path === EMBED_PREFIX || path?.startsWith(`${EMBED_PREFIX}/`)) {
-      req.url = '/webview.html'
+      req.url = '/webview.html';
     }
-  }
+  };
 
   return {
     name: 'serve-webview-entry',
     configureServer(server) {
       server.middlewares.use((req, _res, next) => {
-        rewrite(req)
-        next()
-      })
+        rewrite(req);
+        next();
+      });
     },
     configurePreviewServer(server) {
       // `vite preview`'s static server sends every asset uncompressed. That's
@@ -55,13 +55,13 @@ function serveWebviewEntry(): Plugin {
       // compression()'s Express-flavoured types don't match Connect's
       // NextHandleFunction; the middleware itself is Connect-compatible, which
       // is the whole reason it works against Vite's server unmodified.
-      server.middlewares.use(compression() as unknown as Connect.NextHandleFunction)
+      server.middlewares.use(compression() as unknown as Connect.NextHandleFunction);
       server.middlewares.use((req, _res, next) => {
-        rewrite(req)
-        next()
-      })
+        rewrite(req);
+        next();
+      });
     },
-  }
+  };
 }
 
 export default defineConfig({
@@ -95,4 +95,4 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
   },
-})
+});

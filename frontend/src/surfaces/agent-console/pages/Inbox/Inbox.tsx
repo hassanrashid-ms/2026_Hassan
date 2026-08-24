@@ -1,16 +1,16 @@
-import { useMemo } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { MessageSquare } from 'lucide-react'
-import { fetchInbox } from '../../api/agentApi.ts'
-import { loadAgentSession } from '../../lib/agentSession.ts'
-import { ConversationDetailPane } from '../../components/ConversationDetailPane.tsx'
-import { ConversationList } from './components/ConversationList.tsx'
+import { useMemo } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { MessageSquare } from 'lucide-react';
+import { fetchInbox } from '../../api/agentApi.ts';
+import { loadAgentSession } from '../../lib/agentSession.ts';
+import { ConversationDetailPane } from '../../components/ConversationDetailPane.tsx';
+import { ConversationList } from './components/ConversationList.tsx';
 
 export function Inbox() {
-  const { conversationId } = useParams<{ conversationId?: string }>()
-  const navigate = useNavigate()
-  const session = loadAgentSession()
+  const { conversationId } = useParams<{ conversationId?: string }>();
+  const navigate = useNavigate();
+  const session = loadAgentSession();
 
   // Already cached by ConversationList under the same keys; this lookup is
   // just to find the selected row for ConversationDetailPane's header without
@@ -19,32 +19,42 @@ export function Inbox() {
     queryKey: ['inbox', 'mine'],
     queryFn: () => fetchInbox(session!.token, 'mine'),
     enabled: session !== null,
-  })
+  });
   const escalated = useQuery({
     queryKey: ['inbox', 'escalated'],
     queryFn: () => fetchInbox(session!.token, 'escalated'),
     enabled: session !== null,
-  })
+  });
 
   const summary = useMemo(() => {
-    if (!conversationId) return undefined
+    if (!conversationId) return undefined;
     return (
       mine.data?.conversations.find((c) => c.id === conversationId) ??
       escalated.data?.conversations.find((c) => c.id === conversationId)
-    )
-  }, [conversationId, mine.data, escalated.data])
+    );
+  }, [conversationId, mine.data, escalated.data]);
 
-  if (!session) return null
+  if (!session) return null;
 
-  const selectedId = conversationId ?? null
+  const selectedId = conversationId ?? null;
 
   return (
     <div className="flex h-full min-h-0">
       {/* Below the md breakpoint, a selected conversation replaces the list
           full-screen (back affordance via ThreadPanel's onBack) since
           side-by-side doesn't fit narrow viewports. */}
-      <div className={selectedId ? 'hidden w-80 shrink-0 border-r border-slate-200 md:block' : 'w-full shrink-0 border-r border-slate-200 md:w-80'}>
-        <ConversationList token={session.token} selectedId={selectedId} onSelect={(id) => navigate(`/inbox/${id}`)} />
+      <div
+        className={
+          selectedId
+            ? 'hidden w-80 shrink-0 border-r border-slate-200 md:block'
+            : 'w-full shrink-0 border-r border-slate-200 md:w-80'
+        }
+      >
+        <ConversationList
+          token={session.token}
+          selectedId={selectedId}
+          onSelect={(id) => navigate(`/inbox/${id}`)}
+        />
       </div>
       <div className={selectedId ? 'min-w-0 flex-1' : 'hidden flex-1 md:block'}>
         {selectedId ? (
@@ -63,5 +73,5 @@ export function Inbox() {
         )}
       </div>
     </div>
-  )
+  );
 }

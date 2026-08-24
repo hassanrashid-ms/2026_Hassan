@@ -1,48 +1,56 @@
-import { and, asc, desc, eq } from 'drizzle-orm'
-import type { Server } from 'socket.io'
-import { applyBotTurn } from './applyBotTurn.ts'
-import type { BotDecider, BotTurnDecision, BotTurnInput } from './botTurn.ts'
-import { toAgentView, toPlayerView, type PostedMessageRow } from '../conversations/index.ts'
-import { conversation, event, message } from '../../shared/db/schema/index.ts'
-import { withWorkspace, type Tx } from '../../shared/db/withWorkspace.ts'
-import { emitInboxChanged, emitMessageToRooms, emitPhaseChanged } from '../../shared/realtime/emit.ts'
-import { getIo } from '../../shared/realtime/socketServer.ts'
-import { logger } from '../../shared/logging/logger.ts'
-import type { ConfirmPhaseValue, PlayerMessageView } from '@support/types'
+import { and, asc, desc, eq } from 'drizzle-orm';
+import type { Server } from 'socket.io';
+import { applyBotTurn } from './applyBotTurn.ts';
+import type { BotDecider, BotTurnDecision, BotTurnInput } from './botTurn.ts';
+import { toAgentView, toPlayerView, type PostedMessageRow } from '../conversations/index.ts';
+import { conversation, event, message } from '../../shared/db/schema/index.ts';
+import { withWorkspace, type Tx } from '../../shared/db/withWorkspace.ts';
+import {
+  emitInboxChanged,
+  emitMessageToRooms,
+  emitPhaseChanged,
+} from '../../shared/realtime/emit.ts';
+import { getIo } from '../../shared/realtime/socketServer.ts';
+import { logger } from '../../shared/logging/logger.ts';
+import type { ConfirmPhaseValue, PlayerMessageView } from '@support/types';
 
-export type { BotTurnInput }
+export type { BotTurnInput };
 
 type GatherResult = {
-  status: string
-  subintentId: string | null
-  confirmPhase: ConfirmPhaseValue
-} | null
+  status: string;
+  subintentId: string | null;
+  confirmPhase: ConfirmPhaseValue;
+} | null;
 
 async function gather(
   tx: Tx,
   conversationId: string,
 ): Promise<{
-  conv: GatherResult
-  history: PlayerMessageView[]
-  botMessageCount: number
-  unhelpedReplyCount: number
-  lastPlayerMessageAt: Date | null
+  conv: GatherResult;
+  history: PlayerMessageView[];
+  botMessageCount: number;
+  unhelpedReplyCount: number;
+  lastPlayerMessageAt: Date | null;
 }> {
   const [conv] = await tx
-    .select({ status: conversation.status, subintentId: conversation.subintentId, confirmPhase: conversation.confirmPhase })
+    .select({
+      status: conversation.status,
+      subintentId: conversation.subintentId,
+      confirmPhase: conversation.confirmPhase,
+    })
     .from(conversation)
     .where(eq(conversation.id, conversationId))
-    .limit(1)
+    .limit(1);
 
   const rows: PostedMessageRow[] = await tx
     .select()
     .from(message)
     .where(eq(message.conversationId, conversationId))
-    .orderBy(asc(message.seq))
+    .orderBy(asc(message.seq));
 
-  const history = rows.map(toPlayerView).filter((m): m is PlayerMessageView => m !== null)
-  const botMessageCount = rows.filter((r) => r.authorType === 'bot').length
-  const lastPlayer = rows.filter((r) => r.authorType === 'player').at(-1)
+  const history = rows.map(toPlayerView).filter((m): m is PlayerMessageView => m !== null);
+  const botMessageCount = rows.filter((r) => r.authorType === 'bot').length;
+  const lastPlayer = rows.filter((r) => r.authorType === 'player').at(-1);
 
   // "Unhelped" resets at the conversation's most recent conversation_resolved
   // event — no new stored counter, derived the same way botMessageCount is.
@@ -51,12 +59,18 @@ async function gather(
     .from(event)
     .where(and(eq(event.conversationId, conversationId), eq(event.type, 'conversation_resolved')))
     .orderBy(desc(event.occurredAt))
-    .limit(1)
+    .limit(1);
   const unhelpedReplyCount = rows.filter(
     (r) => r.authorType === 'bot' && (!lastResolved || r.createdAt > lastResolved.occurredAt),
-  ).length
+  ).length;
 
-  return { conv: conv ?? null, history, botMessageCount, unhelpedReplyCount, lastPlayerMessageAt: lastPlayer?.createdAt ?? null }
+  return {
+    conv: conv ?? null,
+    history,
+    botMessageCount,
+    unhelpedReplyCount,
+    lastPlayerMessageAt: lastPlayer?.createdAt ?? null,
+  };
 }
 
 /**
@@ -68,36 +82,48 @@ async function gather(
 function emitApplied(
   workspaceId: string,
   conversationId: string,
-  result: { posted: PostedMessageRow[]; statusChanged: boolean; phaseChanged: ConfirmPhaseValue | null },
+  result: {
+    posted: PostedMessageRow[];
+    statusChanged: boolean;
+    phaseChanged: ConfirmPhaseValue | null;
+  },
 ): void {
-  let io: Server
+  let io: Server;
   try {
-    io = getIo()
+    io = getIo();
   } catch (err) {
     logger.warn('bot.orchestrator', 'skipping realtime emit: socket server not initialised', {
       workspaceId,
       conversationId,
       error: err instanceof Error ? err.message : String(err),
-    })
-    return
+    });
+    return;
   }
 
   for (const row of result.posted) {
-    emitMessageToRooms(io, conversationId, toPlayerView(row), toAgentView(row))
+    emitMessageToRooms(io, conversationId, toPlayerView(row), toAgentView(row));
   }
   // The form offer changes no status, so `conversation:changed` says nothing and
   // the agent rail would never learn the card went up. Only the offer sets this.
   if (result.phaseChanged) {
-    emitPhaseChanged(io, conversationId, { conversation_id: conversationId, confirm_phase: result.phaseChanged })
+    emitPhaseChanged(io, conversationId, {
+      conversation_id: conversationId,
+      confirm_phase: result.phaseChanged,
+    });
   }
   if (result.statusChanged) {
-    emitInboxChanged(io, workspaceId, conversationId, 'open')
+    emitInboxChanged(io, workspaceId, conversationId, 'open');
   }
 }
 
 export type ApplyIfBotActiveResult =
-  | { applied: true; posted: PostedMessageRow[]; statusChanged: boolean; phaseChanged: ConfirmPhaseValue | null }
-  | { applied: false }
+  | {
+      applied: true;
+      posted: PostedMessageRow[];
+      statusChanged: boolean;
+      phaseChanged: ConfirmPhaseValue | null;
+    }
+  | { applied: false };
 
 /**
  * Shared by `runBotTurn`'s own apply/emit step and the BullMQ `failed` handler
@@ -128,24 +154,24 @@ export async function applyDecisionIfBotActive(
       .from(conversation)
       .where(eq(conversation.id, conversationId))
       .for('update')
-      .limit(1)
+      .limit(1);
 
-    if (!conv || conv.status !== 'bot_active') return { applied: false } as const
+    if (!conv || conv.status !== 'bot_active') return { applied: false } as const;
 
-    const applied = await applyBotTurn(tx, { workspaceId, conversationId }, decision)
-    return { applied: true, ...applied } as const
-  })
+    const applied = await applyBotTurn(tx, { workspaceId, conversationId }, decision);
+    return { applied: true, ...applied } as const;
+  });
 
   if (!result.applied) {
     logger.info('bot.orchestrator', 'skipped apply: conversation left bot_active before apply', {
       workspaceId,
       conversationId,
-    })
-    return result
+    });
+    return result;
   }
 
-  emitApplied(workspaceId, conversationId, result)
-  return result
+  emitApplied(workspaceId, conversationId, result);
+  return result;
 }
 
 /**
@@ -159,12 +185,15 @@ export async function applyDecisionIfBotActive(
  * `applyDecisionIfBotActive` re-checks atomically with the apply, which is the
  * authoritative guard.
  */
-export async function runBotTurn(workspaceId: string, conversationId: string, decider: BotDecider): Promise<void> {
-  const { conv, history, botMessageCount, unhelpedReplyCount, lastPlayerMessageAt } = await withWorkspace(workspaceId, (tx) =>
-    gather(tx, conversationId),
-  )
+export async function runBotTurn(
+  workspaceId: string,
+  conversationId: string,
+  decider: BotDecider,
+): Promise<void> {
+  const { conv, history, botMessageCount, unhelpedReplyCount, lastPlayerMessageAt } =
+    await withWorkspace(workspaceId, (tx) => gather(tx, conversationId));
 
-  if (!conv || conv.status !== 'bot_active') return
+  if (!conv || conv.status !== 'bot_active') return;
 
   const decision = await decider({
     workspaceId,
@@ -175,7 +204,7 @@ export async function runBotTurn(workspaceId: string, conversationId: string, de
     unhelpedReplyCount,
     lastPlayerMessageAt,
     history,
-  })
+  });
 
-  await applyDecisionIfBotActive(workspaceId, conversationId, decision)
+  await applyDecisionIfBotActive(workspaceId, conversationId, decision);
 }

@@ -1,9 +1,16 @@
-import { and, desc, eq, ne, sql } from 'drizzle-orm'
-import { conversation, message, player, playerStateSnapshot, session, workspace } from '../../shared/db/schema/index.ts'
-import { withWorkspace } from '../../shared/db/withWorkspace.ts'
-import type { PlayerContext } from '../../shared/middleware/requirePlayerToken.ts'
+import { and, desc, eq, ne, sql } from 'drizzle-orm';
+import {
+  conversation,
+  message,
+  player,
+  playerStateSnapshot,
+  session,
+  workspace,
+} from '../../shared/db/schema/index.ts';
+import { withWorkspace } from '../../shared/db/withWorkspace.ts';
+import type { PlayerContext } from '../../shared/middleware/requirePlayerToken.ts';
 
-export type BootstrapQueryInput = { session_id: string }
+export type BootstrapQueryInput = { session_id: string };
 
 /**
  * What the web surface calls first. Not part of the frozen contract — it ships with
@@ -13,7 +20,11 @@ export async function loadBootstrap(ctx: PlayerContext, query: BootstrapQueryInp
   return withWorkspace(ctx.workspaceId, async (tx) => {
     // `workspace` is unscoped (no RLS policy), so this is a plain lookup by the
     // already-verified id from the player token — no set_config dependency.
-    const [ws] = await tx.select({ name: workspace.name }).from(workspace).where(eq(workspace.id, ctx.workspaceId)).limit(1)
+    const [ws] = await tx
+      .select({ name: workspace.name })
+      .from(workspace)
+      .where(eq(workspace.id, ctx.workspaceId))
+      .limit(1);
 
     // RLS hides another workspace's row and the player_id predicate excludes another
     // player's, so a miss here cannot be distinguished from "never existed" — which
@@ -29,15 +40,15 @@ export async function loadBootstrap(ctx: PlayerContext, query: BootstrapQueryInp
       .from(session)
       .innerJoin(player, eq(player.id, session.playerId))
       .where(and(eq(session.id, query.session_id), eq(session.playerId, ctx.playerId)))
-      .limit(1)
+      .limit(1);
 
-    if (!found) return null
+    if (!found) return null;
 
     const [snapshot] = await tx
       .select()
       .from(playerStateSnapshot)
       .where(eq(playerStateSnapshot.sessionId, found.id))
-      .limit(1)
+      .limit(1);
 
     // The player's *latest* conversation, not all of them: closed tickets stay
     // in history once "open a new ticket" ships, and a player_id-wide count
@@ -48,7 +59,7 @@ export async function loadBootstrap(ctx: PlayerContext, query: BootstrapQueryInp
       .from(conversation)
       .where(eq(conversation.playerId, ctx.playerId))
       .orderBy(desc(conversation.createdAt))
-      .limit(1)
+      .limit(1);
 
     const [unread] = current
       ? await tx
@@ -62,8 +73,8 @@ export async function loadBootstrap(ctx: PlayerContext, query: BootstrapQueryInp
               ne(message.deliveryState, 'read'),
             ),
           )
-      : []
+      : [];
 
-    return { found, snapshot, unreadCount: unread?.count ?? 0, workspaceName: ws?.name ?? '' }
-  })
+    return { found, snapshot, unreadCount: unread?.count ?? 0, workspaceName: ws?.name ?? '' };
+  });
 }

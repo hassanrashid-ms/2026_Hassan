@@ -2,13 +2,18 @@ import {
   OpenAPIRegistry,
   OpenApiGeneratorV3,
   extendZodWithOpenApi,
-} from '@asteasolutions/zod-to-openapi'
-import { z } from 'zod'
-import { FormAnswerBody, FormTerminateBody, NewTicketBody, ResolutionAnswerBody } from '@support/types'
+} from '@asteasolutions/zod-to-openapi';
+import { z } from 'zod';
+import {
+  FormAnswerBody,
+  FormTerminateBody,
+  NewTicketBody,
+  ResolutionAnswerBody,
+} from '@support/types';
 
-extendZodWithOpenApi(z)
+extendZodWithOpenApi(z);
 
-const registry = new OpenAPIRegistry()
+const registry = new OpenAPIRegistry();
 
 // Schema definitions
 const PlayerTokenRequestSchema = z.object({
@@ -18,21 +23,24 @@ const PlayerTokenRequestSchema = z.object({
     .max(128)
     .regex(/^[A-Za-z0-9._:-]+$/)
     .openapi({ example: 'test-player-1', description: 'Game external player identifier' }),
-})
+});
 
 const SessionStartBodySchema = z.object({
   session_id: z.uuid().openapi({ example: '9a40fd09-f71d-4f4f-a909-8562c564b1ca' }),
   entry_point: z.string().min(1).max(120).openapi({ example: 'settings_menu' }),
   started_at: z.string().optional().openapi({ example: '2026-08-06T04:59:35.742Z' }),
-  snapshot: z.record(z.string(), z.unknown()).optional().openapi({ description: 'Captured Player State Snapshot' }),
-})
+  snapshot: z
+    .record(z.string(), z.unknown())
+    .optional()
+    .openapi({ description: 'Captured Player State Snapshot' }),
+});
 
 const SessionEndBodySchema = z.object({
   session_id: z.uuid().openapi({ example: '9a40fd09-f71d-4f4f-a909-8562c564b1ca' }),
   duration_ms: z.number().int().nonnegative().nullable().openapi({ example: 184200 }),
   conversation_created: z.boolean().nullable().openapi({ example: false }),
   articles_read: z.array(z.string().max(200)).openapi({ example: ['a_123', 'a_456'] }),
-})
+});
 
 const IncidentBodySchema = z.object({
   incident_id: z.uuid().nullable().openapi({ example: 'c7a20fd0-f71d-4f4f-a909-8562c564b1ca' }),
@@ -41,59 +49,70 @@ const IncidentBodySchema = z.object({
   detail: z.string().openapi({ example: '5s elapsed, no response' }),
   sdk_version: z.string().max(60).optional().openapi({ example: '1.0.0' }),
   client_version: z.string().max(60).optional().openapi({ example: '0.1.0' }),
-})
+});
 
 const AgentMessageViewSchema = z.object({
   id: z.uuid(),
   seq: z.number().int().nonnegative(),
   author_type: z.enum(['player', 'agent', 'bot', 'system']),
   author_agent_id: z.uuid().nullable(),
-  author_name: z.string().openapi({ description: 'Per-message author display name; resolved from author_agent_id, never the conversation assignee.' }),
+  author_name: z.string().openapi({
+    description:
+      'Per-message author display name; resolved from author_agent_id, never the conversation assignee.',
+  }),
   body: z.string(),
   visibility: z.enum(['public', 'internal']),
   delivery_state: z.enum(['sending', 'sent', 'delivered', 'read', 'failed']),
   read_at: z.string().nullable(),
   created_at: z.string(),
-  article_id: z
-    .uuid()
-    .nullable()
-    .openapi({ description: 'The article a bot answer was written from, or null. Clients render their own "Read more" from it.' }),
-})
+  article_id: z.uuid().nullable().openapi({
+    description:
+      'The article a bot answer was written from, or null. Clients render their own "Read more" from it.',
+  }),
+});
 
 // Register Component Schemas
-const playerTokenRequestComponent = registry.register('PlayerTokenRequest', PlayerTokenRequestSchema)
-const sessionStartBodyComponent = registry.register('SessionStartBody', SessionStartBodySchema)
-const sessionEndBodyComponent = registry.register('SessionEndBody', SessionEndBodySchema)
-const incidentBodyComponent = registry.register('IncidentBody', IncidentBodySchema)
+const playerTokenRequestComponent = registry.register(
+  'PlayerTokenRequest',
+  PlayerTokenRequestSchema,
+);
+const sessionStartBodyComponent = registry.register('SessionStartBody', SessionStartBodySchema);
+const sessionEndBodyComponent = registry.register('SessionEndBody', SessionEndBodySchema);
+const incidentBodyComponent = registry.register('IncidentBody', IncidentBodySchema);
 
 // Define Security Schemes
 const bearerWorkspaceSecret = registry.registerComponent('securitySchemes', 'WorkspaceSecretAuth', {
   type: 'http',
   scheme: 'bearer',
   description: 'Game Backend Workspace Secret (sk_<slug>.<raw>)',
-})
+});
 
 const bearerPlayerJwt = registry.registerComponent('securitySchemes', 'PlayerJwtAuth', {
   type: 'http',
   scheme: 'bearer',
   bearerFormat: 'JWT',
   description: 'Short-lived Player JWT (15-min TTL)',
-})
+});
 
 const bearerAgentJwt = registry.registerComponent('securitySchemes', 'AgentJwtAuth', {
   type: 'http',
   scheme: 'bearer',
   bearerFormat: 'JWT',
   description: 'Agent Session JWT',
-})
+});
 
 // Header Schemas
 const SdkHeadersSchema = z.object({
-  'x-support-workspace': z.string().openapi({ description: 'Workspace slug', example: 'demo-workspace' }),
+  'x-support-workspace': z
+    .string()
+    .openapi({ description: 'Workspace slug', example: 'demo-workspace' }),
   'x-support-sdk': z.string().optional().openapi({ description: 'SDK Version', example: '1.0.0' }),
-  'x-support-client-version': z.string().optional().openapi({ description: 'Game Version', example: '0.1.0' }),
+  'x-support-client-version': z
+    .string()
+    .optional()
+    .openapi({ description: 'Game Version', example: '0.1.0' }),
   'idempotency-key': z.string().optional().openapi({ description: 'Idempotency UUID' }),
-})
+});
 
 // Admin Schemas
 const WorkspaceSummarySchema = z.object({
@@ -102,14 +121,14 @@ const WorkspaceSummarySchema = z.object({
   slug: z.string(),
   member_count: z.number().int().nonnegative(),
   created_at: z.string(),
-})
+});
 
 const CreateWorkspaceBodySchema = z.object({
   name: z.string().min(1).max(200).openapi({ example: 'My New Game' }),
   slug: z.string().min(1).max(63).openapi({ example: 'my-new-game' }),
-})
+});
 
-const RenameWorkspaceBodySchema = z.object({ name: z.string().min(1).max(200) })
+const RenameWorkspaceBodySchema = z.object({ name: z.string().min(1).max(200) });
 
 const MemberSummarySchema = z.object({
   agent_id: z.uuid(),
@@ -117,27 +136,27 @@ const MemberSummarySchema = z.object({
   display_name: z.string(),
   status: z.enum(['active', 'on_leave', 'deactivated', 'invited']),
   role: z.enum(['agent', 'team_lead']),
-})
+});
 
 const AddMemberBodySchema = z.object({
   email: z.email().openapi({ example: 'new-hire@mindstormstudios.com' }),
   role: z.enum(['agent', 'team_lead']),
-})
+});
 
 const UpdateMemberBodySchema = z.object({
   role: z.enum(['agent', 'team_lead']).optional(),
   remove: z.boolean().optional(),
-})
+});
 
 const SecretMetadataSchema = z.object({
   created_at: z.string(),
   expires_at: z.string().nullable(),
-})
+});
 
 const RotatedSecretSchema = z.object({
   secret: z.string().openapi({ description: 'Raw secret — shown exactly once.' }),
   created_at: z.string(),
-})
+});
 
 const AgentSummarySchema = z.object({
   id: z.uuid(),
@@ -146,14 +165,15 @@ const AgentSummarySchema = z.object({
   status: z.enum(['active', 'on_leave', 'deactivated', 'invited']),
   is_admin: z.boolean(),
   is_super_admin: z.boolean(),
-})
+});
 
 const bearerAgentSession = registry.registerComponent('securitySchemes', 'AgentSessionAuth', {
   type: 'http',
   scheme: 'bearer',
   bearerFormat: 'JWT',
-  description: 'Agent session JWT — the caller must additionally have agent.is_admin = true for every /admin/* route.',
-})
+  description:
+    'Agent session JWT — the caller must additionally have agent.is_admin = true for every /admin/* route.',
+});
 
 // --- 1. AUTH ROUTES ---
 registry.registerPath({
@@ -187,7 +207,7 @@ registry.registerPath({
     404: { description: 'Workspace not found' },
     422: { description: 'Malformed external_player_id' },
   },
-})
+});
 
 registry.registerPath({
   method: 'get',
@@ -212,7 +232,7 @@ registry.registerPath({
       },
     },
   },
-})
+});
 
 registry.registerPath({
   method: 'post',
@@ -242,7 +262,7 @@ registry.registerPath({
       },
     },
   },
-})
+});
 
 // --- 2. SDK ENDPOINTS ---
 registry.registerPath({
@@ -268,7 +288,7 @@ registry.registerPath({
     },
     401: { description: 'Unauthorized — invalid player token' },
   },
-})
+});
 
 registry.registerPath({
   method: 'post',
@@ -292,7 +312,7 @@ registry.registerPath({
       content: { 'application/json': { schema: z.object({ ok: z.boolean() }) } },
     },
   },
-})
+});
 
 registry.registerPath({
   method: 'post',
@@ -316,7 +336,7 @@ registry.registerPath({
       content: { 'application/json': { schema: z.object({ ok: z.boolean() }) } },
     },
   },
-})
+});
 
 registry.registerPath({
   method: 'get',
@@ -337,7 +357,7 @@ registry.registerPath({
       },
     },
   },
-})
+});
 
 // --- 3. SURFACE ENDPOINTS (WebView) ---
 registry.registerPath({
@@ -376,7 +396,7 @@ registry.registerPath({
       },
     },
   },
-})
+});
 
 registry.registerPath({
   method: 'get',
@@ -392,7 +412,7 @@ registry.registerPath({
       description: 'Active conversation or null',
     },
   },
-})
+});
 
 registry.registerPath({
   method: 'post',
@@ -412,7 +432,7 @@ registry.registerPath({
   responses: {
     200: { description: 'Conversation created' },
   },
-})
+});
 
 registry.registerPath({
   method: 'post',
@@ -433,7 +453,7 @@ registry.registerPath({
   responses: {
     200: { description: 'Message sent' },
   },
-})
+});
 
 registry.registerPath({
   method: 'get',
@@ -448,7 +468,7 @@ registry.registerPath({
   responses: {
     200: { description: 'Player thread (conversation_id is null when none exists yet)' },
   },
-})
+});
 
 registry.registerPath({
   method: 'post',
@@ -469,7 +489,7 @@ registry.registerPath({
   responses: {
     200: { description: 'Message sent' },
   },
-})
+});
 
 registry.registerPath({
   method: 'post',
@@ -489,7 +509,7 @@ registry.registerPath({
   responses: {
     200: { description: 'Marked read' },
   },
-})
+});
 
 // --- 4. AGENT ENDPOINTS ---
 registry.registerPath({
@@ -501,7 +521,7 @@ registry.registerPath({
   responses: {
     200: { description: 'Agents list' },
   },
-})
+});
 
 registry.registerPath({
   method: 'get',
@@ -512,34 +532,44 @@ registry.registerPath({
   request: {
     query: z.object({
       status: z.enum(['unassigned', 'mine', 'agentAssigned', 'botHandling', 'escalated']),
-      priority: z.union([z.enum(['p1', 'p2', 'p3', 'p4']), z.array(z.enum(['p1', 'p2', 'p3', 'p4']))]).optional(),
+      priority: z
+        .union([z.enum(['p1', 'p2', 'p3', 'p4']), z.array(z.enum(['p1', 'p2', 'p3', 'p4']))])
+        .optional(),
       labelIds: z.union([z.string().uuid(), z.array(z.string().uuid())]).optional(),
       subintentIds: z.union([z.string().uuid(), z.array(z.string().uuid())]).optional(),
       assigneeIds: z.union([z.string().uuid(), z.array(z.string().uuid())]).optional(),
       olderThanHours: z.coerce.number().optional(),
-      q: z.string().optional()
+      q: z.string().optional(),
     }),
   },
   responses: {
     200: { description: 'Conversations list' },
   },
-})
+});
 
 const AgentSubintentSchema = z
   .object({ intent_name: z.string(), subintent_name: z.string() })
-  .nullable()
+  .nullable();
 
 const AgentConversationDetailSchema = z.object({
   id: z.uuid(),
   number: z.number().int(),
   player: z.object({ id: z.uuid(), external_player_id: z.string() }),
-  status: z.enum(['new', 'bot_active', 'open', 'awaiting_player', 'escalated', 'resolved', 'closed']),
+  status: z.enum([
+    'new',
+    'bot_active',
+    'open',
+    'awaiting_player',
+    'escalated',
+    'resolved',
+    'closed',
+  ]),
   subintent: AgentSubintentSchema,
   assigned_agent: z.object({ id: z.uuid(), display_name: z.string() }).nullable(),
   resolution_source: z.enum(['bot', 'agent']).nullable(),
   resolved_by_agent_name: z.string().nullable(),
   created_at: z.string(),
-})
+});
 
 registry.registerPath({
   method: 'get',
@@ -558,17 +588,23 @@ registry.registerPath({
     },
     404: { description: 'Not found, or not in this workspace' },
   },
-})
+});
 
 registry.registerPath({
   method: 'post',
   path: '/agent/conversations/{id}/take-over',
   summary: 'Agent Take Over Bot Conversation',
-  description: 'Atomically assigns a bot_active conversation to the acting agent and transitions it to open.',
+  description:
+    'Atomically assigns a bot_active conversation to the acting agent and transitions it to open.',
   security: [{ [bearerAgentJwt.name]: [] }],
   request: { params: z.object({ id: z.uuid() }) },
-  responses: { 200: { description: 'Take-over result', content: { 'application/json': { schema: z.object({ taken_over: z.boolean() }) } } } },
-})
+  responses: {
+    200: {
+      description: 'Take-over result',
+      content: { 'application/json': { schema: z.object({ taken_over: z.boolean() }) } },
+    },
+  },
+});
 
 const AgentPlayerStateSchema = z.union([
   z.object({ status: z.literal('no_session') }),
@@ -588,18 +624,26 @@ const AgentPlayerStateSchema = z.union([
     degraded_reason: z.string().nullable(),
     captured_at: z.string(),
   }),
-])
+]);
 
 const AgentTicketSummarySchema = z.object({
   id: z.uuid(),
   number: z.number().int(),
   created_at: z.string(),
-  status: z.enum(['new', 'bot_active', 'open', 'awaiting_player', 'escalated', 'resolved', 'closed']),
+  status: z.enum([
+    'new',
+    'bot_active',
+    'open',
+    'awaiting_player',
+    'escalated',
+    'resolved',
+    'closed',
+  ]),
   subintent: AgentSubintentSchema,
   resolution_source: z.enum(['bot', 'agent']).nullable(),
   resolved_by_agent_name: z.string().nullable(),
   reopen_count: z.number().int(),
-})
+});
 
 const FormFieldTypeSchema = z.enum([
   'short_text',
@@ -609,7 +653,7 @@ const FormFieldTypeSchema = z.enum([
   'time',
   'choice',
   'attachment',
-])
+]);
 
 const AgentFormViewSchema = z.object({
   form_name: z.string(),
@@ -627,7 +671,7 @@ const AgentFormViewSchema = z.object({
       answered: z.boolean(),
     }),
   ),
-})
+});
 
 registry.registerPath({
   method: 'get',
@@ -659,7 +703,7 @@ registry.registerPath({
     },
     404: { description: 'Not found, or not in this workspace' },
   },
-})
+});
 
 registry.registerPath({
   method: 'post',
@@ -680,13 +724,14 @@ registry.registerPath({
       },
     },
   },
-})
+});
 
 registry.registerPath({
   method: 'patch',
   path: '/agent/conversations/{id}/assign',
   summary: 'Agent Reassign Conversation',
-  description: 'Reassigns an active conversation to a different agent. Team lead or admin role required.',
+  description:
+    'Reassigns an active conversation to a different agent. Team lead or admin role required.',
   security: [{ [bearerAgentJwt.name]: [] }],
   request: {
     params: z.object({ id: z.uuid() }),
@@ -705,7 +750,7 @@ registry.registerPath({
     404: { description: 'Conversation not found or target agent not found' },
     409: { description: 'Conversation status invalid or target agent not active' },
   },
-})
+});
 
 registry.registerPath({
   method: 'patch',
@@ -729,7 +774,7 @@ registry.registerPath({
     404: { description: 'Conversation not found' },
     409: { description: 'Target subintent does not exist or is archived' },
   },
-})
+});
 
 registry.registerPath({
   method: 'post',
@@ -740,12 +785,15 @@ registry.registerPath({
   security: [{ [bearerAgentJwt.name]: [] }],
   request: { params: z.object({ id: z.uuid() }) },
   responses: {
-    200: { description: 'Asked', content: { 'application/json': { schema: z.object({ asked: z.boolean() }) } } },
+    200: {
+      description: 'Asked',
+      content: { 'application/json': { schema: z.object({ asked: z.boolean() }) } },
+    },
     403: { description: 'Another agent owns this conversation' },
     404: { description: 'Conversation not found' },
     409: { description: 'Wrong status, or a check is already pending' },
   },
-})
+});
 
 registry.registerPath({
   method: 'post',
@@ -756,27 +804,34 @@ registry.registerPath({
   security: [{ [bearerAgentJwt.name]: [] }],
   request: { params: z.object({ id: z.uuid() }) },
   responses: {
-    200: { description: 'Escalated', content: { 'application/json': { schema: z.object({ escalated: z.boolean() }) } } },
+    200: {
+      description: 'Escalated',
+      content: { 'application/json': { schema: z.object({ escalated: z.boolean() }) } },
+    },
     403: { description: 'Another agent owns this conversation' },
     404: { description: 'Conversation not found' },
     409: { description: 'Wrong status' },
   },
-})
+});
 
 registry.registerPath({
   method: 'post',
   path: '/agent/conversations/{id}/unescalate',
   summary: 'Agent Unescalate Conversation',
-  description: 'Moves status from escalated back to open. Requires either ownership or an unassigned conversation.',
+  description:
+    'Moves status from escalated back to open. Requires either ownership or an unassigned conversation.',
   security: [{ [bearerAgentJwt.name]: [] }],
   request: { params: z.object({ id: z.uuid() }) },
   responses: {
-    200: { description: 'Unescalated', content: { 'application/json': { schema: z.object({ unescalated: z.boolean() }) } } },
+    200: {
+      description: 'Unescalated',
+      content: { 'application/json': { schema: z.object({ unescalated: z.boolean() }) } },
+    },
     403: { description: 'Another agent owns this conversation' },
     404: { description: 'Conversation not found' },
     409: { description: 'Wrong status' },
   },
-})
+});
 
 registry.registerPath({
   method: 'get',
@@ -790,10 +845,12 @@ registry.registerPath({
   responses: {
     200: {
       description: 'Messages list',
-      content: { 'application/json': { schema: z.object({ messages: z.array(AgentMessageViewSchema) }) } },
+      content: {
+        'application/json': { schema: z.object({ messages: z.array(AgentMessageViewSchema) }) },
+      },
     },
   },
-})
+});
 
 registry.registerPath({
   method: 'post',
@@ -817,7 +874,7 @@ registry.registerPath({
   responses: {
     200: { description: 'Agent message or internal note sent' },
   },
-})
+});
 
 registry.registerPath({
   method: 'post',
@@ -840,7 +897,7 @@ registry.registerPath({
   responses: {
     200: { description: 'Messages marked read' },
   },
-})
+});
 
 // --- 5. AGENT TAXONOMY & ARTICLE ENDPOINTS ---
 registry.registerPath({
@@ -850,7 +907,7 @@ registry.registerPath({
   description: 'Lists intents with nested subintents, for the category picker.',
   security: [{ [bearerAgentJwt.name]: [] }],
   responses: { 200: { description: 'Intents list' } },
-})
+});
 
 registry.registerPath({
   method: 'post',
@@ -858,12 +915,16 @@ registry.registerPath({
   summary: 'Agent Create Intent',
   description: 'Creates an intent inline. Admin-only, enforced server-side.',
   security: [{ [bearerAgentJwt.name]: [] }],
-  request: { body: { content: { 'application/json': { schema: z.object({ name: z.string().min(1).max(120) }) } } } },
+  request: {
+    body: {
+      content: { 'application/json': { schema: z.object({ name: z.string().min(1).max(120) }) } },
+    },
+  },
   responses: {
     201: { description: 'Intent created' },
     403: { description: 'Forbidden — admin role required' },
   },
-})
+});
 
 registry.registerPath({
   method: 'post',
@@ -873,14 +934,16 @@ registry.registerPath({
   security: [{ [bearerAgentJwt.name]: [] }],
   request: {
     params: z.object({ id: z.uuid() }),
-    body: { content: { 'application/json': { schema: z.object({ name: z.string().min(1).max(120) }) } } },
+    body: {
+      content: { 'application/json': { schema: z.object({ name: z.string().min(1).max(120) }) } },
+    },
   },
   responses: {
     201: { description: 'Subintent created' },
     403: { description: 'Forbidden — admin role required' },
     404: { description: 'Intent not found' },
   },
-})
+});
 
 registry.registerPath({
   method: 'patch',
@@ -890,7 +953,9 @@ registry.registerPath({
   security: [{ [bearerAgentJwt.name]: [] }],
   request: {
     params: z.object({ id: z.uuid() }),
-    body: { content: { 'application/json': { schema: z.object({ name: z.string().min(1).max(120) }) } } },
+    body: {
+      content: { 'application/json': { schema: z.object({ name: z.string().min(1).max(120) }) } },
+    },
   },
   responses: {
     200: { description: 'Intent renamed' },
@@ -898,13 +963,14 @@ registry.registerPath({
     404: { description: 'Intent not found' },
     409: { description: 'Another intent already has this name' },
   },
-})
+});
 
 registry.registerPath({
   method: 'post',
   path: '/agent/intents/{id}/archive',
   summary: 'Agent Archive Intent',
-  description: 'Archives an intent. Admin-only. Blocked while active subintents or published articles reference it.',
+  description:
+    'Archives an intent. Admin-only. Blocked while active subintents or published articles reference it.',
   security: [{ [bearerAgentJwt.name]: [] }],
   request: { params: z.object({ id: z.uuid() }) },
   responses: {
@@ -913,7 +979,7 @@ registry.registerPath({
     404: { description: 'Intent not found' },
     409: { description: 'Not archivable — is the system intent, or still referenced' },
   },
-})
+});
 
 registry.registerPath({
   method: 'patch',
@@ -926,7 +992,10 @@ registry.registerPath({
     body: {
       content: {
         'application/json': {
-          schema: z.object({ name: z.string().min(1).max(120).optional(), defaultPriority: z.enum(['p1', 'p2', 'p3', 'p4']).optional() }),
+          schema: z.object({
+            name: z.string().min(1).max(120).optional(),
+            defaultPriority: z.enum(['p1', 'p2', 'p3', 'p4']).optional(),
+          }),
         },
       },
     },
@@ -937,13 +1006,14 @@ registry.registerPath({
     404: { description: 'Subintent not found' },
     409: { description: 'Another subintent under this intent already has this name' },
   },
-})
+});
 
 registry.registerPath({
   method: 'post',
   path: '/agent/subintents/{id}/archive',
   summary: 'Agent Archive Subintent',
-  description: 'Archives a subintent. Admin-only. The workspace’s "Other" subintent can never be archived.',
+  description:
+    'Archives a subintent. Admin-only. The workspace’s "Other" subintent can never be archived.',
   security: [{ [bearerAgentJwt.name]: [] }],
   request: { params: z.object({ id: z.uuid() }) },
   responses: {
@@ -952,7 +1022,7 @@ registry.registerPath({
     404: { description: 'Subintent not found' },
     409: { description: 'Not archivable — this is the "Other" subintent' },
   },
-})
+});
 
 registry.registerPath({
   method: 'post',
@@ -969,7 +1039,7 @@ registry.registerPath({
     403: { description: 'Forbidden — admin role required' },
     404: { description: 'Subintent or target intent not found (or target is archived)' },
   },
-})
+});
 
 registry.registerPath({
   method: 'post',
@@ -988,17 +1058,18 @@ registry.registerPath({
     404: { description: 'Subintent not found' },
     409: { description: 'Invalid merge target, or loser is the "Other" subintent' },
   },
-})
+});
 
 registry.registerPath({
   method: 'get',
   path: '/agent/tags',
   summary: 'Agent List Tags',
-  description: 'Searches active (non-archived) workspace tags by normalizedName prefix. Empty query returns all, alphabetical.',
+  description:
+    'Searches active (non-archived) workspace tags by normalizedName prefix. Empty query returns all, alphabetical.',
   security: [{ [bearerAgentJwt.name]: [] }],
   request: { query: z.object({ query: z.string().optional() }) },
   responses: { 200: { description: 'Tags list' } },
-})
+});
 
 registry.registerPath({
   method: 'post',
@@ -1007,12 +1078,16 @@ registry.registerPath({
   description:
     'Normalizes name and creates a tag. Idempotent: returns the existing active tag if one matches, or un-archives and returns a matching archived tag.',
   security: [{ [bearerAgentJwt.name]: [] }],
-  request: { body: { content: { 'application/json': { schema: z.object({ name: z.string().min(1).max(120) }) } } } },
+  request: {
+    body: {
+      content: { 'application/json': { schema: z.object({ name: z.string().min(1).max(120) }) } },
+    },
+  },
   responses: {
     200: { description: 'Existing tag returned (reuse or revival), no-op create' },
     201: { description: 'Tag created' },
   },
-})
+});
 
 registry.registerPath({
   method: 'patch',
@@ -1022,33 +1097,37 @@ registry.registerPath({
   security: [{ [bearerAgentJwt.name]: [] }],
   request: {
     params: z.object({ id: z.uuid() }),
-    body: { content: { 'application/json': { schema: z.object({ name: z.string().min(1).max(120) }) } } },
+    body: {
+      content: { 'application/json': { schema: z.object({ name: z.string().min(1).max(120) }) } },
+    },
   },
   responses: {
     200: { description: 'Tag renamed' },
     404: { description: 'Tag not found' },
     409: { description: 'Another active tag already has this name' },
   },
-})
+});
 
 registry.registerPath({
   method: 'post',
   path: '/agent/tags/{id}/archive',
   summary: 'Agent Archive Tag',
-  description: 'Archives a tag. No preconditions — a tag can be archived while still attached to conversations.',
+  description:
+    'Archives a tag. No preconditions — a tag can be archived while still attached to conversations.',
   security: [{ [bearerAgentJwt.name]: [] }],
   request: { params: z.object({ id: z.uuid() }) },
   responses: {
     200: { description: 'Tag archived' },
     404: { description: 'Tag not found' },
   },
-})
+});
 
 registry.registerPath({
   method: 'post',
   path: '/agent/conversations/{id}/tags',
   summary: 'Agent Attach Tag',
-  description: 'Attaches a tag to a conversation. Idempotent. tagId is confirmed visible in-workspace before use.',
+  description:
+    'Attaches a tag to a conversation. Idempotent. tagId is confirmed visible in-workspace before use.',
   security: [{ [bearerAgentJwt.name]: [] }],
   request: {
     params: z.object({ id: z.uuid() }),
@@ -1058,17 +1137,18 @@ registry.registerPath({
     200: { description: 'Tag attached' },
     404: { description: 'Tag not found in this workspace' },
   },
-})
+});
 
 registry.registerPath({
   method: 'delete',
   path: '/agent/conversations/{id}/tags/{tagId}',
   summary: 'Agent Detach Tag',
-  description: 'Detaches a tag from a conversation (soft removal). No-op if not currently attached.',
+  description:
+    'Detaches a tag from a conversation (soft removal). No-op if not currently attached.',
   security: [{ [bearerAgentJwt.name]: [] }],
   request: { params: z.object({ id: z.uuid(), tagId: z.uuid() }) },
   responses: { 200: { description: 'Tag detached (or was already detached)' } },
-})
+});
 
 registry.registerPath({
   method: 'get',
@@ -1077,7 +1157,7 @@ registry.registerPath({
   description: 'Lists articles in all states for this workspace.',
   security: [{ [bearerAgentJwt.name]: [] }],
   responses: { 200: { description: 'Articles list' } },
-})
+});
 
 registry.registerPath({
   method: 'get',
@@ -1087,7 +1167,7 @@ registry.registerPath({
   security: [{ [bearerAgentJwt.name]: [] }],
   request: { params: z.object({ id: z.uuid() }) },
   responses: { 200: { description: 'Article detail' }, 404: { description: 'Not found' } },
-})
+});
 
 registry.registerPath({
   method: 'post',
@@ -1110,7 +1190,7 @@ registry.registerPath({
     },
   },
   responses: { 201: { description: 'Draft created' }, 404: { description: 'Intent not found' } },
-})
+});
 
 registry.registerPath({
   method: 'patch',
@@ -1138,13 +1218,13 @@ registry.registerPath({
     404: { description: 'Not found' },
     409: { description: 'Article is not a draft' },
   },
-})
+});
 
 registry.registerPath({
   method: 'post',
   path: '/agent/articles/{id}/publish',
   summary: 'Agent Publish Article',
-  description: "draft -> published, stamps published_by/published_at.",
+  description: 'draft -> published, stamps published_by/published_at.',
   security: [{ [bearerAgentJwt.name]: [] }],
   request: { params: z.object({ id: z.uuid() }) },
   responses: {
@@ -1152,7 +1232,7 @@ registry.registerPath({
     404: { description: 'Not found' },
     409: { description: 'Not a draft, or title/body empty' },
   },
-})
+});
 
 registry.registerPath({
   method: 'post',
@@ -1162,7 +1242,7 @@ registry.registerPath({
   security: [{ [bearerAgentJwt.name]: [] }],
   request: { params: z.object({ id: z.uuid() }) },
   responses: { 200: { description: 'Article archived' }, 404: { description: 'Not found' } },
-})
+});
 
 // --- 5b. AGENT FORMS ENDPOINTS ---
 // PATCH routes from the design doc fall back to POST-with-verb-suffix here:
@@ -1176,16 +1256,17 @@ const FormFieldSchema = z.object({
   options: z.array(z.string().min(1)).min(2).optional(),
   placeholder: z.string().min(1).max(200).optional(),
   helperText: z.string().min(1).max(300).optional(),
-})
+});
 
 registry.registerPath({
   method: 'get',
   path: '/agent/forms',
   summary: 'Agent List Forms',
-  description: 'Lists all forms in the workspace with mapping/publish/draft status. Team Lead or Admin.',
+  description:
+    'Lists all forms in the workspace with mapping/publish/draft status. Team Lead or Admin.',
   security: [{ [bearerAgentJwt.name]: [] }],
   responses: { 200: { description: 'Forms list' }, 403: { description: 'Forbidden' } },
-})
+});
 
 registry.registerPath({
   method: 'post',
@@ -1193,19 +1274,28 @@ registry.registerPath({
   summary: 'Agent Create Form',
   description: 'Creates a form and its v1 empty draft. Team Lead or Admin.',
   security: [{ [bearerAgentJwt.name]: [] }],
-  request: { body: { content: { 'application/json': { schema: z.object({ name: z.string().min(1).max(200) }) } } } },
+  request: {
+    body: {
+      content: { 'application/json': { schema: z.object({ name: z.string().min(1).max(200) }) } },
+    },
+  },
   responses: { 201: { description: 'Form created' }, 403: { description: 'Forbidden' } },
-})
+});
 
 registry.registerPath({
   method: 'get',
   path: '/agent/forms/{id}',
   summary: 'Agent Get Form',
-  description: 'Fetches one form: draft fields, published fields, and mapped subintents. Team Lead or Admin.',
+  description:
+    'Fetches one form: draft fields, published fields, and mapped subintents. Team Lead or Admin.',
   security: [{ [bearerAgentJwt.name]: [] }],
   request: { params: z.object({ id: z.uuid() }) },
-  responses: { 200: { description: 'Form detail' }, 403: { description: 'Forbidden' }, 404: { description: 'Not found' } },
-})
+  responses: {
+    200: { description: 'Form detail' },
+    403: { description: 'Forbidden' },
+    404: { description: 'Not found' },
+  },
+});
 
 registry.registerPath({
   method: 'patch',
@@ -1219,7 +1309,10 @@ registry.registerPath({
     body: {
       content: {
         'application/json': {
-          schema: z.object({ name: z.string().min(1).max(200).optional(), fields: z.array(FormFieldSchema).optional() }),
+          schema: z.object({
+            name: z.string().min(1).max(200).optional(),
+            fields: z.array(FormFieldSchema).optional(),
+          }),
         },
       },
     },
@@ -1230,13 +1323,14 @@ registry.registerPath({
     404: { description: 'Not found' },
     422: { description: 'Invalid fields, or attachment/time field type used' },
   },
-})
+});
 
 registry.registerPath({
   method: 'post',
   path: '/agent/forms/{id}/publish',
   summary: 'Agent Publish Form',
-  description: 'Publishes the current draft; rejects if there is no draft or the draft is empty. Admin-only.',
+  description:
+    'Publishes the current draft; rejects if there is no draft or the draft is empty. Admin-only.',
   security: [{ [bearerAgentJwt.name]: [] }],
   request: { params: z.object({ id: z.uuid() }) },
   responses: {
@@ -1245,13 +1339,14 @@ registry.registerPath({
     404: { description: 'Not found' },
     409: { description: 'No draft, or draft has zero fields' },
   },
-})
+});
 
 registry.registerPath({
   method: 'post',
   path: '/agent/forms/{id}/archive',
   summary: 'Agent Archive Form',
-  description: 'Archives a form. Idempotent — archiving twice succeeds. No cascade to mapped subintents. Admin-only.',
+  description:
+    'Archives a form. Idempotent — archiving twice succeeds. No cascade to mapped subintents. Admin-only.',
   security: [{ [bearerAgentJwt.name]: [] }],
   request: { params: z.object({ id: z.uuid() }) },
   responses: {
@@ -1259,7 +1354,7 @@ registry.registerPath({
     403: { description: 'Forbidden — admin role required' },
     404: { description: 'Not found' },
   },
-})
+});
 
 registry.registerPath({
   method: 'patch',
@@ -1270,7 +1365,9 @@ registry.registerPath({
   security: [{ [bearerAgentJwt.name]: [] }],
   request: {
     params: z.object({ id: z.uuid() }),
-    body: { content: { 'application/json': { schema: z.object({ subintentIds: z.array(z.uuid()) }) } } },
+    body: {
+      content: { 'application/json': { schema: z.object({ subintentIds: z.array(z.uuid()) }) } },
+    },
   },
   responses: {
     200: { description: 'Mapping replaced' },
@@ -1278,7 +1375,7 @@ registry.registerPath({
     404: { description: 'Not found' },
     422: { description: 'One or more subintent ids are unknown, archived, or cross-workspace' },
   },
-})
+});
 
 registry.registerPath({
   method: 'get',
@@ -1291,7 +1388,7 @@ registry.registerPath({
     200: { description: 'Resolved bot config' },
     403: { description: 'Forbidden — Team Lead or Admin role required' },
   },
-})
+});
 
 registry.registerPath({
   method: 'post',
@@ -1306,7 +1403,11 @@ registry.registerPath({
         'application/json': {
           schema: z.object({
             is_provisioned: z.boolean().optional().openapi({ example: true }),
-            prompt: z.string().nullable().optional().openapi({ example: 'You are the first-line support assistant…' }),
+            prompt: z
+              .string()
+              .nullable()
+              .optional()
+              .openapi({ example: 'You are the first-line support assistant…' }),
             rules: z
               .array(
                 z.object({
@@ -1343,9 +1444,12 @@ registry.registerPath({
   responses: {
     200: { description: 'Resolved bot config after the save' },
     403: { description: 'Forbidden — admin role required' },
-    422: { description: 'Nothing to change, an unknown field, an empty prompt, or an invalid rules/tools_config/limits_config payload' },
+    422: {
+      description:
+        'Nothing to change, an unknown field, an empty prompt, or an invalid rules/tools_config/limits_config payload',
+    },
   },
-})
+});
 
 registry.registerPath({
   method: 'get',
@@ -1357,8 +1461,13 @@ registry.registerPath({
   request: {
     query: z.object({
       limit: z.coerce.number().int().min(1).max(200).optional().openapi({ example: 50 }),
-      cursor: z.string().optional().openapi({ description: 'Opaque next_cursor from the previous page' }),
-      field: z.enum(['prompt', 'rules', 'tools_config', 'limits_config', 'is_provisioned']).optional(),
+      cursor: z
+        .string()
+        .optional()
+        .openapi({ description: 'Opaque next_cursor from the previous page' }),
+      field: z
+        .enum(['prompt', 'rules', 'tools_config', 'limits_config', 'is_provisioned'])
+        .optional(),
     }),
   },
   responses: {
@@ -1366,7 +1475,7 @@ registry.registerPath({
     403: { description: 'Forbidden — Team Lead or Admin role required' },
     422: { description: 'Invalid limit, cursor or field' },
   },
-})
+});
 
 registry.registerPath({
   method: 'post',
@@ -1392,9 +1501,12 @@ registry.registerPath({
     200: { description: 'Resolved bot config after the rollback' },
     403: { description: 'Forbidden — admin role required' },
     404: { description: 'No matching change_log entry for this workspace' },
-    422: { description: 'change_log_id does not belong to the requested field, or the restored value fails validation' },
+    422: {
+      description:
+        'change_log_id does not belong to the requested field, or the restored value fails validation',
+    },
   },
-})
+});
 
 // --- 6. SURFACE ARTICLE ENDPOINTS ---
 registry.registerPath({
@@ -1403,9 +1515,11 @@ registry.registerPath({
   summary: 'Public List Articles',
   description: 'Lists published articles, optionally filtered by intent or keyword.',
   security: [{ [bearerPlayerJwt.name]: [] }],
-  request: { query: z.object({ intentId: z.uuid().optional(), q: z.string().min(1).max(200).optional() }) },
+  request: {
+    query: z.object({ intentId: z.uuid().optional(), q: z.string().min(1).max(200).optional() }),
+  },
   responses: { 200: { description: 'Articles list' } },
-})
+});
 
 registry.registerPath({
   method: 'get',
@@ -1415,16 +1529,17 @@ registry.registerPath({
   security: [{ [bearerPlayerJwt.name]: [] }],
   request: { params: z.object({ id: z.uuid() }) },
   responses: { 200: { description: 'Article detail' }, 404: { description: 'Not found' } },
-})
+});
 
 registry.registerPath({
   method: 'get',
   path: '/surface/intents',
   summary: 'Public List Intents',
-  description: 'Lists intents (categories) with at least one published article, alphabetical by name.',
+  description:
+    'Lists intents (categories) with at least one published article, alphabetical by name.',
   security: [{ [bearerPlayerJwt.name]: [] }],
   responses: { 200: { description: 'Intents list' } },
-})
+});
 
 registry.registerPath({
   method: 'post',
@@ -1437,12 +1552,14 @@ registry.registerPath({
   responses: {
     200: {
       description: 'Answer applied',
-      content: { 'application/json': { schema: z.object({ confirm_phase: z.string(), status: z.string() }) } },
+      content: {
+        'application/json': { schema: z.object({ confirm_phase: z.string(), status: z.string() }) },
+      },
     },
     404: { description: 'No conversation for this player' },
     409: { description: 'No resolution check pending' },
   },
-})
+});
 
 registry.registerPath({
   method: 'post',
@@ -1455,13 +1572,17 @@ registry.registerPath({
   responses: {
     200: {
       description: 'Answer accepted',
-      content: { 'application/json': { schema: z.object({ ok: z.literal(true), is_correction: z.boolean() }) } },
+      content: {
+        'application/json': {
+          schema: z.object({ ok: z.literal(true), is_correction: z.boolean() }),
+        },
+      },
     },
     404: { description: 'No conversation for this player' },
     409: { description: 'No form pending' },
     422: { description: 'Unknown field, invalid value, or unsupported field type' },
   },
-})
+});
 
 registry.registerPath({
   method: 'post',
@@ -1476,14 +1597,18 @@ registry.registerPath({
       description: 'Form terminated and handoff completed',
       content: {
         'application/json': {
-          schema: z.object({ confirm_phase: z.literal('none'), status: z.string(), form_status: z.string() }),
+          schema: z.object({
+            confirm_phase: z.literal('none'),
+            status: z.string(),
+            form_status: z.string(),
+          }),
         },
       },
     },
     404: { description: 'No conversation for this player' },
     409: { description: 'No form pending' },
   },
-})
+});
 
 registry.registerPath({
   method: 'post',
@@ -1498,14 +1623,18 @@ registry.registerPath({
       description: 'Form skipped and handoff completed',
       content: {
         'application/json': {
-          schema: z.object({ confirm_phase: z.literal('none'), status: z.string(), form_status: z.string() }),
+          schema: z.object({
+            confirm_phase: z.literal('none'),
+            status: z.string(),
+            form_status: z.string(),
+          }),
         },
       },
     },
     404: { description: 'No conversation for this player' },
     409: { description: 'No form pending' },
   },
-})
+});
 
 registry.registerPath({
   method: 'post',
@@ -1527,7 +1656,7 @@ registry.registerPath({
     404: { description: 'No conversation for this player' },
     409: { description: 'The current conversation is still open' },
   },
-})
+});
 
 registry.registerPath({
   method: 'get',
@@ -1537,10 +1666,12 @@ registry.registerPath({
   responses: {
     200: {
       description: 'Every workspace with its member count',
-      content: { 'application/json': { schema: z.object({ workspaces: z.array(WorkspaceSummarySchema) }) } },
+      content: {
+        'application/json': { schema: z.object({ workspaces: z.array(WorkspaceSummarySchema) }) },
+      },
     },
   },
-})
+});
 
 registry.registerPath({
   method: 'post',
@@ -1548,17 +1679,30 @@ registry.registerPath({
   summary: 'Create Workspace',
   security: [{ [bearerAgentSession.name]: [] }],
   request: { body: { content: { 'application/json': { schema: CreateWorkspaceBodySchema } } } },
-  responses: { 201: { description: 'Workspace created', content: { 'application/json': { schema: WorkspaceSummarySchema } } } },
-})
+  responses: {
+    201: {
+      description: 'Workspace created',
+      content: { 'application/json': { schema: WorkspaceSummarySchema } },
+    },
+  },
+});
 
 registry.registerPath({
   method: 'patch',
   path: '/admin/workspaces/{id}',
   summary: 'Rename Workspace',
   security: [{ [bearerAgentSession.name]: [] }],
-  request: { params: z.object({ id: z.uuid() }), body: { content: { 'application/json': { schema: RenameWorkspaceBodySchema } } } },
-  responses: { 200: { description: 'Workspace renamed', content: { 'application/json': { schema: WorkspaceSummarySchema } } } },
-})
+  request: {
+    params: z.object({ id: z.uuid() }),
+    body: { content: { 'application/json': { schema: RenameWorkspaceBodySchema } } },
+  },
+  responses: {
+    200: {
+      description: 'Workspace renamed',
+      content: { 'application/json': { schema: WorkspaceSummarySchema } },
+    },
+  },
+});
 
 registry.registerPath({
   method: 'get',
@@ -1566,17 +1710,32 @@ registry.registerPath({
   summary: 'List Workspace Members',
   security: [{ [bearerAgentSession.name]: [] }],
   request: { params: z.object({ id: z.uuid() }) },
-  responses: { 200: { description: 'Active members', content: { 'application/json': { schema: z.object({ members: z.array(MemberSummarySchema) }) } } } },
-})
+  responses: {
+    200: {
+      description: 'Active members',
+      content: {
+        'application/json': { schema: z.object({ members: z.array(MemberSummarySchema) }) },
+      },
+    },
+  },
+});
 
 registry.registerPath({
   method: 'post',
   path: '/admin/workspaces/{id}/members',
   summary: 'Grant Workspace Access',
   security: [{ [bearerAgentSession.name]: [] }],
-  request: { params: z.object({ id: z.uuid() }), body: { content: { 'application/json': { schema: AddMemberBodySchema } } } },
-  responses: { 201: { description: 'Member granted', content: { 'application/json': { schema: MemberSummarySchema } } } },
-})
+  request: {
+    params: z.object({ id: z.uuid() }),
+    body: { content: { 'application/json': { schema: AddMemberBodySchema } } },
+  },
+  responses: {
+    201: {
+      description: 'Member granted',
+      content: { 'application/json': { schema: MemberSummarySchema } },
+    },
+  },
+});
 
 registry.registerPath({
   method: 'patch',
@@ -1587,8 +1746,13 @@ registry.registerPath({
     params: z.object({ id: z.uuid(), agentId: z.uuid() }),
     body: { content: { 'application/json': { schema: UpdateMemberBodySchema } } },
   },
-  responses: { 200: { description: 'Member updated or removed', content: { 'application/json': { schema: MemberSummarySchema } } } },
-})
+  responses: {
+    200: {
+      description: 'Member updated or removed',
+      content: { 'application/json': { schema: MemberSummarySchema } },
+    },
+  },
+});
 
 registry.registerPath({
   method: 'get',
@@ -1596,18 +1760,31 @@ registry.registerPath({
   summary: 'Get Workspace Secret Metadata',
   security: [{ [bearerAgentSession.name]: [] }],
   request: { params: z.object({ id: z.uuid() }) },
-  responses: { 200: { description: 'Metadata only — never the raw secret', content: { 'application/json': { schema: z.object({ secrets: z.array(SecretMetadataSchema) }) } } } },
-})
+  responses: {
+    200: {
+      description: 'Metadata only — never the raw secret',
+      content: {
+        'application/json': { schema: z.object({ secrets: z.array(SecretMetadataSchema) }) },
+      },
+    },
+  },
+});
 
 registry.registerPath({
   method: 'post',
   path: '/admin/workspaces/{id}/secret/rotate',
   summary: 'Rotate Workspace Secret',
-  description: 'The old secret keeps working for a 24h grace window. The raw new secret is returned exactly once, here.',
+  description:
+    'The old secret keeps working for a 24h grace window. The raw new secret is returned exactly once, here.',
   security: [{ [bearerAgentSession.name]: [] }],
   request: { params: z.object({ id: z.uuid() }) },
-  responses: { 201: { description: 'New secret minted', content: { 'application/json': { schema: RotatedSecretSchema } } } },
-})
+  responses: {
+    201: {
+      description: 'New secret minted',
+      content: { 'application/json': { schema: RotatedSecretSchema } },
+    },
+  },
+});
 
 registry.registerPath({
   method: 'get',
@@ -1615,29 +1792,54 @@ registry.registerPath({
   summary: 'Agent Directory',
   security: [{ [bearerAgentSession.name]: [] }],
   request: { query: z.object({ q: z.string().optional() }) },
-  responses: { 200: { description: 'Every agent, admin flags included', content: { 'application/json': { schema: z.object({ agents: z.array(AgentSummarySchema) }) } } } },
-})
+  responses: {
+    200: {
+      description: 'Every agent, admin flags included',
+      content: {
+        'application/json': { schema: z.object({ agents: z.array(AgentSummarySchema) }) },
+      },
+    },
+  },
+});
 
 registry.registerPath({
   method: 'patch',
   path: '/admin/agents/{id}/admin',
   summary: 'Grant Or Revoke Admin (super admin only)',
   security: [{ [bearerAgentSession.name]: [] }],
-  request: { params: z.object({ id: z.uuid() }), body: { content: { 'application/json': { schema: z.object({ is_admin: z.boolean() }) } } } },
-  responses: { 200: { description: 'Flag updated', content: { 'application/json': { schema: AgentSummarySchema } } } },
-})
+  request: {
+    params: z.object({ id: z.uuid() }),
+    body: { content: { 'application/json': { schema: z.object({ is_admin: z.boolean() }) } } },
+  },
+  responses: {
+    200: {
+      description: 'Flag updated',
+      content: { 'application/json': { schema: AgentSummarySchema } },
+    },
+  },
+});
 
 registry.registerPath({
   method: 'patch',
   path: '/admin/agents/{id}/super-admin',
   summary: 'Grant Or Revoke Super Admin (super admin only)',
   security: [{ [bearerAgentSession.name]: [] }],
-  request: { params: z.object({ id: z.uuid() }), body: { content: { 'application/json': { schema: z.object({ is_super_admin: z.boolean() }) } } } },
-  responses: { 200: { description: 'Flag updated', content: { 'application/json': { schema: AgentSummarySchema } } } },
-})
+  request: {
+    params: z.object({ id: z.uuid() }),
+    body: {
+      content: { 'application/json': { schema: z.object({ is_super_admin: z.boolean() }) } },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Flag updated',
+      content: { 'application/json': { schema: AgentSummarySchema } },
+    },
+  },
+});
 
 // Build Document
-const generator = new OpenApiGeneratorV3(registry.definitions)
+const generator = new OpenApiGeneratorV3(registry.definitions);
 
 export const openApiDocument = generator.generateDocument({
   openapi: '3.0.0',
@@ -1652,4 +1854,4 @@ export const openApiDocument = generator.generateDocument({
       description: 'Local Development Server',
     },
   ],
-})
+});

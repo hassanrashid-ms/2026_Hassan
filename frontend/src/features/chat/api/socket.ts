@@ -1,8 +1,8 @@
-import { io, type Socket } from 'socket.io-client'
+import { io, type Socket } from 'socket.io-client';
 
-const BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000'
+const BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000';
 
-export type SocketRole = 'player' | 'agent'
+export type SocketRole = 'player' | 'agent';
 
 /**
  * `workspaceId` matters only for an admin session (no workspace_id claim in
@@ -11,5 +11,5 @@ export type SocketRole = 'player' | 'agent'
  * always pass it.
  */
 export function createSocket(token: string, role: SocketRole, workspaceId?: string): Socket {
-  return io(BASE, { auth: { token, role, workspaceId }, transports: ['websocket'] })
+  return io(BASE, { auth: { token, role, workspaceId }, transports: ['websocket'] });
 }

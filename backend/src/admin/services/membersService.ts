@@ -1,14 +1,14 @@
-import { and, eq, isNull } from 'drizzle-orm'
-import { adminDb } from '../../shared/db/adminClient.ts'
-import { agent, workspaceMember } from '../../shared/db/schema/index.ts'
+import { and, eq, isNull } from 'drizzle-orm';
+import { adminDb } from '../../shared/db/adminClient.ts';
+import { agent, workspaceMember } from '../../shared/db/schema/index.ts';
 
 export type MemberSummary = {
-  agent_id: string
-  email: string
-  display_name: string
-  status: string
-  role: 'agent' | 'team_lead'
-}
+  agent_id: string;
+  email: string;
+  display_name: string;
+  status: string;
+  role: 'agent' | 'team_lead';
+};
 
 export async function listMembers(workspaceId: string): Promise<MemberSummary[]> {
   const rows = await adminDb
@@ -22,7 +22,7 @@ export async function listMembers(workspaceId: string): Promise<MemberSummary[]>
     .from(workspaceMember)
     .innerJoin(agent, eq(agent.id, workspaceMember.agentId))
     .where(and(eq(workspaceMember.workspaceId, workspaceId), isNull(workspaceMember.deactivatedAt)))
-    .orderBy(agent.displayName)
+    .orderBy(agent.displayName);
 
   return rows.map((row) => ({
     agent_id: row.agentId,
@@ -30,14 +30,14 @@ export async function listMembers(workspaceId: string): Promise<MemberSummary[]>
     display_name: row.displayName,
     status: row.status,
     role: row.role,
-  }))
+  }));
 }
 
 /** Upsert: granting access to an email already invited/active in this workspace updates the role instead of erroring. */
 export async function addMember(args: {
-  workspaceId: string
-  email: string
-  role: 'agent' | 'team_lead'
+  workspaceId: string;
+  email: string;
+  role: 'agent' | 'team_lead';
 }): Promise<MemberSummary> {
   // onConflictDoNothing + a defensive re-select, not onConflictDoUpdate with an
   // empty SET (invalid SQL) — mirrors the exact upsert-or-fetch pattern
@@ -48,18 +48,28 @@ export async function addMember(args: {
     .insert(agent)
     .values({ email: args.email, displayName: args.email, status: 'invited' })
     .onConflictDoNothing({ target: agent.email })
-    .returning({ id: agent.id, email: agent.email, displayName: agent.displayName, status: agent.status })
+    .returning({
+      id: agent.id,
+      email: agent.email,
+      displayName: agent.displayName,
+      status: agent.status,
+    });
 
   const agentRow =
     inserted ??
     (
       await adminDb
-        .select({ id: agent.id, email: agent.email, displayName: agent.displayName, status: agent.status })
+        .select({
+          id: agent.id,
+          email: agent.email,
+          displayName: agent.displayName,
+          status: agent.status,
+        })
         .from(agent)
         .where(eq(agent.email, args.email))
         .limit(1)
-    )[0]
-  if (!agentRow) throw new Error('agent upsert-or-fetch returned nothing')
+    )[0];
+  if (!agentRow) throw new Error('agent upsert-or-fetch returned nothing');
 
   await adminDb
     .insert(workspaceMember)
@@ -67,7 +77,7 @@ export async function addMember(args: {
     .onConflictDoUpdate({
       target: [workspaceMember.workspaceId, workspaceMember.agentId],
       set: { role: args.role, deactivatedAt: null },
-    })
+    });
 
   return {
     agent_id: agentRow.id,
@@ -75,30 +85,40 @@ export async function addMember(args: {
     display_name: agentRow.displayName,
     status: agentRow.status,
     role: args.role,
-  }
+  };
 }
 
 export async function updateMember(args: {
-  workspaceId: string
-  agentId: string
-  role?: 'agent' | 'team_lead'
-  remove?: boolean
+  workspaceId: string;
+  agentId: string;
+  role?: 'agent' | 'team_lead';
+  remove?: boolean;
 }): Promise<MemberSummary | null> {
   const [existing] = await adminDb
     .select({ status: agent.status })
     .from(agent)
     .innerJoin(workspaceMember, eq(workspaceMember.agentId, agent.id))
-    .where(and(eq(workspaceMember.workspaceId, args.workspaceId), eq(workspaceMember.agentId, args.agentId)))
-    .limit(1)
-  if (!existing) return null
+    .where(
+      and(
+        eq(workspaceMember.workspaceId, args.workspaceId),
+        eq(workspaceMember.agentId, args.agentId),
+      ),
+    )
+    .limit(1);
+  if (!existing) return null;
 
   // An invited agent has never signed in — removing them deletes the pending
   // row outright rather than soft-deactivating a membership that never became real.
   if (args.remove && existing.status === 'invited') {
     await adminDb
       .delete(workspaceMember)
-      .where(and(eq(workspaceMember.workspaceId, args.workspaceId), eq(workspaceMember.agentId, args.agentId)))
-    return null
+      .where(
+        and(
+          eq(workspaceMember.workspaceId, args.workspaceId),
+          eq(workspaceMember.agentId, args.agentId),
+        ),
+      );
+    return null;
   }
 
   const [row] = await adminDb
@@ -107,15 +127,20 @@ export async function updateMember(args: {
       role: args.role,
       deactivatedAt: args.remove ? new Date() : undefined,
     })
-    .where(and(eq(workspaceMember.workspaceId, args.workspaceId), eq(workspaceMember.agentId, args.agentId)))
-    .returning({ role: workspaceMember.role })
-  if (!row) return null
+    .where(
+      and(
+        eq(workspaceMember.workspaceId, args.workspaceId),
+        eq(workspaceMember.agentId, args.agentId),
+      ),
+    )
+    .returning({ role: workspaceMember.role });
+  if (!row) return null;
 
   const [agentRow] = await adminDb
     .select({ email: agent.email, displayName: agent.displayName, status: agent.status })
     .from(agent)
     .where(eq(agent.id, args.agentId))
-    .limit(1)
+    .limit(1);
 
   return {
     agent_id: args.agentId,
@@ -123,5 +148,5 @@ export async function updateMember(args: {
     display_name: agentRow!.displayName,
     status: agentRow!.status,
     role: row.role,
-  }
+  };
 }

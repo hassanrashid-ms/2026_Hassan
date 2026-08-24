@@ -50,14 +50,14 @@ mutually exclusive.
 
 Controls:
 
-| Control | Behavior |
-|---|---|
-| Search box | Free text. Matches ticket number (`#1042`), player identity (`external_player_id`), and subintent label. Case-insensitive. |
-| Priority | Multi-select, p1–p4 |
-| Label | Multi-select, from the `tag` table |
-| Subintent | Multi-select, from the `subintent` table, scoped to the workspace |
-| Assignee | Multi-select of agents. Meaningful mainly within "Agent Assigned"; if selected while another column has no matching rows, that column just renders its normal empty state |
-| Age | Threshold ("older than 4 hours", "older than 1 day", etc.), computed from `last_message_at` |
+| Control    | Behavior                                                                                                                                                                  |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Search box | Free text. Matches ticket number (`#1042`), player identity (`external_player_id`), and subintent label. Case-insensitive.                                                |
+| Priority   | Multi-select, p1–p4                                                                                                                                                       |
+| Label      | Multi-select, from the `tag` table                                                                                                                                        |
+| Subintent  | Multi-select, from the `subintent` table, scoped to the workspace                                                                                                         |
+| Assignee   | Multi-select of agents. Meaningful mainly within "Agent Assigned"; if selected while another column has no matching rows, that column just renders its normal empty state |
+| Age        | Threshold ("older than 4 hours", "older than 1 day", etc.), computed from `last_message_at`                                                                               |
 
 All controls combine with AND — e.g. priority p1 AND label "refund" AND
 older-than-4-hours is one filter state, matching the product spec's
@@ -92,14 +92,14 @@ projection and type change only.
 `GET /agent/conversations` gains new optional query params, all AND'd with
 the existing `status` param's column filter:
 
-| Param | Type | Matches |
-|---|---|---|
-| `q` | string | `number` (numeric/prefix match), `player.external_player_id`, `subintent.label` — `ILIKE` |
-| `priority` | string[] | `conversations.priority IN (...)` |
-| `labelIds` | uuid[] | conversation has at least one matching row in `conversation_tag` |
-| `subintentIds` | uuid[] | `conversations.subintentId IN (...)` |
-| `assigneeIds` | uuid[] | `conversations.assignedAgentId IN (...)` |
-| `olderThanHours` | number | `last_message_at < now() - interval` |
+| Param            | Type     | Matches                                                                                   |
+| ---------------- | -------- | ----------------------------------------------------------------------------------------- |
+| `q`              | string   | `number` (numeric/prefix match), `player.external_player_id`, `subintent.label` — `ILIKE` |
+| `priority`       | string[] | `conversations.priority IN (...)`                                                         |
+| `labelIds`       | uuid[]   | conversation has at least one matching row in `conversation_tag`                          |
+| `subintentIds`   | uuid[]   | `conversations.subintentId IN (...)`                                                      |
+| `assigneeIds`    | uuid[]   | `conversations.assignedAgentId IN (...)`                                                  |
+| `olderThanHours` | number   | `last_message_at < now() - interval`                                                      |
 
 `conversationsService.listConversations` (`agent/services/conversationsService.ts:18-76`)
 takes these as additional optional filter args and appends the

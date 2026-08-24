@@ -1,4 +1,4 @@
-import { clearAgentSession } from './agentSession.ts'
+import { clearAgentSession } from './agentSession.ts';
 
 /**
  * Fires from contexts outside the router — the global QueryCache/MutationCache
@@ -7,8 +7,8 @@ import { clearAgentSession } from './agentSession.ts'
  * guarantees no stale query cache or open socket survives an invalid session.
  */
 export function handleSessionExpired(): void {
-  clearAgentSession()
+  clearAgentSession();
   if (window.location.pathname !== '/login') {
-    window.location.assign('/login')
+    window.location.assign('/login');
   }
 }

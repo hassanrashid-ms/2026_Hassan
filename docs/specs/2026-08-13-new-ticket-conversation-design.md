@@ -85,7 +85,7 @@ On success, the webview:
   carve-out for the explicit new-ticket path.
 - `docs/specs/2026-08-13-conversation-lifecycle-events-and-session-attribution-design.md:12-14` —
   "the database holds exactly one conversation for that player" is no longer universally true;
-  qualify as "at most one *live* conversation."
+  qualify as "at most one _live_ conversation."
 
 ### Tests
 

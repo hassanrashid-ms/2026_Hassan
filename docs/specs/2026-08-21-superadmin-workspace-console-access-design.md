@@ -9,7 +9,7 @@ that blocks it: an admin's session has no meaningful `workspace_id` to view cons
 
 Today an admin JWT either carries no `workspace_id` (`/admin/*` routes, where it's inert — `crm_admin`
 bypasses RLS entirely) or an arbitrary one picked at login (`authService.ts`'s "any workspace" hack,
-which exists only to satisfy the JWT's shape). Neither lets an admin view a *specific* workspace's
+which exists only to satisfy the JWT's shape). Neither lets an admin view a _specific_ workspace's
 console data, because RLS scopes every query to `current_setting('app.workspace_id')`, which is set
 from the JWT — a value fixed at login, not chosen per click.
 
@@ -38,8 +38,8 @@ off the JWT (`withWorkspace.ts`) branches:
   rule in CLAUDE.md) — a bad or missing id is `404`, not an empty result set.
 
 This is strictly additive to the existing admin bypasses (`requireAdminAccess`,
-`requireTeamLeadOrAdmin`) — those already decide *whether* a route is callable; this decides *which
-workspace's rows* the query underneath sees. Both layers are needed; neither substitutes for the
+`requireTeamLeadOrAdmin`) — those already decide _whether_ a route is callable; this decides _which
+workspace's rows_ the query underneath sees. Both layers are needed; neither substitutes for the
 other.
 
 ## Frontend surface

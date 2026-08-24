@@ -1,14 +1,14 @@
 // Import-boundary enforcement only. No general style/quality ruleset, no
 // eslint:recommended, no react/hooks/a11y plugins — see task-2 brief.
-import tseslint from 'typescript-eslint'
-import boundaries from 'eslint-plugin-boundaries'
+import tseslint from 'typescript-eslint';
+import boundaries from 'eslint-plugin-boundaries';
 
 export default tseslint.config(
   {
     ignores: ['dist/**', 'node_modules/**'],
   },
   {
-    files: ['src/**/*.{ts,tsx}'],
+    files: ['**/src/**/*.{ts,tsx}'],
     languageOptions: {
       parser: tseslint.parser,
       parserOptions: { ecmaFeatures: { jsx: true } },
@@ -16,18 +16,11 @@ export default tseslint.config(
     plugins: { boundaries },
     settings: {
       'boundaries/elements': [
-        // Order matters: elements-single-match (default true) uses the first
-        // pattern that matches, so the surface patterns must be listed before
-        // the shared catch-all.
-        { type: 'agent-console', pattern: 'src/surfaces/agent-console/**/*' },
-        { type: 'webview', pattern: 'src/surfaces/webview/**/*' },
-        { type: 'shared', pattern: 'src/**/*' },
+        { type: 'agent-console', pattern: '**/src/surfaces/agent-console/**/*' },
+        { type: 'webview', pattern: '**/src/surfaces/webview/**/*' },
+        { type: 'shared', pattern: '**/src/**/*' },
       ],
-      // `routes/AppRoutes.tsx` is the single composition root: it lives in
-      // `shared` but must import page components from both surfaces to wire
-      // up routing. Exempted from boundary checks rather than modeled as a
-      // fourth zone, since it's the one deliberate, intentional crossing.
-      'boundaries/ignore': ['src/routes/AppRoutes.tsx'],
+      'boundaries/ignore': ['**/src/routes/AppRoutes.tsx'],
     },
     rules: {
       'boundaries/dependencies': [
@@ -75,7 +68,7 @@ export default tseslint.config(
   // Expressed as path patterns rather than a resolver so it holds with no extra
   // dependency and no resolver configuration to drift out of sync.
   {
-    files: ['src/surfaces/agent-console/**/*.{ts,tsx}'],
+    files: ['**/src/surfaces/agent-console/**/*.{ts,tsx}'],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -91,7 +84,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['src/surfaces/webview/**/*.{ts,tsx}'],
+    files: ['**/src/surfaces/webview/**/*.{ts,tsx}'],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -110,8 +103,8 @@ export default tseslint.config(
     // Shared code — everything outside the two surface zones. AppRoutes.tsx is
     // the one deliberate crossing and is exempt here for the same reason it is
     // listed in `boundaries/ignore` above: it is the single composition root.
-    files: ['src/**/*.{ts,tsx}'],
-    ignores: ['src/surfaces/**', 'src/routes/AppRoutes.tsx'],
+    files: ['**/src/**/*.{ts,tsx}'],
+    ignores: ['**/src/surfaces/**', '**/src/routes/AppRoutes.tsx'],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -127,4 +120,4 @@ export default tseslint.config(
       ],
     },
   },
-)
+);

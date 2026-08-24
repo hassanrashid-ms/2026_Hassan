@@ -25,13 +25,13 @@
  *
  * Usage: pnpm exec tsx backend/scripts/reseed-default-bot-prompt.ts
  */
-import { loadRootEnv } from '../src/env/loadRootEnv.ts'
+import { loadRootEnv } from '../src/env/loadRootEnv.ts';
 
 // Static imports of anything that reads env (client.ts calls getEnv() at module
 // load time) would evaluate before this line runs — Node links all of a
 // module's static imports before executing its own top-level code. Load env
 // first, then pull the rest in dynamically.
-loadRootEnv(import.meta.url)
+loadRootEnv(import.meta.url);
 
 const OLD_DEFAULT_BOT_PROMPT = `You are the first-line support assistant inside a mobile game's help window. You are talking to a player, in the game, right now.
 
@@ -83,45 +83,51 @@ not say will be refused and you will be asked to write it again.
 To hand off, call the handoff tool. The tool is what actually connects the player to a human, and it
 tells them so in our own words, so the call is the whole of your turn — you do not need to write the
 handoff sentence yourself, and a reply that only describes a handoff does not perform one. It leaves
-the player waiting on a bot that has already given up. Do not keep asking questions to fill the gap.`
+the player waiting on a bot that has already given up. Do not keep asking questions to fill the gap.`;
 
 async function main() {
-  const { db, closeDb } = await import('../src/shared/db/client.ts')
-  const { botConfig, workspace } = await import('../src/shared/db/schema/index.ts')
-  const { eq } = await import('drizzle-orm')
-  const { withWorkspace, withoutWorkspace } = await import('../src/shared/db/withWorkspace.ts')
-  const { saveBotConfig } = await import('../src/domain/bot/botConfig.ts')
-  const { getOrCreateSystemActor } = await import('../src/domain/bot/systemActor.ts')
-  const { DEFAULT_BOT_PROMPT } = await import('../src/domain/bot/defaultPrompt.ts')
+  const { db, closeDb } = await import('../src/shared/db/client.ts');
+  const { botConfig, workspace } = await import('../src/shared/db/schema/index.ts');
+  const { eq } = await import('drizzle-orm');
+  const { withWorkspace, withoutWorkspace } = await import('../src/shared/db/withWorkspace.ts');
+  const { saveBotConfig } = await import('../src/domain/bot/botConfig.ts');
+  const { getOrCreateSystemActor } = await import('../src/domain/bot/systemActor.ts');
+  const { DEFAULT_BOT_PROMPT } = await import('../src/domain/bot/defaultPrompt.ts');
 
   try {
     // `bot_config` is RLS-scoped — a plain select outside a workspace transaction
     // returns zero rows, not an error. `workspace` is one of the two unscoped
     // tables (see withoutWorkspace), so it's the only safe way to enumerate every
     // tenant before checking each one's bot_config row inside its own context.
-    const workspaces = await withoutWorkspace((tx) => tx.select({ id: workspace.id }).from(workspace))
+    const workspaces = await withoutWorkspace((tx) =>
+      tx.select({ id: workspace.id }).from(workspace),
+    );
 
-    let staleCount = 0
+    let staleCount = 0;
     for (const { id: workspaceId } of workspaces) {
       await withWorkspace(workspaceId, async (tx) => {
-        const [row] = await tx.select({ prompt: botConfig.prompt }).from(botConfig).where(eq(botConfig.workspaceId, workspaceId)).limit(1)
-        if (!row || row.prompt !== OLD_DEFAULT_BOT_PROMPT) return
+        const [row] = await tx
+          .select({ prompt: botConfig.prompt })
+          .from(botConfig)
+          .where(eq(botConfig.workspaceId, workspaceId))
+          .limit(1);
+        if (!row || row.prompt !== OLD_DEFAULT_BOT_PROMPT) return;
 
-        staleCount++
-        const actorId = await getOrCreateSystemActor(tx)
-        await saveBotConfig(tx, { workspaceId, actorId, prompt: null })
-        console.log(`  reseeded ${workspaceId}`)
-      })
+        staleCount++;
+        const actorId = await getOrCreateSystemActor(tx);
+        await saveBotConfig(tx, { workspaceId, actorId, prompt: null });
+        console.log(`  reseeded ${workspaceId}`);
+      });
     }
 
-    console.log(`${workspaces.length} workspace(s) checked, ${staleCount} reseeded.`)
-    console.log('Done.')
+    console.log(`${workspaces.length} workspace(s) checked, ${staleCount} reseeded.`);
+    console.log('Done.');
   } finally {
-    await closeDb()
+    await closeDb();
   }
 }
 
 main().catch((err) => {
-  console.error(err)
-  process.exitCode = 1
-})
+  console.error(err);
+  process.exitCode = 1;
+});

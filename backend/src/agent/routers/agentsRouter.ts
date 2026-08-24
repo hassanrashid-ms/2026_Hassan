@@ -1,6 +1,6 @@
-import { Router } from 'express'
-import { listAgentsHandler } from '../controllers/agentsController.ts'
+import { Router } from 'express';
+import { listAgentsHandler } from '../controllers/agentsController.ts';
 
-export const agentsRouter = Router()
+export const agentsRouter = Router();
 
-agentsRouter.get('/agents', listAgentsHandler)
+agentsRouter.get('/agents', listAgentsHandler);

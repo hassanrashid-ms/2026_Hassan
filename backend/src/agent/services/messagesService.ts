@@ -1,18 +1,22 @@
-import { and, eq, lte, ne } from 'drizzle-orm'
-import type { z } from 'zod'
-import { MarkAgentReadBody, SendAgentMessageBody, type AgentMessageView } from '@support/types'
-import { postMessage, toAgentView, toPlayerView } from '../../domain/conversations/index.ts'
-import { conversation, message } from '../../shared/db/schema/index.ts'
-import { withWorkspace } from '../../shared/db/withWorkspace.ts'
-import { appendEvent } from '../../shared/events/appendEvent.ts'
-import { emitInboxChanged, emitMessageToRooms, emitReadReceipt } from '../../shared/realtime/emit.ts'
-import { getIo } from '../../shared/realtime/socketServer.ts'
-import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts'
+import { and, eq, lte, ne } from 'drizzle-orm';
+import type { z } from 'zod';
+import { MarkAgentReadBody, SendAgentMessageBody, type AgentMessageView } from '@support/types';
+import { postMessage, toAgentView, toPlayerView } from '../../domain/conversations/index.ts';
+import { conversation, message } from '../../shared/db/schema/index.ts';
+import { withWorkspace } from '../../shared/db/withWorkspace.ts';
+import { appendEvent } from '../../shared/events/appendEvent.ts';
+import {
+  emitInboxChanged,
+  emitMessageToRooms,
+  emitReadReceipt,
+} from '../../shared/realtime/emit.ts';
+import { getIo } from '../../shared/realtime/socketServer.ts';
+import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts';
 
 export type SendAgentMessageResult =
   | { outcome: 'ok'; message: AgentMessageView }
   | { outcome: 'forbidden' }
-  | { outcome: 'not_found' }
+  | { outcome: 'not_found' };
 
 export async function sendAgentMessage(
   ctx: AgentContext,
@@ -20,13 +24,17 @@ export async function sendAgentMessage(
 ): Promise<SendAgentMessageResult> {
   const result = await withWorkspace(ctx.workspaceId, async (tx) => {
     const [found] = await tx
-      .select({ id: conversation.id, assignedAgentId: conversation.assignedAgentId, status: conversation.status })
+      .select({
+        id: conversation.id,
+        assignedAgentId: conversation.assignedAgentId,
+        status: conversation.status,
+      })
       .from(conversation)
       .where(eq(conversation.id, body.conversation_id))
-      .limit(1)
+      .limit(1);
 
-    if (!found) return { outcome: 'not_found' } as const
-    if (found.assignedAgentId !== ctx.agentId) return { outcome: 'forbidden' } as const
+    if (!found) return { outcome: 'not_found' } as const;
+    if (found.assignedAgentId !== ctx.agentId) return { outcome: 'forbidden' } as const;
 
     const posted = await postMessage(tx, {
       workspaceId: ctx.workspaceId,
@@ -36,46 +44,53 @@ export async function sendAgentMessage(
       authorAgentId: ctx.agentId,
       body: body.body,
       visibility: body.visibility,
-    })
+    });
 
-    let inboxStatus: 'awaiting_player' | null = null
+    let inboxStatus: 'awaiting_player' | null = null;
     if (body.visibility !== 'internal' && found.status === 'open') {
-      await tx.update(conversation).set({ status: 'awaiting_player' }).where(eq(conversation.id, found.id))
+      await tx
+        .update(conversation)
+        .set({ status: 'awaiting_player' })
+        .where(eq(conversation.id, found.id));
       await appendEvent(tx, {
         workspaceId: ctx.workspaceId,
         type: 'conversation_awaiting_player',
         conversationId: found.id,
         actorId: ctx.agentId,
         actorType: 'agent',
-      })
-      inboxStatus = 'awaiting_player'
+      });
+      inboxStatus = 'awaiting_player';
     }
 
-    return { outcome: 'ok', posted, inboxStatus } as const
-  })
+    return { outcome: 'ok', posted, inboxStatus } as const;
+  });
 
-  if (result.outcome !== 'ok') return result
+  if (result.outcome !== 'ok') return result;
 
-  const agentView = toAgentView(result.posted)
-  const playerView = toPlayerView(result.posted)
-  emitMessageToRooms(getIo(), body.conversation_id, playerView, agentView)
+  const agentView = toAgentView(result.posted);
+  const playerView = toPlayerView(result.posted);
+  emitMessageToRooms(getIo(), body.conversation_id, playerView, agentView);
   if (result.inboxStatus) {
-    emitInboxChanged(getIo(), ctx.workspaceId, body.conversation_id, result.inboxStatus)
+    emitInboxChanged(getIo(), ctx.workspaceId, body.conversation_id, result.inboxStatus);
   }
-  return { outcome: 'ok', message: agentView }
+  return { outcome: 'ok', message: agentView };
 }
 
-export type MarkReadResult = { conversationId: string; upToSeq: number; readAt: Date } | null
+export type MarkReadResult = { conversationId: string; upToSeq: number; readAt: Date } | null;
 
 export async function markAgentMessagesRead(
   ctx: AgentContext,
   body: z.infer<typeof MarkAgentReadBody>,
 ): Promise<MarkReadResult> {
-  const readAt = new Date()
+  const readAt = new Date();
 
   const result = await withWorkspace(ctx.workspaceId, async (tx) => {
-    const [found] = await tx.select({ id: conversation.id }).from(conversation).where(eq(conversation.id, body.conversation_id)).limit(1)
-    if (!found) return null
+    const [found] = await tx
+      .select({ id: conversation.id })
+      .from(conversation)
+      .where(eq(conversation.id, body.conversation_id))
+      .limit(1);
+    if (!found) return null;
 
     const updated = await tx
       .update(message)
@@ -88,11 +103,11 @@ export async function markAgentMessagesRead(
           lte(message.seq, body.up_to_seq),
         ),
       )
-      .returning({ seq: message.seq })
+      .returning({ seq: message.seq });
 
-    if (updated.length === 0) return null
-    return { conversationId: found.id, upToSeq: Math.max(...updated.map((r) => r.seq)), readAt }
-  })
+    if (updated.length === 0) return null;
+    return { conversationId: found.id, upToSeq: Math.max(...updated.map((r) => r.seq)), readAt };
+  });
 
   if (result) {
     emitReadReceipt(getIo(), 'player', {
@@ -100,8 +115,8 @@ export async function markAgentMessagesRead(
       up_to_seq: result.upToSeq,
       reader_type: 'agent',
       read_at: result.readAt.toISOString(),
-    })
+    });
   }
 
-  return result
+  return result;
 }

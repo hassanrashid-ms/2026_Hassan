@@ -20,15 +20,15 @@
 
 Slices 1 and 2 of the same spec. Do not implement any of it; if any of it is missing, stop and say so rather than building it here.
 
-| Assumed | Where |
-|---|---|
-| `form`, `form_version`, `form_submission`, `form_answer` tables + RLS policies | `backend/src/shared/db/schema/forms.ts` |
-| `form_field_type` and `form_status` pg enums | `backend/src/shared/db/schema/enums.ts` |
-| `FORM_FIELD_TYPES`, `FormFieldType`, `formFieldSchema`, `FormField` | `packages/types/src/forms.ts` |
-| `confirm_phase` enum carries `'form'` | `backend/src/shared/db/schema/enums.ts`, `packages/types/src/chat.ts` |
-| Submissions are created at handoff and terminated on submit/skip/timeout | `backend/src/domain/forms/completeFormAndHandoff.ts` |
-| `form_offered`, `form_field_answered`, `form_completed` events are written | `appendEvent` call sites |
-| Three seeded published forms | `backend/src/shared/db/seedForms.ts` |
+| Assumed                                                                        | Where                                                                 |
+| ------------------------------------------------------------------------------ | --------------------------------------------------------------------- |
+| `form`, `form_version`, `form_submission`, `form_answer` tables + RLS policies | `backend/src/shared/db/schema/forms.ts`                               |
+| `form_field_type` and `form_status` pg enums                                   | `backend/src/shared/db/schema/enums.ts`                               |
+| `FORM_FIELD_TYPES`, `FormFieldType`, `formFieldSchema`, `FormField`            | `packages/types/src/forms.ts`                                         |
+| `confirm_phase` enum carries `'form'`                                          | `backend/src/shared/db/schema/enums.ts`, `packages/types/src/chat.ts` |
+| Submissions are created at handoff and terminated on submit/skip/timeout       | `backend/src/domain/forms/completeFormAndHandoff.ts`                  |
+| `form_offered`, `form_field_answered`, `form_completed` events are written     | `appendEvent` call sites                                              |
+| Three seeded published forms                                                   | `backend/src/shared/db/seedForms.ts`                                  |
 
 **Step 0 for the whole plan — run this first and read the output:**
 
@@ -83,23 +83,23 @@ Every task's requirements implicitly include this section.
 
 ## File Structure
 
-| Path | Change |
-|---|---|
-| `packages/types/src/agent-context.ts` | `AgentFormFieldView`, `AgentFormView`; `form` on the context response |
-| `packages/types/src/forms.ts` | `FormStatusValue` (only if slice 1 did not already export it) |
-| `backend/src/agent/services/conversationContextService.ts` | `buildFormFieldViews` (pure, exported), `getFormView`, one line in `getConversationContext` |
-| `backend/src/docs/openapi.ts` | `AgentFormViewSchema`; `form` added to the context response schema |
-| `backend/tests/helpers/db.ts` | `seedForm`, `seedFormVersion`, `seedFormSubmission`, `seedFormAnswer` (if absent) |
-| `backend/tests/agent.formContext.test.ts` | **new** — the backend half of §3.5 |
-| `frontend/src/surfaces/agent-console/pages/Inbox/components/context/formStatusLine.ts` | **new**, pure |
-| `.../context/formStatusLine.test.ts` | **new** |
-| `.../context/formAnswerValue.ts` | **new**, pure |
-| `.../context/formAnswerValue.test.ts` | **new** |
-| `.../context/FormPanel.tsx` | **new** |
-| `.../components/ContextRail.tsx` | mount `FormPanel`; socket subscription for one invalidation |
-| `.../components/ContextRail.test.tsx` | socket mock; the five states; the invalidation |
-| `.../components/ConversationRow.tsx` | "Answering questions" label |
-| `.../components/ConversationList.test.tsx` | label present / absent |
+| Path                                                                                   | Change                                                                                      |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `packages/types/src/agent-context.ts`                                                  | `AgentFormFieldView`, `AgentFormView`; `form` on the context response                       |
+| `packages/types/src/forms.ts`                                                          | `FormStatusValue` (only if slice 1 did not already export it)                               |
+| `backend/src/agent/services/conversationContextService.ts`                             | `buildFormFieldViews` (pure, exported), `getFormView`, one line in `getConversationContext` |
+| `backend/src/docs/openapi.ts`                                                          | `AgentFormViewSchema`; `form` added to the context response schema                          |
+| `backend/tests/helpers/db.ts`                                                          | `seedForm`, `seedFormVersion`, `seedFormSubmission`, `seedFormAnswer` (if absent)           |
+| `backend/tests/agent.formContext.test.ts`                                              | **new** — the backend half of §3.5                                                          |
+| `frontend/src/surfaces/agent-console/pages/Inbox/components/context/formStatusLine.ts` | **new**, pure                                                                               |
+| `.../context/formStatusLine.test.ts`                                                   | **new**                                                                                     |
+| `.../context/formAnswerValue.ts`                                                       | **new**, pure                                                                               |
+| `.../context/formAnswerValue.test.ts`                                                  | **new**                                                                                     |
+| `.../context/FormPanel.tsx`                                                            | **new**                                                                                     |
+| `.../components/ContextRail.tsx`                                                       | mount `FormPanel`; socket subscription for one invalidation                                 |
+| `.../components/ContextRail.test.tsx`                                                  | socket mock; the five states; the invalidation                                              |
+| `.../components/ConversationRow.tsx`                                                   | "Answering questions" label                                                                 |
+| `.../components/ConversationList.test.tsx`                                             | label present / absent                                                                      |
 
 `FormPanel.tsx` goes in the rail's `context/` subfolder beside `PlayerStatePanel.tsx` and `TicketList.tsx`, and the two branching bits are extracted as pure functions with their own tests, exactly as `ticketOutcome.ts` / `ticketOutcome.test.ts` already do it on this surface.
 
@@ -110,6 +110,7 @@ Every task's requirements implicitly include this section.
 The whole slice's contract, plus the one piece of real branching on the backend, tested without a database.
 
 **Files:**
+
 - Modify: `packages/types/src/forms.ts` (conditionally — see Step 1)
 - Modify: `packages/types/src/agent-context.ts`
 - Modify: `backend/src/agent/services/conversationContextService.ts`
@@ -117,6 +118,7 @@ The whole slice's contract, plus the one piece of real branching on the backend,
 - Test: `backend/tests/agent.formContext.test.ts` (created here, DB-free tests only)
 
 **Interfaces:**
+
 - Consumes: `FormField` and `FormFieldType` from `@support/types` (slice 1).
 - Produces:
   - `type FormStatusValue = 'in_progress' | 'completed' | 'partial' | 'skipped'`
@@ -145,7 +147,7 @@ If it prints nothing, append this to `packages/types/src/forms.ts`:
  * `skipped`. Which action ended the submission lives in the `form_completed`
  * event's `terminated_by`, not here.
  */
-export type FormStatusValue = 'in_progress' | 'completed' | 'partial' | 'skipped'
+export type FormStatusValue = 'in_progress' | 'completed' | 'partial' | 'skipped';
 ```
 
 If it prints an existing status type under another name, use that name everywhere below instead of `FormStatusValue` and skip this edit. Either way, confirm it is re-exported from `packages/types/src/index.ts`:
@@ -161,16 +163,35 @@ If `./forms.ts` is not exported from the barrel, add `export * from './forms.ts'
 Create `backend/tests/agent.formContext.test.ts`. This first block is pure — no Postgres, no server. The DB-backed blocks arrive in Task 2 and append to the same file.
 
 ```typescript
-import { describe, expect, it } from 'vitest'
-import type { FormField } from '@support/types'
-import { buildFormFieldViews } from '../src/agent/services/conversationContextService.ts'
+import { describe, expect, it } from 'vitest';
+import type { FormField } from '@support/types';
+import { buildFormFieldViews } from '../src/agent/services/conversationContextService.ts';
 
 const V1_FIELDS: FormField[] = [
-  { key: 'store', label: 'Store', type: 'choice', isRequired: true, position: 0, options: ['Apple App Store', 'Google Play', 'Other'] },
-  { key: 'order_or_receipt_id', label: 'Order or receipt ID', type: 'short_text', isRequired: true, position: 1 },
+  {
+    key: 'store',
+    label: 'Store',
+    type: 'choice',
+    isRequired: true,
+    position: 0,
+    options: ['Apple App Store', 'Google Play', 'Other'],
+  },
+  {
+    key: 'order_or_receipt_id',
+    label: 'Order or receipt ID',
+    type: 'short_text',
+    isRequired: true,
+    position: 1,
+  },
   { key: 'purchase_date', label: 'Date of purchase', type: 'date', isRequired: true, position: 2 },
-  { key: 'what_you_expected', label: 'What you expected', type: 'long_text', isRequired: true, position: 3 },
-]
+  {
+    key: 'what_you_expected',
+    label: 'What you expected',
+    type: 'long_text',
+    isRequired: true,
+    position: 3,
+  },
+];
 
 describe('buildFormFieldViews', () => {
   it('renders every field in position order when all are answered', () => {
@@ -179,12 +200,17 @@ describe('buildFormFieldViews', () => {
       { fieldKey: 'store', fieldType: 'choice', value: 'Google Play' },
       { fieldKey: 'purchase_date', fieldType: 'date', value: '2026-08-16' },
       { fieldKey: 'order_or_receipt_id', fieldType: 'short_text', value: 'GPA.1234' },
-    ])
+    ]);
 
-    expect(rows.map((r) => r.key)).toEqual(['store', 'order_or_receipt_id', 'purchase_date', 'what_you_expected'])
-    expect(rows.every((r) => r.answered)).toBe(true)
-    expect(answeredCount).toBe(4)
-  })
+    expect(rows.map((r) => r.key)).toEqual([
+      'store',
+      'order_or_receipt_id',
+      'purchase_date',
+      'what_you_expected',
+    ]);
+    expect(rows.every((r) => r.answered)).toBe(true);
+    expect(answeredCount).toBe(4);
+  });
 
   // The assertion that carries the product requirement: a gap is a row, not an
   // omission. An agent has to be able to tell "the player did not answer this"
@@ -193,39 +219,64 @@ describe('buildFormFieldViews', () => {
     const { rows, answeredCount } = buildFormFieldViews(V1_FIELDS, [
       { fieldKey: 'store', fieldType: 'choice', value: 'Google Play' },
       { fieldKey: 'order_or_receipt_id', fieldType: 'short_text', value: 'GPA.1234' },
-    ])
+    ]);
 
-    expect(rows).toHaveLength(4)
-    expect(rows.map((r) => r.answered)).toEqual([true, true, false, false])
-    expect(rows[2]).toMatchObject({ key: 'purchase_date', label: 'Date of purchase', value: null, answered: false })
-    expect(answeredCount).toBe(2)
-  })
+    expect(rows).toHaveLength(4);
+    expect(rows.map((r) => r.answered)).toEqual([true, true, false, false]);
+    expect(rows[2]).toMatchObject({
+      key: 'purchase_date',
+      label: 'Date of purchase',
+      value: null,
+      answered: false,
+    });
+    expect(answeredCount).toBe(2);
+  });
 
   it('renders every field as a gap when nothing was answered', () => {
-    const { rows, answeredCount } = buildFormFieldViews(V1_FIELDS, [])
-    expect(rows).toHaveLength(4)
-    expect(rows.some((r) => r.answered)).toBe(false)
-    expect(answeredCount).toBe(0)
-  })
+    const { rows, answeredCount } = buildFormFieldViews(V1_FIELDS, []);
+    expect(rows).toHaveLength(4);
+    expect(rows.some((r) => r.answered)).toBe(false);
+    expect(answeredCount).toBe(0);
+  });
 
   // The answer snapshots its own field_type precisely so the value is
   // interpretable without resolving the version. A field retyped in v2 must not
   // change how a v1 answer reads.
   it('takes field_type from the answer, and only the label from the version', () => {
     const { rows } = buildFormFieldViews(
-      [{ key: 'purchase_date', label: 'Date of purchase', type: 'short_text', isRequired: true, position: 0 }],
+      [
+        {
+          key: 'purchase_date',
+          label: 'Date of purchase',
+          type: 'short_text',
+          isRequired: true,
+          position: 0,
+        },
+      ],
       [{ fieldKey: 'purchase_date', fieldType: 'date', value: '2026-08-16' }],
-    )
-    expect(rows[0]).toMatchObject({ label: 'Date of purchase', field_type: 'date', value: '2026-08-16' })
-  })
+    );
+    expect(rows[0]).toMatchObject({
+      label: 'Date of purchase',
+      field_type: 'date',
+      value: '2026-08-16',
+    });
+  });
 
   it('takes field_type from the version for an unanswered field', () => {
     const { rows } = buildFormFieldViews(
-      [{ key: 'purchase_date', label: 'Date of purchase', type: 'date', isRequired: true, position: 0 }],
+      [
+        {
+          key: 'purchase_date',
+          label: 'Date of purchase',
+          type: 'date',
+          isRequired: true,
+          position: 0,
+        },
+      ],
       [],
-    )
-    expect(rows[0]).toMatchObject({ field_type: 'date', answered: false })
-  })
+    );
+    expect(rows[0]).toMatchObject({ field_type: 'date', answered: false });
+  });
 
   it('sorts by position rather than trusting array order', () => {
     const { rows } = buildFormFieldViews(
@@ -234,9 +285,9 @@ describe('buildFormFieldViews', () => {
         { key: 'a', label: 'A', type: 'short_text', isRequired: false, position: 0 },
       ],
       [],
-    )
-    expect(rows.map((r) => r.key)).toEqual(['a', 'b'])
-  })
+    );
+    expect(rows.map((r) => r.key)).toEqual(['a', 'b']);
+  });
 
   // Cannot normally occur — the answer route validates field_key against this
   // same version — but appending beats dropping, exactly as getPlayerStateView
@@ -249,12 +300,12 @@ describe('buildFormFieldViews', () => {
         { fieldKey: 'a', fieldType: 'short_text', value: 'yes' },
         { fieldKey: 'ghost', fieldType: 'short_text', value: 'orphan' },
       ],
-    )
-    expect(rows.map((r) => r.key)).toEqual(['a', 'ghost'])
-    expect(rows[1]).toMatchObject({ label: 'ghost', answered: true })
-    expect(answeredCount).toBe(1)
-  })
-})
+    );
+    expect(rows.map((r) => r.key)).toEqual(['a', 'ghost']);
+    expect(rows[1]).toMatchObject({ label: 'ghost', answered: true });
+    expect(answeredCount).toBe(1);
+  });
+});
 ```
 
 - [ ] **Step 3: Run it to make sure it fails**
@@ -267,7 +318,7 @@ Expected: FAIL — `buildFormFieldViews` is not exported from `conversationConte
 In `packages/types/src/agent-context.ts`, add the imports at the top:
 
 ```typescript
-import type { FormFieldType, FormStatusValue } from './forms.ts'
+import type { FormFieldType, FormStatusValue } from './forms.ts';
 ```
 
 and append these types:
@@ -279,20 +330,20 @@ and append these types:
  * be able to tell "the player did not answer this" from "this was never asked".
  */
 export type AgentFormFieldView = {
-  key: string
+  key: string;
   /** From the submission's snapshotted form_version, never the current one. */
-  label: string
-  position: number
+  label: string;
+  position: number;
   /**
    * From the answer's own snapshotted field_type when answered — the value is
    * interpretable without resolving the version, which is why that column
    * exists. From the version's declared type when unanswered.
    */
-  field_type: FormFieldType
+  field_type: FormFieldType;
   /** null when the field has no answer row. Read `answered`, not this. */
-  value: unknown
-  answered: boolean
-}
+  value: unknown;
+  answered: boolean;
+};
 
 /**
  * The form section of the context rail. `null` on the response when this
@@ -300,36 +351,36 @@ export type AgentFormFieldView = {
  * entirely rather than opening onto nothing, the same precedent `raw` sets.
  */
 export type AgentFormView = {
-  form_name: string
+  form_name: string;
   /** The submission's snapshot. The section header names it: "Purchase receipt · v1". */
-  form_version: number
-  status: FormStatusValue
+  form_version: number;
+  status: FormStatusValue;
   /** The version's field count. The denominator in "2 of 4". */
-  field_count: number
+  field_count: number;
   /** Distinct answered keys that are in the version. Never exceeds field_count. */
-  answered_count: number
+  answered_count: number;
   /** In `position` order, answered and unanswered alike. */
-  fields: AgentFormFieldView[]
-}
+  fields: AgentFormFieldView[];
+};
 ```
 
 Then add the field to the response type:
 
 ```typescript
 export type AgentConversationContextResponse = {
-  player_state: AgentPlayerStateView
-  tickets: AgentTicketSummary[]
+  player_state: AgentPlayerStateView;
+  tickets: AgentTicketSummary[];
   summary: {
-    total_tickets: number
-    total_reopened: number
-    first_contact_at: string
-  }
+    total_tickets: number;
+    total_reopened: number;
+    first_contact_at: string;
+  };
   /**
    * null when this conversation has no form submission. Not an error and not an
    * empty object: the rail omits the section entirely.
    */
-  form: AgentFormView | null
-}
+  form: AgentFormView | null;
+};
 ```
 
 Leave the existing doc comments on `tickets` and `summary` exactly as they are.
@@ -347,14 +398,14 @@ import type {
   AgentTicketSummary,
   FormField,
   FormFieldType,
-} from '@support/types'
+} from '@support/types';
 ```
 
 and append to the file:
 
 ```typescript
 /** One field's current answer: the row with the greatest `created_at` for its key. */
-export type LatestAnswer = { fieldKey: string; fieldType: FormFieldType; value: unknown }
+export type LatestAnswer = { fieldKey: string; fieldType: FormFieldType; value: unknown };
 
 /**
  * The submission's snapshotted field list folded together with its current
@@ -369,16 +420,16 @@ export function buildFormFieldViews(
   fields: FormField[],
   answers: LatestAnswer[],
 ): { rows: AgentFormFieldView[]; answeredCount: number } {
-  const byKey = new Map(answers.map((answer) => [answer.fieldKey, answer]))
-  const rows: AgentFormFieldView[] = []
-  let answeredCount = 0
+  const byKey = new Map(answers.map((answer) => [answer.fieldKey, answer]));
+  const rows: AgentFormFieldView[] = [];
+  let answeredCount = 0;
 
   // Sorted here rather than trusted from the jsonb array: this list is read as
   // the order the questions were asked in, and a mis-ordered row misreads.
-  const ordered = [...fields].sort((a, b) => a.position - b.position)
+  const ordered = [...fields].sort((a, b) => a.position - b.position);
   for (const field of ordered) {
-    const answer = byKey.get(field.key)
-    if (answer) answeredCount += 1
+    const answer = byKey.get(field.key);
+    if (answer) answeredCount += 1;
     rows.push({
       key: field.key,
       label: field.label,
@@ -386,16 +437,16 @@ export function buildFormFieldViews(
       field_type: answer ? answer.fieldType : field.type,
       value: answer ? answer.value : null,
       answered: answer !== undefined,
-    })
+    });
   }
 
   // An answer whose key is not in the version cannot normally occur — the answer
   // route validates against this same version — but appending beats dropping,
   // the same call getPlayerStateView makes for an undeclared blob key. It does
   // not count toward answered_count: the denominator is the questions asked.
-  const known = new Set(ordered.map((field) => field.key))
+  const known = new Set(ordered.map((field) => field.key));
   for (const answer of answers) {
-    if (known.has(answer.fieldKey)) continue
+    if (known.has(answer.fieldKey)) continue;
     rows.push({
       key: answer.fieldKey,
       label: answer.fieldKey,
@@ -403,10 +454,10 @@ export function buildFormFieldViews(
       field_type: answer.fieldType,
       value: answer.value,
       answered: true,
-    })
+    });
   }
 
-  return { rows, answeredCount }
+  return { rows, answeredCount };
 }
 ```
 
@@ -426,14 +477,14 @@ function contextResponse(playerState: AgentPlayerStateView): AgentConversationCo
     tickets: [],
     summary: { total_tickets: 0, total_reopened: 0, first_contact_at: '2026-04-12T00:00:00Z' },
     form: null,
-  }
+  };
 }
 ```
 
 - [ ] **Step 8: Typecheck the workspace**
 
 Run: `pnpm typecheck`
-Expected: PASS. If `getConversationContext` is flagged for not returning `form`, that is Task 2 — but it should not be yet, because the object literal there is still missing a required property. If it *is* flagged, add `form: null` to that return object as a placeholder and let Task 2 replace it; do not leave the typecheck red at the end of a task.
+Expected: PASS. If `getConversationContext` is flagged for not returning `form`, that is Task 2 — but it should not be yet, because the object literal there is still missing a required property. If it _is_ flagged, add `form: null` to that return object as a placeholder and let Task 2 replace it; do not leave the typecheck red at the end of a task.
 
 - [ ] **Step 9: Commit**
 
@@ -452,12 +503,14 @@ git commit -m "feat(agent-context): form view types and the pure field-view fold
 Three scoped reads inside the transaction the endpoint already opens, folded by Task 1's function, plus the Swagger entry the repo requires.
 
 **Files:**
+
 - Modify: `backend/src/agent/services/conversationContextService.ts`
 - Modify: `backend/src/docs/openapi.ts:497-527` (the context response schema)
 - Modify: `backend/tests/helpers/db.ts`
 - Test: `backend/tests/agent.formContext.test.ts` (append)
 
 **Interfaces:**
+
 - Consumes: `buildFormFieldViews`, `LatestAnswer`, `AgentFormView` from Task 1.
 - Produces: `getFormView(tx: Tx, conversationId: string): Promise<AgentFormView | null>`, exported so the tests can call it inside `withWorkspace` the way `getPlayerStateView` and `getTicketHistory` already are; `form` present on every 200 from `/context`.
 
@@ -467,64 +520,86 @@ Only if Step 0's grep showed they are absent. Append to `backend/tests/helpers/d
 
 ```typescript
 export async function seedForm(args: { workspaceId: string; name?: string }): Promise<string> {
-  const id = randomUUID()
+  const id = randomUUID();
   await ownerPool.query(`insert into form (id, workspace_id, name) values ($1, $2, $3)`, [
     id,
     args.workspaceId,
     args.name ?? `Form ${id.slice(0, 8)}`,
-  ])
-  return id
+  ]);
+  return id;
 }
 
 export async function seedFormVersion(args: {
-  workspaceId: string
-  formId: string
-  version: number
-  fields: unknown[]
-  published?: boolean
+  workspaceId: string;
+  formId: string;
+  version: number;
+  fields: unknown[];
+  published?: boolean;
 }): Promise<string> {
-  const id = randomUUID()
+  const id = randomUUID();
   await ownerPool.query(
     `insert into form_version (id, workspace_id, form_id, version, fields, published_at)
      values ($1, $2, $3, $4, $5, case when $6 then now() else null end)`,
-    [id, args.workspaceId, args.formId, args.version, JSON.stringify(args.fields), args.published ?? true],
-  )
-  return id
+    [
+      id,
+      args.workspaceId,
+      args.formId,
+      args.version,
+      JSON.stringify(args.fields),
+      args.published ?? true,
+    ],
+  );
+  return id;
 }
 
 export async function seedFormSubmission(args: {
-  workspaceId: string
-  conversationId: string
-  formId: string
-  formVersion: number
-  status?: 'in_progress' | 'completed' | 'partial' | 'skipped'
+  workspaceId: string;
+  conversationId: string;
+  formId: string;
+  formVersion: number;
+  status?: 'in_progress' | 'completed' | 'partial' | 'skipped';
 }): Promise<string> {
-  const id = randomUUID()
+  const id = randomUUID();
   await ownerPool.query(
     `insert into form_submission (id, workspace_id, conversation_id, form_id, form_version, status)
      values ($1, $2, $3, $4, $5, $6)`,
-    [id, args.workspaceId, args.conversationId, args.formId, args.formVersion, args.status ?? 'in_progress'],
-  )
-  return id
+    [
+      id,
+      args.workspaceId,
+      args.conversationId,
+      args.formId,
+      args.formVersion,
+      args.status ?? 'in_progress',
+    ],
+  );
+  return id;
 }
 
 export async function seedFormAnswer(args: {
-  workspaceId: string
-  submissionId: string
-  fieldKey: string
-  fieldType: string
-  value: unknown
-  createdAt?: Date
+  workspaceId: string;
+  submissionId: string;
+  fieldKey: string;
+  fieldType: string;
+  value: unknown;
+  createdAt?: Date;
 }): Promise<string> {
-  const id = randomUUID()
+  const id = randomUUID();
   // ownerPool connects as the migration role, so REVOKE UPDATE ON form_answer
   // FROM support_app does not apply here. Tests still never update a row.
   await ownerPool.query(
     `insert into form_answer (id, workspace_id, form_submission_id, field_key, field_type, value, created_at)
      values ($1, $2, $3, $4, $5, $6, coalesce($7, now()))`,
-    [id, args.workspaceId, args.submissionId, args.fieldKey, args.fieldType, JSON.stringify(args.value), args.createdAt ?? null],
-  )
-  return id
+    [
+      id,
+      args.workspaceId,
+      args.submissionId,
+      args.fieldKey,
+      args.fieldType,
+      JSON.stringify(args.value),
+      args.createdAt ?? null,
+    ],
+  );
+  return id;
 }
 ```
 
@@ -533,18 +608,18 @@ export async function seedFormAnswer(args: {
 Append to `backend/tests/agent.formContext.test.ts`. Add these imports at the top of the file:
 
 ```typescript
-import { createServer } from 'node:http'
-import express from 'express'
-import { afterAll, beforeAll, beforeEach } from 'vitest'
-import { req as request } from './helpers/http.ts'
-import { closeDb } from '../src/shared/db/client.ts'
-import { withWorkspace } from '../src/shared/db/withWorkspace.ts'
-import { getFormView } from '../src/agent/services/conversationContextService.ts'
-import { requireAgentSession } from '../src/shared/middleware/requireAgentSession.ts'
-import { errorMiddleware } from '../src/errors.ts'
-import { signAgentSession } from '../src/shared/auth/agentSession.ts'
-import { closeSocketServer, createSocketServer } from '../src/shared/realtime/socketServer.ts'
-import { conversationsRouter } from '../src/agent/routers/conversationsRouter.ts'
+import { createServer } from 'node:http';
+import express from 'express';
+import { afterAll, beforeAll, beforeEach } from 'vitest';
+import { req as request } from './helpers/http.ts';
+import { closeDb } from '../src/shared/db/client.ts';
+import { withWorkspace } from '../src/shared/db/withWorkspace.ts';
+import { getFormView } from '../src/agent/services/conversationContextService.ts';
+import { requireAgentSession } from '../src/shared/middleware/requireAgentSession.ts';
+import { errorMiddleware } from '../src/errors.ts';
+import { signAgentSession } from '../src/shared/auth/agentSession.ts';
+import { closeSocketServer, createSocketServer } from '../src/shared/realtime/socketServer.ts';
+import { conversationsRouter } from '../src/agent/routers/conversationsRouter.ts';
 import {
   closeOwnerPool,
   ownerPool,
@@ -556,74 +631,77 @@ import {
   seedPlayer,
   seedWorkspace,
   truncateAll,
-} from './helpers/db.ts'
+} from './helpers/db.ts';
 ```
 
 and this body:
 
 ```typescript
-const app = express()
-app.use(express.json())
-app.use(requireAgentSession, conversationsRouter)
-app.use(errorMiddleware)
+const app = express();
+app.use(express.json());
+app.use(requireAgentSession, conversationsRouter);
+app.use(errorMiddleware);
 
 beforeAll(() => {
-  createSocketServer(createServer())
-})
+  createSocketServer(createServer());
+});
 
 afterAll(async () => {
-  await closeSocketServer()
-  await closeDb()
-  await closeOwnerPool()
-})
+  await closeSocketServer();
+  await closeDb();
+  await closeOwnerPool();
+});
 
-beforeEach(truncateAll)
+beforeEach(truncateAll);
 
 async function setupAgent(workspaceId: string) {
   const { rows } = await ownerPool.query<{ id: string }>(
     `insert into agent (email, display_name) values ($1, 'Agent One') returning id`,
     [`a-${workspaceId.slice(0, 8)}@example.test`],
-  )
-  const agentId = rows[0]!.id
-  await ownerPool.query(`insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`, [
-    workspaceId,
+  );
+  const agentId = rows[0]!.id;
+  await ownerPool.query(
+    `insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`,
+    [workspaceId, agentId],
+  );
+  return {
     agentId,
-  ])
-  return { agentId, token: await signAgentSession({ agent_id: agentId, workspace_id: workspaceId }) }
+    token: await signAgentSession({ agent_id: agentId, workspace_id: workspaceId }),
+  };
 }
 
 async function setupSubmission(args: {
-  status?: 'in_progress' | 'completed' | 'partial' | 'skipped'
-  v1Fields?: unknown[]
+  status?: 'in_progress' | 'completed' | 'partial' | 'skipped';
+  v1Fields?: unknown[];
 }) {
-  const workspaceId = await seedWorkspace()
-  const playerId = await seedPlayer(workspaceId)
-  const conversationId = await seedConversation({ workspaceId, playerId })
-  const formId = await seedForm({ workspaceId, name: 'Purchase receipt' })
-  await seedFormVersion({ workspaceId, formId, version: 1, fields: args.v1Fields ?? V1_FIELDS })
+  const workspaceId = await seedWorkspace();
+  const playerId = await seedPlayer(workspaceId);
+  const conversationId = await seedConversation({ workspaceId, playerId });
+  const formId = await seedForm({ workspaceId, name: 'Purchase receipt' });
+  await seedFormVersion({ workspaceId, formId, version: 1, fields: args.v1Fields ?? V1_FIELDS });
   const submissionId = await seedFormSubmission({
     workspaceId,
     conversationId,
     formId,
     formVersion: 1,
     status: args.status ?? 'in_progress',
-  })
-  return { workspaceId, playerId, conversationId, formId, submissionId }
+  });
+  return { workspaceId, playerId, conversationId, formId, submissionId };
 }
 
 describe('getFormView', () => {
   it('returns null when the conversation has no submission', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
 
-    const view = await withWorkspace(workspaceId, (tx) => getFormView(tx, conversationId))
-    expect(view).toBeNull()
-  })
+    const view = await withWorkspace(workspaceId, (tx) => getFormView(tx, conversationId));
+    expect(view).toBeNull();
+  });
 
   it('names the form and the snapshotted version', async () => {
-    const { workspaceId, conversationId } = await setupSubmission({ status: 'skipped' })
-    const view = await withWorkspace(workspaceId, (tx) => getFormView(tx, conversationId))
+    const { workspaceId, conversationId } = await setupSubmission({ status: 'skipped' });
+    const view = await withWorkspace(workspaceId, (tx) => getFormView(tx, conversationId));
 
     expect(view).toMatchObject({
       form_name: 'Purchase receipt',
@@ -631,11 +709,11 @@ describe('getFormView', () => {
       status: 'skipped',
       field_count: 4,
       answered_count: 0,
-    })
-  })
+    });
+  });
 
   it('reads the greatest created_at per field_key and hides the older row', async () => {
-    const { workspaceId, conversationId, submissionId } = await setupSubmission({})
+    const { workspaceId, conversationId, submissionId } = await setupSubmission({});
     await seedFormAnswer({
       workspaceId,
       submissionId,
@@ -643,7 +721,7 @@ describe('getFormView', () => {
       fieldType: 'short_text',
       value: 'GPA.0000',
       createdAt: new Date('2026-08-17T10:00:00Z'),
-    })
+    });
     await seedFormAnswer({
       workspaceId,
       submissionId,
@@ -651,99 +729,118 @@ describe('getFormView', () => {
       fieldType: 'short_text',
       value: 'GPA.1234',
       createdAt: new Date('2026-08-17T10:05:00Z'),
-    })
+    });
 
-    const view = await withWorkspace(workspaceId, (tx) => getFormView(tx, conversationId))
-    const row = view!.fields.find((f) => f.key === 'order_or_receipt_id')
-    expect(row).toMatchObject({ value: 'GPA.1234', answered: true })
+    const view = await withWorkspace(workspaceId, (tx) => getFormView(tx, conversationId));
+    const row = view!.fields.find((f) => f.key === 'order_or_receipt_id');
+    expect(row).toMatchObject({ value: 'GPA.1234', answered: true });
     // A correction is one row in the rail, not two: revision history is noise.
-    expect(view!.fields.filter((f) => f.key === 'order_or_receipt_id')).toHaveLength(1)
-    expect(view!.answered_count).toBe(1)
-  })
+    expect(view!.fields.filter((f) => f.key === 'order_or_receipt_id')).toHaveLength(1);
+    expect(view!.answered_count).toBe(1);
+  });
 
   // The whole reason form_submission.form_version exists. Editing a live form
   // creates v2; answers already collected stay readable against v1.
   it('labels against the submission version after the form is edited to v2', async () => {
-    const { workspaceId, conversationId, formId, submissionId } = await setupSubmission({})
+    const { workspaceId, conversationId, formId, submissionId } = await setupSubmission({});
     await seedFormAnswer({
       workspaceId,
       submissionId,
       fieldKey: 'purchase_date',
       fieldType: 'date',
       value: '2026-08-16',
-    })
+    });
     await seedFormVersion({
       workspaceId,
       formId,
       version: 2,
       fields: [
-        { key: 'purchase_date', label: 'When you bought it', type: 'short_text', isRequired: true, position: 0 },
+        {
+          key: 'purchase_date',
+          label: 'When you bought it',
+          type: 'short_text',
+          isRequired: true,
+          position: 0,
+        },
       ],
-    })
+    });
 
-    const view = await withWorkspace(workspaceId, (tx) => getFormView(tx, conversationId))
-    expect(view!.form_version).toBe(1)
-    expect(view!.field_count).toBe(4)
-    const row = view!.fields.find((f) => f.key === 'purchase_date')
-    expect(row!.label).toBe('Date of purchase')
+    const view = await withWorkspace(workspaceId, (tx) => getFormView(tx, conversationId));
+    expect(view!.form_version).toBe(1);
+    expect(view!.field_count).toBe(4);
+    const row = view!.fields.find((f) => f.key === 'purchase_date');
+    expect(row!.label).toBe('Date of purchase');
     // Type comes off the answer, so retyping the field in v2 changes nothing here.
-    expect(row!.field_type).toBe('date')
-  })
-})
+    expect(row!.field_type).toBe('date');
+  });
+});
 
 describe('GET /agent/conversations/:id/context form block', () => {
   it('returns form: null when the conversation was never offered one', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
-    const { token } = await setupAgent(workspaceId)
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
+    const { token } = await setupAgent(workspaceId);
 
     const res = await request(app)
       .get(`/conversations/${conversationId}/context`)
-      .set('Authorization', `Bearer ${token}`)
+      .set('Authorization', `Bearer ${token}`);
 
-    expect(res.status).toBe(200)
-    expect(res.body.form).toBeNull()
+    expect(res.status).toBe(200);
+    expect(res.body.form).toBeNull();
     // The other two sections are unaffected by an absent form.
-    expect(res.body.player_state).toBeDefined()
-    expect(res.body.tickets).toBeDefined()
-  })
+    expect(res.body.player_state).toBeDefined();
+    expect(res.body.tickets).toBeDefined();
+  });
 
   it('carries the partial form with its gaps intact', async () => {
-    const { workspaceId, conversationId, submissionId } = await setupSubmission({ status: 'partial' })
-    await seedFormAnswer({ workspaceId, submissionId, fieldKey: 'store', fieldType: 'choice', value: 'Google Play' })
+    const { workspaceId, conversationId, submissionId } = await setupSubmission({
+      status: 'partial',
+    });
+    await seedFormAnswer({
+      workspaceId,
+      submissionId,
+      fieldKey: 'store',
+      fieldType: 'choice',
+      value: 'Google Play',
+    });
     await seedFormAnswer({
       workspaceId,
       submissionId,
       fieldKey: 'order_or_receipt_id',
       fieldType: 'short_text',
       value: 'GPA.1234',
-    })
-    const { token } = await setupAgent(workspaceId)
+    });
+    const { token } = await setupAgent(workspaceId);
 
     const res = await request(app)
       .get(`/conversations/${conversationId}/context`)
-      .set('Authorization', `Bearer ${token}`)
+      .set('Authorization', `Bearer ${token}`);
 
-    expect(res.status).toBe(200)
-    expect(res.body.form.status).toBe('partial')
-    expect(res.body.form.answered_count).toBe(2)
-    expect(res.body.form.field_count).toBe(4)
-    expect(res.body.form.fields.map((f: { answered: boolean }) => f.answered)).toEqual([true, true, false, false])
-  })
+    expect(res.status).toBe(200);
+    expect(res.body.form.status).toBe('partial');
+    expect(res.body.form.answered_count).toBe(2);
+    expect(res.body.form.field_count).toBe(4);
+    expect(res.body.form.fields.map((f: { answered: boolean }) => f.answered)).toEqual([
+      true,
+      true,
+      false,
+      false,
+    ]);
+  });
 
   it('404s a conversation in another workspace rather than leaking its form', async () => {
-    const { conversationId } = await setupSubmission({})
-    const otherWorkspaceId = await seedWorkspace()
-    const { token } = await setupAgent(otherWorkspaceId)
+    const { conversationId } = await setupSubmission({});
+    const otherWorkspaceId = await seedWorkspace();
+    const { token } = await setupAgent(otherWorkspaceId);
 
     const res = await request(app)
       .get(`/conversations/${conversationId}/context`)
-      .set('Authorization', `Bearer ${token}`)
+      .set('Authorization', `Bearer ${token}`);
 
-    expect(res.status).toBe(404)
-  })
-})
+    expect(res.status).toBe(404);
+  });
+});
 ```
 
 - [ ] **Step 3: Run them to verify they fail**
@@ -769,7 +866,7 @@ import {
   player,
   playerStateSnapshot,
   subintent,
-} from '../../shared/db/schema/index.ts'
+} from '../../shared/db/schema/index.ts';
 ```
 
 and add `AgentFormView` to the `@support/types` type import. Then append:
@@ -808,19 +905,21 @@ export async function getFormView(tx: Tx, conversationId: string): Promise<Agent
     // there is at most one today. Newest-first with limit 1 so a future second
     // form shows the current one rather than an arbitrary row.
     .orderBy(desc(formSubmission.startedAt))
-    .limit(1)
+    .limit(1);
 
-  if (!submission) return null
+  if (!submission) return null;
 
   const [version] = await tx
     .select({ fields: formVersion.fields })
     .from(formVersion)
-    .where(and(eq(formVersion.formId, submission.formId), eq(formVersion.version, submission.version)))
-    .limit(1)
+    .where(
+      and(eq(formVersion.formId, submission.formId), eq(formVersion.version, submission.version)),
+    )
+    .limit(1);
 
   // FK (form_id, form_version) -> form_version (form_id, version) makes the
   // miss impossible; an empty list beats a throw if the constraint ever slips.
-  const fields = version?.fields ?? []
+  const fields = version?.fields ?? [];
 
   const answerRows = await tx
     .select({
@@ -830,15 +929,15 @@ export async function getFormView(tx: Tx, conversationId: string): Promise<Agent
     })
     .from(formAnswer)
     .where(eq(formAnswer.formSubmissionId, submission.id))
-    .orderBy(asc(formAnswer.createdAt), asc(formAnswer.id))
+    .orderBy(asc(formAnswer.createdAt), asc(formAnswer.id));
 
   // Oldest first, so the last write for a key wins — which is the read rule:
   // the current answer is the row with the greatest created_at. Older rows stay
   // queryable; revision history in a rail nobody asked for is noise.
-  const latest = new Map<string, LatestAnswer>()
-  for (const row of answerRows) latest.set(row.fieldKey, row)
+  const latest = new Map<string, LatestAnswer>();
+  for (const row of answerRows) latest.set(row.fieldKey, row);
 
-  const { rows, answeredCount } = buildFormFieldViews(fields, [...latest.values()])
+  const { rows, answeredCount } = buildFormFieldViews(fields, [...latest.values()]);
 
   return {
     form_name: submission.formName,
@@ -847,14 +946,14 @@ export async function getFormView(tx: Tx, conversationId: string): Promise<Agent
     field_count: fields.length,
     answered_count: answeredCount,
     fields: rows,
-  }
+  };
 }
 ```
 
 Then in `getConversationContext`, after the `getTicketHistory` call:
 
 ```typescript
-    const formView = await getFormView(tx, conversationId)
+const formView = await getFormView(tx, conversationId);
 ```
 
 and add `form: formView,` to the returned object, after `summary`.
@@ -882,7 +981,7 @@ const FormFieldTypeSchema = z.enum([
   'time',
   'choice',
   'attachment',
-])
+]);
 
 const AgentFormViewSchema = z.object({
   form_name: z.string(),
@@ -900,7 +999,7 @@ const AgentFormViewSchema = z.object({
       answered: z.boolean(),
     }),
   ),
-})
+});
 ```
 
 Add `form: AgentFormViewSchema.nullable(),` to the 200 response schema object, after `summary`, and extend that path's `description` string with:
@@ -934,12 +1033,14 @@ git commit -m "feat(agent-context): serve the form block on the conversation con
 The rail already splits its one piece of real branching into `ticketOutcome.ts` with its own test and no mounting. The form section has two: the status line and the value formatter. Same treatment.
 
 **Files:**
+
 - Create: `frontend/src/surfaces/agent-console/pages/Inbox/components/context/formStatusLine.ts`
 - Create: `frontend/src/surfaces/agent-console/pages/Inbox/components/context/formStatusLine.test.ts`
 - Create: `frontend/src/surfaces/agent-console/pages/Inbox/components/context/formAnswerValue.ts`
 - Create: `frontend/src/surfaces/agent-console/pages/Inbox/components/context/formAnswerValue.test.ts`
 
 **Interfaces:**
+
 - Consumes: `FormStatusValue`, `FormFieldType` from `@support/types`.
 - Produces:
   - `formStatusLine(status: FormStatusValue, answeredCount: number, fieldCount: number): string`
@@ -951,84 +1052,84 @@ The rail already splits its one piece of real branching into `ticketOutcome.ts` 
 Create `formStatusLine.test.ts`:
 
 ```typescript
-import { describe, expect, it } from 'vitest'
-import { formStatusLine } from './formStatusLine.ts'
+import { describe, expect, it } from 'vitest';
+import { formStatusLine } from './formStatusLine.ts';
 
 describe('formStatusLine', () => {
   // bot_active conversations sit in the unassigned queue, so an agent can open
   // a ticket while the player is still on question two. The line says so.
   it('counts progress while the player is still answering', () => {
-    expect(formStatusLine('in_progress', 2, 4)).toBe('Player is answering · 2 of 4')
-    expect(formStatusLine('in_progress', 0, 4)).toBe('Player is answering · 0 of 4')
-  })
+    expect(formStatusLine('in_progress', 2, 4)).toBe('Player is answering · 2 of 4');
+    expect(formStatusLine('in_progress', 0, 4)).toBe('Player is answering · 0 of 4');
+  });
 
   it('reports a completed form', () => {
-    expect(formStatusLine('completed', 4, 4)).toBe('All 4 questions answered')
-    expect(formStatusLine('completed', 1, 1)).toBe('All 1 question answered')
-  })
+    expect(formStatusLine('completed', 4, 4)).toBe('All 4 questions answered');
+    expect(formStatusLine('completed', 1, 1)).toBe('All 1 question answered');
+  });
 
   // The spec's own phrasing for what the agent reads on a partial form.
   it('splits a partial form into answered and not', () => {
-    expect(formStatusLine('partial', 2, 6)).toBe('2 answered · 4 not answered')
-    expect(formStatusLine('partial', 3, 4)).toBe('3 answered · 1 not answered')
-  })
+    expect(formStatusLine('partial', 2, 6)).toBe('2 answered · 4 not answered');
+    expect(formStatusLine('partial', 3, 4)).toBe('3 answered · 1 not answered');
+  });
 
   // A skipped form must read as a decision, not as an absence — the agent has
   // to know to ask rather than wonder where the details went.
   it('says the player skipped', () => {
-    expect(formStatusLine('skipped', 0, 4)).toBe('Player skipped the questions')
-  })
-})
+    expect(formStatusLine('skipped', 0, 4)).toBe('Player skipped the questions');
+  });
+});
 ```
 
 Create `formAnswerValue.test.ts`:
 
 ```typescript
-import { describe, expect, it } from 'vitest'
-import { NOT_ANSWERED, formAnswerValue } from './formAnswerValue.ts'
+import { describe, expect, it } from 'vitest';
+import { NOT_ANSWERED, formAnswerValue } from './formAnswerValue.ts';
 
 describe('formAnswerValue', () => {
   // The row exists precisely so this string is visible. Never an empty cell.
   it('labels an unanswered field', () => {
-    expect(formAnswerValue('short_text', null, false)).toBe(NOT_ANSWERED)
-    expect(NOT_ANSWERED).toBe('Not answered')
-  })
+    expect(formAnswerValue('short_text', null, false)).toBe(NOT_ANSWERED);
+    expect(NOT_ANSWERED).toBe('Not answered');
+  });
 
   it('renders text and choice answers verbatim', () => {
-    expect(formAnswerValue('short_text', 'GPA.1234', true)).toBe('GPA.1234')
-    expect(formAnswerValue('long_text', 'It charged me twice', true)).toBe('It charged me twice')
-    expect(formAnswerValue('choice', 'Google Play', true)).toBe('Google Play')
-  })
+    expect(formAnswerValue('short_text', 'GPA.1234', true)).toBe('GPA.1234');
+    expect(formAnswerValue('long_text', 'It charged me twice', true)).toBe('It charged me twice');
+    expect(formAnswerValue('choice', 'Google Play', true)).toBe('Google Play');
+  });
 
   it('formats a date answer', () => {
-    expect(formAnswerValue('date', '2026-08-16', true)).toBe('16 Aug 2026')
-  })
+    expect(formAnswerValue('date', '2026-08-16', true)).toBe('16 Aug 2026');
+  });
 
   // The type comes off the answer row, not off the current version. Same value,
   // different snapshotted type, different rendering — which is what makes a v1
   // answer still readable after v2 retypes the field.
   it('renders by the snapshotted type, not by the value shape', () => {
-    expect(formAnswerValue('short_text', '2026-08-16', true)).toBe('2026-08-16')
-  })
+    expect(formAnswerValue('short_text', '2026-08-16', true)).toBe('2026-08-16');
+  });
 
   it('renders numbers and times', () => {
-    expect(formAnswerValue('number', 3, true)).toBe('3')
-    expect(formAnswerValue('number', 0, true)).toBe('0')
-    expect(formAnswerValue('time', '14:30', true)).toBe('14:30')
-  })
+    expect(formAnswerValue('number', 3, true)).toBe('3');
+    expect(formAnswerValue('number', 0, true)).toBe('0');
+    expect(formAnswerValue('time', '14:30', true)).toBe('14:30');
+  });
 
   it('does not crash on an unparseable date or an unexpected shape', () => {
-    expect(formAnswerValue('date', 'not-a-date', true)).toBe('not-a-date')
-    expect(formAnswerValue('short_text', { a: 1 }, true)).toBe('{"a":1}')
-    expect(formAnswerValue('short_text', null, true)).toBe(NOT_ANSWERED)
-  })
+    expect(formAnswerValue('date', 'not-a-date', true)).toBe('not-a-date');
+    expect(formAnswerValue('short_text', { a: 1 }, true)).toBe('{"a":1}');
+    expect(formAnswerValue('short_text', null, true)).toBe(NOT_ANSWERED);
+  });
 
   // attachment is declared-but-inert: no attachment table, so no answer of this
   // type can exist yet. Naming it beats rendering a raw uuid blob if one ever does.
   it('names an attachment rather than dumping it', () => {
-    expect(formAnswerValue('attachment', { attachmentId: 'abc' }, true)).toBe('Attachment')
-  })
-})
+    expect(formAnswerValue('attachment', { attachmentId: 'abc' }, true)).toBe('Attachment');
+  });
+});
 ```
 
 - [ ] **Step 2: Run them to verify they fail**
@@ -1041,7 +1142,7 @@ Expected: FAIL — both modules do not exist.
 Create `formStatusLine.ts`:
 
 ```typescript
-import type { FormStatusValue } from '@support/types'
+import type { FormStatusValue } from '@support/types';
 
 /**
  * The one line under the form's name. Split out for the same reason
@@ -1052,16 +1153,20 @@ import type { FormStatusValue } from '@support/types'
  * player declined, and the agent has to know to ask rather than wonder where
  * the details went.
  */
-export function formStatusLine(status: FormStatusValue, answeredCount: number, fieldCount: number): string {
+export function formStatusLine(
+  status: FormStatusValue,
+  answeredCount: number,
+  fieldCount: number,
+): string {
   switch (status) {
     case 'in_progress':
-      return `Player is answering · ${answeredCount} of ${fieldCount}`
+      return `Player is answering · ${answeredCount} of ${fieldCount}`;
     case 'completed':
-      return `All ${fieldCount} question${fieldCount === 1 ? '' : 's'} answered`
+      return `All ${fieldCount} question${fieldCount === 1 ? '' : 's'} answered`;
     case 'partial':
-      return `${answeredCount} answered · ${fieldCount - answeredCount} not answered`
+      return `${answeredCount} answered · ${fieldCount - answeredCount} not answered`;
     case 'skipped':
-      return 'Player skipped the questions'
+      return 'Player skipped the questions';
   }
 }
 ```
@@ -1069,22 +1174,22 @@ export function formStatusLine(status: FormStatusValue, answeredCount: number, f
 Create `formAnswerValue.ts`:
 
 ```typescript
-import type { FormFieldType } from '@support/types'
+import type { FormFieldType } from '@support/types';
 
 /** The visible text for a field the player did not answer. Never an empty cell. */
-export const NOT_ANSWERED = 'Not answered'
+export const NOT_ANSWERED = 'Not answered';
 
 function shortDate(value: string): string {
   // Answers are stored as YYYY-MM-DD. Parsed as UTC so a local timezone west of
   // Greenwich cannot render the day before the one the player picked.
-  const parsed = new Date(`${value}T00:00:00Z`)
-  if (Number.isNaN(parsed.getTime())) return value
+  const parsed = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime())) return value;
   return parsed.toLocaleDateString('en-GB', {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
     timeZone: 'UTC',
-  })
+  });
 }
 
 /**
@@ -1092,13 +1197,17 @@ function shortDate(value: string): string {
  * never the current version's type. That snapshot is why a value is
  * interpretable without resolving the version at all.
  */
-export function formAnswerValue(fieldType: FormFieldType, value: unknown, answered: boolean): string {
-  if (!answered || value === null || value === undefined) return NOT_ANSWERED
-  if (fieldType === 'attachment') return 'Attachment'
-  if (fieldType === 'date' && typeof value === 'string') return shortDate(value)
-  if (typeof value === 'string') return value
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
-  return JSON.stringify(value)
+export function formAnswerValue(
+  fieldType: FormFieldType,
+  value: unknown,
+  answered: boolean,
+): string {
+  if (!answered || value === null || value === undefined) return NOT_ANSWERED;
+  if (fieldType === 'attachment') return 'Attachment';
+  if (fieldType === 'date' && typeof value === 'string') return shortDate(value);
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return JSON.stringify(value);
 }
 ```
 
@@ -1124,11 +1233,13 @@ git commit -m "feat(context-rail): pure copy functions for the form section"
 A third stacked section below Player state and Tickets. Same rail, no tabs, no new surface.
 
 **Files:**
+
 - Create: `frontend/src/surfaces/agent-console/pages/Inbox/components/context/FormPanel.tsx`
 - Modify: `frontend/src/surfaces/agent-console/pages/Inbox/components/ContextRail.tsx`
 - Test: `frontend/src/surfaces/agent-console/pages/Inbox/components/ContextRail.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `AgentFormView` (Task 1), `formStatusLine`, `formAnswerValue`, `NOT_ANSWERED` (Task 3).
 - Produces: `FormPanel({ form }: { form: AgentFormView })`, mounted in `ContextRail` only when `data.form` is truthy.
 
@@ -1145,7 +1256,14 @@ function formView(overrides: Partial<AgentFormView> = {}): AgentFormView {
     field_count: 2,
     answered_count: 2,
     fields: [
-      { key: 'store', label: 'Store', position: 0, field_type: 'choice', value: 'Google Play', answered: true },
+      {
+        key: 'store',
+        label: 'Store',
+        position: 0,
+        field_type: 'choice',
+        value: 'Google Play',
+        answered: true,
+      },
       {
         key: 'purchase_date',
         label: 'Date of purchase',
@@ -1156,40 +1274,40 @@ function formView(overrides: Partial<AgentFormView> = {}): AgentFormView {
       },
     ],
     ...overrides,
-  }
+  };
 }
 
 function railWithForm(form: AgentFormView | null) {
   vi.mocked(fetchConversationContext).mockResolvedValue({
     ...contextResponse({ status: 'no_session' }),
     form,
-  })
-  return renderRail()
+  });
+  return renderRail();
 }
 
 describe('ContextRail form section', () => {
   // State 1 of five, and the one that renders nothing. Same precedent as `raw`
   // being `{}`: an empty panel explaining an absence is worse than no panel.
   it('omits the section entirely when there is no form', async () => {
-    railWithForm(null)
-    await screen.findByText('No session was attached to this ticket')
-    expect(screen.queryByText('Form')).not.toBeInTheDocument()
-    expect(screen.queryByText(/Purchase receipt/)).not.toBeInTheDocument()
-  })
+    railWithForm(null);
+    await screen.findByText('No session was attached to this ticket');
+    expect(screen.queryByText('Form')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Purchase receipt/)).not.toBeInTheDocument();
+  });
 
   it('names the form and the version the player was actually asked', async () => {
-    railWithForm(formView())
-    expect(await screen.findByText('Purchase receipt · v1')).toBeInTheDocument()
-  })
+    railWithForm(formView());
+    expect(await screen.findByText('Purchase receipt · v1')).toBeInTheDocument();
+  });
 
   it('renders every field of a completed form, labelled, in position order', async () => {
-    railWithForm(formView())
-    expect(await screen.findByText('All 2 questions answered')).toBeInTheDocument()
-    const labels = screen.getAllByRole('term').map((el) => el.textContent)
-    expect(labels).toEqual(['Store', 'Date of purchase'])
-    expect(screen.getByText('Google Play')).toBeInTheDocument()
-    expect(screen.getByText('16 Aug 2026')).toBeInTheDocument()
-  })
+    railWithForm(formView());
+    expect(await screen.findByText('All 2 questions answered')).toBeInTheDocument();
+    const labels = screen.getAllByRole('term').map((el) => el.textContent);
+    expect(labels).toEqual(['Store', 'Date of purchase']);
+    expect(screen.getByText('Google Play')).toBeInTheDocument();
+    expect(screen.getByText('16 Aug 2026')).toBeInTheDocument();
+  });
 
   it('counts progress while the form is still being answered', async () => {
     railWithForm(
@@ -1209,9 +1327,9 @@ describe('ContextRail form section', () => {
           },
         ],
       }),
-    )
-    expect(await screen.findByText('Player is answering · 1 of 2')).toBeInTheDocument()
-  })
+    );
+    expect(await screen.findByText('Player is answering · 1 of 2')).toBeInTheDocument();
+  });
 
   // The assertion that carries the product requirement. A gap is a visible row.
   it('renders a partial form gaps and all, rather than dropping the blanks', async () => {
@@ -1231,11 +1349,11 @@ describe('ContextRail form section', () => {
           },
         ],
       }),
-    )
-    expect(await screen.findByText('1 answered · 1 not answered')).toBeInTheDocument()
-    expect(screen.getByText('Date of purchase')).toBeInTheDocument()
-    expect(screen.getByText('Not answered')).toBeInTheDocument()
-  })
+    );
+    expect(await screen.findByText('1 answered · 1 not answered')).toBeInTheDocument();
+    expect(screen.getByText('Date of purchase')).toBeInTheDocument();
+    expect(screen.getByText('Not answered')).toBeInTheDocument();
+  });
 
   // A skipped form must be a visible row, never a missing section: the agent has
   // to be able to tell "declined" from "never offered".
@@ -1246,11 +1364,11 @@ describe('ContextRail form section', () => {
         answered_count: 0,
         fields: formView().fields.map((f) => ({ ...f, value: null, answered: false })),
       }),
-    )
-    expect(await screen.findByText('Player skipped the questions')).toBeInTheDocument()
-    expect(screen.getByText('Purchase receipt · v1')).toBeInTheDocument()
-    expect(screen.queryByText('Not answered')).not.toBeInTheDocument()
-  })
+    );
+    expect(await screen.findByText('Player skipped the questions')).toBeInTheDocument();
+    expect(screen.getByText('Purchase receipt · v1')).toBeInTheDocument();
+    expect(screen.queryByText('Not answered')).not.toBeInTheDocument();
+  });
 
   // Values render off the answer's own snapshotted field_type. A field retyped
   // in a later version does not change how an older answer reads.
@@ -1270,32 +1388,35 @@ describe('ContextRail form section', () => {
           },
         ],
       }),
-    )
-    expect(await screen.findByText('2026-08-16')).toBeInTheDocument()
-    expect(screen.queryByText('16 Aug 2026')).not.toBeInTheDocument()
-  })
+    );
+    expect(await screen.findByText('2026-08-16')).toBeInTheDocument();
+    expect(screen.queryByText('16 Aug 2026')).not.toBeInTheDocument();
+  });
 
   // Read-only in every state. Nothing here edits, re-offers, or submits.
   it('offers no controls', async () => {
-    railWithForm(formView())
-    await screen.findByText('Purchase receipt · v1')
-    const section = screen.getByRole('region', { name: 'Form' })
-    expect(within(section).queryAllByRole('button')).toHaveLength(0)
-    expect(within(section).queryAllByRole('textbox')).toHaveLength(0)
-  })
+    railWithForm(formView());
+    await screen.findByText('Purchase receipt · v1');
+    const section = screen.getByRole('region', { name: 'Form' });
+    expect(within(section).queryAllByRole('button')).toHaveLength(0);
+    expect(within(section).queryAllByRole('textbox')).toHaveLength(0);
+  });
 
   // The rail is one query, so a malformed form block must not take the other two
   // sections down with it.
   it('renders the other sections when the form block is absent from the payload', async () => {
-    const { form: _omitted, ...withoutForm } = { ...contextResponse({ status: 'not_captured' }), form: null }
+    const { form: _omitted, ...withoutForm } = {
+      ...contextResponse({ status: 'not_captured' }),
+      form: null,
+    };
     vi.mocked(fetchConversationContext).mockResolvedValue(
       withoutForm as unknown as AgentConversationContextResponse,
-    )
-    renderRail()
-    expect(await screen.findByText('No player state was captured')).toBeInTheDocument()
-    expect(screen.getByText('Tickets')).toBeInTheDocument()
-  })
-})
+    );
+    renderRail();
+    expect(await screen.findByText('No player state was captured')).toBeInTheDocument();
+    expect(screen.getByText('Tickets')).toBeInTheDocument();
+  });
+});
 ```
 
 Add `within` to the `@testing-library/react` import at the top of the file.
@@ -1308,10 +1429,10 @@ Expected: FAIL — nothing renders "Purchase receipt · v1".
 - [ ] **Step 3: Write `FormPanel.tsx`**
 
 ```tsx
-import type { AgentFormView } from '@support/types'
-import { cn } from '../../../../lib/cn.ts'
-import { formAnswerValue } from './formAnswerValue.ts'
-import { formStatusLine } from './formStatusLine.ts'
+import type { AgentFormView } from '@support/types';
+import { cn } from '../../../../lib/cn.ts';
+import { formAnswerValue } from './formAnswerValue.ts';
+import { formStatusLine } from './formStatusLine.ts';
 
 /**
  * The third stacked section of the rail: what the bot asked before handoff and
@@ -1329,7 +1450,7 @@ export function FormPanel({ form }: { form: AgentFormView }) {
   // A skipped form has no answers by construction, so listing every field as
   // "Not answered" would repeat the status line four times. In every other
   // state the gaps are the point and stay visible as rows.
-  const showFields = form.status !== 'skipped' && form.fields.length > 0
+  const showFields = form.status !== 'skipped' && form.fields.length > 0;
 
   return (
     <section className="px-4 py-3" aria-label="Form">
@@ -1358,7 +1479,7 @@ export function FormPanel({ form }: { form: AgentFormView }) {
         </dl>
       )}
     </section>
-  )
+  );
 }
 ```
 
@@ -1367,21 +1488,25 @@ export function FormPanel({ form }: { form: AgentFormView }) {
 In `ContextRail.tsx`, add the import:
 
 ```typescript
-import { FormPanel } from './context/FormPanel.tsx'
+import { FormPanel } from './context/FormPanel.tsx';
 ```
 
 and render it below `TicketList`, inside the `contextQuery.data ?` branch:
 
 ```tsx
-              <TicketList
-                tickets={contextQuery.data.tickets}
-                summary={contextQuery.data.summary}
-                currentId={conversationId}
-                onSelect={(id) => void navigate(`/inbox/${id}`)}
-              />
-              {/* Five states, and this is the one that renders nothing: no form
-                  means no section, following the raw-is-{} precedent. */}
-              {contextQuery.data.form ? <FormPanel form={contextQuery.data.form} /> : null}
+<TicketList
+  tickets={contextQuery.data.tickets}
+  summary={contextQuery.data.summary}
+  currentId={conversationId}
+  onSelect={(id) => void navigate(`/inbox/${id}`)}
+/>;
+{
+  /* Five states, and this is the one that renders nothing: no form
+                  means no section, following the raw-is-{} precedent. */
+}
+{
+  contextQuery.data.form ? <FormPanel form={contextQuery.data.form} /> : null;
+}
 ```
 
 - [ ] **Step 5: Run the tests to verify they pass**
@@ -1410,10 +1535,12 @@ git commit -m "feat(context-rail): render the form section in all five states"
 The rail's query is deliberately socket-free with a long `staleTime`, because the snapshot is immutable and ticket history moves on the order of days. **A form in progress is not immutable**, and the unassigned queue is `assigned_agent_id IS NULL AND status NOT IN (resolved, closed)` — which includes `bot_active`, so an agent genuinely can open a ticket while the player is on question two. One trigger, for the one mutable thing in the panel. The `staleTime` is not dropped.
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/agent-console/pages/Inbox/components/ContextRail.tsx`
 - Test: `frontend/src/surfaces/agent-console/pages/Inbox/components/ContextRail.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `createSocket` from `frontend/src/features/chat/api/socket.ts` (same import `ThreadPanel.tsx` and `ConversationList.tsx` use).
 - Produces: nothing new; the rail's `['conversation', id, 'context']` query refetches on `conversation:phase_changed` and on nothing else.
 
@@ -1425,29 +1552,29 @@ The existing `ContextRail.test.tsx` does not mock the socket module. Add the moc
 const socket = vi.hoisted(() => ({
   handlers: new Map<string, (payload: unknown) => void>(),
   closed: 0,
-}))
+}));
 
 vi.mock('../../../../../features/chat/api/socket.ts', () => ({
   createSocket: () => ({
     on: (event: string, handler: (payload: unknown) => void) => {
-      socket.handlers.set(event, handler)
+      socket.handlers.set(event, handler);
     },
     emit: vi.fn(),
     close: () => {
-      socket.closed += 1
+      socket.closed += 1;
     },
   }),
-}))
+}));
 ```
 
 Extend the existing `beforeEach` to clear it:
 
 ```typescript
 beforeEach(() => {
-  vi.resetAllMocks()
-  socket.handlers.clear()
-  socket.closed = 0
-})
+  vi.resetAllMocks();
+  socket.handlers.clear();
+  socket.closed = 0;
+});
 ```
 
 and add `act` and `waitFor` to the `@testing-library/react` import. Then append:
@@ -1458,42 +1585,46 @@ describe('ContextRail invalidation', () => {
     vi.mocked(fetchConversationContext).mockResolvedValue({
       ...contextResponse({ status: 'no_session' }),
       form: formView({ status: 'in_progress', answered_count: 1 }),
-    })
-    renderRail()
-    await screen.findByText('Purchase receipt · v1')
-    expect(fetchConversationContext).toHaveBeenCalledTimes(1)
+    });
+    renderRail();
+    await screen.findByText('Purchase receipt · v1');
+    expect(fetchConversationContext).toHaveBeenCalledTimes(1);
 
-    const handler = socket.handlers.get('conversation:phase_changed')
-    if (!handler) throw new Error('the rail never subscribed to conversation:phase_changed')
-    act(() => handler({ conversation_id: 'c1', confirm_phase: 'none' }))
+    const handler = socket.handlers.get('conversation:phase_changed');
+    if (!handler) throw new Error('the rail never subscribed to conversation:phase_changed');
+    act(() => handler({ conversation_id: 'c1', confirm_phase: 'none' }));
 
     // A form in progress is the one mutable thing in the panel, and this is the
     // only event that moves it.
-    await waitFor(() => expect(fetchConversationContext).toHaveBeenCalledTimes(2))
-  })
+    await waitFor(() => expect(fetchConversationContext).toHaveBeenCalledTimes(2));
+  });
 
   it('ignores unrelated socket traffic', async () => {
-    vi.mocked(fetchConversationContext).mockResolvedValue(contextResponse({ status: 'no_session' }))
-    renderRail()
-    await screen.findByText('No session was attached to this ticket')
-    expect(fetchConversationContext).toHaveBeenCalledTimes(1)
+    vi.mocked(fetchConversationContext).mockResolvedValue(
+      contextResponse({ status: 'no_session' }),
+    );
+    renderRail();
+    await screen.findByText('No session was attached to this ticket');
+    expect(fetchConversationContext).toHaveBeenCalledTimes(1);
 
     // The rail subscribes to exactly one event. Player state is immutable by
     // construction and ticket history moves on the order of days; refetching
     // the whole rail on every inbound message would undo the long staleTime.
-    expect(socket.handlers.has('message:new')).toBe(false)
-    expect(socket.handlers.has('message:read')).toBe(false)
-    expect(socket.handlers.has('conversation:changed')).toBe(false)
-  })
+    expect(socket.handlers.has('message:new')).toBe(false);
+    expect(socket.handlers.has('message:read')).toBe(false);
+    expect(socket.handlers.has('conversation:changed')).toBe(false);
+  });
 
   it('closes the socket on unmount', async () => {
-    vi.mocked(fetchConversationContext).mockResolvedValue(contextResponse({ status: 'no_session' }))
-    const { unmount } = renderRail()
-    await screen.findByText('No session was attached to this ticket')
-    unmount()
-    expect(socket.closed).toBe(1)
-  })
-})
+    vi.mocked(fetchConversationContext).mockResolvedValue(
+      contextResponse({ status: 'no_session' }),
+    );
+    const { unmount } = renderRail();
+    await screen.findByText('No session was attached to this ticket');
+    unmount();
+    expect(socket.closed).toBe(1);
+  });
+});
 ```
 
 - [ ] **Step 2: Run them to verify they fail**
@@ -1506,35 +1637,35 @@ Expected: FAIL — "the rail never subscribed to conversation:phase_changed".
 In `ContextRail.tsx`, extend the imports:
 
 ```typescript
-import { useEffect } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { createSocket } from '../../../../../features/chat/api/socket.ts'
+import { useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { createSocket } from '../../../../../features/chat/api/socket.ts';
 ```
 
 Inside the component, above the `useQuery`, add `const queryClient = useQueryClient()`, and below it:
 
 ```typescript
-  // The one narrow trigger. The staleTime above is not dropped: player state is
-  // immutable by construction and ticket history moves on the order of days.
-  // The exception is a form in progress, and bot_active conversations sit in the
-  // unassigned queue, so an agent can open a ticket mid-form. A missed
-  // invalidation leaves the panel stale rather than wrong, and the next
-  // navigation corrects it.
-  useEffect(() => {
-    const socket = createSocket(token, 'agent')
-    // Inside 'connect', not once at setup: rooms live on the server's socket
-    // instance, so every reconnect lands in a socket that has joined nothing.
-    socket.on('connect', () => {
-      socket.emit('join_conversation', { conversation_id: conversationId })
-    })
-    socket.on('conversation:phase_changed', () => {
-      void queryClient.invalidateQueries({ queryKey: ['conversation', conversationId, 'context'] })
-    })
-    return () => {
-      socket.emit('leave_conversation', { conversation_id: conversationId })
-      socket.close()
-    }
-  }, [token, conversationId, queryClient])
+// The one narrow trigger. The staleTime above is not dropped: player state is
+// immutable by construction and ticket history moves on the order of days.
+// The exception is a form in progress, and bot_active conversations sit in the
+// unassigned queue, so an agent can open a ticket mid-form. A missed
+// invalidation leaves the panel stale rather than wrong, and the next
+// navigation corrects it.
+useEffect(() => {
+  const socket = createSocket(token, 'agent');
+  // Inside 'connect', not once at setup: rooms live on the server's socket
+  // instance, so every reconnect lands in a socket that has joined nothing.
+  socket.on('connect', () => {
+    socket.emit('join_conversation', { conversation_id: conversationId });
+  });
+  socket.on('conversation:phase_changed', () => {
+    void queryClient.invalidateQueries({ queryKey: ['conversation', conversationId, 'context'] });
+  });
+  return () => {
+    socket.emit('leave_conversation', { conversation_id: conversationId });
+    socket.close();
+  };
+}, [token, conversationId, queryClient]);
 ```
 
 Do not subscribe to anything else, and do not change `staleTime`.
@@ -1564,10 +1695,12 @@ git commit -m "feat(context-rail): invalidate the context query on conversation:
 No new data. `AgentConversationSummary` already carries `confirm_phase` (`conversationsService.ts:19,46`; `packages/types/src/chat.ts:73`), and slice 2 added `'form'` to the enum. Without the label, an unassigned `bot_active` ticket with no agent and a half-filled form reads as a stuck ticket.
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/agent-console/pages/Inbox/components/ConversationRow.tsx`
 - Test: `frontend/src/surfaces/agent-console/pages/Inbox/components/ConversationList.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `AgentConversationSummary.confirm_phase` — already on the type and already in the list query's select. **Do not add a column, a field, or a query.**
 - Produces: nothing consumed downstream.
 
@@ -1617,18 +1750,18 @@ Expected: FAIL — "Answering questions" is not in the document.
 In `ConversationRow.tsx`, replace the badge row (lines 57-60) with:
 
 ```tsx
-      <div className="flex items-center justify-between gap-2">
-        <span className="truncate text-sm font-medium">{conversation.player.external_player_id}</span>
-        <span className="flex shrink-0 items-center gap-1.5">
-          {/* No new data: confirm_phase already rides on the summary. A
+<div className="flex items-center justify-between gap-2">
+  <span className="truncate text-sm font-medium">{conversation.player.external_player_id}</span>
+  <span className="flex shrink-0 items-center gap-1.5">
+    {/* No new data: confirm_phase already rides on the summary. A
               bot_active ticket sits in the unassigned queue, so without this a
               half-filled form reads as a stuck ticket. */}
-          {conversation.confirm_phase === 'form' && (
-            <span className="text-xs text-muted">Answering questions</span>
-          )}
-          <Badge variant={STATUS_BADGE_VARIANT[conversation.status]}>{conversation.status}</Badge>
-        </span>
-      </div>
+    {conversation.confirm_phase === 'form' && (
+      <span className="text-xs text-muted">Answering questions</span>
+    )}
+    <Badge variant={STATUS_BADGE_VARIANT[conversation.status]}>{conversation.status}</Badge>
+  </span>
+</div>
 ```
 
 - [ ] **Step 4: Run the tests to verify they pass**
@@ -1671,17 +1804,17 @@ Expected: PASS.
 
 Every item in §3.5 must map to a test that exists and passes. Confirm each by name:
 
-| §3.5 requirement | Test |
-|---|---|
-| Each of the five states renders, including the omission | `ContextRail.test.tsx` → "omits the section entirely when there is no form", "counts progress while the form is still being answered", "renders every field of a completed form…", "renders a partial form gaps and all…", "says the player skipped…" |
-| `partial` renders gaps rather than dropping them | `ContextRail.test.tsx` → "renders a partial form gaps and all…"; `agent.formContext.test.ts` → "keeps unanswered fields as rows rather than dropping them" |
-| Labels resolve against the submission's version after a v2 edit | `agent.formContext.test.ts` → "labels against the submission version after the form is edited to v2" |
-| Values render from the answer's snapshotted `field_type` | `formAnswerValue.test.ts` → "renders by the snapshotted type…"; `ContextRail.test.tsx` → "renders a value by its snapshotted field_type"; `agent.formContext.test.ts` → "takes field_type from the answer…" |
-| The rail invalidates on `conversation:phase_changed` and not on unrelated traffic | `ContextRail.test.tsx` → "refetches the context when the conversation phase changes", "ignores unrelated socket traffic" |
-| `/context` returns `form: null` when the subintent has no form | `agent.formContext.test.ts` → "returns form: null when the conversation was never offered one" |
-| The other two rail sections render normally when the form block errors | `ContextRail.test.tsx` → "renders the other sections when the form block is absent from the payload" |
-| Read-only tickets unaffected; `markAgentMessagesRead` still not called | `ThreadPanel.test.tsx` (unchanged, must still pass); `ContextRail.test.tsx` → "offers no controls" |
-| Queue label (§3.4) | `ConversationList.test.tsx` → "labels a row whose player is still answering the form", "does not label a row in any other phase" |
+| §3.5 requirement                                                                  | Test                                                                                                                                                                                                                                                  |
+| --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Each of the five states renders, including the omission                           | `ContextRail.test.tsx` → "omits the section entirely when there is no form", "counts progress while the form is still being answered", "renders every field of a completed form…", "renders a partial form gaps and all…", "says the player skipped…" |
+| `partial` renders gaps rather than dropping them                                  | `ContextRail.test.tsx` → "renders a partial form gaps and all…"; `agent.formContext.test.ts` → "keeps unanswered fields as rows rather than dropping them"                                                                                            |
+| Labels resolve against the submission's version after a v2 edit                   | `agent.formContext.test.ts` → "labels against the submission version after the form is edited to v2"                                                                                                                                                  |
+| Values render from the answer's snapshotted `field_type`                          | `formAnswerValue.test.ts` → "renders by the snapshotted type…"; `ContextRail.test.tsx` → "renders a value by its snapshotted field_type"; `agent.formContext.test.ts` → "takes field_type from the answer…"                                           |
+| The rail invalidates on `conversation:phase_changed` and not on unrelated traffic | `ContextRail.test.tsx` → "refetches the context when the conversation phase changes", "ignores unrelated socket traffic"                                                                                                                              |
+| `/context` returns `form: null` when the subintent has no form                    | `agent.formContext.test.ts` → "returns form: null when the conversation was never offered one"                                                                                                                                                        |
+| The other two rail sections render normally when the form block errors            | `ContextRail.test.tsx` → "renders the other sections when the form block is absent from the payload"                                                                                                                                                  |
+| Read-only tickets unaffected; `markAgentMessagesRead` still not called            | `ThreadPanel.test.tsx` (unchanged, must still pass); `ContextRail.test.tsx` → "offers no controls"                                                                                                                                                    |
+| Queue label (§3.4)                                                                | `ConversationList.test.tsx` → "labels a row whose player is still answering the form", "does not label a row in any other phase"                                                                                                                      |
 
 - [ ] **Step 4: Check the Swagger document by eye**
 

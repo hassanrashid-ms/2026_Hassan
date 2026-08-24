@@ -1,23 +1,23 @@
-import { useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createIntent, fetchIntents } from '../../../api/agentApi.ts'
-import { Button } from '../../../components/ui/button.tsx'
-import { Input } from '../../../components/ui/input.tsx'
-import { ScrollArea } from '../../../components/ui/scroll-area.tsx'
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { createIntent, fetchIntents } from '../../../api/agentApi.ts';
+import { Button } from '../../../components/ui/button.tsx';
+import { Input } from '../../../components/ui/input.tsx';
+import { ScrollArea } from '../../../components/ui/scroll-area.tsx';
 
 export function CategorySidebar({ token }: { token: string }) {
-  const queryClient = useQueryClient()
-  const [newIntentName, setNewIntentName] = useState('')
+  const queryClient = useQueryClient();
+  const [newIntentName, setNewIntentName] = useState('');
 
-  const intents = useQuery({ queryKey: ['admin-intents'], queryFn: () => fetchIntents(token) })
+  const intents = useQuery({ queryKey: ['admin-intents'], queryFn: () => fetchIntents(token) });
 
   const addIntent = useMutation({
     mutationFn: () => createIntent(token, newIntentName),
     onSuccess: () => {
-      setNewIntentName('')
-      void queryClient.invalidateQueries({ queryKey: ['admin-intents'] })
+      setNewIntentName('');
+      void queryClient.invalidateQueries({ queryKey: ['admin-intents'] });
     },
-  })
+  });
 
   return (
     <div className="flex h-full min-h-0 flex-col border-r border-slate-200">
@@ -46,10 +46,15 @@ export function CategorySidebar({ token }: { token: string }) {
           value={newIntentName}
           onChange={(e) => setNewIntentName(e.target.value)}
         />
-        <Button type="button" size="sm" onClick={() => addIntent.mutate()} disabled={addIntent.isPending || !newIntentName}>
+        <Button
+          type="button"
+          size="sm"
+          onClick={() => addIntent.mutate()}
+          disabled={addIntent.isPending || !newIntentName}
+        >
           Add Category
         </Button>
       </div>
     </div>
-  )
+  );
 }

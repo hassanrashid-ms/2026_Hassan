@@ -1,15 +1,15 @@
-import { and, eq, inArray, isNull } from 'drizzle-orm'
-import { formFieldsSchema, type FormField } from '@support/types'
-import { form, formVersion, subintent } from './schema/index.ts'
-import type { Tx } from './withWorkspace.ts'
+import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { formFieldsSchema, type FormField } from '@support/types';
+import { form, formVersion, subintent } from './schema/index.ts';
+import type { Tx } from './withWorkspace.ts';
 
 export type SeedForm = {
-  name: string
+  name: string;
   /** Seeded subintents this form serves, BY NAME. Resolved against the rows
    *  seedTaxonomy created, so a taxonomy edit does not strand a hardcoded uuid. */
-  subintents: string[]
-  fields: FormField[]
-}
+  subintents: string[];
+  fields: FormField[];
+};
 
 /**
  * Three forms, matching the product spec's "Starting templates: purchase
@@ -30,7 +30,13 @@ export const SEED_FORMS: SeedForm[] = [
     name: 'Purchase receipt',
     // The four fields drawn in the product spec's own mockup (page 23, screen C).
     // Nothing invented.
-    subintents: ['Missing Purchase', 'Double Charge', 'Refund Status', 'Refund Requests', 'Billing Errors'],
+    subintents: [
+      'Missing Purchase',
+      'Double Charge',
+      'Refund Status',
+      'Refund Requests',
+      'Billing Errors',
+    ],
     fields: [
       {
         key: 'store',
@@ -88,9 +94,29 @@ export const SEED_FORMS: SeedForm[] = [
         position: 1,
         placeholder: 'e.g. 1. Open the app  2. Tap Shop  3. It crashes',
       },
-      { key: 'when_it_happened', label: 'When it happened', type: 'date', isRequired: false, position: 2 },
-      { key: 'device_model', label: 'Device model', type: 'short_text', isRequired: false, position: 3, placeholder: 'e.g. iPhone 14, Pixel 8' },
-      { key: 'os_version', label: 'OS version', type: 'short_text', isRequired: false, position: 4, placeholder: 'e.g. iOS 17.4, Android 14' },
+      {
+        key: 'when_it_happened',
+        label: 'When it happened',
+        type: 'date',
+        isRequired: false,
+        position: 2,
+      },
+      {
+        key: 'device_model',
+        label: 'Device model',
+        type: 'short_text',
+        isRequired: false,
+        position: 3,
+        placeholder: 'e.g. iPhone 14, Pixel 8',
+      },
+      {
+        key: 'os_version',
+        label: 'OS version',
+        type: 'short_text',
+        isRequired: false,
+        position: 4,
+        placeholder: 'e.g. iOS 17.4, Android 14',
+      },
     ],
   },
   {
@@ -114,7 +140,13 @@ export const SEED_FORMS: SeedForm[] = [
         position: 1,
         options: ['Google Play', 'Apple Game Center', 'Guest', 'Not sure'],
       },
-      { key: 'last_played', label: 'When you last played', type: 'date', isRequired: false, position: 2 },
+      {
+        key: 'last_played',
+        label: 'When you last played',
+        type: 'date',
+        isRequired: false,
+        position: 2,
+      },
       {
         key: 'what_changed',
         label: 'What changed before you lost access',
@@ -124,7 +156,7 @@ export const SEED_FORMS: SeedForm[] = [
       },
     ],
   },
-]
+];
 
 /**
  * Idempotent, like the rest of the seed. `form` is keyed by
@@ -136,36 +168,41 @@ export const SEED_FORMS: SeedForm[] = [
  * Runs on the APP pool inside the caller's withWorkspace transaction, so the
  * seed exercises the real RLS path rather than bypassing it.
  */
-export async function seedForms(tx: Tx, workspaceId: string): Promise<{ forms: number; mapped: number }> {
-  const now = new Date()
-  let forms = 0
-  let mapped = 0
+export async function seedForms(
+  tx: Tx,
+  workspaceId: string,
+): Promise<{ forms: number; mapped: number }> {
+  const now = new Date();
+  let forms = 0;
+  let mapped = 0;
 
   for (const seedForm of SEED_FORMS) {
     // Validate before writing. Nothing at the database layer checks `fields`, so
     // a malformed seed would otherwise ship a form the submission service can
     // never accept an answer for.
-    const parsed = formFieldsSchema.safeParse(seedForm.fields)
+    const parsed = formFieldsSchema.safeParse(seedForm.fields);
     if (!parsed.success) {
-      throw new Error(`Seed form "${seedForm.name}" has invalid fields: ${JSON.stringify(parsed.error.issues)}`)
+      throw new Error(
+        `Seed form "${seedForm.name}" has invalid fields: ${JSON.stringify(parsed.error.issues)}`,
+      );
     }
 
     let [row] = await tx
       .insert(form)
       .values({ workspaceId, name: seedForm.name })
       .onConflictDoNothing()
-      .returning({ id: form.id })
+      .returning({ id: form.id });
 
     if (row) {
-      forms++
+      forms++;
     } else {
-      ;[row] = await tx
+      [row] = await tx
         .select({ id: form.id })
         .from(form)
         .where(and(eq(form.workspaceId, workspaceId), eq(form.name, seedForm.name)))
-        .limit(1)
+        .limit(1);
     }
-    if (!row) throw new Error(`form upsert returned nothing for "${seedForm.name}"`)
+    if (!row) throw new Error(`form upsert returned nothing for "${seedForm.name}"`);
 
     await tx
       .insert(formVersion)
@@ -176,7 +213,7 @@ export async function seedForms(tx: Tx, workspaceId: string): Promise<{ forms: n
         fields: parsed.data,
         publishedAt: now,
       })
-      .onConflictDoNothing()
+      .onConflictDoNothing();
 
     const updated = await tx
       .update(subintent)
@@ -188,9 +225,9 @@ export async function seedForms(tx: Tx, workspaceId: string): Promise<{ forms: n
           isNull(subintent.formId),
         ),
       )
-      .returning({ id: subintent.id })
-    mapped += updated.length
+      .returning({ id: subintent.id });
+    mapped += updated.length;
   }
 
-  return { forms, mapped }
+  return { forms, mapped };
 }

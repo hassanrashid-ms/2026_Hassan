@@ -1,4 +1,4 @@
-const BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000'
+const BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000';
 
 /**
  * Dev/staging only: VITE_API_BASE_URL sometimes points at an ngrok free-tier
@@ -7,7 +7,7 @@ const BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000'
  * any request lacking this header, which .json() then fails to parse. Sending
  * it unconditionally is a no-op against a real backend, which never looks at it.
  */
-const NGROK_SKIP_WARNING_HEADER = { 'ngrok-skip-browser-warning': 'true' }
+const NGROK_SKIP_WARNING_HEADER = { 'ngrok-skip-browser-warning': 'true' };
 
 /**
  * Carries the HTTP status alongside the message so a caller can tell a 404 from
@@ -15,11 +15,11 @@ const NGROK_SKIP_WARNING_HEADER = { 'ngrok-skip-browser-warning': 'true' }
  * `catch`/`error.message` site is unaffected.
  */
 export class ApiError extends Error {
-  readonly status: number
+  readonly status: number;
   constructor(message: string, status: number) {
-    super(message)
-    this.name = 'ApiError'
-    this.status = status
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
   }
 }
 
@@ -36,7 +36,7 @@ export async function apiCall<T>(
   init: RequestInit = {},
   workspaceId?: string,
 ): Promise<T> {
-  let res: Response
+  let res: Response;
   try {
     res = await fetch(`${BASE}${path}`, {
       ...init,
@@ -47,16 +47,16 @@ export async function apiCall<T>(
         ...NGROK_SKIP_WARNING_HEADER,
         ...(init.headers ?? {}),
       },
-    })
+    });
   } catch {
     // fetch itself rejects on a network failure (offline, DNS, CORS) before any
     // response exists — status 0 marks that as distinct from a real HTTP status,
     // so callers can tell "server said no" from "never reached the server".
-    throw new ApiError('Network error — check your connection and try again.', 0)
+    throw new ApiError('Network error — check your connection and try again.', 0);
   }
   if (!res.ok) {
-    const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null
-    throw new ApiError(body?.error?.message ?? `Request failed with ${res.status}`, res.status)
+    const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
+    throw new ApiError(body?.error?.message ?? `Request failed with ${res.status}`, res.status);
   }
-  return (await res.json()) as T
+  return (await res.json()) as T;
 }

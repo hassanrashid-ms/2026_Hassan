@@ -6,10 +6,10 @@ services:
       POSTGRES_USER: support_owner
       POSTGRES_PASSWORD: support_owner
       POSTGRES_DB: support
-    ports: ["5432:5432"]
-    volumes: ["support-pgdata:/var/lib/postgresql/data"]
+    ports: ['5432:5432']
+    volumes: ['support-pgdata:/var/lib/postgresql/data']
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U support_owner -d support"]
+      test: ['CMD-SHELL', 'pg_isready -U support_owner -d support']
       interval: 5s
       timeout: 3s
       retries: 20
@@ -17,11 +17,11 @@ services:
   redis:
     image: redis:7-alpine
     container_name: support-redis
-    ports: ["6379:6379"]
-    command: ["redis-server", "--appendonly", "yes"]
-    volumes: ["support-redisdata:/data"]
+    ports: ['6379:6379']
+    command: ['redis-server', '--appendonly', 'yes']
+    volumes: ['support-redisdata:/data']
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 5s
       timeout: 3s
       retries: 20

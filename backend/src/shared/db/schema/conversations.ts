@@ -1,5 +1,16 @@
-import { boolean, foreignKey, index, integer, pgTable, text, timestamp, unique, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
-import { sql } from 'drizzle-orm'
+import {
+  boolean,
+  foreignKey,
+  index,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+  unique,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import {
   classificationSource,
   conversationPriority,
@@ -9,13 +20,13 @@ import {
   messageVisibility,
   confirmPhase,
   resolutionSource,
-} from './enums.ts'
-import { agent, workspace } from './identity.ts'
-import { player, session } from './players.ts'
-import { subintent } from './taxonomy.ts'
-import { article } from './articles.ts'
+} from './enums.ts';
+import { agent, workspace } from './identity.ts';
+import { player, session } from './players.ts';
+import { subintent } from './taxonomy.ts';
+import { article } from './articles.ts';
 
-const tz = { withTimezone: true, mode: 'date' } as const
+const tz = { withTimezone: true, mode: 'date' } as const;
 
 /**
  * MINIMAL on purpose. These two tables exist in this slice only because
@@ -77,7 +88,7 @@ export const conversation = pgTable(
     // so a submission can never name another workspace's conversation.
     unique('conversation_workspace_id_uk').on(t.workspaceId, t.id),
   ],
-)
+);
 
 export const message = pgTable(
   'message',
@@ -119,7 +130,7 @@ export const message = pgTable(
     // The GET /sdk/unread scan.
     index('message_unread_idx').on(t.conversationId, t.deliveryState, t.authorType),
   ],
-)
+);
 
 /**
  * One row per resolution attempt. Cycle 1 opens with the conversation; every
@@ -176,4 +187,4 @@ export const resolutionCycle = pgTable(
       .on(t.workspaceId, t.resolvedAt)
       .where(sql`closed_at is null and resolved_at is not null`),
   ],
-)
+);

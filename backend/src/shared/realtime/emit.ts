@@ -1,6 +1,6 @@
-import type { Server } from 'socket.io'
-import type { ConversationPhaseChangedEvent, MessageReadEvent } from '@support/types'
-import { agentRoom, inboxRoom, playerRoom } from './rooms.ts'
+import type { Server } from 'socket.io';
+import type { ConversationPhaseChangedEvent, MessageReadEvent } from '@support/types';
+import { agentRoom, inboxRoom, playerRoom } from './rooms.ts';
 
 /**
  * Payloads are `unknown` on purpose: this module is transport, not
@@ -14,15 +14,23 @@ export function emitMessageToRooms(
   playerPayload: unknown,
   agentPayload: unknown,
 ): void {
-  io.to(agentRoom(conversationId)).emit('message:new', agentPayload)
+  io.to(agentRoom(conversationId)).emit('message:new', agentPayload);
   if (playerPayload !== null) {
-    io.to(playerRoom(conversationId)).emit('message:new', playerPayload)
+    io.to(playerRoom(conversationId)).emit('message:new', playerPayload);
   }
 }
 
 /** id and new status only — never the full conversation row. */
-export function emitInboxChanged(io: Server, workspaceId: string, conversationId: string, status: string): void {
-  io.to(inboxRoom(workspaceId)).emit('conversation:changed', { conversation_id: conversationId, status })
+export function emitInboxChanged(
+  io: Server,
+  workspaceId: string,
+  conversationId: string,
+  status: string,
+): void {
+  io.to(inboxRoom(workspaceId)).emit('conversation:changed', {
+    conversation_id: conversationId,
+    status,
+  });
 }
 
 /**
@@ -31,9 +39,16 @@ export function emitInboxChanged(io: Server, workspaceId: string, conversationId
  * emitMessageToRooms this payload is typed — it is a fixed four-field contract,
  * not a serializer's output passed through.
  */
-export function emitReadReceipt(io: Server, audience: 'player' | 'agents', payload: MessageReadEvent): void {
-  const room = audience === 'player' ? playerRoom(payload.conversation_id) : agentRoom(payload.conversation_id)
-  io.to(room).emit('message:read', payload)
+export function emitReadReceipt(
+  io: Server,
+  audience: 'player' | 'agents',
+  payload: MessageReadEvent,
+): void {
+  const room =
+    audience === 'player'
+      ? playerRoom(payload.conversation_id)
+      : agentRoom(payload.conversation_id);
+  io.to(room).emit('message:read', payload);
 }
 
 /**
@@ -42,7 +57,11 @@ export function emitReadReceipt(io: Server, audience: 'player' | 'agents', paylo
  * the player's banner and the agent's "Ask if resolved" button — which the
  * decline's own message:new says nothing about.
  */
-export function emitPhaseChanged(io: Server, conversationId: string, payload: ConversationPhaseChangedEvent): void {
-  io.to(agentRoom(conversationId)).emit('conversation:phase_changed', payload)
-  io.to(playerRoom(conversationId)).emit('conversation:phase_changed', payload)
+export function emitPhaseChanged(
+  io: Server,
+  conversationId: string,
+  payload: ConversationPhaseChangedEvent,
+): void {
+  io.to(agentRoom(conversationId)).emit('conversation:phase_changed', payload);
+  io.to(playerRoom(conversationId)).emit('conversation:phase_changed', payload);
 }

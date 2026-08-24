@@ -1,17 +1,23 @@
-import * as React from 'react'
-import { Command as CommandPrimitive } from 'cmdk'
-import { cn } from '../../lib/cn.ts'
+import * as React from 'react';
+import { Command as CommandPrimitive } from 'cmdk';
+import { cn } from '../../lib/cn.ts';
 
 function Command({ className, ...props }: React.ComponentProps<typeof CommandPrimitive>) {
   return (
     <CommandPrimitive
-      className={cn('flex h-full w-full flex-col overflow-hidden rounded-md bg-bg text-text', className)}
+      className={cn(
+        'flex h-full w-full flex-col overflow-hidden rounded-md bg-bg text-text',
+        className,
+      )}
       {...props}
     />
-  )
+  );
 }
 
-function CommandInput({ className, ...props }: React.ComponentProps<typeof CommandPrimitive.Input>) {
+function CommandInput({
+  className,
+  ...props
+}: React.ComponentProps<typeof CommandPrimitive.Input>) {
   return (
     <div className="flex items-center border-b border-slate-200 px-3">
       <CommandPrimitive.Input
@@ -22,7 +28,7 @@ function CommandInput({ className, ...props }: React.ComponentProps<typeof Comma
         {...props}
       />
     </div>
-  )
+  );
 }
 
 function CommandList({ className, ...props }: React.ComponentProps<typeof CommandPrimitive.List>) {
@@ -31,20 +37,20 @@ function CommandList({ className, ...props }: React.ComponentProps<typeof Comman
       className={cn('max-h-64 overflow-y-auto overflow-x-hidden', className)}
       {...props}
     />
-  )
+  );
 }
 
 function CommandEmpty(props: React.ComponentProps<typeof CommandPrimitive.Empty>) {
-  return <CommandPrimitive.Empty className="py-4 text-center text-sm text-muted" {...props} />
+  return <CommandPrimitive.Empty className="py-4 text-center text-sm text-muted" {...props} />;
 }
 
-function CommandGroup({ className, ...props }: React.ComponentProps<typeof CommandPrimitive.Group>) {
+function CommandGroup({
+  className,
+  ...props
+}: React.ComponentProps<typeof CommandPrimitive.Group>) {
   return (
-    <CommandPrimitive.Group
-      className={cn('overflow-hidden p-1 text-text', className)}
-      {...props}
-    />
-  )
+    <CommandPrimitive.Group className={cn('overflow-hidden p-1 text-text', className)} {...props} />
+  );
 }
 
 function CommandItem({ className, ...props }: React.ComponentProps<typeof CommandPrimitive.Item>) {
@@ -57,7 +63,7 @@ function CommandItem({ className, ...props }: React.ComponentProps<typeof Comman
       )}
       {...props}
     />
-  )
+  );
 }
 
-export { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem }
+export { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem };

@@ -1,5 +1,5 @@
-import * as React from 'react'
-import { cn } from '@/surfaces/webview/lib/cn'
+import * as React from 'react';
+import { cn } from '@/surfaces/webview/lib/cn';
 
 // Divergence from stock shadcn: no hover state (touch surface), tokens remapped
 // (bg-surface instead of bg-transparent+border-input, border-accent focus instead
@@ -18,9 +18,9 @@ const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<'input'>>(
         )}
         {...props}
       />
-    )
+    );
   },
-)
-Input.displayName = 'Input'
+);
+Input.displayName = 'Input';
 
-export { Input }
+export { Input };

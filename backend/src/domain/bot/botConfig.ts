@@ -1,25 +1,30 @@
-import { eq } from 'drizzle-orm'
-import type { Tx } from '../../shared/db/withWorkspace.ts'
-import { botConfig } from '../../shared/db/schema/index.ts'
-import { buildSystemPrompt, DEFAULT_BOT_PROMPT } from './defaultPrompt.ts'
-import { BUILTIN_RULE_KEYS, LOCKED_RULE_KEYS, buildBaselineRules, type RuleEntry } from './rulesCatalog.ts'
-import { TOOL_CATALOG, buildBaselineToolsConfig, type ToolToggle } from './tools.ts'
-import { LIMIT_CATALOG, buildBaselineLimits, clampLimitBounds } from './limitsCatalog.ts'
-import type { LimitKey, LimitToggleValue as LimitToggle } from '@support/types'
-import { getOrCreateSystemActor } from './systemActor.ts'
-import { appendChangeLog } from '../../shared/changeLog/appendChangeLog.ts'
+import { eq } from 'drizzle-orm';
+import type { Tx } from '../../shared/db/withWorkspace.ts';
+import { botConfig } from '../../shared/db/schema/index.ts';
+import { buildSystemPrompt, DEFAULT_BOT_PROMPT } from './defaultPrompt.ts';
+import {
+  BUILTIN_RULE_KEYS,
+  LOCKED_RULE_KEYS,
+  buildBaselineRules,
+  type RuleEntry,
+} from './rulesCatalog.ts';
+import { TOOL_CATALOG, buildBaselineToolsConfig, type ToolToggle } from './tools.ts';
+import { LIMIT_CATALOG, buildBaselineLimits, clampLimitBounds } from './limitsCatalog.ts';
+import type { LimitKey, LimitToggleValue as LimitToggle } from '@support/types';
+import { getOrCreateSystemActor } from './systemActor.ts';
+import { appendChangeLog } from '../../shared/changeLog/appendChangeLog.ts';
 
 export type ResolvedBotConfig = {
-  isProvisioned: boolean
-  prompt: string
-  rules: RuleEntry[]
-  toolsConfig: ToolToggle[]
+  isProvisioned: boolean;
+  prompt: string;
+  rules: RuleEntry[];
+  toolsConfig: ToolToggle[];
   /** Derived from toolsConfig — what toolsForPhase actually filters against. */
-  enabledTools: ReadonlySet<string>
-  limitsConfig: LimitToggle[]
-  resolvedLimits: Record<LimitKey, number>
-  systemPrompt: string
-}
+  enabledTools: ReadonlySet<string>;
+  limitsConfig: LimitToggle[];
+  resolvedLimits: Record<LimitKey, number>;
+  systemPrompt: string;
+};
 
 function resolved(
   isProvisioned: boolean,
@@ -35,9 +40,12 @@ function resolved(
     toolsConfig,
     enabledTools: new Set(toolsConfig.filter((t) => t.enabled).map((t) => t.tool)),
     limitsConfig,
-    resolvedLimits: Object.fromEntries(limitsConfig.map((l) => [l.key, l.value])) as Record<LimitKey, number>,
+    resolvedLimits: Object.fromEntries(limitsConfig.map((l) => [l.key, l.value])) as Record<
+      LimitKey,
+      number
+    >,
     systemPrompt: buildSystemPrompt(prompt, rules),
-  }
+  };
 }
 
 /**
@@ -58,10 +66,16 @@ export async function resolveBotConfig(tx: Tx, workspaceId: string): Promise<Res
     })
     .from(botConfig)
     .where(eq(botConfig.workspaceId, workspaceId))
-    .limit(1)
+    .limit(1);
 
   if (!row) {
-    return resolved(false, DEFAULT_BOT_PROMPT, buildBaselineRules(), buildBaselineToolsConfig(), buildBaselineLimits())
+    return resolved(
+      false,
+      DEFAULT_BOT_PROMPT,
+      buildBaselineRules(),
+      buildBaselineToolsConfig(),
+      buildBaselineLimits(),
+    );
   }
   return resolved(
     row.isProvisioned,
@@ -69,96 +83,99 @@ export async function resolveBotConfig(tx: Tx, workspaceId: string): Promise<Res
     row.rules as RuleEntry[],
     row.toolsConfig as ToolToggle[],
     row.limitsConfig as LimitToggle[],
-  )
+  );
 }
 
-export const BOT_CONFIG_ENTITY_TYPE = 'bot_config'
+export const BOT_CONFIG_ENTITY_TYPE = 'bot_config';
 
 export class EmptyBotPrompt extends Error {
-  readonly field: 'prompt'
+  readonly field: 'prompt';
   constructor() {
-    super('Bot prompt cannot be empty — pass null to reset it to the default')
-    this.name = 'EmptyBotPrompt'
-    this.field = 'prompt'
+    super('Bot prompt cannot be empty — pass null to reset it to the default');
+    this.name = 'EmptyBotPrompt';
+    this.field = 'prompt';
   }
 }
 
 export class InvalidRulesPayload extends Error {
   constructor(message: string) {
-    super(message)
-    this.name = 'InvalidRulesPayload'
+    super(message);
+    this.name = 'InvalidRulesPayload';
   }
 }
 
 export class InvalidToolsPayload extends Error {
   constructor(message: string) {
-    super(message)
-    this.name = 'InvalidToolsPayload'
+    super(message);
+    this.name = 'InvalidToolsPayload';
   }
 }
 
 export class InvalidLimitsPayload extends Error {
   constructor(message: string) {
-    super(message)
-    this.name = 'InvalidLimitsPayload'
+    super(message);
+    this.name = 'InvalidLimitsPayload';
   }
 }
 
 /** Save-time domain validation beyond Zod's shape check (spec "API / types"). */
 function validateRules(rules: readonly RuleEntry[]): void {
-  const byKey = new Map(rules.map((r) => [r.key, r]))
+  const byKey = new Map(rules.map((r) => [r.key, r]));
 
   for (const key of BUILTIN_RULE_KEYS) {
-    const entry = byKey.get(key)
-    if (!entry) throw new InvalidRulesPayload(`Rules payload is missing builtin rule "${key}".`)
+    const entry = byKey.get(key);
+    if (!entry) throw new InvalidRulesPayload(`Rules payload is missing builtin rule "${key}".`);
     if (LOCKED_RULE_KEYS.has(key) && !entry.enabled) {
-      throw new InvalidRulesPayload(`"${key}" is a locked rule and cannot be disabled.`)
+      throw new InvalidRulesPayload(`"${key}" is a locked rule and cannot be disabled.`);
     }
   }
 
   for (const rule of rules) {
     if (rule.source === 'custom' && BUILTIN_RULE_KEYS.has(rule.key)) {
-      throw new InvalidRulesPayload(`Custom rule cannot reuse builtin key "${rule.key}".`)
+      throw new InvalidRulesPayload(`Custom rule cannot reuse builtin key "${rule.key}".`);
     }
   }
 
   if (!rules.some((r) => r.enabled)) {
-    throw new InvalidRulesPayload('At least one rule must remain enabled.')
+    throw new InvalidRulesPayload('At least one rule must remain enabled.');
   }
 }
 
 function validateToolsConfig(toolsConfig: readonly ToolToggle[]): void {
-  const names = new Set(toolsConfig.map((t) => t.tool))
+  const names = new Set(toolsConfig.map((t) => t.tool));
   for (const t of TOOL_CATALOG) {
-    if (!names.has(t.name)) throw new InvalidToolsPayload(`tools_config is missing "${t.name}".`)
+    if (!names.has(t.name)) throw new InvalidToolsPayload(`tools_config is missing "${t.name}".`);
   }
 }
 
 function validateLimitsConfig(limitsConfig: readonly LimitToggle[]): void {
-  const byKey = new Map(limitsConfig.map((l) => [l.key, l.value]))
+  const byKey = new Map(limitsConfig.map((l) => [l.key, l.value]));
   for (const entry of LIMIT_CATALOG) {
-    const value = byKey.get(entry.key)
-    if (value === undefined) throw new InvalidLimitsPayload(`limits_config is missing "${entry.key}".`)
-    const bounds = clampLimitBounds(entry.key, value)
+    const value = byKey.get(entry.key);
+    if (value === undefined)
+      throw new InvalidLimitsPayload(`limits_config is missing "${entry.key}".`);
+    const bounds = clampLimitBounds(entry.key, value);
     if (!bounds.ok) {
-      throw new InvalidLimitsPayload(`"${entry.key}" must be between ${bounds.min} and ${bounds.max}.`)
+      throw new InvalidLimitsPayload(
+        `"${entry.key}" must be between ${bounds.min} and ${bounds.max}.`,
+      );
     }
   }
 }
 
 export type BotConfigSave = {
-  workspaceId: string
-  actorId: string
-  isProvisioned?: boolean
+  workspaceId: string;
+  actorId: string;
+  isProvisioned?: boolean;
   /** Omitted means leave alone; explicit null resets to DEFAULT_BOT_PROMPT. */
-  prompt?: string | null
+  prompt?: string | null;
   /** Omitted means leave alone; explicit null resets to the catalog baseline. */
-  rules?: RuleEntry[] | null
+  rules?: RuleEntry[] | null;
   /** Omitted means leave alone; explicit null resets to the catalog baseline. */
-  toolsConfig?: ToolToggle[] | null
+  toolsConfig?: ToolToggle[] | null;
   /** Omitted means leave alone; explicit null resets to the catalog baseline. */
-  limitsConfig?: LimitToggle[] | null
-}
+  limitsConfig?: LimitToggle[] | null;
+};
 
 /**
  * The only way `bot_config` is written for an ordinary edit. `seedBotConfig`
@@ -166,10 +183,10 @@ export type BotConfigSave = {
  * before_value semantics.
  */
 export async function saveBotConfig(tx: Tx, input: BotConfigSave): Promise<ResolvedBotConfig> {
-  if (typeof input.prompt === 'string' && input.prompt.trim() === '') throw new EmptyBotPrompt()
-  if (input.rules) validateRules(input.rules)
-  if (input.toolsConfig) validateToolsConfig(input.toolsConfig)
-  if (input.limitsConfig) validateLimitsConfig(input.limitsConfig)
+  if (typeof input.prompt === 'string' && input.prompt.trim() === '') throw new EmptyBotPrompt();
+  if (input.rules) validateRules(input.rules);
+  if (input.toolsConfig) validateToolsConfig(input.toolsConfig);
+  if (input.limitsConfig) validateLimitsConfig(input.limitsConfig);
 
   const [existing] = await tx
     .select({
@@ -181,19 +198,27 @@ export async function saveBotConfig(tx: Tx, input: BotConfigSave): Promise<Resol
     })
     .from(botConfig)
     .where(eq(botConfig.workspaceId, input.workspaceId))
-    .limit(1)
+    .limit(1);
 
-  const beforeProvisioned = existing?.isProvisioned ?? false
-  const beforePrompt = existing?.prompt ?? DEFAULT_BOT_PROMPT
-  const beforeRules = (existing?.rules as RuleEntry[] | undefined) ?? buildBaselineRules()
-  const beforeTools = (existing?.toolsConfig as ToolToggle[] | undefined) ?? buildBaselineToolsConfig()
-  const beforeLimits = (existing?.limitsConfig as LimitToggle[] | undefined) ?? buildBaselineLimits()
+  const beforeProvisioned = existing?.isProvisioned ?? false;
+  const beforePrompt = existing?.prompt ?? DEFAULT_BOT_PROMPT;
+  const beforeRules = (existing?.rules as RuleEntry[] | undefined) ?? buildBaselineRules();
+  const beforeTools =
+    (existing?.toolsConfig as ToolToggle[] | undefined) ?? buildBaselineToolsConfig();
+  const beforeLimits =
+    (existing?.limitsConfig as LimitToggle[] | undefined) ?? buildBaselineLimits();
 
-  const afterProvisioned = input.isProvisioned ?? beforeProvisioned
-  const afterPrompt = input.prompt === undefined ? beforePrompt : (input.prompt ?? DEFAULT_BOT_PROMPT)
-  const afterRules = input.rules === undefined ? beforeRules : (input.rules ?? buildBaselineRules())
-  const afterTools = input.toolsConfig === undefined ? beforeTools : (input.toolsConfig ?? buildBaselineToolsConfig())
-  const afterLimits = input.limitsConfig === undefined ? beforeLimits : (input.limitsConfig ?? buildBaselineLimits())
+  const afterProvisioned = input.isProvisioned ?? beforeProvisioned;
+  const afterPrompt =
+    input.prompt === undefined ? beforePrompt : (input.prompt ?? DEFAULT_BOT_PROMPT);
+  const afterRules =
+    input.rules === undefined ? beforeRules : (input.rules ?? buildBaselineRules());
+  const afterTools =
+    input.toolsConfig === undefined
+      ? beforeTools
+      : (input.toolsConfig ?? buildBaselineToolsConfig());
+  const afterLimits =
+    input.limitsConfig === undefined ? beforeLimits : (input.limitsConfig ?? buildBaselineLimits());
 
   await tx
     .insert(botConfig)
@@ -215,7 +240,7 @@ export async function saveBotConfig(tx: Tx, input: BotConfigSave): Promise<Resol
         limitsConfig: afterLimits,
         updatedAt: new Date(),
       },
-    })
+    });
 
   await appendChangeLog(tx, {
     workspaceId: input.workspaceId,
@@ -229,9 +254,9 @@ export async function saveBotConfig(tx: Tx, input: BotConfigSave): Promise<Resol
       { field: 'tools_config', before: beforeTools, after: afterTools },
       { field: 'limits_config', before: beforeLimits, after: afterLimits },
     ],
-  })
+  });
 
-  return resolved(afterProvisioned, afterPrompt, afterRules, afterTools, afterLimits)
+  return resolved(afterProvisioned, afterPrompt, afterRules, afterTools, afterLimits);
 }
 
 /**
@@ -244,17 +269,23 @@ export async function saveBotConfig(tx: Tx, input: BotConfigSave): Promise<Resol
  * baseline", so the History panel shows a real "version 1" row.
  */
 export async function seedBotConfig(tx: Tx, workspaceId: string): Promise<ResolvedBotConfig> {
-  const [existing] = await tx.select({ workspaceId: botConfig.workspaceId }).from(botConfig).where(eq(botConfig.workspaceId, workspaceId)).limit(1)
-  if (existing) return resolveBotConfig(tx, workspaceId)
+  const [existing] = await tx
+    .select({ workspaceId: botConfig.workspaceId })
+    .from(botConfig)
+    .where(eq(botConfig.workspaceId, workspaceId))
+    .limit(1);
+  if (existing) return resolveBotConfig(tx, workspaceId);
 
-  const actorId = await getOrCreateSystemActor(tx)
+  const actorId = await getOrCreateSystemActor(tx);
 
-  const prompt = DEFAULT_BOT_PROMPT
-  const rules = buildBaselineRules()
-  const toolsConfig = buildBaselineToolsConfig()
-  const limitsConfig = buildBaselineLimits()
+  const prompt = DEFAULT_BOT_PROMPT;
+  const rules = buildBaselineRules();
+  const toolsConfig = buildBaselineToolsConfig();
+  const limitsConfig = buildBaselineLimits();
 
-  await tx.insert(botConfig).values({ workspaceId, isProvisioned: false, prompt, rules, toolsConfig, limitsConfig })
+  await tx
+    .insert(botConfig)
+    .values({ workspaceId, isProvisioned: false, prompt, rules, toolsConfig, limitsConfig });
 
   await appendChangeLog(tx, {
     workspaceId,
@@ -267,7 +298,7 @@ export async function seedBotConfig(tx: Tx, workspaceId: string): Promise<Resolv
       { field: 'tools_config', before: null, after: toolsConfig },
       { field: 'limits_config', before: null, after: limitsConfig },
     ],
-  })
+  });
 
-  return resolved(false, prompt, rules, toolsConfig, limitsConfig)
+  return resolved(false, prompt, rules, toolsConfig, limitsConfig);
 }

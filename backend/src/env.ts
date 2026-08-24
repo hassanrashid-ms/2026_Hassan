@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import { z } from 'zod';
 
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -14,9 +14,7 @@ const EnvSchema = z.object({
   LANGFUSE_SECRET_KEY: z.string().optional(),
   LANGFUSE_PUBLIC_KEY: z.string().optional(),
   LANGFUSE_BASE_URL: z.string().optional(),
-  PLAYER_JWT_SECRET: z
-    .string()
-    .min(32, 'PLAYER_JWT_SECRET must be at least 32 characters'),
+  PLAYER_JWT_SECRET: z.string().min(32, 'PLAYER_JWT_SECRET must be at least 32 characters'),
   PLAYER_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(900),
   AGENT_SESSION_JWT_SECRET: z
     .string()
@@ -32,30 +30,32 @@ const EnvSchema = z.object({
         .map((origin) => origin.trim())
         .filter((origin) => origin.length > 0),
     ),
-})
+});
 
-export type Env = z.infer<typeof EnvSchema>
+export type Env = z.infer<typeof EnvSchema>;
 
-export function loadEnv(source: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env): Env {
-  const parsed = EnvSchema.safeParse(source)
+export function loadEnv(
+  source: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env,
+): Env {
+  const parsed = EnvSchema.safeParse(source);
   if (!parsed.success) {
     const detail = parsed.error.issues
       .map((issue) => `${issue.path.join('.') || '(root)'}: ${issue.message}`)
-      .join('\n')
-    throw new Error(`Invalid environment:\n${detail}`)
+      .join('\n');
+    throw new Error(`Invalid environment:\n${detail}`);
   }
-  return parsed.data
+  return parsed.data;
 }
 
-let cached: Env | undefined
+let cached: Env | undefined;
 
 /** Memoised so a bad env fails once, loudly, rather than on every call. */
 export function getEnv(): Env {
-  cached ??= loadEnv()
-  return cached
+  cached ??= loadEnv();
+  return cached;
 }
 
 /** Tests only — forces the next getEnv() to re-read process.env. */
 export function resetEnvCache(): void {
-  cached = undefined
+  cached = undefined;
 }

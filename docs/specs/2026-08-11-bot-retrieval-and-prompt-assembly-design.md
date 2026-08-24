@@ -13,7 +13,7 @@
 > `HYBRID_ALPHA`, `BOT_ARTICLE_LIMIT` and the no-floor decision (§4) are unchanged — only the caller
 > moves. `{{articles}}` consequently changes meaning: see §10, added below.
 >
-> §8's player-context injection risk, recorded here as *"carried forward to spec 3"*, is **resolved**
+> §8's player-context injection risk, recorded here as _"carried forward to spec 3"_, is **resolved**
 > by spec 4 §7 moving player context into a `user` message.
 
 **Scope:** Everything that turns a conversation into the exact string sent to a model, and nothing
@@ -37,34 +37,34 @@ here** — internal notes must not reach the model, `state.raw` must not reach t
 not be able to steer the system prompt — and each is provable without a model in the loop, in a test
 that runs in milliseconds and never flakes.
 
-| Spec | Contents |
-|---|---|
-| 1 — bot turn seam and handoff | Gating, queue, outcome application, handoff, assignment, events |
-| **2 — this one** | Retrieval, taxonomy view, player context, history, substitution |
-| ~~3 — OpenAI call and decision~~ | **Superseded by spec 4** |
-| 4 — tool-calling decider | `openai` SDK, five tools, budgets, `bot_phase`, context assembly, the `Other` seed |
+| Spec                             | Contents                                                                           |
+| -------------------------------- | ---------------------------------------------------------------------------------- |
+| 1 — bot turn seam and handoff    | Gating, queue, outcome application, handoff, assignment, events                    |
+| **2 — this one**                 | Retrieval, taxonomy view, player context, history, substitution                    |
+| ~~3 — OpenAI call and decision~~ | **Superseded by spec 4**                                                           |
+| 4 — tool-calling decider         | `openai` SDK, five tools, budgets, `bot_phase`, context assembly, the `Other` seed |
 
 ### In scope
 
-| Thing | Why here |
-|---|---|
-| `retrieval.ts` | Hybrid search ids → hydrated published article rows, ranked |
-| `searchArticleIdsHybrid` in `shared/weaviate/articlesIndex.ts` | The bot's query strategy, separate from public FAQ search |
-| `OPENAI_APIKEY` becomes required in `env.ts` | Hybrid cannot vectorize the query without it |
-| `taxonomyView.ts` | The numbered subintent list **and** the index→id map that decodes it |
-| `playerContext.ts` | `{{player_level}}` / `{{spend_tier}}` from `declared`, `unknown` for every no-data state |
-| `history.ts` | Player and bot turns, through `toPlayerView` |
-| `promptAssembly.ts` | Substitution, and the one function that assembles `BotTurnInput` |
-| `BotTurnInput` — filled in | Spec 1 declared it opaque; this is its shape |
-| `UnavailableReason` gains `retrieval_failed` | A broken index is not a bot deciding to hand off |
-| Article and player-value size caps | Token budget, and a player-controlled string in a system prompt |
+| Thing                                                          | Why here                                                                                 |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `retrieval.ts`                                                 | Hybrid search ids → hydrated published article rows, ranked                              |
+| `searchArticleIdsHybrid` in `shared/weaviate/articlesIndex.ts` | The bot's query strategy, separate from public FAQ search                                |
+| `OPENAI_APIKEY` becomes required in `env.ts`                   | Hybrid cannot vectorize the query without it                                             |
+| `taxonomyView.ts`                                              | The numbered subintent list **and** the index→id map that decodes it                     |
+| `playerContext.ts`                                             | `{{player_level}}` / `{{spend_tier}}` from `declared`, `unknown` for every no-data state |
+| `history.ts`                                                   | Player and bot turns, through `toPlayerView`                                             |
+| `promptAssembly.ts`                                            | Substitution, and the one function that assembles `BotTurnInput`                         |
+| `BotTurnInput` — filled in                                     | Spec 1 declared it opaque; this is its shape                                             |
+| `UnavailableReason` gains `retrieval_failed`                   | A broken index is not a bot deciding to hand off                                         |
+| Article and player-value size caps                             | Token budget, and a player-controlled string in a system prompt                          |
 
 ### Out of scope — named so nobody wonders
 
 - **The model call.** No `openai` chat client, no `OPENAI_MODEL` env, no response schema, no turn
-  cap. Spec 4. (`OPENAI_APIKEY` *is* touched here — see §2 — but only as the Weaviate vectorizer
+  cap. Spec 4. (`OPENAI_APIKEY` _is_ touched here — see §2 — but only as the Weaviate vectorizer
   header it already is.)
-- **Resolving an index back to a subintent.** This slice *produces* the map; spec 4 reads it.
+- **Resolving an index back to a subintent.** This slice _produces_ the map; spec 4 reads it.
 - **Seeding the `Other` intent and its catch-all subintent.** `SEED_TAXONOMY` has eight intents and
   none of them is `Other`; `intent.is_system` is declared in the schema and set nowhere. That row is
   what an unclassifiable conversation lands on, and it is **spec 4's prerequisite** — the slice that
@@ -89,10 +89,10 @@ that runs in milliseconds and never flakes.
 that argument still holds — but the conclusion it drew, that the query should therefore be the latest
 player message verbatim, was the wrong fix.
 
-The player's own words are frequently a poor query. *"paid, got nothing"* shares almost no term with
-an article titled *"Why didn't my gems arrive?"*, and the vector half of a five-word fragment carries
+The player's own words are frequently a poor query. _"paid, got nothing"_ shares almost no term with
+an article titled _"Why didn't my gems arrive?"_, and the vector half of a five-word fragment carries
 little signal either. Spec 4 makes retrieval the `search_articles` tool: the model reads the message,
-phrases a query (*"missing in-app purchase not delivered"*), reads the returned titles and bodies,
+phrases a query (_"missing in-app purchase not delivered"_), reads the returned titles and bodies,
 and may query again — up to three times per turn.
 
 Retrieval is the textbook case for a tool. It is idempotent, side-effect-free, and cheap to get
@@ -107,13 +107,13 @@ Two query strategies against one collection, as two functions in
 `shared/weaviate/articlesIndex.ts`:
 
 ```ts
-export const HYBRID_ALPHA = 0.5      // 0 = pure BM25, 1 = pure vector
-export const BOT_ARTICLE_LIMIT = 3
+export const HYBRID_ALPHA = 0.5; // 0 = pure BM25, 1 = pure vector
+export const BOT_ARTICLE_LIMIT = 3;
 
 export async function searchArticleIdsHybrid(
   query: string,
   opts: { workspaceId: string; limit: number },
-): Promise<string[]>
+): Promise<string[]>;
 ```
 
 Same `workspaceId` filter, same `WEAVIATE_CALL_TIMEOUT_MS` wrapper, same
@@ -146,15 +146,19 @@ propagates: the job retries, and on the final attempt the conversation takes spe
 path with a new reason.
 
 > **Spec 4 delta:** the throw now originates inside the `search_articles` tool handler, mid-loop. It
-> is deliberately **not** caught and reported back to the model as *"search failed, carry on"* — a bot
+> is deliberately **not** caught and reported back to the model as _"search failed, carry on"_ — a bot
 > that cannot read the articles cannot answer from them, and inventing an answer or handing off as
 > though it had checked would both be worse than the fallback. The throw leaves the loop untouched
 > and reaches BullMQ exactly as described here.
 
 ```ts
 export type UnavailableReason =
-  | 'not_provisioned' | 'not_implemented' | 'error' | 'timeout' | 'invalid_response'
-  | 'retrieval_failed'   // added by this slice
+  | 'not_provisioned'
+  | 'not_implemented'
+  | 'error'
+  | 'timeout'
+  | 'invalid_response'
+  | 'retrieval_failed'; // added by this slice
 ```
 
 Hybrid **widens** what this covers. BM25 fails only if Weaviate is down; hybrid also fails if the
@@ -163,7 +167,7 @@ every single bot turn. `retrieval_failed` covers both, and the message logged al
 the underlying error so the two are separable in the logs even though they are one reason in the
 metric.
 
-The tempting alternative — treat an outage as "no articles matched" — produces the same *visible*
+The tempting alternative — treat an outage as "no articles matched" — produces the same _visible_
 outcome (the rules tell the bot to hand off when nothing answers the question) while recording it as
 `bot_handoff`. The bot would be credited with a good decision every time search was down, and the
 Bot-fallbacks metric would read zero through an outage. **The two must not be confusable**, which is
@@ -180,12 +184,12 @@ So the bot applies **no score threshold**. Top-3 by fused score always go to the
 
 The consequence has to be stated plainly rather than discovered: **retrieval no longer contributes
 anything to "don't answer from an irrelevant article."** That behaviour now rests entirely on one
-line of `DEFAULT_BOT_RULES` — *"If you are not confident an article answers the question, hand off"* —
+line of `DEFAULT_BOT_RULES` — _"If you are not confident an article answers the question, hand off"_ —
 which is a field an admin can edit, in a table with no validation that it still says so.
 
 This is accepted deliberately. A fused-score threshold is not the fix: hybrid scores are
 rank-relative and not comparable across queries, so any constant would be a guess that drops good
-matches on some queries and admits noise on others, while *looking* like a safeguard. An honest
+matches on some queries and admits noise on others, while _looking_ like a safeguard. An honest
 absence beats a decorative gate.
 
 Two things follow, both for later slices, both recorded so they are choices rather than omissions:
@@ -200,23 +204,23 @@ No help articles matched this question.
 ```
 
 It is now reachable in exactly one situation — **a workspace with no published articles at all**,
-which is the non-negotiables' *"no published articles → skip the article step"* case and needs no
+which is the non-negotiables' _"no published articles → skip the article step"_ case and needs no
 special path. Never an empty region under the `{{articles}}` heading: a blank looks like a truncation
 bug to a model as easily as it reads as absence.
 
 ### 5 · Everything that enters the prompt is size-capped
 
-| Bound | Value | Why |
-|---|---|---|
-| `BOT_ARTICLE_LIMIT` | 3 | The hybrid `limit`, **per `search_articles` call**. Three, not five — see below |
-| `MAX_CATALOGUE_ARTICLES` | 200 | §10 — the `{{articles}}` catalogue |
-| `MAX_ARTICLE_BODY_CHARS` | 2000 | One long article must not crowd out the other two |
-| `MAX_HISTORY_MESSAGES` | 20 | A player can send many messages before the worker runs |
-| `MAX_HISTORY_BODY_CHARS` | 1000 | Per message |
-| `MAX_PLAYER_VALUE_CHARS` | 100 | See §8 — this one is not about tokens |
+| Bound                    | Value | Why                                                                             |
+| ------------------------ | ----- | ------------------------------------------------------------------------------- |
+| `BOT_ARTICLE_LIMIT`      | 3     | The hybrid `limit`, **per `search_articles` call**. Three, not five — see below |
+| `MAX_CATALOGUE_ARTICLES` | 200   | §10 — the `{{articles}}` catalogue                                              |
+| `MAX_ARTICLE_BODY_CHARS` | 2000  | One long article must not crowd out the other two                               |
+| `MAX_HISTORY_MESSAGES`   | 20    | A player can send many messages before the worker runs                          |
+| `MAX_HISTORY_BODY_CHARS` | 1000  | Per message                                                                     |
+| `MAX_PLAYER_VALUE_CHARS` | 100   | See §8 — this one is not about tokens                                           |
 
 **Three articles, not five, follows from §4.** With a BM25 floor, a fourth and fifth result were
-either relevant or filtered out. With no floor, every extra slot is a *guaranteed* extra article,
+either relevant or filtered out. With no floor, every extra slot is a _guaranteed_ extra article,
 relevant or not — so the tail is pure noise the model has to reject, and each one is another chance
 it doesn't. Fewer, better-ranked candidates is the right trade once retrieval stops gating.
 
@@ -252,9 +256,9 @@ prompt is the admin's text, not the admin's text plus what we thought they forgo
 
 ```ts
 export type TaxonomyView = {
-  rendered: string                              // what {{subintents}} becomes
-  indexToSubintentId: ReadonlyMap<number, string>
-}
+  rendered: string; // what {{subintents}} becomes
+  indexToSubintentId: ReadonlyMap<number, string>;
+};
 ```
 
 One function returns both. They are the encode and decode halves of one contract, and a codebase
@@ -269,7 +273,7 @@ from classifying every conversation one category off.
 ...
 ```
 
-The intent name is included because subintent names are unique only *within* an intent — `Refund
+The intent name is included because subintent names are unique only _within_ an intent — `Refund
 Status` under In-App Purchases and `Refund Requests` under Billing are different things and the model
 needs to see which is which. Ordering is by name rather than by `created_at` so the list is
 reproducible from the data alone when reconstructing what a past turn saw.
@@ -290,7 +294,7 @@ Both are seeded `declared_field` keys, so this works on a fresh workspace.
 **Five paths, one output.** `conversation.session_id IS NULL`; no `player_state_snapshot` row for
 that session; `is_missing = true`; `degraded_reason` set with the key absent; key simply absent —
 all render the literal string `unknown`. Never an empty string, never `null`, never an error.
-*Missing data is a state, not an error*, and a prompt whose shape changes with data availability is a
+_Missing data is a state, not an error_, and a prompt whose shape changes with data availability is a
 prompt you cannot reproduce from a bug report.
 
 `degraded_reason` set with the key **present** renders the value: partial data is data.
@@ -298,7 +302,7 @@ prompt you cannot reproduce from a bug report.
 **`raw` is never read.** It is uncontrolled client input, PII by default, and the only reason it
 would ever reach a third-party model is a careless join. There is no code path here that selects it.
 
-**`declared` is player-controlled too.** It arrives from the SDK and, *in this slice*, lands in the
+**`declared` is player-controlled too.** It arrives from the SDK and, _in this slice_, lands in the
 system prompt — the one place in this system where client input outranks instructions. So:
 
 - Non-scalar values (object, array, null) render `unknown`. Only string, number and boolean are
@@ -316,7 +320,7 @@ decided. **Recorded here because it is a property of this design, not an oversig
 ### 9 · History is player and bot only, through `toPlayerView`
 
 ```ts
-export type BotTurnHistoryEntry = { author: 'player' | 'bot'; body: string }
+export type BotTurnHistoryEntry = { author: 'player' | 'bot'; body: string };
 ```
 
 Rows are fetched whole and passed through `toPlayerView`, and the nulls are filtered out — the same
@@ -352,15 +356,15 @@ Progress
 ```
 
 **There is no `summary` field and none is wanted.** `project-overview.md` describes this placeholder
-as *"titles and summaries"*, and the editor wireframe shows a `Summary` field labelled *"search +
-bot"*, but `article` has only `title`, `body`, `keywords`, `intent_id` and `state`. That is
+as _"titles and summaries"_, and the editor wireframe shows a `Summary` field labelled _"search +
+bot"_, but `article` has only `title`, `body`, `keywords`, `intent_id` and `state`. That is
 deliberate, not a gap: a summary is a second copy of the answer that has to be kept in step with the
 first, and a stale summary is worse than none because it is the copy the bot reads. Recorded in
 `docs/decisions/spec-contradictions.md` as a rejected field so nobody adds it back on the strength of
 the wireframe.
 
 **Keywords stay out of the prompt, because they are a search field.** They are indexed in Weaviate and
-boosted `^2` in the query, so a model searching *"gems missing"* reaches the right article through the
+boosted `^2` in the query, so a model searching _"gems missing"_ reaches the right article through the
 index without the catalogue ever naming them. Putting them in the prompt would duplicate in tokens
 what the index already does in ranking.
 
@@ -370,10 +374,10 @@ establish that.
 
 **Three reasons this is the right shape rather than dropping the placeholder.**
 
-It is the only thing that lets the bot know what it *cannot* answer. A search returns the three
+It is the only thing that lets the bot know what it _cannot_ answer. A search returns the three
 least-unrelated articles whatever you ask it (§4 — there is no score floor), so search alone can
 never establish absence. A model that has seen the catalogue can report `no_article` honestly, and
-that reason is *"the raw material for deciding which articles to write next."*
+that reason is _"the raw material for deciding which articles to write next."_
 
 It makes the model's queries better. Knowing the corpus covers purchases, progress and account
 recovery — and not, say, tournaments — shapes a query far more than guessing from the player's
@@ -400,11 +404,11 @@ taxonomy: the honest size of the problem, recorded rather than silently truncate
 ```ts
 export type BotTurnInput = {
   /** Fully assembled and substituted. Nothing downstream edits this string. */
-  systemPrompt: string
-  history: BotTurnHistoryEntry[]
+  systemPrompt: string;
+  history: BotTurnHistoryEntry[];
   /** 1-based, matching the rendered list. Spec 4 decodes the model's answer with it. */
-  indexToSubintentId: ReadonlyMap<number, string>
-}
+  indexToSubintentId: ReadonlyMap<number, string>;
+};
 ```
 
 **Spec 4 adds four fields** — `playerContext`, which it moves out of the system prompt into a `user`
@@ -426,13 +430,13 @@ divergent decision from.
 
 All under `backend/src/domain/bot/`, exported through `index.ts`.
 
-| File | Exports | Notes |
-|---|---|---|
-| `retrieval.ts` | `retrieveArticles(workspaceId, query)` | Calls `searchArticleIdsHybrid`, hydrates from Postgres, re-orders to the fused ranking |
-| `taxonomyView.ts` | `buildTaxonomyView(tx, workspaceId)` → `TaxonomyView` | Renders and decodes together |
-| `playerContext.ts` | `resolvePlayerContext(tx, sessionId)` → `{ playerLevel, spendTier }` | `unknown` for all five no-data paths |
-| `history.ts` | `buildHistory(rows)` → `BotTurnHistoryEntry[]` | Through `toPlayerView` |
-| `promptAssembly.ts` | `substitutePlaceholders`, `assembleBotTurnInput`, `renderArticles`, the caps | The only file that knows the prompt's final shape |
+| File                | Exports                                                                      | Notes                                                                                  |
+| ------------------- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `retrieval.ts`      | `retrieveArticles(workspaceId, query)`                                       | Calls `searchArticleIdsHybrid`, hydrates from Postgres, re-orders to the fused ranking |
+| `taxonomyView.ts`   | `buildTaxonomyView(tx, workspaceId)` → `TaxonomyView`                        | Renders and decodes together                                                           |
+| `playerContext.ts`  | `resolvePlayerContext(tx, sessionId)` → `{ playerLevel, spendTier }`         | `unknown` for all five no-data paths                                                   |
+| `history.ts`        | `buildHistory(rows)` → `BotTurnHistoryEntry[]`                               | Through `toPlayerView`                                                                 |
+| `promptAssembly.ts` | `substitutePlaceholders`, `assembleBotTurnInput`, `renderArticles`, the caps | The only file that knows the prompt's final shape                                      |
 
 `retrieval.ts` is the only one that does I/O outside a transaction, because Weaviate is not Postgres
 and must not be called with a transaction open — the article-index module's timeout comment explains
@@ -531,8 +535,8 @@ Every test below runs with no model, and all but two with no network.
 ### New `tests/bot.retrieval.test.ts` — Weaviate stubbed
 
 - The hybrid query is passed through verbatim from `search_articles`, with `limit` =
-  `BOT_ARTICLE_LIMIT` and `alpha` = `HYBRID_ALPHA`, and no `intentId` filter. (Was: *"the query is the
-  latest player message only"* — superseded by spec 4.)
+  `BOT_ARTICLE_LIMIT` and `alpha` = `HYBRID_ALPHA`, and no `intentId` filter. (Was: _"the query is the
+  latest player message only"_ — superseded by spec 4.)
 - The `workspaceId` filter is applied — another workspace's articles are never retrievable.
 - Postgres hydration re-orders rows to the fused ranking, not to `published_at`.
 - **No score filtering:** a stubbed response of three low-scoring objects yields three articles, not

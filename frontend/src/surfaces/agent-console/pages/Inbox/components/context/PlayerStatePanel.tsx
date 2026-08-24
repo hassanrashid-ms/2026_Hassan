@@ -1,16 +1,16 @@
-import type { AgentPlayerStateView } from '@support/types'
+import type { AgentPlayerStateView } from '@support/types';
 
 const EMPTY_COPY: Record<'no_session' | 'not_captured' | 'missing', string> = {
   no_session: 'No session was attached to this ticket',
   not_captured: 'No player state was captured',
   missing: 'The game returned no player data',
-}
+};
 
 function formatValue(value: unknown): string {
-  if (value === null || value === undefined) return '—'
-  if (typeof value === 'string') return value
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
-  return JSON.stringify(value)
+  if (value === null || value === undefined) return '—';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return JSON.stringify(value);
 }
 
 export function PlayerStatePanel({ state }: { state: AgentPlayerStateView }) {
@@ -20,10 +20,10 @@ export function PlayerStatePanel({ state }: { state: AgentPlayerStateView }) {
         <h3 className="text-xs font-semibold tracking-wide text-muted uppercase">Player state</h3>
         <p className="mt-2 text-sm text-muted">{EMPTY_COPY[state.status]}</p>
       </section>
-    )
+    );
   }
 
-  const hasRaw = Object.keys(state.raw).length > 0
+  const hasRaw = Object.keys(state.raw).length > 0;
 
   return (
     <section className="px-4 py-3">
@@ -45,12 +45,14 @@ export function PlayerStatePanel({ state }: { state: AgentPlayerStateView }) {
           reads as a load failure. */}
       {hasRaw && (
         <details className="mt-3">
-          <summary className="cursor-pointer text-xs text-muted">Everything else the game sent</summary>
+          <summary className="cursor-pointer text-xs text-muted">
+            Everything else the game sent
+          </summary>
           <pre className="mt-2 overflow-x-auto rounded-md bg-slate-50 p-2 text-xs text-text">
             {JSON.stringify(state.raw, null, 2)}
           </pre>
         </details>
       )}
     </section>
-  )
+  );
 }

@@ -1,27 +1,45 @@
-import { useEffect, useRef, useState } from 'react'
-import type { ConversationStatusValue } from '@support/types'
-import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate, useParams } from 'react-router-dom'
-import { claimConversation, fetchInbox, type ConversationListFilter, type TicketsQueryFilters } from '../../api/agentApi.ts'
-import { loadAgentSession } from '../../lib/agentSession.ts'
-import { createSocket } from '../../../../features/chat/api/socket.ts'
-import { handleSessionExpired } from '../../lib/authErrorHandling.ts'
-import { ConversationDetailPane } from '../../components/ConversationDetailPane.tsx'
-import { ConversationRow } from '../Inbox/components/ConversationRow.tsx'
-import { TicketsFilterBar } from './TicketsFilterBar.tsx'
-import { useTicketsFilters } from './useTicketsFilters.ts'
+import { useEffect, useRef, useState } from 'react';
+import type { ConversationStatusValue } from '@support/types';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate, useParams } from 'react-router-dom';
+import {
+  claimConversation,
+  fetchInbox,
+  type ConversationListFilter,
+  type TicketsQueryFilters,
+} from '../../api/agentApi.ts';
+import { loadAgentSession } from '../../lib/agentSession.ts';
+import { createSocket } from '../../../../features/chat/api/socket.ts';
+import { handleSessionExpired } from '../../lib/authErrorHandling.ts';
+import { ConversationDetailPane } from '../../components/ConversationDetailPane.tsx';
+import { ConversationRow } from '../Inbox/components/ConversationRow.tsx';
+import { TicketsFilterBar } from './TicketsFilterBar.tsx';
+import { useTicketsFilters } from './useTicketsFilters.ts';
 
-import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
-import { arrayMove, SortableContext, sortableKeyboardCoordinates, rectSortingStrategy, useSortable } from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
-import { GripVertical } from 'lucide-react'
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  rectSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { GripVertical } from 'lucide-react';
 
 const COLUMNS: { title: string; filter: ConversationListFilter; claimable?: boolean }[] = [
   { title: 'Unassigned', filter: 'unassigned', claimable: true },
   { title: 'Bot Handling', filter: 'botHandling' },
   { title: 'Agent Assigned', filter: 'agentAssigned' },
   { title: 'Escalated', filter: 'escalated' },
-]
+];
 
 function toQueryFilters(f: ReturnType<typeof useTicketsFilters>[0]): TicketsQueryFilters {
   return {
@@ -31,11 +49,13 @@ function toQueryFilters(f: ReturnType<typeof useTicketsFilters>[0]): TicketsQuer
     subintentIds: f.subintentIds.length ? f.subintentIds : undefined,
     assigneeIds: f.assigneeIds.length ? f.assigneeIds : undefined,
     olderThanHours: f.olderThanHours ? Number(f.olderThanHours) : undefined,
-  }
+  };
 }
 
 function hasActiveFilters(f: TicketsQueryFilters): boolean {
-  return Boolean(f.q || f.priority || f.labelIds || f.subintentIds || f.assigneeIds || f.olderThanHours)
+  return Boolean(
+    f.q || f.priority || f.labelIds || f.subintentIds || f.assigneeIds || f.olderThanHours,
+  );
 }
 
 function SortableQueueColumn({
@@ -46,19 +66,21 @@ function SortableQueueColumn({
   filtersActive,
   onSelect,
 }: {
-  id: string
-  col: typeof COLUMNS[0]
-  token: string
-  queryFilters: TicketsQueryFilters
-  filtersActive: boolean
-  onSelect: (id: string) => void
+  id: string;
+  col: (typeof COLUMNS)[0];
+  token: string;
+  queryFilters: TicketsQueryFilters;
+  filtersActive: boolean;
+  onSelect: (id: string) => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id,
+  });
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
-  }
+  };
 
   return (
     <div ref={setNodeRef} style={style} className="mb-4 block break-inside-avoid">
@@ -73,7 +95,7 @@ function SortableQueueColumn({
         onSelect={onSelect}
       />
     </div>
-  )
+  );
 }
 
 function QueueColumn({
@@ -86,46 +108,47 @@ function QueueColumn({
   dragHandleProps,
   onSelect,
 }: {
-  token: string
-  title: string
-  filter: ConversationListFilter
-  queryFilters: TicketsQueryFilters
-  filtersActive: boolean
-  claimable?: boolean
-  dragHandleProps?: Record<string, any>
-  onSelect: (id: string) => void
+  token: string;
+  title: string;
+  filter: ConversationListFilter;
+  queryFilters: TicketsQueryFilters;
+  filtersActive: boolean;
+  claimable?: boolean;
+  dragHandleProps?: Record<string, any>;
+  onSelect: (id: string) => void;
 }) {
-  const queryClient = useQueryClient()
+  const queryClient = useQueryClient();
   const queue = useQuery({
     queryKey: ['tickets', filter, queryFilters],
     queryFn: () => fetchInbox(token, filter, queryFilters),
-  })
+  });
   const claim = useMutation({
     mutationFn: (conversationId: string) => claimConversation(token, conversationId),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['tickets'] }),
-  })
-  
-  const sectionRef = useRef<HTMLElement>(null)
-  const [height] = useState(() => localStorage.getItem(`queueHeight_${filter}`) || '400px')
+  });
+
+  const sectionRef = useRef<HTMLElement>(null);
+  const [height] = useState(() => localStorage.getItem(`queueHeight_${filter}`) || '400px');
 
   useEffect(() => {
-    const el = sectionRef.current
-    if (!el) return
+    const el = sectionRef.current;
+    if (!el) return;
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
-        const borderBoxHeight = entry.borderBoxSize?.[0]?.blockSize ?? entry.target.getBoundingClientRect().height
+        const borderBoxHeight =
+          entry.borderBoxSize?.[0]?.blockSize ?? entry.target.getBoundingClientRect().height;
         if (borderBoxHeight > 50) {
-          localStorage.setItem(`queueHeight_${filter}`, `${borderBoxHeight}px`)
+          localStorage.setItem(`queueHeight_${filter}`, `${borderBoxHeight}px`);
         }
       }
-    })
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [filter])
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [filter]);
 
-  if (queue.data && queue.data.conversations.length === 0 && !filtersActive) return null
+  if (queue.data && queue.data.conversations.length === 0 && !filtersActive) return null;
   return (
-    <section 
+    <section
       ref={sectionRef}
       style={{ height, minHeight: '150px' }}
       className="flex min-h-0 flex-col rounded-card border border-slate-200 bg-surface resize-y overflow-hidden pb-1"
@@ -133,7 +156,10 @@ function QueueColumn({
       <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-3 py-2">
         <div className="flex items-center gap-2">
           {dragHandleProps && (
-            <div {...dragHandleProps} className="cursor-grab active:cursor-grabbing text-muted hover:text-text">
+            <div
+              {...dragHandleProps}
+              className="cursor-grab active:cursor-grabbing text-muted hover:text-text"
+            >
               <GripVertical className="size-4" />
             </div>
           )}
@@ -158,36 +184,41 @@ function QueueColumn({
         {queue.isError && <p className="p-3 text-xs text-muted">Could not load tickets.</p>}
       </div>
     </section>
-  )
+  );
 }
 
 export function Tickets() {
-  const { conversationId } = useParams<{ conversationId?: string }>()
-  const navigate = useNavigate()
-  const session = loadAgentSession()
-  const queryClient = useQueryClient()
-  const [filters, updateFilters] = useTicketsFilters()
-  const queryFilters = toQueryFilters(filters)
-  const filtersActive = hasActiveFilters(queryFilters)
+  const { conversationId } = useParams<{ conversationId?: string }>();
+  const navigate = useNavigate();
+  const session = loadAgentSession();
+  const queryClient = useQueryClient();
+  const [filters, updateFilters] = useTicketsFilters();
+  const queryFilters = toQueryFilters(filters);
+  const filtersActive = hasActiveFilters(queryFilters);
 
   useEffect(() => {
-    if (!session) return
-    const socket = createSocket(session.token, 'agent', session.workspaceId)
+    if (!session) return;
+    const socket = createSocket(session.token, 'agent', session.workspaceId);
     socket.on('connect_error', (error) => {
-      if (error.message === 'unauthorized') handleSessionExpired()
-    })
-    socket.on('conversation:changed', (payload: { conversation_id?: unknown; status?: unknown }) => {
-      const status = payload.status as ConversationStatusValue | undefined
-      const filtersToInvalidate: ConversationListFilter[] =
-        status === 'bot_active' ? ['botHandling'] : ['unassigned', 'agentAssigned', 'escalated']
-      for (const filter of filtersToInvalidate) void queryClient.invalidateQueries({ queryKey: ['tickets', filter] })
-      const changedId = payload.conversation_id
-      if (typeof changedId === 'string') void queryClient.invalidateQueries({ queryKey: ['conversation', changedId, 'detail'] })
-    })
+      if (error.message === 'unauthorized') handleSessionExpired();
+    });
+    socket.on(
+      'conversation:changed',
+      (payload: { conversation_id?: unknown; status?: unknown }) => {
+        const status = payload.status as ConversationStatusValue | undefined;
+        const filtersToInvalidate: ConversationListFilter[] =
+          status === 'bot_active' ? ['botHandling'] : ['unassigned', 'agentAssigned', 'escalated'];
+        for (const filter of filtersToInvalidate)
+          void queryClient.invalidateQueries({ queryKey: ['tickets', filter] });
+        const changedId = payload.conversation_id;
+        if (typeof changedId === 'string')
+          void queryClient.invalidateQueries({ queryKey: ['conversation', changedId, 'detail'] });
+      },
+    );
     return () => {
-      socket.close()
-    }
-  }, [session, queryClient])
+      socket.close();
+    };
+  }, [session, queryClient]);
 
   const queueQueries = useQueries({
     queries: COLUMNS.map(({ filter }) => ({
@@ -195,18 +226,20 @@ export function Tickets() {
       queryFn: () => fetchInbox(session!.token, filter, queryFilters),
       enabled: session !== null,
     })),
-  })
+  });
 
   const summary = (() => {
-    if (!conversationId) return undefined
+    if (!conversationId) return undefined;
     for (const query of queueQueries) {
-      const found = query.data?.conversations.find((conversation) => conversation.id === conversationId)
-      if (found) return found
+      const found = query.data?.conversations.find(
+        (conversation) => conversation.id === conversationId,
+      );
+      if (found) return found;
     }
-    return undefined
-  })()
+    return undefined;
+  })();
 
-  if (!session) return null
+  if (!session) return null;
   if (conversationId) {
     return (
       <ConversationDetailPane
@@ -216,35 +249,35 @@ export function Tickets() {
         summary={summary}
         onBack={() => navigate('/tickets')}
       />
-    )
+    );
   }
 
   const [columnOrder, setColumnOrder] = useState<ConversationListFilter[]>(() => {
-    const saved = localStorage.getItem('ticketsColumnOrder')
+    const saved = localStorage.getItem('ticketsColumnOrder');
     if (saved) {
       try {
-        const parsed = JSON.parse(saved)
-        if (Array.isArray(parsed) && parsed.length === COLUMNS.length) return parsed
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length === COLUMNS.length) return parsed;
       } catch {}
     }
-    return COLUMNS.map(c => c.filter)
-  })
+    return COLUMNS.map((c) => c.filter);
+  });
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  )
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
 
   function handleDragEnd(event: any) {
-    const { active, over } = event
+    const { active, over } = event;
     if (over && active.id !== over.id) {
       setColumnOrder((items) => {
-        const oldIndex = items.indexOf(active.id as ConversationListFilter)
-        const newIndex = items.indexOf(over.id as ConversationListFilter)
-        const newItems = arrayMove(items, oldIndex, newIndex)
-        localStorage.setItem('ticketsColumnOrder', JSON.stringify(newItems))
-        return newItems
-      })
+        const oldIndex = items.indexOf(active.id as ConversationListFilter);
+        const newIndex = items.indexOf(over.id as ConversationListFilter);
+        const newItems = arrayMove(items, oldIndex, newIndex);
+        localStorage.setItem('ticketsColumnOrder', JSON.stringify(newItems));
+        return newItems;
+      });
     }
   }
 
@@ -259,12 +292,14 @@ export function Tickets() {
         <SortableContext items={columnOrder} strategy={rectSortingStrategy}>
           <div className="columns-1 gap-4 md:columns-2">
             {columnOrder.map((filter) => {
-              const col = COLUMNS.find(c => c.filter === filter)!
-              const queryIndex = COLUMNS.findIndex(c => c.filter === filter)
-              const queueQuery = queueQueries[queryIndex]
-              const isHidden = Boolean(queueQuery?.data && queueQuery.data.conversations.length === 0 && !filtersActive)
+              const col = COLUMNS.find((c) => c.filter === filter)!;
+              const queryIndex = COLUMNS.findIndex((c) => c.filter === filter);
+              const queueQuery = queueQueries[queryIndex];
+              const isHidden = Boolean(
+                queueQuery?.data && queueQuery.data.conversations.length === 0 && !filtersActive,
+              );
 
-              if (isHidden) return null
+              if (isHidden) return null;
 
               return (
                 <SortableQueueColumn
@@ -276,11 +311,11 @@ export function Tickets() {
                   filtersActive={filtersActive}
                   onSelect={(id) => navigate(`/tickets/${id}`)}
                 />
-              )
+              );
             })}
           </div>
         </SortableContext>
       </DndContext>
     </div>
-  )
+  );
 }

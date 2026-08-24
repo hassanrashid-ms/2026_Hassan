@@ -1,11 +1,11 @@
-import type { RequestHandler } from 'express'
-import { eq } from 'drizzle-orm'
-import { z } from 'zod'
-import { sendError } from '../../errors.ts'
-import { workspace } from '../db/schema/index.ts'
-import { withoutWorkspace } from '../db/withWorkspace.ts'
+import type { RequestHandler } from 'express';
+import { eq } from 'drizzle-orm';
+import { z } from 'zod';
+import { sendError } from '../../errors.ts';
+import { workspace } from '../db/schema/index.ts';
+import { withoutWorkspace } from '../db/withWorkspace.ts';
 
-const uuidSchema = z.uuid()
+const uuidSchema = z.uuid();
 
 /**
  * Mounted on the agent router only, right after `requireAgentSession` — see
@@ -21,28 +21,32 @@ const uuidSchema = z.uuid()
  * not there are indistinguishable" RLS convention, never a silent empty page.
  */
 export const resolveConsoleWorkspace: RequestHandler = async (req, res, next) => {
-  const ctx = req.agent!
+  const ctx = req.agent!;
   if (!ctx.isAdmin) {
-    next()
-    return
+    next();
+    return;
   }
 
-  const header = req.header('x-workspace-id')
-  const parsed = uuidSchema.safeParse(header)
+  const header = req.header('x-workspace-id');
+  const parsed = uuidSchema.safeParse(header);
   if (!parsed.success) {
-    sendError(res, 404, 'not_found', 'Workspace not found.')
-    return
+    sendError(res, 404, 'not_found', 'Workspace not found.');
+    return;
   }
 
   const exists = await withoutWorkspace(async (tx) => {
-    const [row] = await tx.select({ id: workspace.id }).from(workspace).where(eq(workspace.id, parsed.data)).limit(1)
-    return row !== undefined
-  })
+    const [row] = await tx
+      .select({ id: workspace.id })
+      .from(workspace)
+      .where(eq(workspace.id, parsed.data))
+      .limit(1);
+    return row !== undefined;
+  });
   if (!exists) {
-    sendError(res, 404, 'not_found', 'Workspace not found.')
-    return
+    sendError(res, 404, 'not_found', 'Workspace not found.');
+    return;
   }
 
-  req.agent = { ...ctx, workspaceId: parsed.data }
-  next()
-}
+  req.agent = { ...ctx, workspaceId: parsed.data };
+  next();
+};

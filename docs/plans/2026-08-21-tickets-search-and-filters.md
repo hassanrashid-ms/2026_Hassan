@@ -22,6 +22,7 @@
 ## Task 1: Structured filters on `listConversations` (priority, label, subintent, assignee, age)
 
 **Files:**
+
 - Modify: `backend/src/agent/services/conversationsService.ts`
 - Modify: `backend/src/agent/controllers/conversationsController.ts`
 - Modify: `backend/src/docs/openapi.ts:437-447` (the `/agent/conversations` `registerPath`)
@@ -29,16 +30,19 @@
 - Modify: `backend/tests/agent.conversations.test.ts`
 
 **Interfaces:**
+
 - Produces: `ConversationsListFilters` type from `conversationsService.ts`:
+
   ```ts
   export type ConversationsListFilters = {
-    priority?: ('p1' | 'p2' | 'p3' | 'p4')[]
-    labelIds?: string[]
-    subintentIds?: string[]
-    assigneeIds?: string[]
-    olderThanHours?: number
-  }
+    priority?: ('p1' | 'p2' | 'p3' | 'p4')[];
+    labelIds?: string[];
+    subintentIds?: string[];
+    assigneeIds?: string[];
+    olderThanHours?: number;
+  };
   ```
+
   and `listConversations(ctx: AgentContext, filter: ConversationsFilter, extra?: ConversationsListFilters): Promise<AgentConversationSummary[]>` — `extra` is optional and defaults to `{}`, so every existing call site (there are none outside `conversationsController.ts`) keeps compiling unchanged.
 
 - [ ] **Step 1: Extend `seedConversation` to accept `priority` and `subintentId`**
@@ -47,23 +51,23 @@ In `backend/tests/helpers/db.ts`, the `seedConversation` args type and insert cu
 
 ```ts
 export async function seedConversation(args: {
-  workspaceId: string
-  playerId: string
-  sessionId?: string | null
-  createdAt?: Date
-  status?: 'new' | 'bot_active' | 'open' | 'awaiting_player' | 'escalated' | 'resolved' | 'closed'
-  confirmPhase?: 'none' | 'bot_article' | 'agent_ask' | 'form' | 'inactivity_ask'
-  assignedAgentId?: string | null
-  resolutionSource?: 'bot' | 'agent' | 'player_confirmed' | 'timed_out' | null
-  priority?: 'p1' | 'p2' | 'p3' | 'p4'
-  subintentId?: string | null
+  workspaceId: string;
+  playerId: string;
+  sessionId?: string | null;
+  createdAt?: Date;
+  status?: 'new' | 'bot_active' | 'open' | 'awaiting_player' | 'escalated' | 'resolved' | 'closed';
+  confirmPhase?: 'none' | 'bot_article' | 'agent_ask' | 'form' | 'inactivity_ask';
+  assignedAgentId?: string | null;
+  resolutionSource?: 'bot' | 'agent' | 'player_confirmed' | 'timed_out' | null;
+  priority?: 'p1' | 'p2' | 'p3' | 'p4';
+  subintentId?: string | null;
 }): Promise<string> {
-  const id = randomUUID()
+  const id = randomUUID();
   const { rows } = await ownerPool.query<{ ticket_seq: number }>(
     `update workspace set ticket_seq = ticket_seq + 1 where id = $1 returning ticket_seq`,
     [args.workspaceId],
-  )
-  const number = rows[0]!.ticket_seq
+  );
+  const number = rows[0]!.ticket_seq;
   await ownerPool.query(
     `insert into conversation
        (id, workspace_id, player_id, session_id, number, created_at, status, confirm_phase, assigned_agent_id, resolution_source, priority, subintent_id)
@@ -82,8 +86,8 @@ export async function seedConversation(args: {
       args.priority ?? null,
       args.subintentId ?? null,
     ],
-  )
-  return id
+  );
+  return id;
 }
 ```
 
@@ -94,135 +98,143 @@ Add to `backend/tests/agent.conversations.test.ts`, inside a new `describe('GET 
 ```ts
 describe('GET /agent/conversations filters', () => {
   it('filters by priority', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const p1Id = await seedConversation({ workspaceId, playerId, priority: 'p1' })
-    await seedConversation({ workspaceId, playerId, priority: 'p3' })
-    const { token } = await setupAgent(workspaceId)
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const p1Id = await seedConversation({ workspaceId, playerId, priority: 'p1' });
+    await seedConversation({ workspaceId, playerId, priority: 'p3' });
+    const { token } = await setupAgent(workspaceId);
 
     const res = await request(app)
       .get('/conversations')
       .query({ status: 'unassigned', priority: 'p1' })
       .set('Authorization', `Bearer ${token}`)
-      .expect(200)
+      .expect(200);
 
-    expect(res.body.conversations.map((c: { id: string }) => c.id)).toEqual([p1Id])
-  })
+    expect(res.body.conversations.map((c: { id: string }) => c.id)).toEqual([p1Id]);
+  });
 
   it('filters by label', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const taggedId = await seedConversation({ workspaceId, playerId })
-    await seedConversation({ workspaceId, playerId })
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const taggedId = await seedConversation({ workspaceId, playerId });
+    await seedConversation({ workspaceId, playerId });
     const { rows: tagRows } = await ownerPool.query<{ id: string }>(
       `insert into tag (workspace_id, name, normalized_name, color_index) values ($1, 'Billing', 'billing', 0) returning id`,
       [workspaceId],
-    )
-    const tagId = tagRows[0]!.id
-    await ownerPool.query(`insert into conversation_tag (workspace_id, conversation_id, tag_id) values ($1, $2, $3)`, [
-      workspaceId,
-      taggedId,
-      tagId,
-    ])
-    const { token } = await setupAgent(workspaceId)
+    );
+    const tagId = tagRows[0]!.id;
+    await ownerPool.query(
+      `insert into conversation_tag (workspace_id, conversation_id, tag_id) values ($1, $2, $3)`,
+      [workspaceId, taggedId, tagId],
+    );
+    const { token } = await setupAgent(workspaceId);
 
     const res = await request(app)
       .get('/conversations')
       .query({ status: 'unassigned', labelIds: tagId })
       .set('Authorization', `Bearer ${token}`)
-      .expect(200)
+      .expect(200);
 
-    expect(res.body.conversations.map((c: { id: string }) => c.id)).toEqual([taggedId])
-  })
+    expect(res.body.conversations.map((c: { id: string }) => c.id)).toEqual([taggedId]);
+  });
 
   it('filters by subintent', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const intentId = await seedIntent(workspaceId)
-    const subintentId = await seedSubintent({ workspaceId, intentId })
-    const matchingId = await seedConversation({ workspaceId, playerId, subintentId })
-    await seedConversation({ workspaceId, playerId })
-    const { token } = await setupAgent(workspaceId)
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const intentId = await seedIntent(workspaceId);
+    const subintentId = await seedSubintent({ workspaceId, intentId });
+    const matchingId = await seedConversation({ workspaceId, playerId, subintentId });
+    await seedConversation({ workspaceId, playerId });
+    const { token } = await setupAgent(workspaceId);
 
     const res = await request(app)
       .get('/conversations')
       .query({ status: 'unassigned', subintentIds: subintentId })
       .set('Authorization', `Bearer ${token}`)
-      .expect(200)
+      .expect(200);
 
-    expect(res.body.conversations.map((c: { id: string }) => c.id)).toEqual([matchingId])
-  })
+    expect(res.body.conversations.map((c: { id: string }) => c.id)).toEqual([matchingId]);
+  });
 
   it('filters agentAssigned down to specific assignees', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const agentA = await setupAgent(workspaceId)
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const agentA = await setupAgent(workspaceId);
     const { rows } = await ownerPool.query<{ id: string }>(
       `insert into agent (email, display_name) values ('agent2@example.test', 'Agent Two') returning id`,
-    )
-    const agentBId = rows[0]!.id
-    await ownerPool.query(`insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`, [
+    );
+    const agentBId = rows[0]!.id;
+    await ownerPool.query(
+      `insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`,
+      [workspaceId, agentBId],
+    );
+    const conversationA = await seedConversation({
       workspaceId,
-      agentBId,
-    ])
-    const conversationA = await seedConversation({ workspaceId, playerId, status: 'open', assignedAgentId: agentA.agentId })
-    await seedConversation({ workspaceId, playerId, status: 'open', assignedAgentId: agentBId })
+      playerId,
+      status: 'open',
+      assignedAgentId: agentA.agentId,
+    });
+    await seedConversation({ workspaceId, playerId, status: 'open', assignedAgentId: agentBId });
 
     const res = await request(app)
       .get('/conversations')
       .query({ status: 'agentAssigned', assigneeIds: agentA.agentId })
       .set('Authorization', `Bearer ${agentA.token}`)
-      .expect(200)
+      .expect(200);
 
-    expect(res.body.conversations.map((c: { id: string }) => c.id)).toEqual([conversationA])
-  })
+    expect(res.body.conversations.map((c: { id: string }) => c.id)).toEqual([conversationA]);
+  });
 
   it('combines priority and label filters with AND', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const matchingId = await seedConversation({ workspaceId, playerId, priority: 'p1' })
-    const wrongPriorityId = await seedConversation({ workspaceId, playerId, priority: 'p3' })
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const matchingId = await seedConversation({ workspaceId, playerId, priority: 'p1' });
+    const wrongPriorityId = await seedConversation({ workspaceId, playerId, priority: 'p3' });
     const { rows: tagRows } = await ownerPool.query<{ id: string }>(
       `insert into tag (workspace_id, name, normalized_name, color_index) values ($1, 'Billing', 'billing', 0) returning id`,
       [workspaceId],
-    )
-    const tagId = tagRows[0]!.id
-    await ownerPool.query(`insert into conversation_tag (workspace_id, conversation_id, tag_id) values ($1, $2, $3), ($1, $4, $3)`, [
-      workspaceId,
-      matchingId,
-      tagId,
-      wrongPriorityId,
-    ])
-    const { token } = await setupAgent(workspaceId)
+    );
+    const tagId = tagRows[0]!.id;
+    await ownerPool.query(
+      `insert into conversation_tag (workspace_id, conversation_id, tag_id) values ($1, $2, $3), ($1, $4, $3)`,
+      [workspaceId, matchingId, tagId, wrongPriorityId],
+    );
+    const { token } = await setupAgent(workspaceId);
 
     const res = await request(app)
       .get('/conversations')
       .query({ status: 'unassigned', priority: 'p1', labelIds: tagId })
       .set('Authorization', `Bearer ${token}`)
-      .expect(200)
+      .expect(200);
 
-    expect(res.body.conversations.map((c: { id: string }) => c.id)).toEqual([matchingId])
-  })
+    expect(res.body.conversations.map((c: { id: string }) => c.id)).toEqual([matchingId]);
+  });
 
   it('filters out conversations whose last message is not older than the threshold', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const oldId = await seedConversation({ workspaceId, playerId })
-    const recentId = await seedConversation({ workspaceId, playerId })
-    const now = new Date()
-    await seedMessage({ workspaceId, conversationId: oldId, seq: 1, authorType: 'player', createdAt: new Date(now.getTime() - 10 * 60 * 60 * 1000) } as never)
-    await seedMessage({ workspaceId, conversationId: recentId, seq: 1, authorType: 'player' })
-    const { token } = await setupAgent(workspaceId)
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const oldId = await seedConversation({ workspaceId, playerId });
+    const recentId = await seedConversation({ workspaceId, playerId });
+    const now = new Date();
+    await seedMessage({
+      workspaceId,
+      conversationId: oldId,
+      seq: 1,
+      authorType: 'player',
+      createdAt: new Date(now.getTime() - 10 * 60 * 60 * 1000),
+    } as never);
+    await seedMessage({ workspaceId, conversationId: recentId, seq: 1, authorType: 'player' });
+    const { token } = await setupAgent(workspaceId);
 
     const res = await request(app)
       .get('/conversations')
       .query({ status: 'unassigned', olderThanHours: '4' })
       .set('Authorization', `Bearer ${token}`)
-      .expect(200)
+      .expect(200);
 
-    expect(res.body.conversations.map((c: { id: string }) => c.id)).toEqual([oldId])
-  })
-})
+    expect(res.body.conversations.map((c: { id: string }) => c.id)).toEqual([oldId]);
+  });
+});
 ```
 
 Add `seedIntent` and `seedSubintent` to that file's existing import from `./helpers/db.ts` (they already exist in the helper, just not yet imported here).
@@ -231,16 +243,16 @@ The last test (`olderThanHours`) passes a `createdAt` to `seedMessage`, which th
 
 ```ts
 export async function seedMessage(args: {
-  workspaceId: string
-  conversationId: string
-  seq: number
-  authorType: 'player' | 'agent' | 'bot' | 'system'
-  visibility?: 'public' | 'internal'
-  deliveryState?: 'sending' | 'sent' | 'delivered' | 'read' | 'failed'
-  body?: string
-  createdAt?: Date
+  workspaceId: string;
+  conversationId: string;
+  seq: number;
+  authorType: 'player' | 'agent' | 'bot' | 'system';
+  visibility?: 'public' | 'internal';
+  deliveryState?: 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
+  body?: string;
+  createdAt?: Date;
 }): Promise<string> {
-  const id = randomUUID()
+  const id = randomUUID();
   await ownerPool.query(
     `insert into message (id, workspace_id, conversation_id, seq, author_type, visibility, delivery_state, body, created_at)
      values ($1, $2, $3, $4, $5, $6, $7, $8, coalesce($9, now()))`,
@@ -255,8 +267,8 @@ export async function seedMessage(args: {
       args.body ?? 'test message',
       args.createdAt ?? null,
     ],
-  )
-  return id
+  );
+  return id;
 }
 ```
 
@@ -272,47 +284,67 @@ Expected: the five new tests fail — either a 422 from the Zod schema rejecting
 Replace the full contents of `backend/src/agent/services/conversationsService.ts` lines 1–76 with:
 
 ```ts
-import { and, desc, eq, exists, ilike, inArray, isNull, isNotNull, or, sql } from 'drizzle-orm'
-import type { AgentConversationSummary, AgentMessageView } from '@support/types'
-import { postMessage, toAgentView, type PostedMessageRow } from '../../domain/conversations/index.ts'
-import { appendEvent } from '../../shared/events/appendEvent.ts'
-import { agent, conversation, conversationTag, message, player } from '../../shared/db/schema/index.ts'
-import { withWorkspace, type Tx } from '../../shared/db/withWorkspace.ts'
-import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts'
-import { getConversationTags } from './tagsService.ts'
+import { and, desc, eq, exists, ilike, inArray, isNull, isNotNull, or, sql } from 'drizzle-orm';
+import type { AgentConversationSummary, AgentMessageView } from '@support/types';
+import {
+  postMessage,
+  toAgentView,
+  type PostedMessageRow,
+} from '../../domain/conversations/index.ts';
+import { appendEvent } from '../../shared/events/appendEvent.ts';
+import {
+  agent,
+  conversation,
+  conversationTag,
+  message,
+  player,
+} from '../../shared/db/schema/index.ts';
+import { withWorkspace, type Tx } from '../../shared/db/withWorkspace.ts';
+import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts';
+import { getConversationTags } from './tagsService.ts';
 
-export type ConversationsFilter = 'unassigned' | 'mine' | 'agentAssigned' | 'botHandling' | 'escalated'
+export type ConversationsFilter =
+  'unassigned' | 'mine' | 'agentAssigned' | 'botHandling' | 'escalated';
 
 export type ConversationsListFilters = {
-  priority?: (typeof conversation.priority.enumValues)[number][]
-  labelIds?: string[]
-  subintentIds?: string[]
-  assigneeIds?: string[]
+  priority?: (typeof conversation.priority.enumValues)[number][];
+  labelIds?: string[];
+  subintentIds?: string[];
+  assigneeIds?: string[];
   /** Keeps only conversations whose last message is strictly older than this many hours. */
-  olderThanHours?: number
+  olderThanHours?: number;
   /** Matches ticket number, player external id, or subintent name. */
-  q?: string
-}
+  q?: string;
+};
 
 // The inbox is a work queue, not an archive — a finished ticket is noise there,
 // and its history stays reachable through the context rail. A reopen flips the
 // status back to `open`, so it returns to the queue on its own.
-const ACTIVE_AGENT_STATUSES: (typeof conversation.status.enumValues)[number][] = ['open', 'awaiting_player', 'escalated']
-const UNASSIGNED_STATUSES: (typeof conversation.status.enumValues)[number][] = ['open', 'escalated']
+const ACTIVE_AGENT_STATUSES: (typeof conversation.status.enumValues)[number][] = [
+  'open',
+  'awaiting_player',
+  'escalated',
+];
+const UNASSIGNED_STATUSES: (typeof conversation.status.enumValues)[number][] = [
+  'open',
+  'escalated',
+];
 
 function extraFilterConditions(extra: ConversationsListFilters) {
-  const conditions = []
-  if (extra.priority?.length) conditions.push(inArray(conversation.priority, extra.priority))
-  if (extra.subintentIds?.length) conditions.push(inArray(conversation.subintentId, extra.subintentIds))
-  if (extra.assigneeIds?.length) conditions.push(inArray(conversation.assignedAgentId, extra.assigneeIds))
+  const conditions = [];
+  if (extra.priority?.length) conditions.push(inArray(conversation.priority, extra.priority));
+  if (extra.subintentIds?.length)
+    conditions.push(inArray(conversation.subintentId, extra.subintentIds));
+  if (extra.assigneeIds?.length)
+    conditions.push(inArray(conversation.assignedAgentId, extra.assigneeIds));
   if (extra.labelIds?.length) {
     conditions.push(
       exists(
         sql`(select 1 from ${conversationTag} where ${conversationTag.conversationId} = ${conversation.id} and ${conversationTag.removedAt} is null and ${conversationTag.tagId} in ${extra.labelIds})`,
       ),
-    )
+    );
   }
-  return conditions
+  return conditions;
 }
 
 export async function listConversations(
@@ -337,31 +369,40 @@ export async function listConversations(
       .where(
         and(
           filter === 'mine'
-            ? and(eq(conversation.assignedAgentId, ctx.agentId), inArray(conversation.status, ACTIVE_AGENT_STATUSES))
+            ? and(
+                eq(conversation.assignedAgentId, ctx.agentId),
+                inArray(conversation.status, ACTIVE_AGENT_STATUSES),
+              )
             : filter === 'agentAssigned'
-              ? and(isNotNull(conversation.assignedAgentId), inArray(conversation.status, ACTIVE_AGENT_STATUSES))
+              ? and(
+                  isNotNull(conversation.assignedAgentId),
+                  inArray(conversation.status, ACTIVE_AGENT_STATUSES),
+                )
               : filter === 'botHandling'
                 ? eq(conversation.status, 'bot_active')
                 : filter === 'escalated'
                   ? eq(conversation.status, 'escalated')
-                  : and(isNull(conversation.assignedAgentId), inArray(conversation.status, UNASSIGNED_STATUSES)),
+                  : and(
+                      isNull(conversation.assignedAgentId),
+                      inArray(conversation.status, UNASSIGNED_STATUSES),
+                    ),
           ...extraFilterConditions(extra),
         ),
       )
-      .orderBy(conversation.priority, conversation.createdAt)
+      .orderBy(conversation.priority, conversation.createdAt);
 
     // One extra query per row for the last-message preview. Fine at this
     // slice's inbox size; a lateral join is the fix if the inbox ever grows
     // large enough for this to matter.
-    const summaries: AgentConversationSummary[] = []
+    const summaries: AgentConversationSummary[] = [];
     for (const row of rows) {
       const [last] = await tx
         .select({ body: message.body, createdAt: message.createdAt })
         .from(message)
         .where(eq(message.conversationId, row.id))
         .orderBy(desc(message.seq))
-        .limit(1)
-      const tags = await getConversationTags(tx, row.id)
+        .limit(1);
+      const tags = await getConversationTags(tx, row.id);
 
       summaries.push({
         id: row.id,
@@ -374,7 +415,7 @@ export async function listConversations(
         assigned_agent_name: row.assignedAgentName,
         priority: row.priority,
         tags,
-      })
+      });
     }
 
     // Computed from the same per-row last-message lookup above, not pushed
@@ -383,11 +424,13 @@ export async function listConversations(
     // at all can't be "older than" anything, so it's excluded rather than
     // treated as infinitely old.
     if (extra.olderThanHours !== undefined) {
-      const cutoff = Date.now() - extra.olderThanHours * 60 * 60 * 1000
-      return summaries.filter((s) => s.last_message_at !== null && new Date(s.last_message_at).getTime() < cutoff)
+      const cutoff = Date.now() - extra.olderThanHours * 60 * 60 * 1000;
+      return summaries.filter(
+        (s) => s.last_message_at !== null && new Date(s.last_message_at).getTime() < cutoff,
+      );
     }
-    return summaries
-  })
+    return summaries;
+  });
 }
 ```
 
@@ -400,25 +443,27 @@ Leave the rest of the file (`claimConversation`, `takeOverConversation`, `postTa
 In `backend/src/agent/controllers/conversationsController.ts`, replace line 12:
 
 ```ts
-const ConversationsQuery = z.object({ status: z.enum(['unassigned', 'mine', 'agentAssigned', 'botHandling', 'escalated']) })
+const ConversationsQuery = z.object({
+  status: z.enum(['unassigned', 'mine', 'agentAssigned', 'botHandling', 'escalated']),
+});
 ```
 
 with:
 
 ```ts
-const PRIORITY_VALUES = ['p1', 'p2', 'p3', 'p4'] as const
+const PRIORITY_VALUES = ['p1', 'p2', 'p3', 'p4'] as const;
 
 const csvUuids = z
   .string()
   .transform((v) => v.split(',').filter(Boolean))
   .pipe(z.array(z.uuid()))
-  .optional()
+  .optional();
 
 const csvPriorities = z
   .string()
   .transform((v) => v.split(',').filter(Boolean))
   .pipe(z.array(z.enum(PRIORITY_VALUES)))
-  .optional()
+  .optional();
 
 const ConversationsQuery = z.object({
   status: z.enum(['unassigned', 'mine', 'agentAssigned', 'botHandling', 'escalated']),
@@ -428,23 +473,23 @@ const ConversationsQuery = z.object({
   assigneeIds: csvUuids,
   olderThanHours: z.coerce.number().positive().optional(),
   q: z.string().trim().min(1).max(200).optional(),
-})
+});
 ```
 
 And replace the handler body (lines 15-24):
 
 ```ts
 export const listConversationsHandler: RequestHandler = async (req, res) => {
-  const ctx = req.agent!
-  const query = ConversationsQuery.safeParse(req.query)
+  const ctx = req.agent!;
+  const query = ConversationsQuery.safeParse(req.query);
   if (!query.success) {
-    sendError(res, 422, 'invalid_request', 'status must be a supported conversation filter.')
-    return
+    sendError(res, 422, 'invalid_request', 'status must be a supported conversation filter.');
+    return;
   }
-  const { status, ...extra } = query.data
-  const conversations = await listConversations(ctx, status, extra)
-  res.status(200).json({ conversations })
-}
+  const { status, ...extra } = query.data;
+  const conversations = await listConversations(ctx, status, extra);
+  res.status(200).json({ conversations });
+};
 ```
 
 - [ ] **Step 6: Register the new query params in the OpenAPI spec**
@@ -491,10 +536,12 @@ git commit -m "Add priority, label, subintent, assignee, and age filters to agen
 ## Task 2: Free-text search (`q`) on `listConversations`
 
 **Files:**
+
 - Modify: `backend/src/agent/services/conversationsService.ts`
 - Modify: `backend/tests/agent.conversations.test.ts`
 
 **Interfaces:**
+
 - Consumes: `ConversationsListFilters.q` (already added to the type in Task 1), `extraFilterConditions` (already defined in Task 1).
 - Produces: nothing new — `q` becomes a fully wired filter on the same `listConversations` signature from Task 1.
 
@@ -504,56 +551,59 @@ Add to the `describe('GET /agent/conversations filters', ...)` block from Task 1
 
 ```ts
 it('search matches by ticket number', async () => {
-  const workspaceId = await seedWorkspace()
-  const playerId = await seedPlayer(workspaceId)
-  const firstId = await seedConversation({ workspaceId, playerId })
-  await seedConversation({ workspaceId, playerId })
-  const { rows } = await ownerPool.query<{ number: number }>('select number from conversation where id = $1', [firstId])
-  const { token } = await setupAgent(workspaceId)
+  const workspaceId = await seedWorkspace();
+  const playerId = await seedPlayer(workspaceId);
+  const firstId = await seedConversation({ workspaceId, playerId });
+  await seedConversation({ workspaceId, playerId });
+  const { rows } = await ownerPool.query<{ number: number }>(
+    'select number from conversation where id = $1',
+    [firstId],
+  );
+  const { token } = await setupAgent(workspaceId);
 
   const res = await request(app)
     .get('/conversations')
     .query({ status: 'unassigned', q: String(rows[0]!.number) })
     .set('Authorization', `Bearer ${token}`)
-    .expect(200)
+    .expect(200);
 
-  expect(res.body.conversations.map((c: { id: string }) => c.id)).toEqual([firstId])
-})
+  expect(res.body.conversations.map((c: { id: string }) => c.id)).toEqual([firstId]);
+});
 
 it('search matches by player external id', async () => {
-  const workspaceId = await seedWorkspace()
-  const targetPlayer = await seedPlayer(workspaceId, 'player-magpie')
-  const otherPlayer = await seedPlayer(workspaceId, 'player-other')
-  const matchingId = await seedConversation({ workspaceId, playerId: targetPlayer })
-  await seedConversation({ workspaceId, playerId: otherPlayer })
-  const { token } = await setupAgent(workspaceId)
+  const workspaceId = await seedWorkspace();
+  const targetPlayer = await seedPlayer(workspaceId, 'player-magpie');
+  const otherPlayer = await seedPlayer(workspaceId, 'player-other');
+  const matchingId = await seedConversation({ workspaceId, playerId: targetPlayer });
+  await seedConversation({ workspaceId, playerId: otherPlayer });
+  const { token } = await setupAgent(workspaceId);
 
   const res = await request(app)
     .get('/conversations')
     .query({ status: 'unassigned', q: 'magpie' })
     .set('Authorization', `Bearer ${token}`)
-    .expect(200)
+    .expect(200);
 
-  expect(res.body.conversations.map((c: { id: string }) => c.id)).toEqual([matchingId])
-})
+  expect(res.body.conversations.map((c: { id: string }) => c.id)).toEqual([matchingId]);
+});
 
 it('search matches by subintent name', async () => {
-  const workspaceId = await seedWorkspace()
-  const playerId = await seedPlayer(workspaceId)
-  const intentId = await seedIntent(workspaceId)
-  const subintentId = await seedSubintent({ workspaceId, intentId, name: 'Double charge' })
-  const matchingId = await seedConversation({ workspaceId, playerId, subintentId })
-  await seedConversation({ workspaceId, playerId })
-  const { token } = await setupAgent(workspaceId)
+  const workspaceId = await seedWorkspace();
+  const playerId = await seedPlayer(workspaceId);
+  const intentId = await seedIntent(workspaceId);
+  const subintentId = await seedSubintent({ workspaceId, intentId, name: 'Double charge' });
+  const matchingId = await seedConversation({ workspaceId, playerId, subintentId });
+  await seedConversation({ workspaceId, playerId });
+  const { token } = await setupAgent(workspaceId);
 
   const res = await request(app)
     .get('/conversations')
     .query({ status: 'unassigned', q: 'double charge' })
     .set('Authorization', `Bearer ${token}`)
-    .expect(200)
+    .expect(200);
 
-  expect(res.body.conversations.map((c: { id: string }) => c.id)).toEqual([matchingId])
-})
+  expect(res.body.conversations.map((c: { id: string }) => c.id)).toEqual([matchingId]);
+});
 ```
 
 - [ ] **Step 2: Run the tests to verify they fail**
@@ -568,20 +618,30 @@ Add a `subintent` import and a search-condition builder, then wire it into the q
 Change the schema import line to also pull in `subintent`:
 
 ```ts
-import { agent, conversation, conversationTag, message, player, subintent } from '../../shared/db/schema/index.ts'
+import {
+  agent,
+  conversation,
+  conversationTag,
+  message,
+  player,
+  subintent,
+} from '../../shared/db/schema/index.ts';
 ```
 
 Add this function next to `extraFilterConditions`:
 
 ```ts
 function searchCondition(q: string) {
-  const trimmed = q.trim()
-  const numericPrefix = trimmed.replace(/^#/, '')
-  const conditions = [ilike(player.externalId, `%${trimmed}%`), ilike(subintent.name, `%${trimmed}%`)]
+  const trimmed = q.trim();
+  const numericPrefix = trimmed.replace(/^#/, '');
+  const conditions = [
+    ilike(player.externalId, `%${trimmed}%`),
+    ilike(subintent.name, `%${trimmed}%`),
+  ];
   if (/^\d+$/.test(numericPrefix)) {
-    conditions.push(sql`${conversation.number}::text like ${numericPrefix + '%'}`)
+    conditions.push(sql`${conversation.number}::text like ${numericPrefix + '%'}`);
   }
-  return or(...conditions)
+  return or(...conditions);
 }
 ```
 
@@ -591,19 +651,21 @@ In `extraFilterConditions`, append the search condition:
 
 ```ts
 function extraFilterConditions(extra: ConversationsListFilters) {
-  const conditions = []
-  if (extra.priority?.length) conditions.push(inArray(conversation.priority, extra.priority))
-  if (extra.subintentIds?.length) conditions.push(inArray(conversation.subintentId, extra.subintentIds))
-  if (extra.assigneeIds?.length) conditions.push(inArray(conversation.assignedAgentId, extra.assigneeIds))
+  const conditions = [];
+  if (extra.priority?.length) conditions.push(inArray(conversation.priority, extra.priority));
+  if (extra.subintentIds?.length)
+    conditions.push(inArray(conversation.subintentId, extra.subintentIds));
+  if (extra.assigneeIds?.length)
+    conditions.push(inArray(conversation.assignedAgentId, extra.assigneeIds));
   if (extra.labelIds?.length) {
     conditions.push(
       exists(
         sql`(select 1 from ${conversationTag} where ${conversationTag.conversationId} = ${conversation.id} and ${conversationTag.removedAt} is null and ${conversationTag.tagId} in ${extra.labelIds})`,
       ),
-    )
+    );
   }
-  if (extra.q) conditions.push(searchCondition(extra.q))
-  return conditions
+  if (extra.q) conditions.push(searchCondition(extra.q));
+  return conditions;
 }
 ```
 
@@ -636,6 +698,7 @@ git commit -m "Add free-text search over ticket number, player id, and subintent
 There is no existing endpoint that lists an agent's teammates within a workspace — `fetchDevAgents` only lists dev-login candidates, unscoped to a workspace. This task adds one, following the same service/controller/router split as `tagsService.ts`/`tagsController.ts`/`tagsRouter.ts`.
 
 **Files:**
+
 - Create: `backend/src/agent/services/agentsService.ts`
 - Create: `backend/src/agent/controllers/agentsController.ts`
 - Create: `backend/src/agent/routers/agentsRouter.ts`
@@ -644,6 +707,7 @@ There is no existing endpoint that lists an agent's teammates within a workspace
 - Create: `backend/tests/agent.agents.test.ts`
 
 **Interfaces:**
+
 - Produces: `listWorkspaceAgents(ctx: AgentContext): Promise<{ id: string; display_name: string }[]>` from `agentsService.ts`; route `GET /agent/agents` returning `{ agents: { id: string; display_name: string }[] }`.
 
 - [ ] **Step 1: Write the failing test**
@@ -651,74 +715,106 @@ There is no existing endpoint that lists an agent's teammates within a workspace
 Create `backend/tests/agent.agents.test.ts`:
 
 ```ts
-import express from 'express'
-import { afterAll, beforeEach, describe, expect, it } from 'vitest'
-import { req as request } from './helpers/http.ts'
-import { closeDb } from '../src/shared/db/client.ts'
-import { requireAgentSession } from '../src/shared/middleware/requireAgentSession.ts'
-import { errorMiddleware } from '../src/errors.ts'
-import { signAgentSession } from '../src/shared/auth/agentSession.ts'
-import { agentsRouter } from '../src/agent/routers/agentsRouter.ts'
-import { closeOwnerPool, ownerPool, seedWorkspace, truncateAll, seedWorkspaceMember } from './helpers/db.ts'
+import express from 'express';
+import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { req as request } from './helpers/http.ts';
+import { closeDb } from '../src/shared/db/client.ts';
+import { requireAgentSession } from '../src/shared/middleware/requireAgentSession.ts';
+import { errorMiddleware } from '../src/errors.ts';
+import { signAgentSession } from '../src/shared/auth/agentSession.ts';
+import { agentsRouter } from '../src/agent/routers/agentsRouter.ts';
+import {
+  closeOwnerPool,
+  ownerPool,
+  seedWorkspace,
+  truncateAll,
+  seedWorkspaceMember,
+} from './helpers/db.ts';
 
 // Unlike conversationsRouter's handlers, agentsController never calls
 // getIo() — no socket server needs to exist for this file's process.
-const app = express()
-app.use(express.json())
-app.use(requireAgentSession, agentsRouter)
-app.use(errorMiddleware)
+const app = express();
+app.use(express.json());
+app.use(requireAgentSession, agentsRouter);
+app.use(errorMiddleware);
 
 afterAll(async () => {
-  await closeDb()
-  await closeOwnerPool()
-})
+  await closeDb();
+  await closeOwnerPool();
+});
 
-beforeEach(truncateAll)
+beforeEach(truncateAll);
 
-async function seedAgentWithMembership(workspaceId: string, displayName: string, opts: { role?: 'agent' | 'team_lead' | 'admin'; status?: 'active' | 'on_leave' | 'deactivated'; deactivatedAt?: Date | null } = {}) {
+async function seedAgentWithMembership(
+  workspaceId: string,
+  displayName: string,
+  opts: {
+    role?: 'agent' | 'team_lead' | 'admin';
+    status?: 'active' | 'on_leave' | 'deactivated';
+    deactivatedAt?: Date | null;
+  } = {},
+) {
   const { rows } = await ownerPool.query<{ id: string }>(
     `insert into agent (email, display_name, status) values ($1, $2, $3) returning id`,
-    [`${displayName.toLowerCase().replace(/\s+/g, '.')}@example.test`, displayName, opts.status ?? 'active'],
-  )
-  const agentId = rows[0]!.id
-  await seedWorkspaceMember({ workspaceId, agentId, role: opts.role ?? 'agent', deactivatedAt: opts.deactivatedAt ?? null })
-  return agentId
+    [
+      `${displayName.toLowerCase().replace(/\s+/g, '.')}@example.test`,
+      displayName,
+      opts.status ?? 'active',
+    ],
+  );
+  const agentId = rows[0]!.id;
+  await seedWorkspaceMember({
+    workspaceId,
+    agentId,
+    role: opts.role ?? 'agent',
+    deactivatedAt: opts.deactivatedAt ?? null,
+  });
+  return agentId;
 }
 
 describe('GET /agent/agents', () => {
   it('lists active agents in the workspace by display name', async () => {
-    const workspaceId = await seedWorkspace()
-    const agentId = await seedAgentWithMembership(workspaceId, 'Sarah Chen')
-    const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId })
+    const workspaceId = await seedWorkspace();
+    const agentId = await seedAgentWithMembership(workspaceId, 'Sarah Chen');
+    const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId });
 
-    const res = await request(app).get('/agents').set('Authorization', `Bearer ${token}`).expect(200)
+    const res = await request(app)
+      .get('/agents')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
 
-    expect(res.body.agents).toEqual([{ id: agentId, display_name: 'Sarah Chen' }])
-  })
+    expect(res.body.agents).toEqual([{ id: agentId, display_name: 'Sarah Chen' }]);
+  });
 
   it('excludes agents from other workspaces', async () => {
-    const workspaceA = await seedWorkspace()
-    const workspaceB = await seedWorkspace()
-    const agentId = await seedAgentWithMembership(workspaceA, 'Sarah Chen')
-    await seedAgentWithMembership(workspaceB, 'Other Workspace Agent')
-    const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceA })
+    const workspaceA = await seedWorkspace();
+    const workspaceB = await seedWorkspace();
+    const agentId = await seedAgentWithMembership(workspaceA, 'Sarah Chen');
+    await seedAgentWithMembership(workspaceB, 'Other Workspace Agent');
+    const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceA });
 
-    const res = await request(app).get('/agents').set('Authorization', `Bearer ${token}`).expect(200)
+    const res = await request(app)
+      .get('/agents')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
 
-    expect(res.body.agents.map((a: { id: string }) => a.id)).toEqual([agentId])
-  })
+    expect(res.body.agents.map((a: { id: string }) => a.id)).toEqual([agentId]);
+  });
 
   it('excludes deactivated memberships', async () => {
-    const workspaceId = await seedWorkspace()
-    const activeId = await seedAgentWithMembership(workspaceId, 'Active Agent')
-    await seedAgentWithMembership(workspaceId, 'Deactivated Agent', { deactivatedAt: new Date() })
-    const token = await signAgentSession({ agent_id: activeId, workspace_id: workspaceId })
+    const workspaceId = await seedWorkspace();
+    const activeId = await seedAgentWithMembership(workspaceId, 'Active Agent');
+    await seedAgentWithMembership(workspaceId, 'Deactivated Agent', { deactivatedAt: new Date() });
+    const token = await signAgentSession({ agent_id: activeId, workspace_id: workspaceId });
 
-    const res = await request(app).get('/agents').set('Authorization', `Bearer ${token}`).expect(200)
+    const res = await request(app)
+      .get('/agents')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
 
-    expect(res.body.agents.map((a: { id: string }) => a.id)).toEqual([activeId])
-  })
-})
+    expect(res.body.agents.map((a: { id: string }) => a.id)).toEqual([activeId]);
+  });
+});
 ```
 
 - [ ] **Step 2: Run the test to verify it fails**
@@ -731,12 +827,12 @@ Expected: FAIL — `backend/src/agent/routers/agentsRouter.ts` does not exist ye
 Create `backend/src/agent/services/agentsService.ts`:
 
 ```ts
-import { and, asc, eq, isNull } from 'drizzle-orm'
-import { agent, workspaceMember } from '../../shared/db/schema/index.ts'
-import { withWorkspace } from '../../shared/db/withWorkspace.ts'
-import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts'
+import { and, asc, eq, isNull } from 'drizzle-orm';
+import { agent, workspaceMember } from '../../shared/db/schema/index.ts';
+import { withWorkspace } from '../../shared/db/withWorkspace.ts';
+import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts';
 
-export type WorkspaceAgentOption = { id: string; display_name: string }
+export type WorkspaceAgentOption = { id: string; display_name: string };
 
 export async function listWorkspaceAgents(ctx: AgentContext): Promise<WorkspaceAgentOption[]> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
@@ -745,9 +841,9 @@ export async function listWorkspaceAgents(ctx: AgentContext): Promise<WorkspaceA
       .from(workspaceMember)
       .innerJoin(agent, eq(agent.id, workspaceMember.agentId))
       .where(and(isNull(workspaceMember.deactivatedAt), eq(agent.status, 'active')))
-      .orderBy(asc(agent.displayName))
-    return rows.map((r) => ({ id: r.id, display_name: r.displayName }))
-  })
+      .orderBy(asc(agent.displayName));
+    return rows.map((r) => ({ id: r.id, display_name: r.displayName }));
+  });
 }
 ```
 
@@ -758,14 +854,14 @@ export async function listWorkspaceAgents(ctx: AgentContext): Promise<WorkspaceA
 Create `backend/src/agent/controllers/agentsController.ts`:
 
 ```ts
-import type { RequestHandler } from 'express'
-import { listWorkspaceAgents } from '../services/agentsService.ts'
+import type { RequestHandler } from 'express';
+import { listWorkspaceAgents } from '../services/agentsService.ts';
 
 export const listAgentsHandler: RequestHandler = async (req, res) => {
-  const ctx = req.agent!
-  const agents = await listWorkspaceAgents(ctx)
-  res.status(200).json({ agents })
-}
+  const ctx = req.agent!;
+  const agents = await listWorkspaceAgents(ctx);
+  res.status(200).json({ agents });
+};
 ```
 
 - [ ] **Step 5: Implement the router and register it**
@@ -773,21 +869,21 @@ export const listAgentsHandler: RequestHandler = async (req, res) => {
 Create `backend/src/agent/routers/agentsRouter.ts`:
 
 ```ts
-import { Router } from 'express'
-import { listAgentsHandler } from '../controllers/agentsController.ts'
+import { Router } from 'express';
+import { listAgentsHandler } from '../controllers/agentsController.ts';
 
-export const agentsRouter = Router()
-agentsRouter.get('/agents', listAgentsHandler)
+export const agentsRouter = Router();
+agentsRouter.get('/agents', listAgentsHandler);
 ```
 
 In `backend/src/agent/router.ts`, add the import and registration alongside the other routers:
 
 ```ts
-import { agentsRouter } from './routers/agentsRouter.ts'
+import { agentsRouter } from './routers/agentsRouter.ts';
 ```
 
 ```ts
-agentRouter.use(agentsRouter)
+agentRouter.use(agentsRouter);
 ```
 
 (add both lines next to the existing `tagsRouter` import/use, keeping the same grouping style)
@@ -808,12 +904,14 @@ registry.registerPath({
       description: 'Workspace agents',
       content: {
         'application/json': {
-          schema: z.object({ agents: z.array(z.object({ id: z.uuid(), display_name: z.string() })) }),
+          schema: z.object({
+            agents: z.array(z.object({ id: z.uuid(), display_name: z.string() })),
+          }),
         },
       },
     },
   },
-})
+});
 ```
 
 - [ ] **Step 7: Run the test to verify it passes**
@@ -836,23 +934,29 @@ git commit -m "Add GET /agent/agents endpoint for the tickets assignee filter"
 ## Task 4: Frontend API client additions
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/agent-console/api/agentApi.ts`
 
 **Interfaces:**
+
 - Consumes: nothing new from earlier tasks (calls the endpoints from Tasks 1-3 by URL).
 - Produces:
   ```ts
   export type TicketsQueryFilters = {
-    q?: string
-    priority?: string[]
-    labelIds?: string[]
-    subintentIds?: string[]
-    assigneeIds?: string[]
-    olderThanHours?: number
-  }
-  export type WorkspaceAgentOption = { id: string; display_name: string }
-  export function fetchInbox(token: string, status: ConversationListFilter, filters?: TicketsQueryFilters): Promise<AgentConversationsResponse>
-  export function fetchWorkspaceAgents(token: string): Promise<{ agents: WorkspaceAgentOption[] }>
+    q?: string;
+    priority?: string[];
+    labelIds?: string[];
+    subintentIds?: string[];
+    assigneeIds?: string[];
+    olderThanHours?: number;
+  };
+  export type WorkspaceAgentOption = { id: string; display_name: string };
+  export function fetchInbox(
+    token: string,
+    status: ConversationListFilter,
+    filters?: TicketsQueryFilters,
+  ): Promise<AgentConversationsResponse>;
+  export function fetchWorkspaceAgents(token: string): Promise<{ agents: WorkspaceAgentOption[] }>;
   ```
 
 There is no test file for `agentApi.ts` itself (existing tests mock it wholesale via `vi.mock`); this task is verified through the frontend tests in Tasks 5 and 6, which exercise these functions indirectly. Because that leaves this task with no test of its own, keep the change small and mechanical to keep review cheap.
@@ -862,36 +966,41 @@ There is no test file for `agentApi.ts` itself (existing tests mock it wholesale
 In `frontend/src/surfaces/agent-console/api/agentApi.ts`, replace lines 64-68:
 
 ```ts
-export type ConversationListFilter = 'unassigned' | 'mine' | 'agentAssigned' | 'botHandling' | 'escalated'
+export type ConversationListFilter =
+  'unassigned' | 'mine' | 'agentAssigned' | 'botHandling' | 'escalated';
 
-export function fetchInbox(token: string, status: ConversationListFilter): Promise<AgentConversationsResponse> {
-  return apiCall(`/agent/conversations?status=${status}`, token)
+export function fetchInbox(
+  token: string,
+  status: ConversationListFilter,
+): Promise<AgentConversationsResponse> {
+  return apiCall(`/agent/conversations?status=${status}`, token);
 }
 ```
 
 with:
 
 ```ts
-export type ConversationListFilter = 'unassigned' | 'mine' | 'agentAssigned' | 'botHandling' | 'escalated'
+export type ConversationListFilter =
+  'unassigned' | 'mine' | 'agentAssigned' | 'botHandling' | 'escalated';
 
 export type TicketsQueryFilters = {
-  q?: string
-  priority?: string[]
-  labelIds?: string[]
-  subintentIds?: string[]
-  assigneeIds?: string[]
-  olderThanHours?: number
-}
+  q?: string;
+  priority?: string[];
+  labelIds?: string[];
+  subintentIds?: string[];
+  assigneeIds?: string[];
+  olderThanHours?: number;
+};
 
 function buildTicketsQuery(status: ConversationListFilter, filters?: TicketsQueryFilters): string {
-  const params = new URLSearchParams({ status })
-  if (filters?.q) params.set('q', filters.q)
-  if (filters?.priority?.length) params.set('priority', filters.priority.join(','))
-  if (filters?.labelIds?.length) params.set('labelIds', filters.labelIds.join(','))
-  if (filters?.subintentIds?.length) params.set('subintentIds', filters.subintentIds.join(','))
-  if (filters?.assigneeIds?.length) params.set('assigneeIds', filters.assigneeIds.join(','))
-  if (filters?.olderThanHours) params.set('olderThanHours', String(filters.olderThanHours))
-  return params.toString()
+  const params = new URLSearchParams({ status });
+  if (filters?.q) params.set('q', filters.q);
+  if (filters?.priority?.length) params.set('priority', filters.priority.join(','));
+  if (filters?.labelIds?.length) params.set('labelIds', filters.labelIds.join(','));
+  if (filters?.subintentIds?.length) params.set('subintentIds', filters.subintentIds.join(','));
+  if (filters?.assigneeIds?.length) params.set('assigneeIds', filters.assigneeIds.join(','));
+  if (filters?.olderThanHours) params.set('olderThanHours', String(filters.olderThanHours));
+  return params.toString();
 }
 
 export function fetchInbox(
@@ -899,7 +1008,7 @@ export function fetchInbox(
   status: ConversationListFilter,
   filters?: TicketsQueryFilters,
 ): Promise<AgentConversationsResponse> {
-  return apiCall(`/agent/conversations?${buildTicketsQuery(status, filters)}`, token)
+  return apiCall(`/agent/conversations?${buildTicketsQuery(status, filters)}`, token);
 }
 ```
 
@@ -910,10 +1019,10 @@ This keeps every existing call site (`Inbox.tsx`, `ConversationList.tsx`, their 
 Add near `fetchIntents` (after line 119's closing brace, i.e. right before `export function fetchTags`):
 
 ```ts
-export type WorkspaceAgentOption = { id: string; display_name: string }
+export type WorkspaceAgentOption = { id: string; display_name: string };
 
 export function fetchWorkspaceAgents(token: string): Promise<{ agents: WorkspaceAgentOption[] }> {
-  return apiCall('/agent/agents', token)
+  return apiCall('/agent/agents', token);
 }
 ```
 
@@ -934,33 +1043,38 @@ git commit -m "Extend fetchInbox with optional filters and add fetchWorkspaceAge
 ## Task 5: `MultiSelectFilter` component and `useTicketsFilters` URL-state hook
 
 **Files:**
+
 - Create: `frontend/src/surfaces/agent-console/components/MultiSelectFilter.tsx`
 - Create: `frontend/src/surfaces/agent-console/components/MultiSelectFilter.test.tsx`
 - Create: `frontend/src/surfaces/agent-console/pages/Tickets/useTicketsFilters.ts`
 - Create: `frontend/src/surfaces/agent-console/pages/Tickets/useTicketsFilters.test.tsx`
 
 **Interfaces:**
+
 - Produces:
+
   ```ts
-  export type MultiSelectOption = { value: string; label: string }
+  export type MultiSelectOption = { value: string; label: string };
   export function MultiSelectFilter(props: {
-    label: string
-    options: MultiSelectOption[]
-    selected: string[]
-    onChange: (next: string[]) => void
-  }): JSX.Element
+    label: string;
+    options: MultiSelectOption[];
+    selected: string[];
+    onChange: (next: string[]) => void;
+  }): JSX.Element;
   ```
+
   and
+
   ```ts
   export type TicketsFilters = {
-    q: string
-    priority: string[]
-    labelIds: string[]
-    subintentIds: string[]
-    assigneeIds: string[]
-    olderThanHours: string
-  }
-  export function useTicketsFilters(): [TicketsFilters, (next: Partial<TicketsFilters>) => void]
+    q: string;
+    priority: string[];
+    labelIds: string[];
+    subintentIds: string[];
+    assigneeIds: string[];
+    olderThanHours: string;
+  };
+  export function useTicketsFilters(): [TicketsFilters, (next: Partial<TicketsFilters>) => void];
   ```
 
 - [ ] **Step 1: Write the failing test for `MultiSelectFilter`**
@@ -968,42 +1082,53 @@ git commit -m "Extend fetchInbox with optional filters and add fetchWorkspaceAge
 Create `frontend/src/surfaces/agent-console/components/MultiSelectFilter.test.tsx`:
 
 ```tsx
-import { describe, expect, it, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
-import { MultiSelectFilter } from './MultiSelectFilter.tsx'
+import { describe, expect, it, vi } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { MultiSelectFilter } from './MultiSelectFilter.tsx';
 
 const OPTIONS = [
   { value: 'p1', label: 'P1' },
   { value: 'p2', label: 'P2' },
-]
+];
 
 describe('MultiSelectFilter', () => {
   it('shows the selected count on the trigger', () => {
-    render(<MultiSelectFilter label="Priority" options={OPTIONS} selected={['p1']} onChange={vi.fn()} />)
-    expect(screen.getByRole('button', { name: /Priority/ })).toHaveTextContent('(1)')
-  })
+    render(
+      <MultiSelectFilter label="Priority" options={OPTIONS} selected={['p1']} onChange={vi.fn()} />,
+    );
+    expect(screen.getByRole('button', { name: /Priority/ })).toHaveTextContent('(1)');
+  });
 
   it('adds a value when an unselected option is clicked', async () => {
-    const onChange = vi.fn()
-    render(<MultiSelectFilter label="Priority" options={OPTIONS} selected={[]} onChange={onChange} />)
+    const onChange = vi.fn();
+    render(
+      <MultiSelectFilter label="Priority" options={OPTIONS} selected={[]} onChange={onChange} />,
+    );
 
-    await userEvent.click(screen.getByRole('button', { name: /Priority/ }))
-    await userEvent.click(await screen.findByText('P1'))
+    await userEvent.click(screen.getByRole('button', { name: /Priority/ }));
+    await userEvent.click(await screen.findByText('P1'));
 
-    expect(onChange).toHaveBeenCalledWith(['p1'])
-  })
+    expect(onChange).toHaveBeenCalledWith(['p1']);
+  });
 
   it('removes a value when an already-selected option is clicked', async () => {
-    const onChange = vi.fn()
-    render(<MultiSelectFilter label="Priority" options={OPTIONS} selected={['p1', 'p2']} onChange={onChange} />)
+    const onChange = vi.fn();
+    render(
+      <MultiSelectFilter
+        label="Priority"
+        options={OPTIONS}
+        selected={['p1', 'p2']}
+        onChange={onChange}
+      />,
+    );
 
-    await userEvent.click(screen.getByRole('button', { name: /Priority/ }))
-    await userEvent.click(await screen.findByText('P1'))
+    await userEvent.click(screen.getByRole('button', { name: /Priority/ }));
+    await userEvent.click(await screen.findByText('P1'));
 
-    expect(onChange).toHaveBeenCalledWith(['p2'])
-  })
-})
+    expect(onChange).toHaveBeenCalledWith(['p2']);
+  });
+});
 ```
 
 - [ ] **Step 2: Run the test to verify it fails**
@@ -1016,14 +1141,14 @@ Expected: FAIL — `MultiSelectFilter.tsx` doesn't exist yet.
 Create `frontend/src/surfaces/agent-console/components/MultiSelectFilter.tsx`:
 
 ```tsx
-import { useState } from 'react'
-import { Check } from 'lucide-react'
-import { Button } from './ui/button.tsx'
-import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from './ui/command.tsx'
-import { Popover, PopoverContent, PopoverTrigger } from './ui/popover.tsx'
-import { cn } from '../lib/cn.ts'
+import { useState } from 'react';
+import { Check } from 'lucide-react';
+import { Button } from './ui/button.tsx';
+import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from './ui/command.tsx';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover.tsx';
+import { cn } from '../lib/cn.ts';
 
-export type MultiSelectOption = { value: string; label: string }
+export type MultiSelectOption = { value: string; label: string };
 
 export function MultiSelectFilter({
   label,
@@ -1031,15 +1156,15 @@ export function MultiSelectFilter({
   selected,
   onChange,
 }: {
-  label: string
-  options: MultiSelectOption[]
-  selected: string[]
-  onChange: (next: string[]) => void
+  label: string;
+  options: MultiSelectOption[];
+  selected: string[];
+  onChange: (next: string[]) => void;
 }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(false);
 
   function toggle(value: string) {
-    onChange(selected.includes(value) ? selected.filter((v) => v !== value) : [...selected, value])
+    onChange(selected.includes(value) ? selected.filter((v) => v !== value) : [...selected, value]);
   }
 
   return (
@@ -1047,7 +1172,9 @@ export function MultiSelectFilter({
       <PopoverTrigger asChild>
         <Button type="button" variant="outline" size="sm">
           {label}
-          {selected.length > 0 && <span className="ml-1 text-xs text-muted">({selected.length})</span>}
+          {selected.length > 0 && (
+            <span className="ml-1 text-xs text-muted">({selected.length})</span>
+          )}
         </Button>
       </PopoverTrigger>
       <PopoverContent className="p-0" align="start">
@@ -1056,8 +1183,17 @@ export function MultiSelectFilter({
             {options.length === 0 && <CommandEmpty>No options.</CommandEmpty>}
             <CommandGroup>
               {options.map((option) => (
-                <CommandItem key={option.value} value={option.label} onSelect={() => toggle(option.value)}>
-                  <Check className={cn('size-4', selected.includes(option.value) ? 'opacity-100' : 'opacity-0')} />
+                <CommandItem
+                  key={option.value}
+                  value={option.label}
+                  onSelect={() => toggle(option.value)}
+                >
+                  <Check
+                    className={cn(
+                      'size-4',
+                      selected.includes(option.value) ? 'opacity-100' : 'opacity-0',
+                    )}
+                  />
                   {option.label}
                 </CommandItem>
               ))}
@@ -1066,7 +1202,7 @@ export function MultiSelectFilter({
         </Command>
       </PopoverContent>
     </Popover>
-  )
+  );
 }
 ```
 
@@ -1082,52 +1218,68 @@ Expected: PASS.
 Create `frontend/src/surfaces/agent-console/pages/Tickets/useTicketsFilters.test.tsx`:
 
 ```tsx
-import { describe, expect, it } from 'vitest'
-import { renderHook, act } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
-import { useTicketsFilters } from './useTicketsFilters.ts'
+import { describe, expect, it } from 'vitest';
+import { renderHook, act } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+import { useTicketsFilters } from './useTicketsFilters.ts';
 
 function renderWithRouter(initialEntry: string) {
   return renderHook(() => useTicketsFilters(), {
-    wrapper: ({ children }) => <MemoryRouter initialEntries={[initialEntry]}>{children}</MemoryRouter>,
-  })
+    wrapper: ({ children }) => (
+      <MemoryRouter initialEntries={[initialEntry]}>{children}</MemoryRouter>
+    ),
+  });
 }
 
 describe('useTicketsFilters', () => {
   it('parses csv params from the URL', () => {
-    const { result } = renderWithRouter('/tickets?priority=p1,p2&labelIds=abc')
-    const [filters] = result.current
-    expect(filters.priority).toEqual(['p1', 'p2'])
-    expect(filters.labelIds).toEqual(['abc'])
-    expect(filters.q).toBe('')
-  })
+    const { result } = renderWithRouter('/tickets?priority=p1,p2&labelIds=abc');
+    const [filters] = result.current;
+    expect(filters.priority).toEqual(['p1', 'p2']);
+    expect(filters.labelIds).toEqual(['abc']);
+    expect(filters.q).toBe('');
+  });
 
   it('defaults to empty filters with no params', () => {
-    const { result } = renderWithRouter('/tickets')
-    const [filters] = result.current
-    expect(filters).toEqual({ q: '', priority: [], labelIds: [], subintentIds: [], assigneeIds: [], olderThanHours: '' })
-  })
+    const { result } = renderWithRouter('/tickets');
+    const [filters] = result.current;
+    expect(filters).toEqual({
+      q: '',
+      priority: [],
+      labelIds: [],
+      subintentIds: [],
+      assigneeIds: [],
+      olderThanHours: '',
+    });
+  });
 
   it('merges a partial update into the current filters', () => {
-    const { result } = renderWithRouter('/tickets?priority=p1')
+    const { result } = renderWithRouter('/tickets?priority=p1');
     act(() => {
-      const [, update] = result.current
-      update({ q: 'refund' })
-    })
-    const [filters] = result.current
-    expect(filters).toEqual({ q: 'refund', priority: ['p1'], labelIds: [], subintentIds: [], assigneeIds: [], olderThanHours: '' })
-  })
+      const [, update] = result.current;
+      update({ q: 'refund' });
+    });
+    const [filters] = result.current;
+    expect(filters).toEqual({
+      q: 'refund',
+      priority: ['p1'],
+      labelIds: [],
+      subintentIds: [],
+      assigneeIds: [],
+      olderThanHours: '',
+    });
+  });
 
   it('drops a filter from the URL when set back to empty', () => {
-    const { result } = renderWithRouter('/tickets?priority=p1')
+    const { result } = renderWithRouter('/tickets?priority=p1');
     act(() => {
-      const [, update] = result.current
-      update({ priority: [] })
-    })
-    const [filters] = result.current
-    expect(filters.priority).toEqual([])
-  })
-})
+      const [, update] = result.current;
+      update({ priority: [] });
+    });
+    const [filters] = result.current;
+    expect(filters.priority).toEqual([]);
+  });
+});
 ```
 
 - [ ] **Step 6: Run the test to verify it fails**
@@ -1140,19 +1292,19 @@ Expected: FAIL — `useTicketsFilters.ts` doesn't exist yet.
 Create `frontend/src/surfaces/agent-console/pages/Tickets/useTicketsFilters.ts`:
 
 ```ts
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom';
 
 export type TicketsFilters = {
-  q: string
-  priority: string[]
-  labelIds: string[]
-  subintentIds: string[]
-  assigneeIds: string[]
-  olderThanHours: string
-}
+  q: string;
+  priority: string[];
+  labelIds: string[];
+  subintentIds: string[];
+  assigneeIds: string[];
+  olderThanHours: string;
+};
 
 function parseCsv(value: string | null): string[] {
-  return value ? value.split(',').filter(Boolean) : []
+  return value ? value.split(',').filter(Boolean) : [];
 }
 
 /**
@@ -1161,7 +1313,7 @@ function parseCsv(value: string | null): string[] {
  * already used for search on the webview's SupportSearch page.
  */
 export function useTicketsFilters(): [TicketsFilters, (next: Partial<TicketsFilters>) => void] {
-  const [params, setParams] = useSearchParams()
+  const [params, setParams] = useSearchParams();
 
   const filters: TicketsFilters = {
     q: params.get('q') ?? '',
@@ -1170,21 +1322,21 @@ export function useTicketsFilters(): [TicketsFilters, (next: Partial<TicketsFilt
     subintentIds: parseCsv(params.get('subintentIds')),
     assigneeIds: parseCsv(params.get('assigneeIds')),
     olderThanHours: params.get('olderThanHours') ?? '',
-  }
+  };
 
   function update(next: Partial<TicketsFilters>) {
-    const merged = { ...filters, ...next }
-    const nextParams = new URLSearchParams()
-    if (merged.q) nextParams.set('q', merged.q)
-    if (merged.priority.length) nextParams.set('priority', merged.priority.join(','))
-    if (merged.labelIds.length) nextParams.set('labelIds', merged.labelIds.join(','))
-    if (merged.subintentIds.length) nextParams.set('subintentIds', merged.subintentIds.join(','))
-    if (merged.assigneeIds.length) nextParams.set('assigneeIds', merged.assigneeIds.join(','))
-    if (merged.olderThanHours) nextParams.set('olderThanHours', merged.olderThanHours)
-    setParams(nextParams, { replace: true })
+    const merged = { ...filters, ...next };
+    const nextParams = new URLSearchParams();
+    if (merged.q) nextParams.set('q', merged.q);
+    if (merged.priority.length) nextParams.set('priority', merged.priority.join(','));
+    if (merged.labelIds.length) nextParams.set('labelIds', merged.labelIds.join(','));
+    if (merged.subintentIds.length) nextParams.set('subintentIds', merged.subintentIds.join(','));
+    if (merged.assigneeIds.length) nextParams.set('assigneeIds', merged.assigneeIds.join(','));
+    if (merged.olderThanHours) nextParams.set('olderThanHours', merged.olderThanHours);
+    setParams(nextParams, { replace: true });
   }
 
-  return [filters, update]
+  return [filters, update];
 }
 ```
 
@@ -1208,12 +1360,14 @@ git commit -m "Add MultiSelectFilter component and URL-backed tickets filter sta
 ## Task 6: Wire the filter bar into the Tickets page
 
 **Files:**
+
 - Create: `frontend/src/surfaces/agent-console/pages/Tickets/TicketsFilterBar.tsx`
 - Create: `frontend/src/surfaces/agent-console/pages/Tickets/TicketsFilterBar.test.tsx`
 - Modify: `frontend/src/surfaces/agent-console/pages/Tickets/Tickets.tsx`
 - Create: `frontend/src/surfaces/agent-console/pages/Tickets/Tickets.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `MultiSelectFilter`, `useTicketsFilters`/`TicketsFilters` (Task 5), `fetchInbox`/`TicketsQueryFilters`/`fetchWorkspaceAgents` (Task 4), `fetchTags`, `fetchIntents` (pre-existing).
 - Produces: `TicketsFilterBar(props: { token: string; filters: TicketsFilters; onChange: (next: Partial<TicketsFilters>) => void }): JSX.Element`, exported for the test; not consumed outside this task.
 
@@ -1222,22 +1376,29 @@ git commit -m "Add MultiSelectFilter component and URL-backed tickets filter sta
 Create `frontend/src/surfaces/agent-console/pages/Tickets/TicketsFilterBar.test.tsx`:
 
 ```tsx
-import { describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { TicketsFilterBar } from './TicketsFilterBar.tsx'
-import * as agentApi from '../../api/agentApi.ts'
+import { describe, expect, it, vi } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { TicketsFilterBar } from './TicketsFilterBar.tsx';
+import * as agentApi from '../../api/agentApi.ts';
 
-vi.mock('../../api/agentApi.ts')
+vi.mock('../../api/agentApi.ts');
 
-const EMPTY_FILTERS = { q: '', priority: [], labelIds: [], subintentIds: [], assigneeIds: [], olderThanHours: '' }
+const EMPTY_FILTERS = {
+  q: '',
+  priority: [],
+  labelIds: [],
+  subintentIds: [],
+  assigneeIds: [],
+  olderThanHours: '',
+};
 
 function renderBar(onChange = vi.fn()) {
-  vi.mocked(agentApi.fetchTags).mockResolvedValue([])
-  vi.mocked(agentApi.fetchIntents).mockResolvedValue({ intents: [] })
-  vi.mocked(agentApi.fetchWorkspaceAgents).mockResolvedValue({ agents: [] })
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  vi.mocked(agentApi.fetchTags).mockResolvedValue([]);
+  vi.mocked(agentApi.fetchIntents).mockResolvedValue({ intents: [] });
+  vi.mocked(agentApi.fetchWorkspaceAgents).mockResolvedValue({ agents: [] });
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return {
     onChange,
     ...render(
@@ -1245,31 +1406,31 @@ function renderBar(onChange = vi.fn()) {
         <TicketsFilterBar token="t" filters={EMPTY_FILTERS} onChange={onChange} />
       </QueryClientProvider>,
     ),
-  }
+  };
 }
 
 describe('TicketsFilterBar', () => {
   it('renders a Priority filter control', () => {
-    renderBar()
-    expect(screen.getByRole('button', { name: /Priority/ })).toBeInTheDocument()
-  })
+    renderBar();
+    expect(screen.getByRole('button', { name: /Priority/ })).toBeInTheDocument();
+  });
 
   it('debounces search input before calling onChange', async () => {
-    const { onChange } = renderBar()
-    await userEvent.type(screen.getByPlaceholderText(/Search/i), 'refund')
+    const { onChange } = renderBar();
+    await userEvent.type(screen.getByPlaceholderText(/Search/i), 'refund');
 
-    expect(onChange).not.toHaveBeenCalled()
-    await waitFor(() => expect(onChange).toHaveBeenCalledWith({ q: 'refund' }), { timeout: 1000 })
-  })
+    expect(onChange).not.toHaveBeenCalled();
+    await waitFor(() => expect(onChange).toHaveBeenCalledWith({ q: 'refund' }), { timeout: 1000 });
+  });
 
   it('toggling the Priority p1 option calls onChange with the selection', async () => {
-    const { onChange } = renderBar()
-    await userEvent.click(screen.getByRole('button', { name: /Priority/ }))
-    await userEvent.click(await screen.findByText('P1'))
+    const { onChange } = renderBar();
+    await userEvent.click(screen.getByRole('button', { name: /Priority/ }));
+    await userEvent.click(await screen.findByText('P1'));
 
-    expect(onChange).toHaveBeenCalledWith({ priority: ['p1'] })
-  })
-})
+    expect(onChange).toHaveBeenCalledWith({ priority: ['p1'] });
+  });
+});
 ```
 
 - [ ] **Step 2: Run the test to verify it fails**
@@ -1282,63 +1443,75 @@ Expected: FAIL — `TicketsFilterBar.tsx` doesn't exist yet.
 Create `frontend/src/surfaces/agent-console/pages/Tickets/TicketsFilterBar.tsx`:
 
 ```tsx
-import { useEffect, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { Search } from 'lucide-react'
-import { fetchIntents, fetchTags, fetchWorkspaceAgents } from '../../api/agentApi.ts'
-import { Input } from '../../components/ui/input.tsx'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select.tsx'
-import { MultiSelectFilter } from '../../components/MultiSelectFilter.tsx'
-import type { TicketsFilters } from './useTicketsFilters.ts'
+import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Search } from 'lucide-react';
+import { fetchIntents, fetchTags, fetchWorkspaceAgents } from '../../api/agentApi.ts';
+import { Input } from '../../components/ui/input.tsx';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../../components/ui/select.tsx';
+import { MultiSelectFilter } from '../../components/MultiSelectFilter.tsx';
+import type { TicketsFilters } from './useTicketsFilters.ts';
 
 const PRIORITY_OPTIONS = [
   { value: 'p1', label: 'P1' },
   { value: 'p2', label: 'P2' },
   { value: 'p3', label: 'P3' },
   { value: 'p4', label: 'P4' },
-]
+];
 
 const AGE_OPTIONS = [
   { value: 'any', label: 'Any age' },
   { value: '4', label: 'Older than 4 hours' },
   { value: '24', label: 'Older than 1 day' },
   { value: '72', label: 'Older than 3 days' },
-]
+];
 
-const SEARCH_DEBOUNCE_MS = 300
+const SEARCH_DEBOUNCE_MS = 300;
 
 export function TicketsFilterBar({
   token,
   filters,
   onChange,
 }: {
-  token: string
-  filters: TicketsFilters
-  onChange: (next: Partial<TicketsFilters>) => void
+  token: string;
+  filters: TicketsFilters;
+  onChange: (next: Partial<TicketsFilters>) => void;
 }) {
-  const [searchInput, setSearchInput] = useState(filters.q)
+  const [searchInput, setSearchInput] = useState(filters.q);
 
   // The URL is the source of truth (back/forward, a bookmarked filtered
   // board), so a change made anywhere else — not just from typing here —
   // has to resync this field.
-  useEffect(() => setSearchInput(filters.q), [filters.q])
+  useEffect(() => setSearchInput(filters.q), [filters.q]);
 
   useEffect(() => {
-    if (searchInput === filters.q) return
-    const timer = setTimeout(() => onChange({ q: searchInput }), SEARCH_DEBOUNCE_MS)
-    return () => clearTimeout(timer)
+    if (searchInput === filters.q) return;
+    const timer = setTimeout(() => onChange({ q: searchInput }), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchInput])
+  }, [searchInput]);
 
-  const tagsQuery = useQuery({ queryKey: ['tags', ''], queryFn: () => fetchTags(token) })
-  const intentsQuery = useQuery({ queryKey: ['intents'], queryFn: () => fetchIntents(token) })
-  const agentsQuery = useQuery({ queryKey: ['workspaceAgents'], queryFn: () => fetchWorkspaceAgents(token) })
+  const tagsQuery = useQuery({ queryKey: ['tags', ''], queryFn: () => fetchTags(token) });
+  const intentsQuery = useQuery({ queryKey: ['intents'], queryFn: () => fetchIntents(token) });
+  const agentsQuery = useQuery({
+    queryKey: ['workspaceAgents'],
+    queryFn: () => fetchWorkspaceAgents(token),
+  });
 
-  const labelOptions = (tagsQuery.data ?? []).map((tag) => ({ value: tag.id, label: tag.name }))
+  const labelOptions = (tagsQuery.data ?? []).map((tag) => ({ value: tag.id, label: tag.name }));
   const subintentOptions = (intentsQuery.data?.intents ?? []).flatMap((intent) =>
     intent.subintents.map((sub) => ({ value: sub.id, label: `${intent.name} / ${sub.name}` })),
-  )
-  const agentOptions = (agentsQuery.data?.agents ?? []).map((a) => ({ value: a.id, label: a.display_name }))
+  );
+  const agentOptions = (agentsQuery.data?.agents ?? []).map((a) => ({
+    value: a.id,
+    label: a.display_name,
+  }));
 
   return (
     <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -1351,11 +1524,34 @@ export function TicketsFilterBar({
           onChange={(e) => setSearchInput(e.target.value)}
         />
       </div>
-      <MultiSelectFilter label="Priority" options={PRIORITY_OPTIONS} selected={filters.priority} onChange={(v) => onChange({ priority: v })} />
-      <MultiSelectFilter label="Label" options={labelOptions} selected={filters.labelIds} onChange={(v) => onChange({ labelIds: v })} />
-      <MultiSelectFilter label="Subintent" options={subintentOptions} selected={filters.subintentIds} onChange={(v) => onChange({ subintentIds: v })} />
-      <MultiSelectFilter label="Assignee" options={agentOptions} selected={filters.assigneeIds} onChange={(v) => onChange({ assigneeIds: v })} />
-      <Select value={filters.olderThanHours || 'any'} onValueChange={(v) => onChange({ olderThanHours: v === 'any' ? '' : v })}>
+      <MultiSelectFilter
+        label="Priority"
+        options={PRIORITY_OPTIONS}
+        selected={filters.priority}
+        onChange={(v) => onChange({ priority: v })}
+      />
+      <MultiSelectFilter
+        label="Label"
+        options={labelOptions}
+        selected={filters.labelIds}
+        onChange={(v) => onChange({ labelIds: v })}
+      />
+      <MultiSelectFilter
+        label="Subintent"
+        options={subintentOptions}
+        selected={filters.subintentIds}
+        onChange={(v) => onChange({ subintentIds: v })}
+      />
+      <MultiSelectFilter
+        label="Assignee"
+        options={agentOptions}
+        selected={filters.assigneeIds}
+        onChange={(v) => onChange({ assigneeIds: v })}
+      />
+      <Select
+        value={filters.olderThanHours || 'any'}
+        onValueChange={(v) => onChange({ olderThanHours: v === 'any' ? '' : v })}
+      >
         <SelectTrigger className="w-40">
           <SelectValue />
         </SelectTrigger>
@@ -1368,7 +1564,7 @@ export function TicketsFilterBar({
         </SelectContent>
       </Select>
     </div>
-  )
+  );
 }
 ```
 
@@ -1382,30 +1578,36 @@ Expected: PASS.
 Create `frontend/src/surfaces/agent-console/pages/Tickets/Tickets.test.tsx`:
 
 ```tsx
-import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { Tickets } from './Tickets.tsx'
-import { loadAgentSession } from '../../lib/agentSession.ts'
-import * as agentApi from '../../api/agentApi.ts'
+import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { Tickets } from './Tickets.tsx';
+import { loadAgentSession } from '../../lib/agentSession.ts';
+import * as agentApi from '../../api/agentApi.ts';
 
 vi.mock('../../lib/agentSession.ts', async () => {
-  const actual = await vi.importActual<typeof import('../../lib/agentSession.ts')>('../../lib/agentSession.ts')
-  return { ...actual, loadAgentSession: vi.fn() }
-})
+  const actual = await vi.importActual<typeof import('../../lib/agentSession.ts')>(
+    '../../lib/agentSession.ts',
+  );
+  return { ...actual, loadAgentSession: vi.fn() };
+});
 vi.mock('../../../../features/chat/api/socket.ts', () => ({
   createSocket: () => ({ on: vi.fn(), close: vi.fn() }),
-}))
-vi.mock('../../api/agentApi.ts')
+}));
+vi.mock('../../api/agentApi.ts');
 
 function renderTickets(path = '/tickets') {
-  vi.mocked(loadAgentSession).mockReturnValue({ token: 'tok', agentId: 'agent-1', workspaceId: 'ws-1' } as never)
-  vi.mocked(agentApi.fetchTags).mockResolvedValue([])
-  vi.mocked(agentApi.fetchIntents).mockResolvedValue({ intents: [] })
-  vi.mocked(agentApi.fetchWorkspaceAgents).mockResolvedValue({ agents: [] })
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  vi.mocked(loadAgentSession).mockReturnValue({
+    token: 'tok',
+    agentId: 'agent-1',
+    workspaceId: 'ws-1',
+  } as never);
+  vi.mocked(agentApi.fetchTags).mockResolvedValue([]);
+  vi.mocked(agentApi.fetchIntents).mockResolvedValue({ intents: [] });
+  vi.mocked(agentApi.fetchWorkspaceAgents).mockResolvedValue({ agents: [] });
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[path]}>
@@ -1415,41 +1617,57 @@ function renderTickets(path = '/tickets') {
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
-  )
+  );
 }
 
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => vi.clearAllMocks());
 
 describe('Tickets filtering', () => {
   it('passes the active filters through to fetchInbox for every column', async () => {
-    const fetchInboxSpy = vi.mocked(agentApi.fetchInbox).mockResolvedValue({ conversations: [] })
-    renderTickets('/tickets?priority=p1')
+    const fetchInboxSpy = vi.mocked(agentApi.fetchInbox).mockResolvedValue({ conversations: [] });
+    renderTickets('/tickets?priority=p1');
 
     await waitFor(() =>
-      expect(fetchInboxSpy).toHaveBeenCalledWith('tok', 'unassigned', expect.objectContaining({ priority: ['p1'] })),
-    )
-    expect(fetchInboxSpy).toHaveBeenCalledWith('tok', 'botHandling', expect.objectContaining({ priority: ['p1'] }))
-    expect(fetchInboxSpy).toHaveBeenCalledWith('tok', 'agentAssigned', expect.objectContaining({ priority: ['p1'] }))
-    expect(fetchInboxSpy).toHaveBeenCalledWith('tok', 'escalated', expect.objectContaining({ priority: ['p1'] }))
-  })
+      expect(fetchInboxSpy).toHaveBeenCalledWith(
+        'tok',
+        'unassigned',
+        expect.objectContaining({ priority: ['p1'] }),
+      ),
+    );
+    expect(fetchInboxSpy).toHaveBeenCalledWith(
+      'tok',
+      'botHandling',
+      expect.objectContaining({ priority: ['p1'] }),
+    );
+    expect(fetchInboxSpy).toHaveBeenCalledWith(
+      'tok',
+      'agentAssigned',
+      expect.objectContaining({ priority: ['p1'] }),
+    );
+    expect(fetchInboxSpy).toHaveBeenCalledWith(
+      'tok',
+      'escalated',
+      expect.objectContaining({ priority: ['p1'] }),
+    );
+  });
 
   it('shows a filtered-empty message distinct from a genuinely empty column', async () => {
     vi.mocked(agentApi.fetchInbox).mockImplementation((_token, status) =>
       Promise.resolve({ conversations: status === 'unassigned' ? [] : [] }),
-    )
-    renderTickets('/tickets?priority=p1')
+    );
+    renderTickets('/tickets?priority=p1');
 
-    await screen.findAllByText('No tickets match your filters.')
-  })
+    await screen.findAllByText('No tickets match your filters.');
+  });
 
   it('shows the default empty state with no filters active', async () => {
-    vi.mocked(agentApi.fetchInbox).mockResolvedValue({ conversations: [] })
-    renderTickets('/tickets')
+    vi.mocked(agentApi.fetchInbox).mockResolvedValue({ conversations: [] });
+    renderTickets('/tickets');
 
-    await waitFor(() => expect(agentApi.fetchInbox).toHaveBeenCalled())
-    expect(screen.queryByText('No tickets match your filters.')).not.toBeInTheDocument()
-  })
-})
+    await waitFor(() => expect(agentApi.fetchInbox).toHaveBeenCalled());
+    expect(screen.queryByText('No tickets match your filters.')).not.toBeInTheDocument();
+  });
+});
 ```
 
 - [ ] **Step 6: Run the test to verify it fails**
@@ -1462,25 +1680,30 @@ Expected: FAIL — `Tickets.tsx` doesn't render a filter bar yet, so no filters 
 Replace the full contents of `frontend/src/surfaces/agent-console/pages/Tickets/Tickets.tsx`:
 
 ```tsx
-import { useEffect } from 'react'
-import type { ConversationStatusValue } from '@support/types'
-import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate, useParams } from 'react-router-dom'
-import { claimConversation, fetchInbox, type ConversationListFilter, type TicketsQueryFilters } from '../../api/agentApi.ts'
-import { loadAgentSession } from '../../lib/agentSession.ts'
-import { createSocket } from '../../../../features/chat/api/socket.ts'
-import { handleSessionExpired } from '../../lib/authErrorHandling.ts'
-import { ConversationDetailPane } from '../../components/ConversationDetailPane.tsx'
-import { ConversationRow } from '../Inbox/components/ConversationRow.tsx'
-import { TicketsFilterBar } from './TicketsFilterBar.tsx'
-import { useTicketsFilters } from './useTicketsFilters.ts'
+import { useEffect } from 'react';
+import type { ConversationStatusValue } from '@support/types';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate, useParams } from 'react-router-dom';
+import {
+  claimConversation,
+  fetchInbox,
+  type ConversationListFilter,
+  type TicketsQueryFilters,
+} from '../../api/agentApi.ts';
+import { loadAgentSession } from '../../lib/agentSession.ts';
+import { createSocket } from '../../../../features/chat/api/socket.ts';
+import { handleSessionExpired } from '../../lib/authErrorHandling.ts';
+import { ConversationDetailPane } from '../../components/ConversationDetailPane.tsx';
+import { ConversationRow } from '../Inbox/components/ConversationRow.tsx';
+import { TicketsFilterBar } from './TicketsFilterBar.tsx';
+import { useTicketsFilters } from './useTicketsFilters.ts';
 
 const COLUMNS: { title: string; filter: ConversationListFilter; claimable?: boolean }[] = [
   { title: 'Unassigned', filter: 'unassigned', claimable: true },
   { title: 'Bot Handling', filter: 'botHandling' },
   { title: 'Agent Assigned', filter: 'agentAssigned' },
   { title: 'Escalated', filter: 'escalated' },
-]
+];
 
 function toQueryFilters(f: ReturnType<typeof useTicketsFilters>[0]): TicketsQueryFilters {
   return {
@@ -1490,11 +1713,13 @@ function toQueryFilters(f: ReturnType<typeof useTicketsFilters>[0]): TicketsQuer
     subintentIds: f.subintentIds.length ? f.subintentIds : undefined,
     assigneeIds: f.assigneeIds.length ? f.assigneeIds : undefined,
     olderThanHours: f.olderThanHours ? Number(f.olderThanHours) : undefined,
-  }
+  };
 }
 
 function hasActiveFilters(f: TicketsQueryFilters): boolean {
-  return Boolean(f.q || f.priority || f.labelIds || f.subintentIds || f.assigneeIds || f.olderThanHours)
+  return Boolean(
+    f.q || f.priority || f.labelIds || f.subintentIds || f.assigneeIds || f.olderThanHours,
+  );
 }
 
 function QueueColumn({
@@ -1506,24 +1731,24 @@ function QueueColumn({
   claimable = false,
   onSelect,
 }: {
-  token: string
-  title: string
-  filter: ConversationListFilter
-  queryFilters: TicketsQueryFilters
-  filtersActive: boolean
-  claimable?: boolean
-  onSelect: (id: string) => void
+  token: string;
+  title: string;
+  filter: ConversationListFilter;
+  queryFilters: TicketsQueryFilters;
+  filtersActive: boolean;
+  claimable?: boolean;
+  onSelect: (id: string) => void;
 }) {
-  const queryClient = useQueryClient()
+  const queryClient = useQueryClient();
   const queue = useQuery({
     queryKey: ['tickets', filter, queryFilters],
     queryFn: () => fetchInbox(token, filter, queryFilters),
-  })
+  });
   const claim = useMutation({
     mutationFn: (conversationId: string) => claimConversation(token, conversationId),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['tickets'] }),
-  })
-  if (queue.data && queue.data.conversations.length === 0 && !filtersActive) return null
+  });
+  if (queue.data && queue.data.conversations.length === 0 && !filtersActive) return null;
   return (
     <section className="flex h-[calc(100vh-12rem)] min-h-0 flex-col rounded-card border border-slate-200 bg-surface">
       <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-3 py-2">
@@ -1547,36 +1772,41 @@ function QueueColumn({
         {queue.isError && <p className="p-3 text-xs text-muted">Could not load tickets.</p>}
       </div>
     </section>
-  )
+  );
 }
 
 export function Tickets() {
-  const { conversationId } = useParams<{ conversationId?: string }>()
-  const navigate = useNavigate()
-  const session = loadAgentSession()
-  const queryClient = useQueryClient()
-  const [filters, updateFilters] = useTicketsFilters()
-  const queryFilters = toQueryFilters(filters)
-  const filtersActive = hasActiveFilters(queryFilters)
+  const { conversationId } = useParams<{ conversationId?: string }>();
+  const navigate = useNavigate();
+  const session = loadAgentSession();
+  const queryClient = useQueryClient();
+  const [filters, updateFilters] = useTicketsFilters();
+  const queryFilters = toQueryFilters(filters);
+  const filtersActive = hasActiveFilters(queryFilters);
 
   useEffect(() => {
-    if (!session) return
-    const socket = createSocket(session.token, 'agent')
+    if (!session) return;
+    const socket = createSocket(session.token, 'agent');
     socket.on('connect_error', (error) => {
-      if (error.message === 'unauthorized') handleSessionExpired()
-    })
-    socket.on('conversation:changed', (payload: { conversation_id?: unknown; status?: unknown }) => {
-      const status = payload.status as ConversationStatusValue | undefined
-      const filtersToInvalidate: ConversationListFilter[] =
-        status === 'bot_active' ? ['botHandling'] : ['unassigned', 'agentAssigned', 'escalated']
-      for (const filter of filtersToInvalidate) void queryClient.invalidateQueries({ queryKey: ['tickets', filter] })
-      const changedId = payload.conversation_id
-      if (typeof changedId === 'string') void queryClient.invalidateQueries({ queryKey: ['conversation', changedId, 'detail'] })
-    })
+      if (error.message === 'unauthorized') handleSessionExpired();
+    });
+    socket.on(
+      'conversation:changed',
+      (payload: { conversation_id?: unknown; status?: unknown }) => {
+        const status = payload.status as ConversationStatusValue | undefined;
+        const filtersToInvalidate: ConversationListFilter[] =
+          status === 'bot_active' ? ['botHandling'] : ['unassigned', 'agentAssigned', 'escalated'];
+        for (const filter of filtersToInvalidate)
+          void queryClient.invalidateQueries({ queryKey: ['tickets', filter] });
+        const changedId = payload.conversation_id;
+        if (typeof changedId === 'string')
+          void queryClient.invalidateQueries({ queryKey: ['conversation', changedId, 'detail'] });
+      },
+    );
     return () => {
-      socket.close()
-    }
-  }, [session, queryClient])
+      socket.close();
+    };
+  }, [session, queryClient]);
 
   const queueQueries = useQueries({
     queries: COLUMNS.map(({ filter }) => ({
@@ -1584,18 +1814,20 @@ export function Tickets() {
       queryFn: () => fetchInbox(session!.token, filter, queryFilters),
       enabled: session !== null,
     })),
-  })
+  });
 
   const summary = (() => {
-    if (!conversationId) return undefined
+    if (!conversationId) return undefined;
     for (const query of queueQueries) {
-      const found = query.data?.conversations.find((conversation) => conversation.id === conversationId)
-      if (found) return found
+      const found = query.data?.conversations.find(
+        (conversation) => conversation.id === conversationId,
+      );
+      if (found) return found;
     }
-    return undefined
-  })()
+    return undefined;
+  })();
 
-  if (!session) return null
+  if (!session) return null;
   if (conversationId) {
     return (
       <ConversationDetailPane
@@ -1605,7 +1837,7 @@ export function Tickets() {
         summary={summary}
         onBack={() => navigate('/tickets')}
       />
-    )
+    );
   }
 
   return (
@@ -1630,11 +1862,11 @@ export function Tickets() {
         ))}
       </div>
     </div>
-  )
+  );
 }
 ```
 
-Note on the invalidate-on-socket-event handler: it invalidates `['tickets', filter]` (no third element), and TanStack Query's default `invalidateQueries` matching is a *prefix* match — `['tickets', 'unassigned', queryFilters]` still matches the `['tickets', 'unassigned']` predicate and gets refetched, automatically re-querying with whatever `queryFilters` are active at that moment. No change to that handler is required for filters to work correctly with real-time updates.
+Note on the invalidate-on-socket-event handler: it invalidates `['tickets', filter]` (no third element), and TanStack Query's default `invalidateQueries` matching is a _prefix_ match — `['tickets', 'unassigned', queryFilters]` still matches the `['tickets', 'unassigned']` predicate and gets refetched, automatically re-querying with whatever `queryFilters` are active at that moment. No change to that handler is required for filters to work correctly with real-time updates.
 
 - [ ] **Step 8: Run the test to verify it passes**
 

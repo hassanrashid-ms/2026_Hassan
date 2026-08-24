@@ -1,5 +1,5 @@
-import { useCallback } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useCallback } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 /**
  * Closing a route-driven overlay (the article sheet) should be the inverse of
@@ -12,14 +12,14 @@ import { useLocation, useNavigate } from 'react-router-dom'
  * fall forward to home instead of stepping out of the app entirely.
  */
 export function useCloseOverlay(fallback: string): () => void {
-  const navigate = useNavigate()
-  const location = useLocation()
+  const navigate = useNavigate();
+  const location = useLocation();
 
   return useCallback(() => {
     if (location.key === 'default') {
-      navigate(fallback, { replace: true })
+      navigate(fallback, { replace: true });
     } else {
-      navigate(-1)
+      navigate(-1);
     }
-  }, [navigate, location.key, fallback])
+  }, [navigate, location.key, fallback]);
 }

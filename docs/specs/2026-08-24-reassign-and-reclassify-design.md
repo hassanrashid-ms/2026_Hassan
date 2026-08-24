@@ -8,7 +8,7 @@ conversation actions that exist as concepts but have no endpoint or UI yet:
 - **Reassign any conversation** — Team Lead/Admin only. Today the only ways a conversation's
   `assigned_agent_id` changes are `claim` (self-assign, only when unassigned) and `take-over`
   (self-assign, only from `bot_active`). Neither lets a TL/Admin move a conversation that already
-  has an owner to a *different* agent — the thing "reassignment" means in the spec's people-and-routing
+  has an owner to a _different_ agent — the thing "reassignment" means in the spec's people-and-routing
   glossary ("lead reassigns").
 - **Correct the classification** — Agent, Team Lead, and Admin. `conversation.subintent_id` is
   currently write-once from the agent's side: `classifyIfUnset` (`domain/bot/applyBotTurn.ts`) only
@@ -38,13 +38,14 @@ claim/take-over/merge code paths as templates rather than introducing new patter
 New function `reassignConversation(ctx, conversationId, targetAgentId)` in
 `agent/services/conversationsService.ts`, alongside `claimConversation`/`takeOverConversation`.
 
-| Check | Failure |
-|---|---|
+| Check                                                                                          | Failure                                                                                                                                  |
+| ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | Conversation exists in this workspace and `status IN ('open', 'awaiting_player', 'escalated')` | 404 if missing, 409 `invalid_status` otherwise — `bot_active` goes through `take-over`, `resolved`/`closed`/`new` are not ownable states |
-| Target agent has a non-deactivated `workspace_member` row in `ctx.workspaceId` | 404 `agent_not_found` |
-| Target agent's `agent.status = 'active'` | 409 `agent_not_active` |
+| Target agent has a non-deactivated `workspace_member` row in `ctx.workspaceId`                 | 404 `agent_not_found`                                                                                                                    |
+| Target agent's `agent.status = 'active'`                                                       | 409 `agent_not_active`                                                                                                                   |
 
 On success, in one transaction:
+
 1. `UPDATE conversation SET assigned_agent_id = targetAgentId` — no `isNull` guard, unlike `claim`;
    this is the override path and may move a conversation away from its current owner.
 2. `appendEvent({ type: 'conversation_reassigned', actorId: ctx.agentId, actorType: 'agent', payload: { agent_id: targetAgentId, reassigned_by: ctx.agentId, via: 'reassign' } })`.
@@ -64,15 +65,16 @@ Response: `{ reassigned: boolean }`, following `{ taken_over: boolean }`'s exist
 
 New function `reclassifyConversation(ctx, conversationId, subintentId)` in the same service file.
 
-| Check | Failure |
-|---|---|
-| Conversation exists in this workspace | 404 |
+| Check                                                              | Failure                 |
+| ------------------------------------------------------------------ | ----------------------- |
+| Conversation exists in this workspace                              | 404                     |
 | Target subintent exists in this workspace and `archivedAt IS NULL` | 409 `invalid_subintent` |
 
 No status restriction — allowed on any conversation status, including `resolved`/`closed`, since
 this corrects reporting data rather than performing a workflow action.
 
 On success, in one transaction:
+
 1. `UPDATE conversation SET subintent_id = subintentId, classification_source = 'agent'`.
 2. `appendEvent({ type: 'conversation_reclassified', actorId: ctx.agentId, actorType: 'agent', payload: { from_subintent_id, to_subintent_id: subintentId, classification_source: 'agent' } })`.
 3. `appendChangeLog({ entityType: 'conversation', entityId: conversationId, actorId: ctx.agentId, changes: [{ field: 'subintent_id', before: from_subintent_id, after: subintentId }] })`.
@@ -101,7 +103,7 @@ already sit.
   list modeled directly on `TagPicker.tsx`, sourced from the existing `GET /agents` endpoint instead
   of `GET /agent/tags`. Trigger renders the current assignee's name (or "Unassigned"). Rendered only
   when `canBuildForms(session)` from `lib/agentSession.ts` is true — that helper's role set (`undefined
-  | team_lead | admin`) is exactly the Team Lead/Admin gate this feature needs, so it's reused as-is
+| team_lead | admin`) is exactly the Team Lead/Admin gate this feature needs, so it's reused as-is
   rather than adding a duplicate `canReassign` helper. Selecting an agent calls the new
   `reassignConversation` API function and invalidates `['conversation', id, 'detail']`,
   `['tickets']`, and `['inbox', 'mine']` — the same set `takeOver`/`claim` already invalidate.

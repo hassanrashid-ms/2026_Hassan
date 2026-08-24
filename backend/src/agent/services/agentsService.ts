@@ -1,13 +1,13 @@
-import { eq } from 'drizzle-orm'
-import { agent, workspaceMember } from '../../shared/db/schema/index.ts'
-import { withWorkspace } from '../../shared/db/withWorkspace.ts'
+import { eq } from 'drizzle-orm';
+import { agent, workspaceMember } from '../../shared/db/schema/index.ts';
+import { withWorkspace } from '../../shared/db/withWorkspace.ts';
 
 export type WorkspaceAgentSummary = {
-  id: string
-  display_name: string
-  email: string
-  role: string
-}
+  id: string;
+  display_name: string;
+  email: string;
+  role: string;
+};
 
 export async function listWorkspaceAgents(workspaceId: string): Promise<WorkspaceAgentSummary[]> {
   return withWorkspace(workspaceId, async (tx) => {
@@ -21,8 +21,8 @@ export async function listWorkspaceAgents(workspaceId: string): Promise<Workspac
       .from(workspaceMember)
       .innerJoin(agent, eq(agent.id, workspaceMember.agentId))
       .where(eq(workspaceMember.workspaceId, workspaceId))
-      .orderBy(agent.displayName)
+      .orderBy(agent.displayName);
 
-    return rows
-  })
+    return rows;
+  });
 }

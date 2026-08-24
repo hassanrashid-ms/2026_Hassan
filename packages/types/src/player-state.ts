@@ -14,7 +14,7 @@ export const DECLARED_FIELD_KEYS = [
   'spend_tier',
   'account_created_at',
   'last_session_at',
-] as const
+] as const;
 
 /**
  * The six the game's IPlayerStateProvider supplies. The rest come from the SDK's
@@ -29,14 +29,14 @@ export const PROVIDER_FIELD_KEYS = [
   'spend_tier',
   'account_created_at',
   'last_session_at',
-] as const
+] as const;
 
-export type DeclaredFieldType = 'string' | 'number' | 'boolean' | 'timestamp'
+export type DeclaredFieldType = 'string' | 'number' | 'boolean' | 'timestamp';
 
 export const DECLARED_FIELD_SEED: readonly {
-  key: (typeof DECLARED_FIELD_KEYS)[number]
-  label: string
-  type: DeclaredFieldType
+  key: (typeof DECLARED_FIELD_KEYS)[number];
+  label: string;
+  type: DeclaredFieldType;
 }[] = [
   { key: 'player_id', label: 'Player ID', type: 'string' },
   { key: 'client_version', label: 'Client version', type: 'string' },
@@ -49,4 +49,4 @@ export const DECLARED_FIELD_SEED: readonly {
   { key: 'spend_tier', label: 'Spend tier', type: 'string' },
   { key: 'account_created_at', label: 'Account created', type: 'timestamp' },
   { key: 'last_session_at', label: 'Last session', type: 'timestamp' },
-]
+];

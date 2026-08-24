@@ -1,19 +1,22 @@
-import * as React from 'react'
-import * as SheetPrimitive from '@radix-ui/react-dialog'
-import { XIcon } from 'lucide-react'
-import { cva, type VariantProps } from 'class-variance-authority'
-import { cn } from '../../lib/cn.ts'
+import * as React from 'react';
+import * as SheetPrimitive from '@radix-ui/react-dialog';
+import { XIcon } from 'lucide-react';
+import { cva, type VariantProps } from 'class-variance-authority';
+import { cn } from '../../lib/cn.ts';
 
 function Sheet(props: React.ComponentProps<typeof SheetPrimitive.Root>) {
-  return <SheetPrimitive.Root {...props} />
+  return <SheetPrimitive.Root {...props} />;
 }
 function SheetTrigger(props: React.ComponentProps<typeof SheetPrimitive.Trigger>) {
-  return <SheetPrimitive.Trigger {...props} />
+  return <SheetPrimitive.Trigger {...props} />;
 }
 function SheetClose(props: React.ComponentProps<typeof SheetPrimitive.Close>) {
-  return <SheetPrimitive.Close {...props} />
+  return <SheetPrimitive.Close {...props} />;
 }
-function SheetOverlay({ className, ...props }: React.ComponentProps<typeof SheetPrimitive.Overlay>) {
+function SheetOverlay({
+  className,
+  ...props
+}: React.ComponentProps<typeof SheetPrimitive.Overlay>) {
   return (
     <SheetPrimitive.Overlay
       className={cn(
@@ -22,7 +25,7 @@ function SheetOverlay({ className, ...props }: React.ComponentProps<typeof Sheet
       )}
       {...props}
     />
-  )
+  );
 }
 
 const sheetVariants = cva(
@@ -39,7 +42,7 @@ const sheetVariants = cva(
     },
     defaultVariants: { side: 'right' },
   },
-)
+);
 
 function SheetContent({
   className,
@@ -54,7 +57,7 @@ function SheetContent({
      * still read and click — needs no scrim. Defaults to `true`, so every
      * existing caller keeps today's behaviour.
      */
-    showOverlay?: boolean
+    showOverlay?: boolean;
   }) {
   return (
     <SheetPrimitive.Portal>
@@ -67,19 +70,31 @@ function SheetContent({
         </SheetPrimitive.Close>
       </SheetPrimitive.Content>
     </SheetPrimitive.Portal>
-  )
+  );
 }
 function SheetHeader({ className, ...props }: React.ComponentProps<'div'>) {
-  return <div className={cn('flex flex-col gap-1.5 p-4', className)} {...props} />
+  return <div className={cn('flex flex-col gap-1.5 p-4', className)} {...props} />;
 }
 function SheetFooter({ className, ...props }: React.ComponentProps<'div'>) {
-  return <div className={cn('mt-auto flex flex-col gap-2 p-4', className)} {...props} />
+  return <div className={cn('mt-auto flex flex-col gap-2 p-4', className)} {...props} />;
 }
 function SheetTitle({ className, ...props }: React.ComponentProps<typeof SheetPrimitive.Title>) {
-  return <SheetPrimitive.Title className={cn('font-semibold text-text', className)} {...props} />
+  return <SheetPrimitive.Title className={cn('font-semibold text-text', className)} {...props} />;
 }
-function SheetDescription({ className, ...props }: React.ComponentProps<typeof SheetPrimitive.Description>) {
-  return <SheetPrimitive.Description className={cn('text-sm text-muted', className)} {...props} />
+function SheetDescription({
+  className,
+  ...props
+}: React.ComponentProps<typeof SheetPrimitive.Description>) {
+  return <SheetPrimitive.Description className={cn('text-sm text-muted', className)} {...props} />;
 }
 
-export { Sheet, SheetTrigger, SheetClose, SheetContent, SheetHeader, SheetFooter, SheetTitle, SheetDescription }
+export {
+  Sheet,
+  SheetTrigger,
+  SheetClose,
+  SheetContent,
+  SheetHeader,
+  SheetFooter,
+  SheetTitle,
+  SheetDescription,
+};

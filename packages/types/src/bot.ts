@@ -1,12 +1,17 @@
-import { z } from 'zod'
+import { z } from 'zod';
 
 /**
  * NOT part of the frozen SDK contract — ships with the server, same as
  * articles.ts. Shared by the agent console and OpenAPI.
  */
 
-export const TOGGLEABLE_TOOL_NAMES = ['search_articles', 'classify', 'answer_from_article', 'confirm_resolution'] as const
-export type ToggleableToolName = (typeof TOGGLEABLE_TOOL_NAMES)[number]
+export const TOGGLEABLE_TOOL_NAMES = [
+  'search_articles',
+  'classify',
+  'answer_from_article',
+  'confirm_resolution',
+] as const;
+export type ToggleableToolName = (typeof TOGGLEABLE_TOOL_NAMES)[number];
 
 /**
  * `enforcement` is deliberately absent: it's never client-settable — the server
@@ -21,19 +26,24 @@ const RuleEntrySchema = z
     locked: z.boolean(),
     source: z.enum(['builtin', 'custom']),
   })
-  .strict()
-export type RuleEntryValue = z.infer<typeof RuleEntrySchema>
+  .strict();
+export type RuleEntryValue = z.infer<typeof RuleEntrySchema>;
 
 const ToolToggleSchema = z
   .object({
     tool: z.enum(TOGGLEABLE_TOOL_NAMES),
     enabled: z.boolean(),
   })
-  .strict()
-export type ToolToggleValue = z.infer<typeof ToolToggleSchema>
+  .strict();
+export type ToolToggleValue = z.infer<typeof ToolToggleSchema>;
 
-export const LIMIT_KEYS = ['max_bot_messages', 'max_tool_calls_per_turn', 'max_articles_per_turn', 'max_unhelped_replies'] as const
-export type LimitKey = (typeof LIMIT_KEYS)[number]
+export const LIMIT_KEYS = [
+  'max_bot_messages',
+  'max_tool_calls_per_turn',
+  'max_articles_per_turn',
+  'max_unhelped_replies',
+] as const;
+export type LimitKey = (typeof LIMIT_KEYS)[number];
 
 /**
  * Shape-only validation. Per-key min/max bounds live in `LIMIT_CATALOG`
@@ -46,8 +56,8 @@ const LimitToggleSchema = z
     key: z.enum(LIMIT_KEYS),
     value: z.number().int().positive(),
   })
-  .strict()
-export type LimitToggleValue = z.infer<typeof LimitToggleSchema>
+  .strict();
+export type LimitToggleValue = z.infer<typeof LimitToggleSchema>;
 
 /**
  * A partial save: an omitted key means "leave this field alone", and an explicit
@@ -76,9 +86,12 @@ export const SaveBotConfigBody = z
       body.rules !== undefined ||
       body.tools_config !== undefined ||
       body.limits_config !== undefined,
-    { message: 'At least one of is_provisioned, prompt, rules, tools_config or limits_config is required.' },
-  )
-export type SaveBotConfigBodyValue = z.infer<typeof SaveBotConfigBody>
+    {
+      message:
+        'At least one of is_provisioned, prompt, rules, tools_config or limits_config is required.',
+    },
+  );
+export type SaveBotConfigBodyValue = z.infer<typeof SaveBotConfigBody>;
 
 export const RollbackBotConfigBody = z
   .object({
@@ -86,8 +99,8 @@ export const RollbackBotConfigBody = z
     change_log_id: z.string().min(1),
     side: z.enum(['before', 'after']),
   })
-  .strict()
-export type RollbackBotConfigBodyValue = z.infer<typeof RollbackBotConfigBody>
+  .strict();
+export type RollbackBotConfigBodyValue = z.infer<typeof RollbackBotConfigBody>;
 
 /**
  * `limit` is coerced because Express query values are always strings. The 200 cap
@@ -97,10 +110,10 @@ export type RollbackBotConfigBodyValue = z.infer<typeof RollbackBotConfigBody>
 export const ChangeLogHistoryQuery = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
   cursor: z.string().min(1).optional(),
-})
-export type ChangeLogHistoryQueryValue = z.infer<typeof ChangeLogHistoryQuery>
+});
+export type ChangeLogHistoryQueryValue = z.infer<typeof ChangeLogHistoryQuery>;
 
-export type RuleEntryView = RuleEntryValue & { enforcement: 'code' | 'prompt' }
+export type RuleEntryView = RuleEntryValue & { enforcement: 'code' | 'prompt' };
 
 /**
  * `prompt`, `rules`, `tools_config` are always populated — every workspace has a
@@ -111,22 +124,22 @@ export type RuleEntryView = RuleEntryValue & { enforcement: 'code' | 'prompt' }
  * null-checks (there is no more null state to check).
  */
 export type BotConfigView = {
-  is_provisioned: boolean
-  prompt: string
-  rules: RuleEntryView[]
-  tools_config: ToolToggleValue[]
-  enabled_tools: string[]
-  limits_config: LimitToggleValue[]
-  resolved_limits: Record<LimitKey, number>
-  system_prompt: string
-  is_prompt_customized: boolean
-  is_rules_customized: boolean
-  is_tools_customized: boolean
-  is_limits_customized: boolean
-  updated_at: string | null
-}
+  is_provisioned: boolean;
+  prompt: string;
+  rules: RuleEntryView[];
+  tools_config: ToolToggleValue[];
+  enabled_tools: string[];
+  limits_config: LimitToggleValue[];
+  resolved_limits: Record<LimitKey, number>;
+  system_prompt: string;
+  is_prompt_customized: boolean;
+  is_rules_customized: boolean;
+  is_tools_customized: boolean;
+  is_limits_customized: boolean;
+  updated_at: string | null;
+};
 
-export type ChangeLogActorView = { id: string; display_name: string; email: string }
+export type ChangeLogActorView = { id: string; display_name: string; email: string };
 
 /**
  * `field` is the COLUMN name — 'is_provisioned' | 'prompt' | 'rules' |
@@ -141,16 +154,16 @@ export type ChangeLogActorView = { id: string; display_name: string; email: stri
  * hold it safely and a JS bigint cannot be serialised at all.
  */
 export type ChangeLogEntryView = {
-  id: string
-  field: string
-  before_value: unknown
-  after_value: unknown
-  actor: ChangeLogActorView
-  changed_at: string
-}
+  id: string;
+  field: string;
+  before_value: unknown;
+  after_value: unknown;
+  actor: ChangeLogActorView;
+  changed_at: string;
+};
 
 /** `next_cursor` null means this is the last page. */
 export type ChangeLogHistoryResponse = {
-  entries: ChangeLogEntryView[]
-  next_cursor: string | null
-}
+  entries: ChangeLogEntryView[];
+  next_cursor: string | null;
+};

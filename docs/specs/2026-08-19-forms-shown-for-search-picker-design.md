@@ -20,7 +20,7 @@ indication that a subintent might already belong to another form.
 - Replace the flat button grid with: a row of removable chips for the current selection, plus a
   `+` button that opens a dialog containing a search box and a list of intents grouped with their
   subintents nested underneath.
-- Enforce, in the picker itself, that a subintent already mapped to a *different* form cannot be
+- Enforce, in the picker itself, that a subintent already mapped to a _different_ form cannot be
   selected here, and that "select this whole intent" is unavailable when any of its subintents are
   taken that way.
 
@@ -42,12 +42,12 @@ New file: `frontend/src/surfaces/agent-console/pages/Forms/components/ShownForPi
 
 ```ts
 function ShownForPicker({
-  intents,          // IntentView[] — same data FormEditorSheet already fetches
-  selected,         // string[] — subintent ids, i.e. the `shownFor` state
-  onChange,         // (ids: string[]) => void
-  currentFormId,    // string | null — the form being edited (null = new form)
-  disabled,         // boolean — archived forms can't be edited
-}: ShownForPickerProps)
+  intents, // IntentView[] — same data FormEditorSheet already fetches
+  selected, // string[] — subintent ids, i.e. the `shownFor` state
+  onChange, // (ids: string[]) => void
+  currentFormId, // string | null — the form being edited (null = new form)
+  disabled, // boolean — archived forms can't be edited
+}: ShownForPickerProps);
 ```
 
 `FormEditorSheet.tsx:402-419` is replaced with:
@@ -66,28 +66,29 @@ function ShownForPicker({
 
 ```ts
 type SubintentRow = {
-  id: string
-  name: string
-  locked: boolean        // formId set to a *different* form
-}
+  id: string;
+  name: string;
+  locked: boolean; // formId set to a *different* form
+};
 type IntentGroup = {
-  id: string
-  name: string
-  subintents: SubintentRow[]   // already filtered by the current query
-  bulkLocked: boolean          // true if any subintent in this intent is locked
-}
+  id: string;
+  name: string;
+  subintents: SubintentRow[]; // already filtered by the current query
+  bulkLocked: boolean; // true if any subintent in this intent is locked
+};
 
 function buildGroupedSubintents(
   intents: IntentView[],
   query: string,
   currentFormId: string | null,
-): IntentGroup[]
+): IntentGroup[];
 ```
 
 Rules:
+
 - Archived subintents are dropped entirely (same as today's `nonArchivedSubintents`).
 - `locked = subintent.formId !== null && subintent.formId !== currentFormId`.
-- `bulkLocked = subintents.some(s => s.locked)` — computed over the intent's *full* subintent set,
+- `bulkLocked = subintents.some(s => s.locked)` — computed over the intent's _full_ subintent set,
   not just the filtered/matching ones, so bulk-select stays disabled even when a search query hides
   the locked row.
 - Query matching (case-insensitive substring):
@@ -138,7 +139,7 @@ Reuses `Dialog`/`DialogContent`/`DialogHeader`/`DialogFooter` already imported i
 ```
 
 - Intent row: checkbox + bold name, no indent. Tri-state: unchecked (no children selected), checked
-  (all *unlocked* children selected), indeterminate (some selected). `bulkLocked` intents render
+  (all _unlocked_ children selected), indeterminate (some selected). `bulkLocked` intents render
   the checkbox `disabled`.
   - Clicking toggles all unlocked children at once: if not all are currently selected, select all
     of them; otherwise clear all of them. Locked children are never touched by this action.

@@ -27,12 +27,14 @@
 ### Task 14: Frontend — API client functions + Switch UI primitive + nav wiring
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/agent-console/api/agentApi.ts`
 - Create: `frontend/src/surfaces/agent-console/components/ui/switch.tsx`
 - Modify: `frontend/src/surfaces/agent-console/components/AgentConsoleShell.tsx`
 - Modify: `frontend/package.json` (add `@radix-ui/react-switch`)
 
 **Interfaces:**
+
 - Produces: `fetchBotConfig(token)`, `saveBotConfig(token, patch)`, `fetchBotConfigHistory(token, opts?)`, `rollbackBotConfig(token, input)`; `Switch` component.
 
 - [ ] **Step 1: Install the Radix switch primitive**
@@ -43,9 +45,9 @@ Run: `pnpm --filter @support/web add @radix-ui/react-switch`
 
 ```tsx
 // frontend/src/surfaces/agent-console/components/ui/switch.tsx
-import * as React from 'react'
-import * as SwitchPrimitive from '@radix-ui/react-switch'
-import { cn } from '../../lib/cn.ts'
+import * as React from 'react';
+import * as SwitchPrimitive from '@radix-ui/react-switch';
+import { cn } from '../../lib/cn.ts';
 
 function Switch({ className, ...props }: React.ComponentProps<typeof SwitchPrimitive.Root>) {
   return (
@@ -65,39 +67,57 @@ function Switch({ className, ...props }: React.ComponentProps<typeof SwitchPrimi
         )}
       />
     </SwitchPrimitive.Root>
-  )
+  );
 }
 
-export { Switch }
+export { Switch };
 ```
 
 - [ ] **Step 3: Add API client functions** to `frontend/src/surfaces/agent-console/api/agentApi.ts`
 
 ```ts
-import type { BotConfigView, ChangeLogHistoryResponse, RollbackBotConfigBodyValue, SaveBotConfigBodyValue } from '@support/types'
+import type {
+  BotConfigView,
+  ChangeLogHistoryResponse,
+  RollbackBotConfigBodyValue,
+  SaveBotConfigBodyValue,
+} from '@support/types';
 
 export function fetchBotConfig(token: string): Promise<BotConfigView> {
-  return apiCall('/agent/bot-config', token)
+  return apiCall('/agent/bot-config', token);
 }
 
-export function saveBotConfig(token: string, patch: SaveBotConfigBodyValue): Promise<BotConfigView> {
-  return apiCall('/agent/bot-config', token, { method: 'POST', body: JSON.stringify(patch) })
+export function saveBotConfig(
+  token: string,
+  patch: SaveBotConfigBodyValue,
+): Promise<BotConfigView> {
+  return apiCall('/agent/bot-config', token, { method: 'POST', body: JSON.stringify(patch) });
 }
 
 export function fetchBotConfigHistory(
   token: string,
-  opts: { field?: 'prompt' | 'rules' | 'tools_config' | 'limits_config'; limit?: number; cursor?: string } = {},
+  opts: {
+    field?: 'prompt' | 'rules' | 'tools_config' | 'limits_config';
+    limit?: number;
+    cursor?: string;
+  } = {},
 ): Promise<ChangeLogHistoryResponse> {
-  const params = new URLSearchParams()
-  if (opts.field) params.set('field', opts.field)
-  if (opts.limit) params.set('limit', String(opts.limit))
-  if (opts.cursor) params.set('cursor', opts.cursor)
-  const query = params.toString()
-  return apiCall(`/agent/bot-config/history${query ? `?${query}` : ''}`, token)
+  const params = new URLSearchParams();
+  if (opts.field) params.set('field', opts.field);
+  if (opts.limit) params.set('limit', String(opts.limit));
+  if (opts.cursor) params.set('cursor', opts.cursor);
+  const query = params.toString();
+  return apiCall(`/agent/bot-config/history${query ? `?${query}` : ''}`, token);
 }
 
-export function rollbackBotConfig(token: string, input: RollbackBotConfigBodyValue): Promise<BotConfigView> {
-  return apiCall('/agent/bot-config/rollback', token, { method: 'POST', body: JSON.stringify(input) })
+export function rollbackBotConfig(
+  token: string,
+  input: RollbackBotConfigBodyValue,
+): Promise<BotConfigView> {
+  return apiCall('/agent/bot-config/rollback', token, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
 }
 ```
 
@@ -107,22 +127,27 @@ export function rollbackBotConfig(token: string, input: RollbackBotConfigBodyVal
 
 ```ts
 // frontend/src/surfaces/agent-console/components/AgentConsoleShell.tsx
-import { Inbox as InboxIcon, BookOpen, ClipboardList, LogOut, Settings, Tags } from 'lucide-react'
-import { canBuildForms, clearAgentSession, isAdmin, loadAgentSession } from '../lib/agentSession.ts'
+import { Inbox as InboxIcon, BookOpen, ClipboardList, LogOut, Settings, Tags } from 'lucide-react';
+import {
+  canBuildForms,
+  clearAgentSession,
+  isAdmin,
+  loadAgentSession,
+} from '../lib/agentSession.ts';
 
 // ... NAV_ITEMS unchanged ...
-const FORMS_NAV_ITEM = { to: '/forms', label: 'Forms', icon: ClipboardList }
+const FORMS_NAV_ITEM = { to: '/forms', label: 'Forms', icon: ClipboardList };
 // Admin-only in the permission matrix ("Edit bot prompt or rules" is Admin).
 // Hiding the link here is UX, not the enforcement point — the API still
 // requires admin on POST/rollback.
-const BOT_CONFIG_NAV_ITEM = { to: '/bot-config', label: 'Bot Config', icon: Settings }
+const BOT_CONFIG_NAV_ITEM = { to: '/bot-config', label: 'Bot Config', icon: Settings };
 
 export function AgentConsoleShell() {
   // ...
   const navItems = [
     ...(canBuildForms(session) ? [...NAV_ITEMS, FORMS_NAV_ITEM] : NAV_ITEMS),
     ...(isAdmin(session) ? [BOT_CONFIG_NAV_ITEM] : []),
-  ]
+  ];
   // ... rest unchanged ...
 }
 ```
@@ -145,11 +170,13 @@ git commit -m "feat(bot-config): frontend API client, Switch primitive, nav entr
 ### Task 15: Frontend — `BotConfig` shell + route registration
 
 **Files:**
+
 - Create: `frontend/src/surfaces/agent-console/pages/BotConfig/BotConfig.tsx`
 - Modify: `frontend/src/routes/AppRoutes.tsx`
 - Test: `frontend/src/surfaces/agent-console/pages/BotConfig/BotConfig.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `fetchBotConfig` from Task 14.
 - Produces: `BotConfig` page component (default-exports nothing; named export `BotConfig`, matching `Taxonomy`'s convention).
 
@@ -157,28 +184,32 @@ git commit -m "feat(bot-config): frontend API client, Switch primitive, nav entr
 
 ```tsx
 // frontend/src/surfaces/agent-console/pages/BotConfig/BotConfig.test.tsx
-import { render, screen, waitFor } from '@testing-library/react'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { BotConfig } from './BotConfig.tsx'
-import * as agentApi from '../../api/agentApi.ts'
-import * as agentSession from '../../lib/agentSession.ts'
+import { render, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { BotConfig } from './BotConfig.tsx';
+import * as agentApi from '../../api/agentApi.ts';
+import * as agentSession from '../../lib/agentSession.ts';
 
 function renderWithQuery() {
-  const queryClient = new QueryClient()
+  const queryClient = new QueryClient();
   return render(
     <QueryClientProvider client={queryClient}>
       <BotConfig />
     </QueryClientProvider>,
-  )
+  );
 }
 
 describe('BotConfig page', () => {
   beforeEach(() => {
     vi.spyOn(agentSession, 'loadAgentSession').mockReturnValue({
-      token: 't', agentId: 'a', displayName: 'Admin', workspaceSlug: 'ws', role: 'admin',
-    })
-  })
+      token: 't',
+      agentId: 'a',
+      displayName: 'Admin',
+      workspaceSlug: 'ws',
+      role: 'admin',
+    });
+  });
 
   it('renders three tabs: Prompt, Rules, Tools', async () => {
     vi.spyOn(agentApi, 'fetchBotConfig').mockResolvedValue({
@@ -192,15 +223,15 @@ describe('BotConfig page', () => {
       is_rules_customized: false,
       is_tools_customized: false,
       updated_at: null,
-    })
+    });
 
-    renderWithQuery()
+    renderWithQuery();
 
-    await waitFor(() => expect(screen.getByRole('tab', { name: 'Prompt' })).toBeInTheDocument())
-    expect(screen.getByRole('tab', { name: 'Rules' })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: 'Tools' })).toBeInTheDocument()
-  })
-})
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'Prompt' })).toBeInTheDocument());
+    expect(screen.getByRole('tab', { name: 'Rules' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Tools' })).toBeInTheDocument();
+  });
+});
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -212,24 +243,24 @@ Expected: FAIL — module not found.
 
 ```tsx
 // frontend/src/surfaces/agent-console/pages/BotConfig/BotConfig.tsx
-import { useQuery } from '@tanstack/react-query'
-import { fetchBotConfig } from '../../api/agentApi.ts'
-import { loadAgentSession } from '../../lib/agentSession.ts'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs.tsx'
-import { PromptTab } from './components/PromptTab.tsx'
-import { RulesTab } from './components/RulesTab.tsx'
-import { ToolsTab } from './components/ToolsTab.tsx'
+import { useQuery } from '@tanstack/react-query';
+import { fetchBotConfig } from '../../api/agentApi.ts';
+import { loadAgentSession } from '../../lib/agentSession.ts';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs.tsx';
+import { PromptTab } from './components/PromptTab.tsx';
+import { RulesTab } from './components/RulesTab.tsx';
+import { ToolsTab } from './components/ToolsTab.tsx';
 
 export function BotConfig() {
-  const session = loadAgentSession()
+  const session = loadAgentSession();
 
   const configQuery = useQuery({
     queryKey: ['bot-config'],
     queryFn: () => fetchBotConfig(session!.token),
     enabled: session !== null,
-  })
+  });
 
-  if (!session) return null
+  if (!session) return null;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -253,7 +284,7 @@ export function BotConfig() {
         </TabsContent>
       </Tabs>
     </div>
-  )
+  );
 }
 ```
 
@@ -288,10 +319,12 @@ git commit -m "feat(bot-config): BotConfig page shell with three tabs, route reg
 ### Task 16: Frontend — `PromptTab`
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/agent-console/pages/BotConfig/components/PromptTab.tsx` (replace Task 15's stub)
 - Test: `frontend/src/surfaces/agent-console/pages/BotConfig/components/PromptTab.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `BotConfigView` from `@support/types`; `saveBotConfig`, `fetchBotConfigHistory`, `rollbackBotConfig` from Task 14.
 - Produces: `PromptTab({ token, config }: { token: string; config: BotConfigView | undefined })`.
 
@@ -299,11 +332,11 @@ git commit -m "feat(bot-config): BotConfig page shell with three tabs, route reg
 
 ```tsx
 // frontend/src/surfaces/agent-console/pages/BotConfig/components/PromptTab.test.tsx
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { describe, expect, it, vi } from 'vitest'
-import { PromptTab } from './PromptTab.tsx'
-import * as agentApi from '../../../api/agentApi.ts'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { describe, expect, it, vi } from 'vitest';
+import { PromptTab } from './PromptTab.tsx';
+import * as agentApi from '../../../api/agentApi.ts';
 
 const BASE_CONFIG = {
   is_provisioned: true,
@@ -316,46 +349,48 @@ const BASE_CONFIG = {
   is_rules_customized: false,
   is_tools_customized: false,
   updated_at: null,
-}
+};
 
 function renderTab(config = BASE_CONFIG) {
-  const queryClient = new QueryClient()
+  const queryClient = new QueryClient();
   return render(
     <QueryClientProvider client={queryClient}>
       <PromptTab token="t" config={config} />
     </QueryClientProvider>,
-  )
+  );
 }
 
 describe('PromptTab', () => {
   it('saves an edited prompt', async () => {
-    const saveSpy = vi.spyOn(agentApi, 'saveBotConfig').mockResolvedValue({ ...BASE_CONFIG, prompt: 'Edited', is_prompt_customized: true })
-    renderTab()
+    const saveSpy = vi
+      .spyOn(agentApi, 'saveBotConfig')
+      .mockResolvedValue({ ...BASE_CONFIG, prompt: 'Edited', is_prompt_customized: true });
+    renderTab();
 
-    const textarea = screen.getByLabelText('Prompt')
-    fireEvent.change(textarea, { target: { value: 'Edited' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    const textarea = screen.getByLabelText('Prompt');
+    fireEvent.change(textarea, { target: { value: 'Edited' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
-    await waitFor(() => expect(saveSpy).toHaveBeenCalledWith('t', { prompt: 'Edited' }))
-  })
+    await waitFor(() => expect(saveSpy).toHaveBeenCalledWith('t', { prompt: 'Edited' }));
+  });
 
   it('shows "Reset to default" only when customised', () => {
-    renderTab({ ...BASE_CONFIG, is_prompt_customized: false })
-    expect(screen.queryByRole('button', { name: 'Reset to default' })).not.toBeInTheDocument()
+    renderTab({ ...BASE_CONFIG, is_prompt_customized: false });
+    expect(screen.queryByRole('button', { name: 'Reset to default' })).not.toBeInTheDocument();
 
-    renderTab({ ...BASE_CONFIG, is_prompt_customized: true })
-    expect(screen.getByRole('button', { name: 'Reset to default' })).toBeInTheDocument()
-  })
+    renderTab({ ...BASE_CONFIG, is_prompt_customized: true });
+    expect(screen.getByRole('button', { name: 'Reset to default' })).toBeInTheDocument();
+  });
 
   it('resets by saving prompt: null', async () => {
-    const saveSpy = vi.spyOn(agentApi, 'saveBotConfig').mockResolvedValue(BASE_CONFIG)
-    renderTab({ ...BASE_CONFIG, is_prompt_customized: true })
+    const saveSpy = vi.spyOn(agentApi, 'saveBotConfig').mockResolvedValue(BASE_CONFIG);
+    renderTab({ ...BASE_CONFIG, is_prompt_customized: true });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Reset to default' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Reset to default' }));
 
-    await waitFor(() => expect(saveSpy).toHaveBeenCalledWith('t', { prompt: null }))
-  })
-})
+    await waitFor(() => expect(saveSpy).toHaveBeenCalledWith('t', { prompt: null }));
+  });
+});
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -367,30 +402,30 @@ Expected: FAIL — stub renders `null`.
 
 ```tsx
 // frontend/src/surfaces/agent-console/pages/BotConfig/components/PromptTab.tsx
-import { useEffect, useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import type { BotConfigView } from '@support/types'
-import { saveBotConfig } from '../../../api/agentApi.ts'
-import { Button } from '../../../components/ui/button.tsx'
-import { Textarea } from '../../../components/ui/textarea.tsx'
-import { HistoryPanel } from './HistoryPanel.tsx'
+import { useEffect, useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import type { BotConfigView } from '@support/types';
+import { saveBotConfig } from '../../../api/agentApi.ts';
+import { Button } from '../../../components/ui/button.tsx';
+import { Textarea } from '../../../components/ui/textarea.tsx';
+import { HistoryPanel } from './HistoryPanel.tsx';
 
 export function PromptTab({ token, config }: { token: string; config: BotConfigView | undefined }) {
-  const queryClient = useQueryClient()
-  const [prompt, setPrompt] = useState(config?.prompt ?? '')
+  const queryClient = useQueryClient();
+  const [prompt, setPrompt] = useState(config?.prompt ?? '');
 
   useEffect(() => {
-    if (config) setPrompt(config.prompt)
-  }, [config?.prompt])
+    if (config) setPrompt(config.prompt);
+  }, [config?.prompt]);
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['bot-config'] })
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['bot-config'] });
 
   const save = useMutation({
     mutationFn: (value: string | null) => saveBotConfig(token, { prompt: value }),
     onSuccess: () => void invalidate(),
-  })
+  });
 
-  if (!config) return null
+  if (!config) return null;
 
   return (
     <div className="flex h-full min-h-0 gap-4">
@@ -406,11 +441,22 @@ export function PromptTab({ token, config }: { token: string; config: BotConfigV
           className="min-h-64 flex-1 font-mono text-xs"
         />
         <div className="flex items-center gap-2">
-          <Button type="button" size="sm" onClick={() => save.mutate(prompt)} disabled={save.isPending || !prompt.trim()}>
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => save.mutate(prompt)}
+            disabled={save.isPending || !prompt.trim()}
+          >
             Save
           </Button>
           {config.is_prompt_customized && (
-            <Button type="button" size="sm" variant="outline" onClick={() => save.mutate(null)} disabled={save.isPending}>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => save.mutate(null)}
+              disabled={save.isPending}
+            >
               Reset to default
             </Button>
           )}
@@ -419,7 +465,7 @@ export function PromptTab({ token, config }: { token: string; config: BotConfigV
       </div>
       <HistoryPanel token={token} field="prompt" onRestored={invalidate} />
     </div>
-  )
+  );
 }
 ```
 
@@ -444,10 +490,12 @@ git commit -m "feat(bot-config): PromptTab with save and reset-to-default"
 ### Task 17: Frontend — `RulesTab`
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/agent-console/pages/BotConfig/components/RulesTab.tsx` (replace Task 15's stub)
 - Test: `frontend/src/surfaces/agent-console/pages/BotConfig/components/RulesTab.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `saveBotConfig`; `Switch` from Task 14.
 - Produces: `RulesTab({ token, config }: { token: string; config: BotConfigView | undefined })`.
 
@@ -455,18 +503,32 @@ git commit -m "feat(bot-config): PromptTab with save and reset-to-default"
 
 ```tsx
 // frontend/src/surfaces/agent-console/pages/BotConfig/components/RulesTab.test.tsx
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { describe, expect, it, vi } from 'vitest'
-import { RulesTab } from './RulesTab.tsx'
-import * as agentApi from '../../../api/agentApi.ts'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { describe, expect, it, vi } from 'vitest';
+import { RulesTab } from './RulesTab.tsx';
+import * as agentApi from '../../../api/agentApi.ts';
 
 const CONFIG = {
   is_provisioned: true,
   prompt: 'p',
   rules: [
-    { key: 'no_credentials', text: 'Never ask for a password.', enabled: true, locked: true, source: 'builtin', enforcement: 'prompt' },
-    { key: 'no_regreet', text: 'Do not greet twice.', enabled: true, locked: false, source: 'builtin', enforcement: 'prompt' },
+    {
+      key: 'no_credentials',
+      text: 'Never ask for a password.',
+      enabled: true,
+      locked: true,
+      source: 'builtin',
+      enforcement: 'prompt',
+    },
+    {
+      key: 'no_regreet',
+      text: 'Do not greet twice.',
+      enabled: true,
+      locked: false,
+      source: 'builtin',
+      enforcement: 'prompt',
+    },
   ],
   tools_config: [],
   enabled_tools: [],
@@ -475,53 +537,54 @@ const CONFIG = {
   is_rules_customized: false,
   is_tools_customized: false,
   updated_at: null,
-}
+};
 
 function renderTab() {
-  const queryClient = new QueryClient()
+  const queryClient = new QueryClient();
   return render(
     <QueryClientProvider client={queryClient}>
       <RulesTab token="t" config={CONFIG} />
     </QueryClientProvider>,
-  )
+  );
 }
 
 describe('RulesTab', () => {
   it('renders a disabled switch for a locked rule', () => {
-    renderTab()
-    const switches = screen.getAllByRole('switch')
-    const lockedSwitch = switches[0]
-    expect(lockedSwitch).toBeDisabled()
-  })
+    renderTab();
+    const switches = screen.getAllByRole('switch');
+    const lockedSwitch = switches[0];
+    expect(lockedSwitch).toBeDisabled();
+  });
 
   it('toggling an unlocked rule saves the full updated rules array', async () => {
-    const saveSpy = vi.spyOn(agentApi, 'saveBotConfig').mockResolvedValue(CONFIG)
-    renderTab()
+    const saveSpy = vi.spyOn(agentApi, 'saveBotConfig').mockResolvedValue(CONFIG);
+    renderTab();
 
-    fireEvent.click(screen.getAllByRole('switch')[1]!)
+    fireEvent.click(screen.getAllByRole('switch')[1]!);
 
     await waitFor(() =>
       expect(saveSpy).toHaveBeenCalledWith('t', {
-        rules: [
-          CONFIG.rules[0],
-          { ...CONFIG.rules[1], enabled: false },
-        ].map(({ enforcement, ...rest }) => rest),
+        rules: [CONFIG.rules[0], { ...CONFIG.rules[1], enabled: false }].map(
+          ({ enforcement, ...rest }) => rest,
+        ),
       }),
-    )
-  })
+    );
+  });
 
   it('adds a custom rule via the free-text input', async () => {
-    const saveSpy = vi.spyOn(agentApi, 'saveBotConfig').mockResolvedValue(CONFIG)
-    renderTab()
+    const saveSpy = vi.spyOn(agentApi, 'saveBotConfig').mockResolvedValue(CONFIG);
+    renderTab();
 
-    fireEvent.change(screen.getByPlaceholderText('Add a custom rule…'), { target: { value: 'No emoji.' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Add' }))
+    fireEvent.change(screen.getByPlaceholderText('Add a custom rule…'), {
+      target: { value: 'No emoji.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
 
-    await waitFor(() => expect(saveSpy).toHaveBeenCalled())
-    const call = saveSpy.mock.calls[0]![1] as { rules: { text: string; source: string }[] }
-    expect(call.rules.at(-1)).toMatchObject({ text: 'No emoji.', source: 'custom', enabled: true })
-  })
-})
+    await waitFor(() => expect(saveSpy).toHaveBeenCalled());
+    const call = saveSpy.mock.calls[0]![1] as { rules: { text: string; source: string }[] };
+    expect(call.rules.at(-1)).toMatchObject({ text: 'No emoji.', source: 'custom', enabled: true });
+  });
+});
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -533,52 +596,58 @@ Expected: FAIL — stub renders `null`.
 
 ```tsx
 // frontend/src/surfaces/agent-console/pages/BotConfig/components/RulesTab.tsx
-import { useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import type { BotConfigView, RuleEntryView } from '@support/types'
-import { saveBotConfig } from '../../../api/agentApi.ts'
-import { Badge } from '../../../components/ui/badge.tsx'
-import { Button } from '../../../components/ui/button.tsx'
-import { Input } from '../../../components/ui/input.tsx'
-import { Switch } from '../../../components/ui/switch.tsx'
-import { HistoryPanel } from './HistoryPanel.tsx'
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import type { BotConfigView, RuleEntryView } from '@support/types';
+import { saveBotConfig } from '../../../api/agentApi.ts';
+import { Badge } from '../../../components/ui/badge.tsx';
+import { Button } from '../../../components/ui/button.tsx';
+import { Input } from '../../../components/ui/input.tsx';
+import { Switch } from '../../../components/ui/switch.tsx';
+import { HistoryPanel } from './HistoryPanel.tsx';
 
 function stripView(rule: RuleEntryView) {
-  const { enforcement, ...rest } = rule
-  return rest
+  const { enforcement, ...rest } = rule;
+  return rest;
 }
 
 export function RulesTab({ token, config }: { token: string; config: BotConfigView | undefined }) {
-  const queryClient = useQueryClient()
-  const [newRuleText, setNewRuleText] = useState('')
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['bot-config'] })
+  const queryClient = useQueryClient();
+  const [newRuleText, setNewRuleText] = useState('');
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['bot-config'] });
 
   const save = useMutation({
     mutationFn: (rules: ReturnType<typeof stripView>[]) => saveBotConfig(token, { rules }),
     onSuccess: () => {
-      setNewRuleText('')
-      void invalidate()
+      setNewRuleText('');
+      void invalidate();
     },
-  })
+  });
 
-  if (!config) return null
+  if (!config) return null;
 
   const toggle = (key: string) => {
-    const updated = config.rules.map((r) => (r.key === key ? { ...r, enabled: !r.enabled } : r))
-    save.mutate(updated.map(stripView))
-  }
+    const updated = config.rules.map((r) => (r.key === key ? { ...r, enabled: !r.enabled } : r));
+    save.mutate(updated.map(stripView));
+  };
 
   const addCustom = () => {
-    if (!newRuleText.trim()) return
+    if (!newRuleText.trim()) return;
     const updated = [
       ...config.rules,
-      { key: `custom-${Date.now()}`, text: newRuleText.trim(), enabled: true, locked: false, source: 'custom' as const },
-    ]
-    save.mutate(updated.map(stripView))
-  }
+      {
+        key: `custom-${Date.now()}`,
+        text: newRuleText.trim(),
+        enabled: true,
+        locked: false,
+        source: 'custom' as const,
+      },
+    ];
+    save.mutate(updated.map(stripView));
+  };
 
-  const activeCount = config.rules.filter((r) => r.enabled).length
-  const lockedCount = config.rules.filter((r) => r.locked).length
+  const activeCount = config.rules.filter((r) => r.enabled).length;
+  const lockedCount = config.rules.filter((r) => r.locked).length;
 
   return (
     <div className="flex h-full min-h-0 gap-4">
@@ -588,13 +657,22 @@ export function RulesTab({ token, config }: { token: string; config: BotConfigVi
         </p>
         <ul className="flex flex-col gap-2">
           {config.rules.map((rule) => (
-            <li key={rule.key} className="flex items-start gap-3 rounded-md border border-slate-200 p-2">
-              <Switch checked={rule.enabled} disabled={rule.locked || save.isPending} onCheckedChange={() => toggle(rule.key)} />
+            <li
+              key={rule.key}
+              className="flex items-start gap-3 rounded-md border border-slate-200 p-2"
+            >
+              <Switch
+                checked={rule.enabled}
+                disabled={rule.locked || save.isPending}
+                onCheckedChange={() => toggle(rule.key)}
+              />
               <div className="flex flex-1 flex-col gap-1">
                 <p className="text-xs">{rule.text}</p>
                 <div className="flex items-center gap-1">
                   {rule.locked && <Badge variant="secondary">Locked</Badge>}
-                  <Badge variant="outline">{rule.enforcement === 'code' ? 'Enforced in code' : 'Prompt only'}</Badge>
+                  <Badge variant="outline">
+                    {rule.enforcement === 'code' ? 'Enforced in code' : 'Prompt only'}
+                  </Badge>
                   {rule.source === 'custom' && <Badge variant="outline">Custom</Badge>}
                 </div>
               </div>
@@ -608,7 +686,12 @@ export function RulesTab({ token, config }: { token: string; config: BotConfigVi
             onChange={(e) => setNewRuleText(e.target.value)}
             className="h-8 flex-1"
           />
-          <Button type="button" size="sm" onClick={addCustom} disabled={save.isPending || !newRuleText.trim()}>
+          <Button
+            type="button"
+            size="sm"
+            onClick={addCustom}
+            disabled={save.isPending || !newRuleText.trim()}
+          >
             Add
           </Button>
         </div>
@@ -616,7 +699,7 @@ export function RulesTab({ token, config }: { token: string; config: BotConfigVi
       </div>
       <HistoryPanel token={token} field="rules" onRestored={invalidate} />
     </div>
-  )
+  );
 }
 ```
 
@@ -638,10 +721,12 @@ git commit -m "feat(bot-config): RulesTab with toggles, enforcement badges, cust
 ### Task 18: Frontend — `ToolsTab`
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/agent-console/pages/BotConfig/components/ToolsTab.tsx` (replace Task 15's stub)
 - Test: `frontend/src/surfaces/agent-console/pages/BotConfig/components/ToolsTab.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `saveBotConfig`, `Switch`.
 - Produces: `ToolsTab({ token, config }: { token: string; config: BotConfigView | undefined })`.
 
@@ -649,11 +734,11 @@ git commit -m "feat(bot-config): RulesTab with toggles, enforcement badges, cust
 
 ```tsx
 // frontend/src/surfaces/agent-console/pages/BotConfig/components/ToolsTab.test.tsx
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { describe, expect, it, vi } from 'vitest'
-import { ToolsTab } from './ToolsTab.tsx'
-import * as agentApi from '../../../api/agentApi.ts'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { describe, expect, it, vi } from 'vitest';
+import { ToolsTab } from './ToolsTab.tsx';
+import * as agentApi from '../../../api/agentApi.ts';
 
 const CONFIG = {
   is_provisioned: true,
@@ -670,55 +755,69 @@ const CONFIG = {
     { key: 'max_articles_per_turn', value: 3 },
     { key: 'max_unhelped_replies', value: 3 },
   ],
-  resolved_limits: { max_bot_messages: 8, max_tool_calls_per_turn: 6, max_articles_per_turn: 3, max_unhelped_replies: 3 },
+  resolved_limits: {
+    max_bot_messages: 8,
+    max_tool_calls_per_turn: 6,
+    max_articles_per_turn: 3,
+    max_unhelped_replies: 3,
+  },
   system_prompt: 'p',
   is_prompt_customized: false,
   is_rules_customized: false,
   is_tools_customized: false,
   is_limits_customized: false,
   updated_at: null,
-}
+};
 
 function renderTab() {
-  const queryClient = new QueryClient()
+  const queryClient = new QueryClient();
   return render(
     <QueryClientProvider client={queryClient}>
       <ToolsTab token="t" config={CONFIG} />
     </QueryClientProvider>,
-  )
+  );
 }
 
 describe('ToolsTab', () => {
   it('shows a static "always on" row for handoff, with no switch', () => {
-    renderTab()
-    expect(screen.getByText('handoff')).toBeInTheDocument()
-    expect(screen.getByText('Always on')).toBeInTheDocument()
-  })
+    renderTab();
+    expect(screen.getByText('handoff')).toBeInTheDocument();
+    expect(screen.getByText('Always on')).toBeInTheDocument();
+  });
 
   it('shows the consequence copy inline when a toggle is off', () => {
-    const off = { ...CONFIG, tools_config: [{ tool: 'search_articles', enabled: false }, { tool: 'classify', enabled: true }] }
-    const queryClient = new QueryClient()
+    const off = {
+      ...CONFIG,
+      tools_config: [
+        { tool: 'search_articles', enabled: false },
+        { tool: 'classify', enabled: true },
+      ],
+    };
+    const queryClient = new QueryClient();
     render(
       <QueryClientProvider client={queryClient}>
         <ToolsTab token="t" config={off} />
       </QueryClientProvider>,
-    )
-    expect(screen.getByText(/Bot can never look anything up/)).toBeInTheDocument()
-  })
+    );
+    expect(screen.getByText(/Bot can never look anything up/)).toBeInTheDocument();
+  });
 
   it('toggling a tool saves the updated tools_config array', async () => {
-    const saveSpy = vi.spyOn(agentApi, 'saveBotConfig').mockResolvedValue(CONFIG)
-    renderTab()
+    const saveSpy = vi.spyOn(agentApi, 'saveBotConfig').mockResolvedValue(CONFIG);
+    renderTab();
 
-    fireEvent.click(screen.getAllByRole('switch')[0]!)
+    fireEvent.click(screen.getAllByRole('switch')[0]!);
 
     await waitFor(() =>
       expect(saveSpy).toHaveBeenCalledWith('t', {
-        tools_config: [{ tool: 'search_articles', enabled: false }, { tool: 'classify', enabled: true }],
+        tools_config: [
+          { tool: 'search_articles', enabled: false },
+          { tool: 'classify', enabled: true },
+        ],
       }),
-    )
-  })
-})
+    );
+  });
+});
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -730,37 +829,42 @@ Expected: FAIL — stub renders `null`.
 
 ```tsx
 // frontend/src/surfaces/agent-console/pages/BotConfig/components/ToolsTab.tsx
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import type { BotConfigView } from '@support/types'
-import { saveBotConfig } from '../../../api/agentApi.ts'
-import { Badge } from '../../../components/ui/badge.tsx'
-import { Switch } from '../../../components/ui/switch.tsx'
-import { HistoryPanel } from './HistoryPanel.tsx'
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import type { BotConfigView } from '@support/types';
+import { saveBotConfig } from '../../../api/agentApi.ts';
+import { Badge } from '../../../components/ui/badge.tsx';
+import { Switch } from '../../../components/ui/switch.tsx';
+import { HistoryPanel } from './HistoryPanel.tsx';
 
 // Mirrors backend/src/domain/bot/tools.ts TOOL_CATALOG — kept in sync by hand;
 // this is display copy only, not enforcement (the API is the enforcement point).
 const CONSEQUENCE_COPY: Record<string, string> = {
   search_articles: 'Bot can never look anything up; every turn ends in classify-only or handoff.',
   classify: 'Conversations stay unclassified from the bot; agents classify manually.',
-  answer_from_article: 'Bot can search/classify but never answers itself — always hands off after searching.',
-  confirm_resolution: 'Article answers are never confirmed by the player; bot_active exits only via handoff or the turn cap.',
-}
+  answer_from_article:
+    'Bot can search/classify but never answers itself — always hands off after searching.',
+  confirm_resolution:
+    'Article answers are never confirmed by the player; bot_active exits only via handoff or the turn cap.',
+};
 
 export function ToolsTab({ token, config }: { token: string; config: BotConfigView | undefined }) {
-  const queryClient = useQueryClient()
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['bot-config'] })
+  const queryClient = useQueryClient();
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['bot-config'] });
 
   const save = useMutation({
-    mutationFn: (toolsConfig: { tool: string; enabled: boolean }[]) => saveBotConfig(token, { tools_config: toolsConfig }),
+    mutationFn: (toolsConfig: { tool: string; enabled: boolean }[]) =>
+      saveBotConfig(token, { tools_config: toolsConfig }),
     onSuccess: () => void invalidate(),
-  })
+  });
 
-  if (!config) return null
+  if (!config) return null;
 
   const toggle = (tool: string) => {
-    const updated = config.tools_config.map((t) => (t.tool === tool ? { ...t, enabled: !t.enabled } : t))
-    save.mutate(updated)
-  }
+    const updated = config.tools_config.map((t) =>
+      t.tool === tool ? { ...t, enabled: !t.enabled } : t,
+    );
+    save.mutate(updated);
+  };
 
   return (
     <div className="flex h-full min-h-0 gap-4">
@@ -769,7 +873,11 @@ export function ToolsTab({ token, config }: { token: string; config: BotConfigVi
           {config.tools_config.map((t) => (
             <li key={t.tool} className="flex flex-col gap-1 rounded-md border border-slate-200 p-2">
               <div className="flex items-center gap-3">
-                <Switch checked={t.enabled} disabled={save.isPending} onCheckedChange={() => toggle(t.tool)} />
+                <Switch
+                  checked={t.enabled}
+                  disabled={save.isPending}
+                  onCheckedChange={() => toggle(t.tool)}
+                />
                 <span className="text-xs font-medium">{t.tool}</span>
               </div>
               {!t.enabled && <p className="pl-11 text-xs text-muted">{CONSEQUENCE_COPY[t.tool]}</p>}
@@ -784,7 +892,7 @@ export function ToolsTab({ token, config }: { token: string; config: BotConfigVi
       </div>
       <HistoryPanel token={token} field="tools_config" onRestored={invalidate} />
     </div>
-  )
+  );
 }
 ```
 
@@ -811,18 +919,18 @@ New test cases:
 
 ```tsx
 it('renders a number input per limit, seeded from resolved_limits', () => {
-  renderTab()
-  expect(screen.getByLabelText('Max bot messages per conversation')).toHaveValue(8)
-  expect(screen.getByLabelText('Max article searches per turn')).toHaveValue(3)
-})
+  renderTab();
+  expect(screen.getByLabelText('Max bot messages per conversation')).toHaveValue(8);
+  expect(screen.getByLabelText('Max article searches per turn')).toHaveValue(3);
+});
 
 it('saves a changed limit on blur, sending the full limits_config array', async () => {
-  const saveSpy = vi.spyOn(agentApi, 'saveBotConfig').mockResolvedValue(CONFIG)
-  renderTab()
+  const saveSpy = vi.spyOn(agentApi, 'saveBotConfig').mockResolvedValue(CONFIG);
+  renderTab();
 
-  const input = screen.getByLabelText('Max unhelped replies before handoff')
-  fireEvent.change(input, { target: { value: '5' } })
-  fireEvent.blur(input)
+  const input = screen.getByLabelText('Max unhelped replies before handoff');
+  fireEvent.change(input, { target: { value: '5' } });
+  fireEvent.blur(input);
 
   await waitFor(() =>
     expect(saveSpy).toHaveBeenCalledWith('t', {
@@ -833,19 +941,21 @@ it('saves a changed limit on blur, sending the full limits_config array', async 
         { key: 'max_unhelped_replies', value: 5 },
       ],
     }),
-  )
-})
+  );
+});
 
 it('shows the server error message when a save is rejected as out of bounds', async () => {
-  vi.spyOn(agentApi, 'saveBotConfig').mockRejectedValue(new Error('"max_bot_messages" must be between 3 and 20.'))
-  renderTab()
+  vi.spyOn(agentApi, 'saveBotConfig').mockRejectedValue(
+    new Error('"max_bot_messages" must be between 3 and 20.'),
+  );
+  renderTab();
 
-  const input = screen.getByLabelText('Max bot messages per conversation')
-  fireEvent.change(input, { target: { value: '999' } })
-  fireEvent.blur(input)
+  const input = screen.getByLabelText('Max bot messages per conversation');
+  fireEvent.change(input, { target: { value: '999' } });
+  fireEvent.blur(input);
 
-  await waitFor(() => expect(screen.getByText(/must be between 3 and 20/)).toBeInTheDocument())
-})
+  await waitFor(() => expect(screen.getByText(/must be between 3 and 20/)).toBeInTheDocument());
+});
 ```
 
 Implementation addition to `ToolsTab.tsx`:
@@ -856,18 +966,19 @@ const LIMIT_LABELS: Record<string, string> = {
   max_tool_calls_per_turn: 'Max tool calls per turn',
   max_articles_per_turn: 'Max article searches per turn',
   max_unhelped_replies: 'Max unhelped replies before handoff',
-}
+};
 
 // Inside ToolsTab, alongside the existing `save` mutation:
 const saveLimits = useMutation({
-  mutationFn: (limitsConfig: { key: string; value: number }[]) => saveBotConfig(token, { limits_config: limitsConfig }),
+  mutationFn: (limitsConfig: { key: string; value: number }[]) =>
+    saveBotConfig(token, { limits_config: limitsConfig }),
   onSuccess: () => void invalidate(),
-})
+});
 
 const updateLimit = (key: string, value: number) => {
-  const updated = config.limits_config.map((l) => (l.key === key ? { ...l, value } : l))
-  saveLimits.mutate(updated)
-}
+  const updated = config.limits_config.map((l) => (l.key === key ? { ...l, value } : l));
+  saveLimits.mutate(updated);
+};
 
 // Rendered inside the tab, below the tools <ul>:
 <div className="flex flex-col gap-2 rounded-md border border-slate-200 p-2">
@@ -886,7 +997,7 @@ const updateLimit = (key: string, value: number) => {
     </label>
   ))}
   {saveLimits.isError && <p className="text-xs text-red-600">{saveLimits.error?.message}</p>}
-</div>
+</div>;
 ```
 
 `defaultValue` (not `value`) is deliberate here — an uncontrolled input that re-syncs only via React key/remount avoids fighting the user's keystroke while they're typing between the change and blur events; the mutation is the source of truth, not local state.
@@ -907,10 +1018,12 @@ git commit -m "feat(bot-config): editable per-workspace limits in ToolsTab"
 ### Task 19: Frontend — `HistoryPanel` with Restore
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/agent-console/pages/BotConfig/components/HistoryPanel.tsx` (replace Tasks 16–18's stub)
 - Test: `frontend/src/surfaces/agent-console/pages/BotConfig/components/HistoryPanel.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `fetchBotConfigHistory`, `rollbackBotConfig`.
 - Produces: `HistoryPanel({ token, field, onRestored }: { token: string; field: 'prompt' | 'rules' | 'tools_config'; onRestored: () => void })`.
 
@@ -918,54 +1031,74 @@ git commit -m "feat(bot-config): editable per-workspace limits in ToolsTab"
 
 ```tsx
 // frontend/src/surfaces/agent-console/pages/BotConfig/components/HistoryPanel.test.tsx
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { describe, expect, it, vi } from 'vitest'
-import { HistoryPanel } from './HistoryPanel.tsx'
-import * as agentApi from '../../../api/agentApi.ts'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { describe, expect, it, vi } from 'vitest';
+import { HistoryPanel } from './HistoryPanel.tsx';
+import * as agentApi from '../../../api/agentApi.ts';
 
 function renderPanel(onRestored = vi.fn()) {
-  const queryClient = new QueryClient()
+  const queryClient = new QueryClient();
   render(
     <QueryClientProvider client={queryClient}>
       <HistoryPanel token="t" field="prompt" onRestored={onRestored} />
     </QueryClientProvider>,
-  )
-  return { onRestored }
+  );
+  return { onRestored };
 }
 
 describe('HistoryPanel', () => {
   it('lists entries for the given field with a Restore control per entry', async () => {
     vi.spyOn(agentApi, 'fetchBotConfigHistory').mockResolvedValue({
       entries: [
-        { id: '2', field: 'prompt', before_value: 'A', after_value: 'B', actor: { id: 'a', display_name: 'Admin', email: 'a@x.test' }, changed_at: '2026-08-19T00:00:00.000Z' },
+        {
+          id: '2',
+          field: 'prompt',
+          before_value: 'A',
+          after_value: 'B',
+          actor: { id: 'a', display_name: 'Admin', email: 'a@x.test' },
+          changed_at: '2026-08-19T00:00:00.000Z',
+        },
       ],
       next_cursor: null,
-    })
+    });
 
-    renderPanel()
+    renderPanel();
 
-    await waitFor(() => expect(screen.getByText('Admin')).toBeInTheDocument())
-    expect(screen.getByRole('button', { name: 'Restore' })).toBeInTheDocument()
-  })
+    await waitFor(() => expect(screen.getByText('Admin')).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'Restore' })).toBeInTheDocument();
+  });
 
   it('calls rollbackBotConfig with the entry id and invokes onRestored on success', async () => {
     vi.spyOn(agentApi, 'fetchBotConfigHistory').mockResolvedValue({
       entries: [
-        { id: '2', field: 'prompt', before_value: 'A', after_value: 'B', actor: { id: 'a', display_name: 'Admin', email: 'a@x.test' }, changed_at: '2026-08-19T00:00:00.000Z' },
+        {
+          id: '2',
+          field: 'prompt',
+          before_value: 'A',
+          after_value: 'B',
+          actor: { id: 'a', display_name: 'Admin', email: 'a@x.test' },
+          changed_at: '2026-08-19T00:00:00.000Z',
+        },
       ],
       next_cursor: null,
-    })
-    const rollbackSpy = vi.spyOn(agentApi, 'rollbackBotConfig').mockResolvedValue({} as never)
-    const { onRestored } = renderPanel()
+    });
+    const rollbackSpy = vi.spyOn(agentApi, 'rollbackBotConfig').mockResolvedValue({} as never);
+    const { onRestored } = renderPanel();
 
-    await waitFor(() => screen.getByRole('button', { name: 'Restore' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Restore' }))
+    await waitFor(() => screen.getByRole('button', { name: 'Restore' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
 
-    await waitFor(() => expect(rollbackSpy).toHaveBeenCalledWith('t', { field: 'prompt', change_log_id: '2', side: 'before' }))
-    await waitFor(() => expect(onRestored).toHaveBeenCalled())
-  })
-})
+    await waitFor(() =>
+      expect(rollbackSpy).toHaveBeenCalledWith('t', {
+        field: 'prompt',
+        change_log_id: '2',
+        side: 'before',
+      }),
+    );
+    await waitFor(() => expect(onRestored).toHaveBeenCalled());
+  });
+});
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -977,10 +1110,10 @@ Expected: FAIL — stub renders `null`.
 
 ```tsx
 // frontend/src/surfaces/agent-console/pages/BotConfig/components/HistoryPanel.tsx
-import { useQuery, useMutation } from '@tanstack/react-query'
-import { fetchBotConfigHistory, rollbackBotConfig } from '../../../api/agentApi.ts'
-import { Button } from '../../../components/ui/button.tsx'
-import { ScrollArea } from '../../../components/ui/scroll-area.tsx'
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { fetchBotConfigHistory, rollbackBotConfig } from '../../../api/agentApi.ts';
+import { Button } from '../../../components/ui/button.tsx';
+import { ScrollArea } from '../../../components/ui/scroll-area.tsx';
 
 /**
  * "Restore" always targets the entry's `before_value` — the state right
@@ -994,21 +1127,22 @@ export function HistoryPanel({
   field,
   onRestored,
 }: {
-  token: string
-  field: 'prompt' | 'rules' | 'tools_config'
-  onRestored: () => void
+  token: string;
+  field: 'prompt' | 'rules' | 'tools_config';
+  onRestored: () => void;
 }) {
   const historyQuery = useQuery({
     queryKey: ['bot-config-history', field],
     queryFn: () => fetchBotConfigHistory(token, { field, limit: 20 }),
-  })
+  });
 
   const restore = useMutation({
-    mutationFn: (changeLogId: string) => rollbackBotConfig(token, { field, change_log_id: changeLogId, side: 'before' }),
+    mutationFn: (changeLogId: string) =>
+      rollbackBotConfig(token, { field, change_log_id: changeLogId, side: 'before' }),
     onSuccess: () => onRestored(),
-  })
+  });
 
-  const entries = historyQuery.data?.entries ?? []
+  const entries = historyQuery.data?.entries ?? [];
 
   return (
     <div className="flex w-64 shrink-0 flex-col gap-2 border-l border-slate-200 pl-3">
@@ -1016,7 +1150,10 @@ export function HistoryPanel({
       <ScrollArea className="min-h-0 flex-1">
         <ul className="flex flex-col gap-2">
           {entries.map((entry) => (
-            <li key={entry.id} className="flex flex-col gap-1 rounded-md border border-slate-200 p-2 text-xs">
+            <li
+              key={entry.id}
+              className="flex flex-col gap-1 rounded-md border border-slate-200 p-2 text-xs"
+            >
               <span className="font-medium">{entry.actor.display_name}</span>
               <span className="text-muted">{new Date(entry.changed_at).toLocaleString()}</span>
               <Button
@@ -1035,7 +1172,7 @@ export function HistoryPanel({
       </ScrollArea>
       {restore.isError && <p className="text-xs text-red-600">{restore.error?.message}</p>}
     </div>
-  )
+  );
 }
 ```
 
@@ -1090,6 +1227,7 @@ Expected: all PASS — these are the tests that mechanically enforce "zero behav
 - [ ] **Step 3: Manual smoke test**
 
 Run `pnpm dev`, log in as an admin (dev login), open `/bot-config`, and confirm:
+
 - Prompt tab loads the seeded `DEFAULT_BOT_PROMPT`, Save and Reset-to-default both work, History lists a "System" seed entry.
 - Rules tab shows 8 rows, the two locked rows (`handoff_immediate`, `no_credentials`) have a disabled switch, adding a custom rule works and appears in Rules and in the Prompt tab's rendered `system_prompt` (visible via `GET /agent/bot-config`'s `system_prompt` field or the interactive Swagger UI at `http://localhost:4000/docs`).
 - Tools tab shows 4 toggleable rows plus a static "Always on" `handoff` row; disabling `search_articles` shows its consequence copy.

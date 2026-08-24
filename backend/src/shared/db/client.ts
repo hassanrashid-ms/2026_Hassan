@@ -1,18 +1,18 @@
-import { drizzle } from 'drizzle-orm/node-postgres'
-import { Pool } from 'pg'
-import { getEnv } from '../../env.ts'
-import { logger } from '../logging/logger.ts'
-import * as schema from './schema/index.ts'
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { Pool } from 'pg';
+import { getEnv } from '../../env.ts';
+import { logger } from '../logging/logger.ts';
+import * as schema from './schema/index.ts';
 
 /** Connects as support_app: a non-owner role with no BYPASSRLS. */
-export const pool = new Pool({ connectionString: getEnv().DATABASE_URL, max: 10 })
+export const pool = new Pool({ connectionString: getEnv().DATABASE_URL, max: 10 });
 pool.on('error', (err) => {
-  logger.error('db.pool', `Idle client error: ${err.message}`)
-})
+  logger.error('db.pool', `Idle client error: ${err.message}`);
+});
 
-export const db = drizzle(pool, { schema })
-export type Db = typeof db
+export const db = drizzle(pool, { schema });
+export type Db = typeof db;
 
 export async function closeDb(): Promise<void> {
-  await pool.end()
+  await pool.end();
 }

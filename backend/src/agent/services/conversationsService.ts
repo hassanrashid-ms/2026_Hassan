@@ -1,51 +1,69 @@
-import { and, desc, eq, exists, ilike, inArray, isNull, isNotNull, or, sql } from 'drizzle-orm'
-import type { AgentConversationSummary, AgentMessageView } from '@support/types'
-import { postMessage, toAgentView, type PostedMessageRow } from '../../domain/conversations/index.ts'
-import { appendEvent } from '../../shared/events/appendEvent.ts'
-import { appendChangeLog } from '../../shared/changeLog/appendChangeLog.ts'
-import { agent, conversation, conversationTag, message, player, subintent, workspaceMember } from '../../shared/db/schema/index.ts'
-import { withWorkspace, type Tx } from '../../shared/db/withWorkspace.ts'
-import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts'
-import { getConversationTags } from './tagsService.ts'
+import { and, desc, eq, exists, ilike, inArray, isNull, isNotNull, or, sql } from 'drizzle-orm';
+import type { AgentConversationSummary, AgentMessageView } from '@support/types';
+import {
+  postMessage,
+  toAgentView,
+  type PostedMessageRow,
+} from '../../domain/conversations/index.ts';
+import { appendEvent } from '../../shared/events/appendEvent.ts';
+import { appendChangeLog } from '../../shared/changeLog/appendChangeLog.ts';
+import {
+  agent,
+  conversation,
+  conversationTag,
+  message,
+  player,
+  subintent,
+  workspaceMember,
+} from '../../shared/db/schema/index.ts';
+import { withWorkspace, type Tx } from '../../shared/db/withWorkspace.ts';
+import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts';
+import { getConversationTags } from './tagsService.ts';
 
-export type ConversationsFilter = 'unassigned' | 'mine' | 'agentAssigned' | 'botHandling' | 'escalated'
+export type ConversationsFilter =
+  'unassigned' | 'mine' | 'agentAssigned' | 'botHandling' | 'escalated';
 
 export type ConversationsListFilters = {
-  priority?: (typeof conversation.priority.enumValues)[number][]
-  labelIds?: string[]
-  subintentIds?: string[]
-  assigneeIds?: string[]
-  olderThanHours?: number
-  q?: string
-}
+  priority?: (typeof conversation.priority.enumValues)[number][];
+  labelIds?: string[];
+  subintentIds?: string[];
+  assigneeIds?: string[];
+  olderThanHours?: number;
+  q?: string;
+};
 
-const ACTIVE_AGENT_STATUSES: (typeof conversation.status.enumValues)[number][] = ['open', 'awaiting_player', 'escalated']
-const UNASSIGNED_STATUSES: (typeof conversation.status.enumValues)[number][] = ['open', 'escalated']
+const ACTIVE_AGENT_STATUSES: (typeof conversation.status.enumValues)[number][] = [
+  'open',
+  'awaiting_player',
+  'escalated',
+];
+const UNASSIGNED_STATUSES: (typeof conversation.status.enumValues)[number][] = [
+  'open',
+  'escalated',
+];
 
 function extraFilterConditions(extra: ConversationsListFilters) {
-  const conditions = []
-  if (extra.priority?.length) conditions.push(inArray(conversation.priority, extra.priority))
-  if (extra.subintentIds?.length) conditions.push(inArray(conversation.subintentId, extra.subintentIds))
-  if (extra.assigneeIds?.length) conditions.push(inArray(conversation.assignedAgentId, extra.assigneeIds))
+  const conditions = [];
+  if (extra.priority?.length) conditions.push(inArray(conversation.priority, extra.priority));
+  if (extra.subintentIds?.length)
+    conditions.push(inArray(conversation.subintentId, extra.subintentIds));
+  if (extra.assigneeIds?.length)
+    conditions.push(inArray(conversation.assignedAgentId, extra.assigneeIds));
   if (extra.labelIds?.length) {
     conditions.push(
       exists(
         sql`(select 1 from ${conversationTag} where ${conversationTag.conversationId} = ${conversation.id} and ${conversationTag.removedAt} is null and ${conversationTag.tagId} in ${extra.labelIds})`,
       ),
-    )
+    );
   }
   if (extra.q) {
-    const term = `%${extra.q}%`
-    const qNum = parseInt(extra.q, 10)
-    const numMatch = !isNaN(qNum) ? eq(conversation.number, qNum) : undefined
-    const qCond = or(
-      numMatch,
-      ilike(player.externalId, term),
-      ilike(subintent.name, term)
-    )
-    if (qCond) conditions.push(qCond)
+    const term = `%${extra.q}%`;
+    const qNum = parseInt(extra.q, 10);
+    const numMatch = !isNaN(qNum) ? eq(conversation.number, qNum) : undefined;
+    const qCond = or(numMatch, ilike(player.externalId, term), ilike(subintent.name, term));
+    if (qCond) conditions.push(qCond);
   }
-  return conditions
+  return conditions;
 }
 
 export async function listConversations(
@@ -71,28 +89,37 @@ export async function listConversations(
       .where(
         and(
           filter === 'mine'
-            ? and(eq(conversation.assignedAgentId, ctx.agentId), inArray(conversation.status, ACTIVE_AGENT_STATUSES))
+            ? and(
+                eq(conversation.assignedAgentId, ctx.agentId),
+                inArray(conversation.status, ACTIVE_AGENT_STATUSES),
+              )
             : filter === 'agentAssigned'
-              ? and(isNotNull(conversation.assignedAgentId), inArray(conversation.status, ACTIVE_AGENT_STATUSES))
+              ? and(
+                  isNotNull(conversation.assignedAgentId),
+                  inArray(conversation.status, ACTIVE_AGENT_STATUSES),
+                )
               : filter === 'botHandling'
                 ? eq(conversation.status, 'bot_active')
                 : filter === 'escalated'
                   ? eq(conversation.status, 'escalated')
-                  : and(isNull(conversation.assignedAgentId), inArray(conversation.status, UNASSIGNED_STATUSES)),
+                  : and(
+                      isNull(conversation.assignedAgentId),
+                      inArray(conversation.status, UNASSIGNED_STATUSES),
+                    ),
           ...extraFilterConditions(extra),
         ),
       )
-      .orderBy(conversation.priority, conversation.createdAt)
+      .orderBy(conversation.priority, conversation.createdAt);
 
-    const summaries: AgentConversationSummary[] = []
+    const summaries: AgentConversationSummary[] = [];
     for (const row of rows) {
       const [last] = await tx
         .select({ body: message.body, createdAt: message.createdAt })
         .from(message)
         .where(eq(message.conversationId, row.id))
         .orderBy(desc(message.seq))
-        .limit(1)
-      const tags = await getConversationTags(tx, row.id)
+        .limit(1);
+      const tags = await getConversationTags(tx, row.id);
 
       summaries.push({
         id: row.id,
@@ -105,22 +132,36 @@ export async function listConversations(
         assigned_agent_name: row.assignedAgentName,
         priority: row.priority,
         tags,
-      })
+      });
     }
 
     if (extra.olderThanHours !== undefined) {
-      const cutoff = Date.now() - extra.olderThanHours * 60 * 60 * 1000
-      return summaries.filter((s) => s.last_message_at !== null && new Date(s.last_message_at).getTime() < cutoff)
+      const cutoff = Date.now() - extra.olderThanHours * 60 * 60 * 1000;
+      return summaries.filter(
+        (s) => s.last_message_at !== null && new Date(s.last_message_at).getTime() < cutoff,
+      );
     }
-    return summaries
-  })
+    return summaries;
+  });
 }
 
-export type ClaimResult = { claimed: boolean; status: string | null; posted: PostedMessageRow | null }
-export type TakeOverResult = ClaimResult
+export type ClaimResult = {
+  claimed: boolean;
+  status: string | null;
+  posted: PostedMessageRow | null;
+};
+export type TakeOverResult = ClaimResult;
 
-async function postTakenOverNotice(tx: Tx, ctx: AgentContext, conversationId: string): Promise<PostedMessageRow> {
-  const [actor] = await tx.select({ displayName: agent.displayName }).from(agent).where(eq(agent.id, ctx.agentId)).limit(1)
+async function postTakenOverNotice(
+  tx: Tx,
+  ctx: AgentContext,
+  conversationId: string,
+): Promise<PostedMessageRow> {
+  const [actor] = await tx
+    .select({ displayName: agent.displayName })
+    .from(agent)
+    .where(eq(agent.id, ctx.agentId))
+    .limit(1);
   return postMessage(tx, {
     workspaceId: ctx.workspaceId,
     conversationId,
@@ -128,18 +169,27 @@ async function postTakenOverNotice(tx: Tx, ctx: AgentContext, conversationId: st
     actorId: null,
     body: `Chat taken over by ${actor?.displayName ?? 'an agent'}.`,
     visibility: 'internal',
-  })
+  });
 }
 
-export async function claimConversation(ctx: AgentContext, conversationId: string): Promise<ClaimResult> {
+export async function claimConversation(
+  ctx: AgentContext,
+  conversationId: string,
+): Promise<ClaimResult> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
     const claimed = await tx
       .update(conversation)
       .set({ assignedAgentId: ctx.agentId })
-      .where(and(eq(conversation.id, conversationId), isNull(conversation.assignedAgentId), inArray(conversation.status, ACTIVE_AGENT_STATUSES)))
-      .returning({ id: conversation.id, status: conversation.status })
-    const [row] = claimed
-    if (!row) return { claimed: false, status: null, posted: null }
+      .where(
+        and(
+          eq(conversation.id, conversationId),
+          isNull(conversation.assignedAgentId),
+          inArray(conversation.status, ACTIVE_AGENT_STATUSES),
+        ),
+      )
+      .returning({ id: conversation.id, status: conversation.status });
+    const [row] = claimed;
+    if (!row) return { claimed: false, status: null, posted: null };
 
     await appendEvent(tx, {
       workspaceId: ctx.workspaceId,
@@ -148,20 +198,29 @@ export async function claimConversation(ctx: AgentContext, conversationId: strin
       actorId: ctx.agentId,
       actorType: 'agent',
       payload: { agent_id: ctx.agentId, via: 'claim' },
-    })
-    const posted = await postTakenOverNotice(tx, ctx, conversationId)
-    return { claimed: true, status: row.status, posted }
-  })
+    });
+    const posted = await postTakenOverNotice(tx, ctx, conversationId);
+    return { claimed: true, status: row.status, posted };
+  });
 }
 
-export async function takeOverConversation(ctx: AgentContext, conversationId: string): Promise<TakeOverResult> {
+export async function takeOverConversation(
+  ctx: AgentContext,
+  conversationId: string,
+): Promise<TakeOverResult> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
     const [row] = await tx
       .update(conversation)
       .set({ assignedAgentId: ctx.agentId, status: 'open', confirmPhase: 'none' })
-      .where(and(eq(conversation.id, conversationId), isNull(conversation.assignedAgentId), eq(conversation.status, 'bot_active')))
-      .returning({ id: conversation.id, status: conversation.status })
-    if (!row) return { claimed: false, status: null, posted: null }
+      .where(
+        and(
+          eq(conversation.id, conversationId),
+          isNull(conversation.assignedAgentId),
+          eq(conversation.status, 'bot_active'),
+        ),
+      )
+      .returning({ id: conversation.id, status: conversation.status });
+    if (!row) return { claimed: false, status: null, posted: null };
 
     await appendEvent(tx, {
       workspaceId: ctx.workspaceId,
@@ -170,20 +229,33 @@ export async function takeOverConversation(ctx: AgentContext, conversationId: st
       actorId: ctx.agentId,
       actorType: 'agent',
       payload: { agent_id: ctx.agentId, from_status: 'bot_active', to_status: 'open' },
-    })
+    });
 
-    const posted = await postTakenOverNotice(tx, ctx, conversationId)
-    return { claimed: true, status: row.status, posted }
-  })
+    const posted = await postTakenOverNotice(tx, ctx, conversationId);
+    return { claimed: true, status: row.status, posted };
+  });
 }
 
 export type ReassignResult =
   | { ok: true; status: string; posted: PostedMessageRow }
-  | { ok: false; reason: 'not_found' | 'invalid_status' | 'agent_not_found' | 'agent_not_active' }
+  | { ok: false; reason: 'not_found' | 'invalid_status' | 'agent_not_found' | 'agent_not_active' };
 
-async function postReassignedNotice(tx: Tx, ctx: AgentContext, conversationId: string, targetAgentId: string): Promise<PostedMessageRow> {
-  const [actor] = await tx.select({ displayName: agent.displayName }).from(agent).where(eq(agent.id, ctx.agentId)).limit(1)
-  const [target] = await tx.select({ displayName: agent.displayName }).from(agent).where(eq(agent.id, targetAgentId)).limit(1)
+async function postReassignedNotice(
+  tx: Tx,
+  ctx: AgentContext,
+  conversationId: string,
+  targetAgentId: string,
+): Promise<PostedMessageRow> {
+  const [actor] = await tx
+    .select({ displayName: agent.displayName })
+    .from(agent)
+    .where(eq(agent.id, ctx.agentId))
+    .limit(1);
+  const [target] = await tx
+    .select({ displayName: agent.displayName })
+    .from(agent)
+    .where(eq(agent.id, targetAgentId))
+    .limit(1);
   return postMessage(tx, {
     workspaceId: ctx.workspaceId,
     conversationId,
@@ -191,34 +263,50 @@ async function postReassignedNotice(tx: Tx, ctx: AgentContext, conversationId: s
     actorId: null,
     body: `Reassigned to ${target?.displayName ?? 'an agent'} by ${actor?.displayName ?? 'an agent'}.`,
     visibility: 'internal',
-  })
+  });
 }
 
-export async function reassignConversation(ctx: AgentContext, conversationId: string, targetAgentId: string): Promise<ReassignResult> {
+export async function reassignConversation(
+  ctx: AgentContext,
+  conversationId: string,
+  targetAgentId: string,
+): Promise<ReassignResult> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
     const [conv] = await tx
       .select({ id: conversation.id, status: conversation.status })
       .from(conversation)
       .where(eq(conversation.id, conversationId))
-      .limit(1)
-    if (!conv) return { ok: false, reason: 'not_found' }
-    if (!ACTIVE_AGENT_STATUSES.includes(conv.status)) return { ok: false, reason: 'invalid_status' }
+      .limit(1);
+    if (!conv) return { ok: false, reason: 'not_found' };
+    if (!ACTIVE_AGENT_STATUSES.includes(conv.status))
+      return { ok: false, reason: 'invalid_status' };
 
     const [member] = await tx
       .select({ id: workspaceMember.id })
       .from(workspaceMember)
-      .where(and(eq(workspaceMember.workspaceId, ctx.workspaceId), eq(workspaceMember.agentId, targetAgentId), isNull(workspaceMember.deactivatedAt)))
-      .limit(1)
-    if (!member) return { ok: false, reason: 'agent_not_found' }
+      .where(
+        and(
+          eq(workspaceMember.workspaceId, ctx.workspaceId),
+          eq(workspaceMember.agentId, targetAgentId),
+          isNull(workspaceMember.deactivatedAt),
+        ),
+      )
+      .limit(1);
+    if (!member) return { ok: false, reason: 'agent_not_found' };
 
-    const [targetAgent] = await tx.select({ status: agent.status }).from(agent).where(eq(agent.id, targetAgentId)).limit(1)
-    if (!targetAgent || targetAgent.status !== 'active') return { ok: false, reason: 'agent_not_active' }
+    const [targetAgent] = await tx
+      .select({ status: agent.status })
+      .from(agent)
+      .where(eq(agent.id, targetAgentId))
+      .limit(1);
+    if (!targetAgent || targetAgent.status !== 'active')
+      return { ok: false, reason: 'agent_not_active' };
 
     const [row] = await tx
       .update(conversation)
       .set({ assignedAgentId: targetAgentId })
       .where(eq(conversation.id, conversationId))
-      .returning({ id: conversation.id, status: conversation.status })
+      .returning({ id: conversation.id, status: conversation.status });
 
     await appendEvent(tx, {
       workspaceId: ctx.workspaceId,
@@ -227,33 +315,50 @@ export async function reassignConversation(ctx: AgentContext, conversationId: st
       actorId: ctx.agentId,
       actorType: 'agent',
       payload: { agent_id: targetAgentId, reassigned_by: ctx.agentId, via: 'reassign' },
-    })
-    const posted = await postReassignedNotice(tx, ctx, conversationId, targetAgentId)
-    return { ok: true, status: row!.status, posted }
-  })
+    });
+    const posted = await postReassignedNotice(tx, ctx, conversationId, targetAgentId);
+    return { ok: true, status: row!.status, posted };
+  });
 }
 
 export type ReclassifyResult =
   | { ok: true; subintentId: string; status: string }
-  | { ok: false; reason: 'not_found' | 'invalid_subintent' }
+  | { ok: false; reason: 'not_found' | 'invalid_subintent' };
 
-export async function reclassifyConversation(ctx: AgentContext, conversationId: string, subintentId: string): Promise<ReclassifyResult> {
+export async function reclassifyConversation(
+  ctx: AgentContext,
+  conversationId: string,
+  subintentId: string,
+): Promise<ReclassifyResult> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
     const [conv] = await tx
-      .select({ id: conversation.id, subintentId: conversation.subintentId, status: conversation.status })
+      .select({
+        id: conversation.id,
+        subintentId: conversation.subintentId,
+        status: conversation.status,
+      })
       .from(conversation)
       .where(eq(conversation.id, conversationId))
-      .limit(1)
-    if (!conv) return { ok: false, reason: 'not_found' }
+      .limit(1);
+    if (!conv) return { ok: false, reason: 'not_found' };
 
     const [target] = await tx
       .select({ id: subintent.id })
       .from(subintent)
-      .where(and(eq(subintent.id, subintentId), eq(subintent.workspaceId, ctx.workspaceId), isNull(subintent.archivedAt)))
-      .limit(1)
-    if (!target) return { ok: false, reason: 'invalid_subintent' }
+      .where(
+        and(
+          eq(subintent.id, subintentId),
+          eq(subintent.workspaceId, ctx.workspaceId),
+          isNull(subintent.archivedAt),
+        ),
+      )
+      .limit(1);
+    if (!target) return { ok: false, reason: 'invalid_subintent' };
 
-    await tx.update(conversation).set({ subintentId, classificationSource: 'agent' }).where(eq(conversation.id, conversationId))
+    await tx
+      .update(conversation)
+      .set({ subintentId, classificationSource: 'agent' })
+      .where(eq(conversation.id, conversationId));
 
     await appendEvent(tx, {
       workspaceId: ctx.workspaceId,
@@ -261,23 +366,34 @@ export async function reclassifyConversation(ctx: AgentContext, conversationId: 
       conversationId,
       actorId: ctx.agentId,
       actorType: 'agent',
-      payload: { from_subintent_id: conv.subintentId, to_subintent_id: subintentId, classification_source: 'agent' },
-    })
+      payload: {
+        from_subintent_id: conv.subintentId,
+        to_subintent_id: subintentId,
+        classification_source: 'agent',
+      },
+    });
     await appendChangeLog(tx, {
       workspaceId: ctx.workspaceId,
       entityType: 'conversation',
       entityId: conversationId,
       actorId: ctx.agentId,
       changes: [{ field: 'subintent_id', before: conv.subintentId, after: subintentId }],
-    })
-    return { ok: true, subintentId, status: conv.status }
-  })
+    });
+    return { ok: true, subintentId, status: conv.status };
+  });
 }
 
-export async function getAgentConversationMessages(ctx: AgentContext, conversationId: string): Promise<AgentMessageView[] | null> {
+export async function getAgentConversationMessages(
+  ctx: AgentContext,
+  conversationId: string,
+): Promise<AgentMessageView[] | null> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
-    const [found] = await tx.select({ id: conversation.id }).from(conversation).where(eq(conversation.id, conversationId)).limit(1)
-    if (!found) return null
+    const [found] = await tx
+      .select({ id: conversation.id })
+      .from(conversation)
+      .where(eq(conversation.id, conversationId))
+      .limit(1);
+    if (!found) return null;
 
     const rows = await tx
       .select({
@@ -300,7 +416,7 @@ export async function getAgentConversationMessages(ctx: AgentContext, conversati
       .innerJoin(player, eq(player.id, conversation.playerId))
       .leftJoin(agent, eq(agent.id, message.authorAgentId))
       .where(eq(message.conversationId, conversationId))
-      .orderBy(message.seq)
-    return rows.map(toAgentView)
-  })
+      .orderBy(message.seq);
+    return rows.map(toAgentView);
+  });
 }

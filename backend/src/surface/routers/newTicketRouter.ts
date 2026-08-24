@@ -1,5 +1,5 @@
-import { Router } from 'express'
-import { newTicketHandler } from '../controllers/newTicketController.ts'
+import { Router } from 'express';
+import { newTicketHandler } from '../controllers/newTicketController.ts';
 
-export const newTicketRouter = Router()
-newTicketRouter.post('/new-ticket', newTicketHandler)
+export const newTicketRouter = Router();
+newTicketRouter.post('/new-ticket', newTicketHandler);

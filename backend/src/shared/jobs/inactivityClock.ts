@@ -1,19 +1,25 @@
-import { and, desc, eq, inArray, isNull, lte, ne } from 'drizzle-orm'
-import { conversation, message, resolutionCycle, workspace } from '../db/schema/index.ts'
-import { withWorkspace, withoutWorkspace, type Tx } from '../db/withWorkspace.ts'
-import { appendEvent } from '../events/appendEvent.ts'
-import { closeResolutionCycle, postMessage, RESOLUTION_CHECK_MESSAGE, toAgentView, toPlayerView } from '../../domain/conversations/index.ts'
-import { emitInboxChanged, emitMessageToRooms, emitPhaseChanged } from '../realtime/emit.ts'
-import { tryIo } from '../realtime/tryIo.ts'
-import { logger } from '../logging/logger.ts'
+import { and, desc, eq, inArray, isNull, lte, ne } from 'drizzle-orm';
+import { conversation, message, resolutionCycle, workspace } from '../db/schema/index.ts';
+import { withWorkspace, withoutWorkspace, type Tx } from '../db/withWorkspace.ts';
+import { appendEvent } from '../events/appendEvent.ts';
+import {
+  closeResolutionCycle,
+  postMessage,
+  RESOLUTION_CHECK_MESSAGE,
+  toAgentView,
+  toPlayerView,
+} from '../../domain/conversations/index.ts';
+import { emitInboxChanged, emitMessageToRooms, emitPhaseChanged } from '../realtime/emit.ts';
+import { tryIo } from '../realtime/tryIo.ts';
+import { logger } from '../logging/logger.ts';
 
-export const INACTIVITY_CLOCK_JOB = 'inactivity-clock'
+export const INACTIVITY_CLOCK_JOB = 'inactivity-clock';
 
 /** The clock only runs while support owns the conversation. */
-const CLOCK_STATUSES = ['open', 'awaiting_player'] as const
+const CLOCK_STATUSES = ['open', 'awaiting_player'] as const;
 
-export type RunInactivityClockOptions = { now?: Date }
-export type InactivityClockResult = { asked: number; timedOut: number }
+export type RunInactivityClockOptions = { now?: Date };
+export type InactivityClockResult = { asked: number; timedOut: number };
 
 /**
  * The two-stage inactivity clock. Stage 1 asks "Did this solve it?" after a
@@ -31,20 +37,22 @@ export type InactivityClockResult = { asked: number; timedOut: number }
  * messages and flips statuses, and a single bad row must not roll back and
  * strand every other player in the workspace.
  */
-export async function runInactivityClock(options: RunInactivityClockOptions = {}): Promise<InactivityClockResult> {
-  const now = options.now ?? new Date()
+export async function runInactivityClock(
+  options: RunInactivityClockOptions = {},
+): Promise<InactivityClockResult> {
+  const now = options.now ?? new Date();
 
   const workspaces = await withoutWorkspace(async (tx) =>
     tx.select({ id: workspace.id }).from(workspace).where(isNull(workspace.disabledAt)),
-  )
+  );
 
-  let asked = 0
-  let timedOut = 0
+  let asked = 0;
+  let timedOut = 0;
   for (const ws of workspaces) {
-    asked += await runAskStage(ws.id, now)
-    timedOut += await runTimeoutStage(ws.id, now)
+    asked += await runAskStage(ws.id, now);
+    timedOut += await runTimeoutStage(ws.id, now);
   }
-  return { asked, timedOut }
+  return { asked, timedOut };
 }
 
 /** Candidate rows for a stage. The status join is what keeps escalated, bot_active and resolved out. */
@@ -66,7 +74,7 @@ async function candidates(
           eq(conversation.confirmPhase, phase),
         ),
       ),
-  )
+  );
 }
 
 /**
@@ -85,21 +93,21 @@ async function lockAndCheck(
     .from(conversation)
     .where(eq(conversation.id, conversationId))
     .limit(1)
-    .for('update')
+    .for('update');
 
-  if (!locked) return false
-  if (locked.confirmPhase !== phase) return false
-  return (CLOCK_STATUSES as readonly string[]).includes(locked.status)
+  if (!locked) return false;
+  if (locked.confirmPhase !== phase) return false;
+  return (CLOCK_STATUSES as readonly string[]).includes(locked.status);
 }
 
 async function runAskStage(workspaceId: string, now: Date): Promise<number> {
-  const rows = await candidates(workspaceId, now, 'none')
+  const rows = await candidates(workspaceId, now, 'none');
 
-  let asked = 0
+  let asked = 0;
   for (const row of rows) {
     try {
       const posted = await withWorkspace(workspaceId, async (tx) => {
-        if (!(await lockAndCheck(tx, row.conversationId, 'none'))) return null
+        if (!(await lockAndCheck(tx, row.conversationId, 'none'))) return null;
 
         // `now` is threaded into postMessage so the stage 2 deadline this touch
         // writes is derived from the tick's clock, not from wall time.
@@ -111,12 +119,12 @@ async function runAskStage(workspaceId: string, now: Date): Promise<number> {
           body: RESOLUTION_CHECK_MESSAGE,
           visibility: 'public',
           now,
-        })
+        });
 
         await tx
           .update(conversation)
           .set({ confirmPhase: 'inactivity_ask' })
-          .where(eq(conversation.id, row.conversationId))
+          .where(eq(conversation.id, row.conversationId));
 
         // Same event type the agent's manual ask writes, disambiguated by
         // payload `source` — the pattern conversation_assigned already uses for
@@ -129,40 +137,40 @@ async function runAskStage(workspaceId: string, now: Date): Promise<number> {
           actorId: null,
           actorType: 'system',
           payload: { source: 'inactivity' },
-        })
+        });
 
-        return sent
-      })
+        return sent;
+      });
 
-      if (!posted) continue
-      asked += 1
+      if (!posted) continue;
+      asked += 1;
 
-      const io = tryIo('jobs', { workspaceId, conversationId: row.conversationId })
+      const io = tryIo('jobs', { workspaceId, conversationId: row.conversationId });
       if (io) {
-        emitMessageToRooms(io, row.conversationId, toPlayerView(posted), toAgentView(posted))
+        emitMessageToRooms(io, row.conversationId, toPlayerView(posted), toAgentView(posted));
         emitPhaseChanged(io, row.conversationId, {
           conversation_id: row.conversationId,
           confirm_phase: 'inactivity_ask',
-        })
+        });
       }
     } catch (error) {
       logger.error('jobs', `inactivity-clock ask failed for conversation ${row.conversationId}`, {
         workspaceId,
         error: error instanceof Error ? `${error.name} ${error.message}` : String(error),
-      })
+      });
     }
   }
-  return asked
+  return asked;
 }
 
 async function runTimeoutStage(workspaceId: string, now: Date): Promise<number> {
-  const rows = await candidates(workspaceId, now, 'inactivity_ask')
+  const rows = await candidates(workspaceId, now, 'inactivity_ask');
 
-  let timedOut = 0
+  let timedOut = 0;
   for (const row of rows) {
     try {
       const done = await withWorkspace(workspaceId, async (tx) => {
-        if (!(await lockAndCheck(tx, row.conversationId, 'inactivity_ask'))) return false
+        if (!(await lockAndCheck(tx, row.conversationId, 'inactivity_ask'))) return false;
 
         // "Support owed the reply when the clock fired." System messages are
         // excluded because stage 1's own ask is one and is always last, which
@@ -179,22 +187,26 @@ async function runTimeoutStage(workspaceId: string, now: Date): Promise<number> 
             ),
           )
           .orderBy(desc(message.seq))
-          .limit(1)
-        const supportOwed = last?.authorType === 'player'
+          .limit(1);
+        const supportOwed = last?.authorType === 'player';
 
         await tx
           .update(conversation)
           .set({ status: 'resolved', confirmPhase: 'none', resolutionSource: 'timed_out' })
-          .where(eq(conversation.id, row.conversationId))
+          .where(eq(conversation.id, row.conversationId));
 
         // By id, not by the open-cycle predicate: this runs before the close and
         // must land on the row the candidate scan actually selected.
         await tx
           .update(resolutionCycle)
           .set({ supportOwedFlag: supportOwed })
-          .where(eq(resolutionCycle.id, row.cycleId))
+          .where(eq(resolutionCycle.id, row.cycleId));
 
-        await closeResolutionCycle(tx, { conversationId: row.conversationId, kind: 'timed_out', now })
+        await closeResolutionCycle(tx, {
+          conversationId: row.conversationId,
+          kind: 'timed_out',
+          now,
+        });
 
         await appendEvent(tx, {
           workspaceId,
@@ -203,25 +215,32 @@ async function runTimeoutStage(workspaceId: string, now: Date): Promise<number> 
           actorId: null,
           actorType: 'system',
           payload: { source: 'inactivity', confirmed_by: 'timeout', support_owed: supportOwed },
-        })
+        });
 
-        return true
-      })
+        return true;
+      });
 
-      if (!done) continue
-      timedOut += 1
+      if (!done) continue;
+      timedOut += 1;
 
-      const io = tryIo('jobs', { workspaceId, conversationId: row.conversationId })
+      const io = tryIo('jobs', { workspaceId, conversationId: row.conversationId });
       if (io) {
-        emitPhaseChanged(io, row.conversationId, { conversation_id: row.conversationId, confirm_phase: 'none' })
-        emitInboxChanged(io, workspaceId, row.conversationId, 'resolved')
+        emitPhaseChanged(io, row.conversationId, {
+          conversation_id: row.conversationId,
+          confirm_phase: 'none',
+        });
+        emitInboxChanged(io, workspaceId, row.conversationId, 'resolved');
       }
     } catch (error) {
-      logger.error('jobs', `inactivity-clock timeout failed for conversation ${row.conversationId}`, {
-        workspaceId,
-        error: error instanceof Error ? `${error.name} ${error.message}` : String(error),
-      })
+      logger.error(
+        'jobs',
+        `inactivity-clock timeout failed for conversation ${row.conversationId}`,
+        {
+          workspaceId,
+          error: error instanceof Error ? `${error.name} ${error.message}` : String(error),
+        },
+      );
     }
   }
-  return timedOut
+  return timedOut;
 }

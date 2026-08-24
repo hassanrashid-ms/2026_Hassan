@@ -1,6 +1,6 @@
 // backend/src/domain/bot/botTurn.ts
 
-import type { ConfirmPhaseValue, PlayerMessageView } from '@support/types'
+import type { ConfirmPhaseValue, PlayerMessageView } from '@support/types';
 
 /**
  * Model-chosen (`asked_for_person`, `no_article`, `sensitive` — passed directly
@@ -15,13 +15,13 @@ export type HandoffReason =
   | 'sensitive'
   | 'unsure'
   | 'turn_cap'
-  | 'unhelped_cap'
+  | 'unhelped_cap';
 
 export type UnavailableReason =
   | 'not_provisioned' // admin has the bot switched off
   | 'error' // a turn failed after its retries were exhausted
   | 'timeout' // callModel exceeded its 15s budget
-  | 'invalid_response' // a refusal or an unparseable tool argument — not retried
+  | 'invalid_response'; // a refusal or an unparseable tool argument — not retried
 
 /**
  * One `search_articles` call the model made while deciding this turn, with the
@@ -31,16 +31,16 @@ export type UnavailableReason =
  * precedent, and the reason `appendEvent` forbids live pointers in payloads.
  */
 export type BotSearchRecord = {
-  query: string
-  results: { id: string; title: string }[]
-}
+  query: string;
+  results: { id: string; title: string }[];
+};
 
 type BotTurnOutcome =
   | { kind: 'noop' }
   | { kind: 'answer'; reply: string; subintentId: string | null; articleId?: string }
   | { kind: 'resolve'; subintentId: string | null }
   | { kind: 'handoff'; reason: HandoffReason; subintentId: string | null }
-  | { kind: 'unavailable'; reason: UnavailableReason }
+  | { kind: 'unavailable'; reason: UnavailableReason };
 
 /**
  * `searches` rides on the decision rather than being written by the decider,
@@ -54,24 +54,26 @@ type BotTurnOutcome =
  * without ever calling a model — an absent field means "no search ran", which
  * is itself the answer to "did retrieval happen?".
  */
-export type BotTurnDecision = BotTurnOutcome & { searches?: BotSearchRecord[] }
+export type BotTurnDecision = BotTurnOutcome & { searches?: BotSearchRecord[] };
 
 export type BotTurnInput = {
-  workspaceId: string
-  conversationId: string
-  subintentId: string | null
+  workspaceId: string;
+  conversationId: string;
+  subintentId: string | null;
   /** Guards whether confirm_resolution is offered to the model this turn. */
-  confirmPhase: ConfirmPhaseValue
+  confirmPhase: ConfirmPhaseValue;
   /** Bot-authored messages so far, in this conversation. Drives resolvedLimits.max_bot_messages. */
-  botMessageCount: number
+  botMessageCount: number;
   /** Bot-authored messages since the last conversation_resolved event (or all of them, if there is none). Drives resolvedLimits.max_unhelped_replies. */
-  unhelpedReplyCount: number
+  unhelpedReplyCount: number;
   /** Null if the player has never sent a message (should not happen once a turn runs). */
-  lastPlayerMessageAt: Date | null
-  history: PlayerMessageView[]
-}
+  lastPlayerMessageAt: Date | null;
+  history: PlayerMessageView[];
+};
 
-export type BotDecider = (input: BotTurnInput) => Promise<BotTurnDecision>
+export type BotDecider = (input: BotTurnInput) => Promise<BotTurnDecision>;
 
 /** Only an admin's deliberate choice is silent. Every other reason gets an internal note. */
-export const SILENT_UNAVAILABLE_REASONS: ReadonlySet<UnavailableReason> = new Set(['not_provisioned'])
+export const SILENT_UNAVAILABLE_REASONS: ReadonlySet<UnavailableReason> = new Set([
+  'not_provisioned',
+]);

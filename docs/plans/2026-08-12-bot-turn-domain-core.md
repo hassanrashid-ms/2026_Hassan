@@ -41,23 +41,23 @@
 
 ## File Structure
 
-| File | Action | Responsibility |
-|---|---|---|
-| `backend/src/shared/db/schema/taxonomy.ts` | modify | add `UNIQUE (workspace_id, id)` to `subintent` |
-| `backend/src/shared/db/schema/conversations.ts` | modify | add `conversation.subintent_id`, its composite FK, its index |
-| `backend/src/domain/bot/botTurn.ts` | create | `HandoffReason`, `UnavailableReason`, `BotTurnDecision`, `BotDecider`, `BotTurnInput`, `SILENT_UNAVAILABLE_REASONS`, `stubDecider` |
-| `backend/src/domain/bot/messages.ts` | create | `HANDOFF_PLAYER_MESSAGE`, `botFailureNote(reason)` |
-| `backend/src/domain/bot/assignOnHandoff.ts` | create | `assignOnHandoff(tx, workspaceId)` → `agentId \| null` |
-| `backend/src/domain/bot/applyBotTurn.ts` | create | `applyBotTurn(tx, ctx, decision)` → `{ posted[], statusChanged }`, all four outcomes |
-| `backend/src/domain/bot/index.ts` | modify | barrel now also exports the four new modules |
-| `backend/src/domain/conversations/postMessage.ts` | modify | `PostMessageInput.actorId` widens to `string \| null` |
-| `backend/src/surface/services/messagesService.ts` | modify | remove the `status: 'open'` override; add the not-provisioned inline branch; compute (but do not consume) `shouldEnqueue` |
-| `backend/tests/helpers/db.ts` | modify | `seedWorkspaceMember`, `seedIntent`, `seedSubintent` helpers; `SCOPED_TABLES` already includes `subintent`/`intent`? verify and add if missing |
-| `backend/tests/schema.test.ts` | modify | three new assertions (composite FK, subintent unique key, conversation status default) |
-| `backend/tests/bot.turnSeam.test.ts` | create | full outcome-matrix test file |
-| `backend/tests/bot.assignment.test.ts` | create | least-loaded assignment test file |
-| `backend/tests/surface.messages.test.ts` | modify | replace the `status: 'open'`-on-create assertion; add the not-provisioned branch assertions |
-| `backend/tests/realtime.internalNote.test.ts` | modify | extend to cover a bot failure note, not just an agent-authored one |
+| File                                              | Action | Responsibility                                                                                                                                 |
+| ------------------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `backend/src/shared/db/schema/taxonomy.ts`        | modify | add `UNIQUE (workspace_id, id)` to `subintent`                                                                                                 |
+| `backend/src/shared/db/schema/conversations.ts`   | modify | add `conversation.subintent_id`, its composite FK, its index                                                                                   |
+| `backend/src/domain/bot/botTurn.ts`               | create | `HandoffReason`, `UnavailableReason`, `BotTurnDecision`, `BotDecider`, `BotTurnInput`, `SILENT_UNAVAILABLE_REASONS`, `stubDecider`             |
+| `backend/src/domain/bot/messages.ts`              | create | `HANDOFF_PLAYER_MESSAGE`, `botFailureNote(reason)`                                                                                             |
+| `backend/src/domain/bot/assignOnHandoff.ts`       | create | `assignOnHandoff(tx, workspaceId)` → `agentId \| null`                                                                                         |
+| `backend/src/domain/bot/applyBotTurn.ts`          | create | `applyBotTurn(tx, ctx, decision)` → `{ posted[], statusChanged }`, all four outcomes                                                           |
+| `backend/src/domain/bot/index.ts`                 | modify | barrel now also exports the four new modules                                                                                                   |
+| `backend/src/domain/conversations/postMessage.ts` | modify | `PostMessageInput.actorId` widens to `string \| null`                                                                                          |
+| `backend/src/surface/services/messagesService.ts` | modify | remove the `status: 'open'` override; add the not-provisioned inline branch; compute (but do not consume) `shouldEnqueue`                      |
+| `backend/tests/helpers/db.ts`                     | modify | `seedWorkspaceMember`, `seedIntent`, `seedSubintent` helpers; `SCOPED_TABLES` already includes `subintent`/`intent`? verify and add if missing |
+| `backend/tests/schema.test.ts`                    | modify | three new assertions (composite FK, subintent unique key, conversation status default)                                                         |
+| `backend/tests/bot.turnSeam.test.ts`              | create | full outcome-matrix test file                                                                                                                  |
+| `backend/tests/bot.assignment.test.ts`            | create | least-loaded assignment test file                                                                                                              |
+| `backend/tests/surface.messages.test.ts`          | modify | replace the `status: 'open'`-on-create assertion; add the not-provisioned branch assertions                                                    |
+| `backend/tests/realtime.internalNote.test.ts`     | modify | extend to cover a bot failure note, not just an agent-authored one                                                                             |
 
 `docs/decisions/spec-contradictions.md` needs **no** edit here — the assignment deviation (§7 of the spec) is Part 1's to record since `assignOnHandoff` is built here.
 
@@ -66,11 +66,13 @@
 ### Task 1: Schema delta — `subintent` unique key, `conversation.subintent_id`, composite FK
 
 **Files:**
+
 - Modify: `backend/src/shared/db/schema/taxonomy.ts`
 - Modify: `backend/src/shared/db/schema/conversations.ts`
 - Test: `backend/tests/schema.test.ts`
 
 **Interfaces:**
+
 - Consumes: nothing new.
 - Produces: `conversation.subintentId` (Drizzle column, `uuid`, nullable) and `subintent`'s new `UNIQUE (workspace_id, id)` index, both importable via `backend/src/shared/db/schema/index.ts` as today.
 
@@ -81,21 +83,21 @@ This is the codebase's **first** composite foreign key (per `docs/decisions/2026
 In `backend/tests/schema.test.ts`, add inside the existing `describe('schema', …)` block:
 
 ```ts
-  it('gives subintent a (workspace_id, id) unique key for the composite FK', async () => {
-    const { rows } = await ownerPool.query<{ indexdef: string }>(
-      `select indexdef from pg_indexes where tablename = 'subintent'`,
-    )
-    const defs = rows.map((r) => r.indexdef).join('\n')
-    expect(defs).toMatch(/UNIQUE INDEX .* ON public\.subintent USING btree \(workspace_id, id\)/)
-  })
+it('gives subintent a (workspace_id, id) unique key for the composite FK', async () => {
+  const { rows } = await ownerPool.query<{ indexdef: string }>(
+    `select indexdef from pg_indexes where tablename = 'subintent'`,
+  );
+  const defs = rows.map((r) => r.indexdef).join('\n');
+  expect(defs).toMatch(/UNIQUE INDEX .* ON public\.subintent USING btree \(workspace_id, id\)/);
+});
 
-  it('adds a nullable, composite-FK conversation.subintent_id', async () => {
-    const cols = await columns('conversation')
-    expect(cols.has('subintent_id')).toBe(true)
-    expect(cols.get('subintent_id')?.nullable).toBe(true)
+it('adds a nullable, composite-FK conversation.subintent_id', async () => {
+  const cols = await columns('conversation');
+  expect(cols.has('subintent_id')).toBe(true);
+  expect(cols.get('subintent_id')?.nullable).toBe(true);
 
-    const { rows } = await ownerPool.query<{ conname: string; confdeltype: string }>(
-      `select conname, confdeltype
+  const { rows } = await ownerPool.query<{ conname: string; confdeltype: string }>(
+    `select conname, confdeltype
          from pg_constraint
         where conrelid = 'conversation'::regclass
           and contype = 'f'
@@ -105,18 +107,18 @@ In `backend/tests/schema.test.ts`, add inside the existing `describe('schema', �
              where attrelid = 'conversation'::regclass
                and attname in ('workspace_id', 'subintent_id')
           )`,
-    )
-    expect(rows.length).toBe(1)
-    expect(rows[0]?.confdeltype).toBe('r') // ON DELETE RESTRICT
-  })
+  );
+  expect(rows.length).toBe(1);
+  expect(rows[0]?.confdeltype).toBe('r'); // ON DELETE RESTRICT
+});
 
-  it('conversation.status still defaults to bot_active', async () => {
-    const { rows } = await ownerPool.query<{ column_default: string }>(
-      `select column_default from information_schema.columns
+it('conversation.status still defaults to bot_active', async () => {
+  const { rows } = await ownerPool.query<{ column_default: string }>(
+    `select column_default from information_schema.columns
         where table_schema = 'public' and table_name = 'conversation' and column_name = 'status'`,
-    )
-    expect(rows[0]?.column_default).toContain('bot_active')
-  })
+  );
+  expect(rows[0]?.column_default).toContain('bot_active');
+});
 ```
 
 - [ ] **Step 2: Run the tests to verify they fail**
@@ -142,7 +144,9 @@ export const subintent = pgTable(
     name: text('name').notNull(),
     defaultPriority: conversationPriority('default_priority'),
     formId: uuid('form_id'),
-    mergedIntoId: uuid('merged_into_id').references((): AnyPgColumn => subintent.id, { onDelete: 'restrict' }),
+    mergedIntoId: uuid('merged_into_id').references((): AnyPgColumn => subintent.id, {
+      onDelete: 'restrict',
+    }),
     archivedAt: timestamp('archived_at', tz),
     createdAt: timestamp('created_at', tz).notNull().defaultNow(),
   },
@@ -153,7 +157,7 @@ export const subintent = pgTable(
     // docs/decisions/2026-08-04-composite-foreign-keys-for-tenancy.md.
     uniqueIndex('subintent_workspace_id_uk').on(t.workspaceId, t.id),
   ],
-)
+);
 ```
 
 - [ ] **Step 4: Add `subintent_id` and its composite FK to `conversation`**
@@ -161,11 +165,20 @@ export const subintent = pgTable(
 In `backend/src/shared/db/schema/conversations.ts`, add the `foreignKey` import and the column:
 
 ```ts
-import { foreignKey, index, integer, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
+import {
+  foreignKey,
+  index,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
 ```
 
 ```ts
-import { subintent } from './taxonomy.ts'
+import { subintent } from './taxonomy.ts';
 ```
 
 Add the column to `conversation`'s column map, after `classificationSource`:
@@ -215,9 +228,11 @@ git commit -m "feat(bot): add conversation.subintent_id with composite FK to sub
 ### Task 2: Test helpers for the new module set
 
 **Files:**
+
 - Modify: `backend/tests/helpers/db.ts`
 
 **Interfaces:**
+
 - Produces: `seedWorkspaceMember(args): Promise<string>` (returns `workspace_member.id`), `seedIntent(args): Promise<string>` (returns `intent.id`), `seedSubintent(args): Promise<string>` (returns `subintent.id`).
 
 Every later task's tests need agents attached to a workspace with a role and active status, and a real subintent row to classify onto. Building these helpers first, and proving them against the schema, means Tasks 3–7's tests are not also debugging fixture SQL.
@@ -232,39 +247,44 @@ In `backend/tests/helpers/db.ts`, append:
 
 ```ts
 export async function seedWorkspaceMember(args: {
-  workspaceId: string
-  agentId: string
-  role?: 'agent' | 'team_lead' | 'admin'
-  deactivatedAt?: Date | null
+  workspaceId: string;
+  agentId: string;
+  role?: 'agent' | 'team_lead' | 'admin';
+  deactivatedAt?: Date | null;
 }): Promise<string> {
-  const id = randomUUID()
+  const id = randomUUID();
   await ownerPool.query(
     `insert into workspace_member (id, workspace_id, agent_id, role, deactivated_at) values ($1, $2, $3, $4, $5)`,
     [id, args.workspaceId, args.agentId, args.role ?? 'agent', args.deactivatedAt ?? null],
-  )
-  return id
+  );
+  return id;
 }
 
-export async function seedIntent(workspaceId: string, name = `Intent ${randomUUID().slice(0, 8)}`): Promise<string> {
-  const id = randomUUID()
-  await ownerPool.query(`insert into intent (id, workspace_id, name) values ($1, $2, $3)`, [id, workspaceId, name])
-  return id
+export async function seedIntent(
+  workspaceId: string,
+  name = `Intent ${randomUUID().slice(0, 8)}`,
+): Promise<string> {
+  const id = randomUUID();
+  await ownerPool.query(`insert into intent (id, workspace_id, name) values ($1, $2, $3)`, [
+    id,
+    workspaceId,
+    name,
+  ]);
+  return id;
 }
 
 export async function seedSubintent(args: {
-  workspaceId: string
-  intentId: string
-  name?: string
+  workspaceId: string;
+  intentId: string;
+  name?: string;
 }): Promise<string> {
-  const id = randomUUID()
-  const name = args.name ?? `Subintent ${randomUUID().slice(0, 8)}`
-  await ownerPool.query(`insert into subintent (id, workspace_id, intent_id, name) values ($1, $2, $3, $4)`, [
-    id,
-    args.workspaceId,
-    args.intentId,
-    name,
-  ])
-  return id
+  const id = randomUUID();
+  const name = args.name ?? `Subintent ${randomUUID().slice(0, 8)}`;
+  await ownerPool.query(
+    `insert into subintent (id, workspace_id, intent_id, name) values ($1, $2, $3, $4)`,
+    [id, args.workspaceId, args.intentId, name],
+  );
+  return id;
 }
 ```
 
@@ -288,7 +308,7 @@ const SCOPED_TABLES = [
   'workspace_member',
   'agent',
   'workspace',
-]
+];
 ```
 
 - [ ] **Step 3: Verify compilation**
@@ -308,10 +328,12 @@ git commit -m "test: add seedWorkspaceMember/seedIntent/seedSubintent helpers, s
 ### Task 3: The `BotDecider` seam and `stubDecider`
 
 **Files:**
+
 - Create: `backend/src/domain/bot/botTurn.ts`
 - Modify: `backend/src/domain/bot/index.ts`
 
 **Interfaces:**
+
 - Consumes: nothing.
 - Produces: `HandoffReason`, `UnavailableReason`, `BotTurnDecision`, `BotTurnInput`, `BotDecider`, `SILENT_UNAVAILABLE_REASONS: ReadonlySet<UnavailableReason>`, `stubDecider: BotDecider`. `BotTurnInput` is `{ workspaceId: string; conversationId: string }` in this slice — Part 2's `runBotTurn` is the only caller and needs nothing richer until spec 2 adds retrieval and spec 4 adds tool budgets.
 
@@ -328,41 +350,47 @@ This is a pure types-and-one-function file — no `Tx`, no I/O, no test file of 
  * in this slice, so a type that grew in the slice that consumes it would make that
  * slice a control-flow change rather than a one-function swap.
  */
-export type HandoffReason = 'model' | 'turn_cap'
+export type HandoffReason = 'model' | 'turn_cap';
 
 export type UnavailableReason =
   | 'not_provisioned' // admin has the bot switched off
   | 'not_implemented' // no decider exists yet — removed once a real one lands
   | 'error' // a turn failed after its retries were exhausted
   | 'timeout' // reserved for the tool-calling decider
-  | 'invalid_response' // reserved for the tool-calling decider
+  | 'invalid_response'; // reserved for the tool-calling decider
 
 export type BotTurnDecision =
   | { kind: 'noop' }
   | { kind: 'answer'; reply: string; subintentId: string }
   | { kind: 'handoff'; reason: HandoffReason; subintentId: string | null }
-  | { kind: 'unavailable'; reason: UnavailableReason }
+  | { kind: 'unavailable'; reason: UnavailableReason };
 
 export type BotTurnInput = {
-  workspaceId: string
-  conversationId: string
-}
+  workspaceId: string;
+  conversationId: string;
+};
 
-export type BotDecider = (input: BotTurnInput) => Promise<BotTurnDecision>
+export type BotDecider = (input: BotTurnInput) => Promise<BotTurnDecision>;
 
 /**
  * The scaffolding decider. `'not_implemented'` exists so a real decider's arrival
  * is a type error at this exact reference, forcing its removal rather than leaving
  * it reachable in production by accident.
  */
-export const stubDecider: BotDecider = async () => ({ kind: 'unavailable', reason: 'not_implemented' })
+export const stubDecider: BotDecider = async () => ({
+  kind: 'unavailable',
+  reason: 'not_implemented',
+});
 
 /**
  * Two `unavailable` reasons are not incidents: an admin deliberately switched the
  * bot off, or no decider has been built yet. Every other reason gets an internal
  * note — see `applyBotTurn`.
  */
-export const SILENT_UNAVAILABLE_REASONS: ReadonlySet<UnavailableReason> = new Set(['not_provisioned', 'not_implemented'])
+export const SILENT_UNAVAILABLE_REASONS: ReadonlySet<UnavailableReason> = new Set([
+  'not_provisioned',
+  'not_implemented',
+]);
 ```
 
 - [ ] **Step 2: Add the barrel export**
@@ -370,7 +398,7 @@ export const SILENT_UNAVAILABLE_REASONS: ReadonlySet<UnavailableReason> = new Se
 In `backend/src/domain/bot/index.ts`, add:
 
 ```ts
-export * from './botTurn.ts'
+export * from './botTurn.ts';
 ```
 
 (Read the existing file first — it currently re-exports `botConfig.ts` and `defaultPrompt.ts`; add this line alongside those, do not replace them.)
@@ -392,10 +420,12 @@ git commit -m "feat(bot): add BotDecider seam, BotTurnDecision union, stubDecide
 ### Task 4: Fixed-copy messages
 
 **Files:**
+
 - Create: `backend/src/domain/bot/messages.ts`
 - Modify: `backend/src/domain/bot/index.ts`
 
 **Interfaces:**
+
 - Consumes: `UnavailableReason` from `./botTurn.ts`.
 - Produces: `HANDOFF_PLAYER_MESSAGE: string`, `botFailureNote(reason: UnavailableReason): string`.
 
@@ -404,19 +434,23 @@ git commit -m "feat(bot): add BotDecider seam, BotTurnDecision union, stubDecide
 Create `backend/tests/bot.messages.test.ts`:
 
 ```ts
-import { describe, expect, it } from 'vitest'
-import { botFailureNote, HANDOFF_PLAYER_MESSAGE } from '../src/domain/bot/messages.ts'
+import { describe, expect, it } from 'vitest';
+import { botFailureNote, HANDOFF_PLAYER_MESSAGE } from '../src/domain/bot/messages.ts';
 
 describe('bot copy', () => {
   it('is the fixed player-facing handoff string', () => {
-    expect(HANDOFF_PLAYER_MESSAGE).toBe("You're being connected to our support team.")
-  })
+    expect(HANDOFF_PLAYER_MESSAGE).toBe("You're being connected to our support team.");
+  });
 
   it('embeds the reason in the internal failure note', () => {
-    expect(botFailureNote('error')).toBe('Bot could not respond (`error`). Handed off unclassified.')
-    expect(botFailureNote('timeout')).toBe('Bot could not respond (`timeout`). Handed off unclassified.')
-  })
-})
+    expect(botFailureNote('error')).toBe(
+      'Bot could not respond (`error`). Handed off unclassified.',
+    );
+    expect(botFailureNote('timeout')).toBe(
+      'Bot could not respond (`timeout`). Handed off unclassified.',
+    );
+  });
+});
 ```
 
 - [ ] **Step 2: Run the test to verify it fails**
@@ -428,7 +462,7 @@ Expected: FAIL — `../src/domain/bot/messages.ts` does not exist.
 
 ```ts
 // backend/src/domain/bot/messages.ts
-import type { UnavailableReason } from './botTurn.ts'
+import type { UnavailableReason } from './botTurn.ts';
 
 /**
  * Identical on every handoff, deliberate or failed — a crash must be
@@ -436,11 +470,11 @@ import type { UnavailableReason } from './botTurn.ts'
  * model output, so a rewritten prompt or a player's own injected instruction
  * cannot reach it.
  */
-export const HANDOFF_PLAYER_MESSAGE = "You're being connected to our support team."
+export const HANDOFF_PLAYER_MESSAGE = "You're being connected to our support team.";
 
 /** The agent-only note for an `unavailable` outcome whose reason is not silent. */
 export function botFailureNote(reason: UnavailableReason): string {
-  return `Bot could not respond (\`${reason}\`). Handed off unclassified.`
+  return `Bot could not respond (\`${reason}\`). Handed off unclassified.`;
 }
 ```
 
@@ -454,7 +488,7 @@ Expected: PASS.
 In `backend/src/domain/bot/index.ts`, add:
 
 ```ts
-export * from './messages.ts'
+export * from './messages.ts';
 ```
 
 - [ ] **Step 6: Commit**
@@ -469,11 +503,13 @@ git commit -m "feat(bot): add fixed handoff copy and internal failure note"
 ### Task 5: `assignOnHandoff` — deterministic least-loaded assignment
 
 **Files:**
+
 - Create: `backend/src/domain/bot/assignOnHandoff.ts`
 - Modify: `backend/src/domain/bot/index.ts`
 - Test: `backend/tests/bot.assignment.test.ts`
 
 **Interfaces:**
+
 - Consumes: `Tx` from `../../shared/db/withWorkspace.ts`; `agent`, `workspaceMember`, `conversation` from `../../shared/db/schema/index.ts`.
 - Produces: `assignOnHandoff(tx: Tx, workspaceId: string): Promise<string | null>`.
 
@@ -484,10 +520,10 @@ Least-loaded: the active member of the workspace with the fewest conversations c
 Create `backend/tests/bot.assignment.test.ts`:
 
 ```ts
-import { afterAll, beforeEach, describe, expect, it } from 'vitest'
-import { assignOnHandoff } from '../src/domain/bot/assignOnHandoff.ts'
-import { withWorkspace } from '../src/shared/db/withWorkspace.ts'
-import { closeDb } from '../src/shared/db/client.ts'
+import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { assignOnHandoff } from '../src/domain/bot/assignOnHandoff.ts';
+import { withWorkspace } from '../src/shared/db/withWorkspace.ts';
+import { closeDb } from '../src/shared/db/client.ts';
 import {
   closeOwnerPool,
   ownerPool,
@@ -497,121 +533,124 @@ import {
   seedWorkspace,
   seedWorkspaceMember,
   truncateAll,
-} from './helpers/db.ts'
+} from './helpers/db.ts';
 
-beforeEach(truncateAll)
+beforeEach(truncateAll);
 afterAll(async () => {
-  await closeDb()
-  await closeOwnerPool()
-})
+  await closeDb();
+  await closeOwnerPool();
+});
 
-async function assignConversationTo(conversationId: string, agentId: string, status = 'open'): Promise<void> {
-  await ownerPool.query(`update conversation set assigned_agent_id = $2, status = $3 where id = $1`, [
-    conversationId,
-    agentId,
-    status,
-  ])
+async function assignConversationTo(
+  conversationId: string,
+  agentId: string,
+  status = 'open',
+): Promise<void> {
+  await ownerPool.query(
+    `update conversation set assigned_agent_id = $2, status = $3 where id = $1`,
+    [conversationId, agentId, status],
+  );
 }
 
 describe('assignOnHandoff', () => {
   it('picks the active member with fewest live-status conversations', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const busyAgent = await seedAgent()
-    const idleAgent = await seedAgent()
-    await seedWorkspaceMember({ workspaceId, agentId: busyAgent })
-    await seedWorkspaceMember({ workspaceId, agentId: idleAgent })
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const busyAgent = await seedAgent();
+    const idleAgent = await seedAgent();
+    await seedWorkspaceMember({ workspaceId, agentId: busyAgent });
+    await seedWorkspaceMember({ workspaceId, agentId: idleAgent });
 
-    const busyConvo = await seedConversation({ workspaceId, playerId })
-    await assignConversationTo(busyConvo, busyAgent, 'open')
+    const busyConvo = await seedConversation({ workspaceId, playerId });
+    await assignConversationTo(busyConvo, busyAgent, 'open');
 
-    const result = await withWorkspace(workspaceId, (tx) => assignOnHandoff(tx, workspaceId))
-    expect(result).toBe(idleAgent)
-  })
+    const result = await withWorkspace(workspaceId, (tx) => assignOnHandoff(tx, workspaceId));
+    expect(result).toBe(idleAgent);
+  });
 
   it('breaks ties by agent.id ascending', async () => {
-    const workspaceId = await seedWorkspace()
-    const agentLow = await seedAgent('a-low@example.test')
-    const agentHigh = await seedAgent('a-high@example.test')
-    await seedWorkspaceMember({ workspaceId, agentId: agentLow })
-    await seedWorkspaceMember({ workspaceId, agentId: agentHigh })
+    const workspaceId = await seedWorkspace();
+    const agentLow = await seedAgent('a-low@example.test');
+    const agentHigh = await seedAgent('a-high@example.test');
+    await seedWorkspaceMember({ workspaceId, agentId: agentLow });
+    await seedWorkspaceMember({ workspaceId, agentId: agentHigh });
 
-    const [lo, hi] = [agentLow, agentHigh].sort()
-    const result = await withWorkspace(workspaceId, (tx) => assignOnHandoff(tx, workspaceId))
-    expect(result).toBe(lo)
-    expect(result).not.toBe(hi)
-  })
+    const [lo, hi] = [agentLow, agentHigh].sort();
+    const result = await withWorkspace(workspaceId, (tx) => assignOnHandoff(tx, workspaceId));
+    expect(result).toBe(lo);
+    expect(result).not.toBe(hi);
+  });
 
   it('skips a deactivated workspace member', async () => {
-    const workspaceId = await seedWorkspace()
-    const deactivated = await seedAgent()
-    const active = await seedAgent()
-    await seedWorkspaceMember({ workspaceId, agentId: deactivated, deactivatedAt: new Date() })
-    await seedWorkspaceMember({ workspaceId, agentId: active })
+    const workspaceId = await seedWorkspace();
+    const deactivated = await seedAgent();
+    const active = await seedAgent();
+    await seedWorkspaceMember({ workspaceId, agentId: deactivated, deactivatedAt: new Date() });
+    await seedWorkspaceMember({ workspaceId, agentId: active });
 
-    const result = await withWorkspace(workspaceId, (tx) => assignOnHandoff(tx, workspaceId))
-    expect(result).toBe(active)
-  })
+    const result = await withWorkspace(workspaceId, (tx) => assignOnHandoff(tx, workspaceId));
+    expect(result).toBe(active);
+  });
 
   it('skips an agent whose status is not active', async () => {
-    const workspaceId = await seedWorkspace()
-    const onLeave = await seedAgent()
-    const active = await seedAgent()
-    await ownerPool.query(`update agent set status = 'on_leave' where id = $1`, [onLeave])
-    await seedWorkspaceMember({ workspaceId, agentId: onLeave })
-    await seedWorkspaceMember({ workspaceId, agentId: active })
+    const workspaceId = await seedWorkspace();
+    const onLeave = await seedAgent();
+    const active = await seedAgent();
+    await ownerPool.query(`update agent set status = 'on_leave' where id = $1`, [onLeave]);
+    await seedWorkspaceMember({ workspaceId, agentId: onLeave });
+    await seedWorkspaceMember({ workspaceId, agentId: active });
 
-    const result = await withWorkspace(workspaceId, (tx) => assignOnHandoff(tx, workspaceId))
-    expect(result).toBe(active)
-  })
+    const result = await withWorkspace(workspaceId, (tx) => assignOnHandoff(tx, workspaceId));
+    expect(result).toBe(active);
+  });
 
   it('includes admins and team leads', async () => {
-    const workspaceId = await seedWorkspace()
-    const admin = await seedAgent()
-    await seedWorkspaceMember({ workspaceId, agentId: admin, role: 'admin' })
+    const workspaceId = await seedWorkspace();
+    const admin = await seedAgent();
+    await seedWorkspaceMember({ workspaceId, agentId: admin, role: 'admin' });
 
-    const result = await withWorkspace(workspaceId, (tx) => assignOnHandoff(tx, workspaceId))
-    expect(result).toBe(admin)
-  })
+    const result = await withWorkspace(workspaceId, (tx) => assignOnHandoff(tx, workspaceId));
+    expect(result).toBe(admin);
+  });
 
   it('returns null, not an error, when no active agent exists', async () => {
-    const workspaceId = await seedWorkspace()
-    const result = await withWorkspace(workspaceId, (tx) => assignOnHandoff(tx, workspaceId))
-    expect(result).toBeNull()
-  })
+    const workspaceId = await seedWorkspace();
+    const result = await withWorkspace(workspaceId, (tx) => assignOnHandoff(tx, workspaceId));
+    expect(result).toBeNull();
+  });
 
   it('never picks an agent from another workspace', async () => {
-    const workspaceA = await seedWorkspace()
-    const workspaceB = await seedWorkspace()
-    const agentB = await seedAgent()
-    await seedWorkspaceMember({ workspaceId: workspaceB, agentId: agentB })
+    const workspaceA = await seedWorkspace();
+    const workspaceB = await seedWorkspace();
+    const agentB = await seedAgent();
+    await seedWorkspaceMember({ workspaceId: workspaceB, agentId: agentB });
 
-    const result = await withWorkspace(workspaceA, (tx) => assignOnHandoff(tx, workspaceA))
-    expect(result).toBeNull()
-  })
+    const result = await withWorkspace(workspaceA, (tx) => assignOnHandoff(tx, workspaceA));
+    expect(result).toBeNull();
+  });
 
   it('only counts open, awaiting_player, escalated as live — not resolved or closed', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const agentA = await seedAgent()
-    const agentB = await seedAgent()
-    await seedWorkspaceMember({ workspaceId, agentId: agentA })
-    await seedWorkspaceMember({ workspaceId, agentId: agentB })
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const agentA = await seedAgent();
+    const agentB = await seedAgent();
+    await seedWorkspaceMember({ workspaceId, agentId: agentA });
+    await seedWorkspaceMember({ workspaceId, agentId: agentB });
 
     // agentA has two RESOLVED conversations — should not count against them.
-    const c1 = await seedConversation({ workspaceId, playerId })
-    const c2 = await seedConversation({ workspaceId, playerId })
-    await assignConversationTo(c1, agentA, 'resolved')
-    await assignConversationTo(c2, agentA, 'closed')
+    const c1 = await seedConversation({ workspaceId, playerId });
+    const c2 = await seedConversation({ workspaceId, playerId });
+    await assignConversationTo(c1, agentA, 'resolved');
+    await assignConversationTo(c2, agentA, 'closed');
 
     // agentB has one OPEN conversation — should count.
-    const c3 = await seedConversation({ workspaceId, playerId })
-    await assignConversationTo(c3, agentB, 'open')
+    const c3 = await seedConversation({ workspaceId, playerId });
+    await assignConversationTo(c3, agentB, 'open');
 
-    const result = await withWorkspace(workspaceId, (tx) => assignOnHandoff(tx, workspaceId))
-    expect(result).toBe(agentA)
-  })
-})
+    const result = await withWorkspace(workspaceId, (tx) => assignOnHandoff(tx, workspaceId));
+    expect(result).toBe(agentA);
+  });
+});
 ```
 
 - [ ] **Step 2: Run the tests to verify they fail**
@@ -623,11 +662,11 @@ Expected: FAIL — `../src/domain/bot/assignOnHandoff.ts` does not exist.
 
 ```ts
 // backend/src/domain/bot/assignOnHandoff.ts
-import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm'
-import type { Tx } from '../../shared/db/withWorkspace.ts'
-import { agent, conversation, workspaceMember } from '../../shared/db/schema/index.ts'
+import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import type { Tx } from '../../shared/db/withWorkspace.ts';
+import { agent, conversation, workspaceMember } from '../../shared/db/schema/index.ts';
 
-const LIVE_STATUSES = ['open', 'awaiting_player', 'escalated'] as const
+const LIVE_STATUSES = ['open', 'awaiting_player', 'escalated'] as const;
 
 /**
  * Deterministic least-loaded, not round-robin — see the deviation recorded in
@@ -647,12 +686,21 @@ export async function assignOnHandoff(tx: Tx, workspaceId: string): Promise<stri
       conversation,
       and(eq(conversation.assignedAgentId, agent.id), eq(conversation.workspaceId, workspaceId)),
     )
-    .where(and(eq(workspaceMember.workspaceId, workspaceId), isNull(workspaceMember.deactivatedAt), eq(agent.status, 'active')))
+    .where(
+      and(
+        eq(workspaceMember.workspaceId, workspaceId),
+        isNull(workspaceMember.deactivatedAt),
+        eq(agent.status, 'active'),
+      ),
+    )
     .groupBy(agent.id)
-    .orderBy(sql`count(${conversation.id}) filter (where ${inArray(conversation.status, [...LIVE_STATUSES])}) asc`, asc(agent.id))
-    .limit(1)
+    .orderBy(
+      sql`count(${conversation.id}) filter (where ${inArray(conversation.status, [...LIVE_STATUSES])}) asc`,
+      asc(agent.id),
+    )
+    .limit(1);
 
-  return rows[0]?.agentId ?? null
+  return rows[0]?.agentId ?? null;
 }
 ```
 
@@ -666,7 +714,7 @@ Expected: PASS, all eight tests.
 In `backend/src/domain/bot/index.ts`, add:
 
 ```ts
-export * from './assignOnHandoff.ts'
+export * from './assignOnHandoff.ts';
 ```
 
 - [ ] **Step 6: Commit**
@@ -681,9 +729,11 @@ git commit -m "feat(bot): add deterministic least-loaded assignOnHandoff"
 ### Task 6: Widen `PostMessageInput.actorId` to `string | null`
 
 **Files:**
+
 - Modify: `backend/src/domain/conversations/postMessage.ts`
 
 **Interfaces:**
+
 - Consumes: nothing new.
 - Produces: `PostMessageInput.actorId: string | null` (was `string`). `postMessage` already passes `actorId` straight to `appendEvent`, whose `EventInput.actorId` is already `string | null | undefined` — no change needed there.
 
@@ -699,20 +749,20 @@ Expected: existing call sites pass a string literal or a seeded id; none assert 
 In `backend/src/domain/conversations/postMessage.ts`, change:
 
 ```ts
-  /** The player id or agent id behind this send — recorded on the event, not the message row. */
-  actorId: string
+/** The player id or agent id behind this send — recorded on the event, not the message row. */
+actorId: string;
 ```
 
 to:
 
 ```ts
-  /**
-   * The player id or agent id behind this send — recorded on the event, not the
-   * message row. Null for a `system` message: it has no player and no agent
-   * behind it, and inventing a sentinel actor id would put a fictional uuid in
-   * the reporting spine.
-   */
-  actorId: string | null
+/**
+ * The player id or agent id behind this send — recorded on the event, not the
+ * message row. Null for a `system` message: it has no player and no agent
+ * behind it, and inventing a sentinel actor id would put a fictional uuid in
+ * the reporting spine.
+ */
+actorId: string | null;
 ```
 
 - [ ] **Step 3: Verify existing callers still typecheck**
@@ -740,45 +790,51 @@ git commit -m "feat(conversations): widen PostMessageInput.actorId to string | n
 ### Task 7: `applyBotTurn` — all four outcomes
 
 **Files:**
+
 - Create: `backend/src/domain/bot/applyBotTurn.ts`
 - Modify: `backend/src/domain/bot/index.ts`
 - Test: `backend/tests/bot.turnSeam.test.ts`
 
 **Interfaces:**
+
 - Consumes: `BotTurnDecision`, `SILENT_UNAVAILABLE_REASONS` from `./botTurn.ts`; `HANDOFF_PLAYER_MESSAGE`, `botFailureNote` from `./messages.ts`; `assignOnHandoff` from `./assignOnHandoff.ts`; `postMessage`, `PostedMessageRow` from `../conversations/postMessage.ts`; `appendEvent` from `../../shared/events/appendEvent.ts`; `Tx` from `../../shared/db/withWorkspace.ts`; `conversation`, `subintent`, `intent` from `../../shared/db/schema/index.ts`.
 - Produces:
   ```ts
   export type ApplyBotTurnContext = {
-    workspaceId: string
-    conversationId: string
-  }
+    workspaceId: string;
+    conversationId: string;
+  };
   export type ApplyBotTurnResult = {
-    posted: PostedMessageRow[]
-    statusChanged: boolean
-  }
-  export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: BotTurnDecision): Promise<ApplyBotTurnResult>
+    posted: PostedMessageRow[];
+    statusChanged: boolean;
+  };
+  export async function applyBotTurn(
+    tx: Tx,
+    ctx: ApplyBotTurnContext,
+    decision: BotTurnDecision,
+  ): Promise<ApplyBotTurnResult>;
   ```
   Part 2's `runBotTurn` and this plan's `sendPlayerMessage` not-provisioned branch both call this signature — do not change it without updating both.
 
 Outcome table (spec's, verbatim):
 
-| `kind` | Message(s) | Status | Assign | Classification | Events |
-|---|---|---|---|---|---|
-| `noop` | — | unchanged | — | — | — |
-| `answer` | `bot`, public | stays `bot_active` | — | set if NULL | `intent_set` if written |
-| `handoff` | `system`, public | → `open` | `assignOnHandoff` | set if NULL | `intent_set` if written, then `bot_handoff` |
-| `unavailable` | `system` public, **+** `system` internal unless reason is silent | → `open` | `assignOnHandoff` | untouched, stays NULL | `bot_unavailable` |
+| `kind`        | Message(s)                                                       | Status             | Assign            | Classification        | Events                                      |
+| ------------- | ---------------------------------------------------------------- | ------------------ | ----------------- | --------------------- | ------------------------------------------- |
+| `noop`        | —                                                                | unchanged          | —                 | —                     | —                                           |
+| `answer`      | `bot`, public                                                    | stays `bot_active` | —                 | set if NULL           | `intent_set` if written                     |
+| `handoff`     | `system`, public                                                 | → `open`           | `assignOnHandoff` | set if NULL           | `intent_set` if written, then `bot_handoff` |
+| `unavailable` | `system` public, **+** `system` internal unless reason is silent | → `open`           | `assignOnHandoff` | untouched, stays NULL | `bot_unavailable`                           |
 
 - [ ] **Step 1: Write the failing tests**
 
 Create `backend/tests/bot.turnSeam.test.ts`:
 
 ```ts
-import { afterAll, beforeEach, describe, expect, it } from 'vitest'
-import { applyBotTurn } from '../src/domain/bot/applyBotTurn.ts'
-import { HANDOFF_PLAYER_MESSAGE, botFailureNote } from '../src/domain/bot/messages.ts'
-import { withWorkspace } from '../src/shared/db/withWorkspace.ts'
-import { closeDb } from '../src/shared/db/client.ts'
+import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { applyBotTurn } from '../src/domain/bot/applyBotTurn.ts';
+import { HANDOFF_PLAYER_MESSAGE, botFailureNote } from '../src/domain/bot/messages.ts';
+import { withWorkspace } from '../src/shared/db/withWorkspace.ts';
+import { closeDb } from '../src/shared/db/client.ts';
 import {
   closeOwnerPool,
   ownerPool,
@@ -790,221 +846,259 @@ import {
   seedWorkspace,
   seedWorkspaceMember,
   truncateAll,
-} from './helpers/db.ts'
+} from './helpers/db.ts';
 
-beforeEach(truncateAll)
+beforeEach(truncateAll);
 afterAll(async () => {
-  await closeDb()
-  await closeOwnerPool()
-})
+  await closeDb();
+  await closeOwnerPool();
+});
 
 async function conversationRow(id: string) {
   const { rows } = await ownerPool.query(
     `select status, assigned_agent_id, subintent_id, classification_source from conversation where id = $1`,
     [id],
-  )
-  return rows[0]
+  );
+  return rows[0];
 }
 
 async function messagesFor(conversationId: string) {
   const { rows } = await ownerPool.query(
     `select author_type, visibility, body from message where conversation_id = $1 order by seq`,
     [conversationId],
-  )
-  return rows
+  );
+  return rows;
 }
 
 async function eventsFor(conversationId: string) {
-  const { rows } = await ownerPool.query(`select type, payload from event where conversation_id = $1 order by id`, [
-    conversationId,
-  ])
-  return rows
+  const { rows } = await ownerPool.query(
+    `select type, payload from event where conversation_id = $1 order by id`,
+    [conversationId],
+  );
+  return rows;
 }
 
 describe('applyBotTurn', () => {
   it('noop writes nothing', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
 
-    await withWorkspace(workspaceId, (tx) => applyBotTurn(tx, { workspaceId, conversationId }, { kind: 'noop' }))
+    await withWorkspace(workspaceId, (tx) =>
+      applyBotTurn(tx, { workspaceId, conversationId }, { kind: 'noop' }),
+    );
 
-    expect(await messagesFor(conversationId)).toEqual([])
-    expect(await eventsFor(conversationId)).toEqual([])
-    const row = await conversationRow(conversationId)
-    expect(row.status).toBe('bot_active')
-  })
+    expect(await messagesFor(conversationId)).toEqual([]);
+    expect(await eventsFor(conversationId)).toEqual([]);
+    const row = await conversationRow(conversationId);
+    expect(row.status).toBe('bot_active');
+  });
 
   it('answer keeps bot_active, posts one public bot message, classifies once', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
-    const intentId = await seedIntent(workspaceId, 'Billing')
-    const subintentId = await seedSubintent({ workspaceId, intentId, name: 'Refund' })
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
+    const intentId = await seedIntent(workspaceId, 'Billing');
+    const subintentId = await seedSubintent({ workspaceId, intentId, name: 'Refund' });
 
     await withWorkspace(workspaceId, (tx) =>
-      applyBotTurn(tx, { workspaceId, conversationId }, { kind: 'answer', reply: 'Here is how refunds work.', subintentId }),
-    )
+      applyBotTurn(
+        tx,
+        { workspaceId, conversationId },
+        { kind: 'answer', reply: 'Here is how refunds work.', subintentId },
+      ),
+    );
 
-    const msgs = await messagesFor(conversationId)
-    expect(msgs).toEqual([{ author_type: 'bot', visibility: 'public', body: 'Here is how refunds work.' }])
+    const msgs = await messagesFor(conversationId);
+    expect(msgs).toEqual([
+      { author_type: 'bot', visibility: 'public', body: 'Here is how refunds work.' },
+    ]);
 
-    const row = await conversationRow(conversationId)
-    expect(row.status).toBe('bot_active')
-    expect(row.subintent_id).toBe(subintentId)
-    expect(row.classification_source).toBe('bot')
+    const row = await conversationRow(conversationId);
+    expect(row.status).toBe('bot_active');
+    expect(row.subintent_id).toBe(subintentId);
+    expect(row.classification_source).toBe('bot');
 
-    const events = await eventsFor(conversationId)
-    expect(events.map((e) => e.type)).toEqual(['intent_set'])
-    expect(events[0].payload).toMatchObject({ source: 'bot', subintent_name: 'Refund', intent_name: 'Billing' })
-  })
+    const events = await eventsFor(conversationId);
+    expect(events.map((e) => e.type)).toEqual(['intent_set']);
+    expect(events[0].payload).toMatchObject({
+      source: 'bot',
+      subintent_name: 'Refund',
+      intent_name: 'Billing',
+    });
+  });
 
   it('a second answer does not reclassify or append a second intent_set', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
-    const intentId = await seedIntent(workspaceId)
-    const firstSubintent = await seedSubintent({ workspaceId, intentId })
-    const secondSubintent = await seedSubintent({ workspaceId, intentId })
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
+    const intentId = await seedIntent(workspaceId);
+    const firstSubintent = await seedSubintent({ workspaceId, intentId });
+    const secondSubintent = await seedSubintent({ workspaceId, intentId });
 
     await withWorkspace(workspaceId, (tx) =>
-      applyBotTurn(tx, { workspaceId, conversationId }, { kind: 'answer', reply: 'first', subintentId: firstSubintent }),
-    )
+      applyBotTurn(
+        tx,
+        { workspaceId, conversationId },
+        { kind: 'answer', reply: 'first', subintentId: firstSubintent },
+      ),
+    );
     await withWorkspace(workspaceId, (tx) =>
-      applyBotTurn(tx, { workspaceId, conversationId }, { kind: 'answer', reply: 'second', subintentId: secondSubintent }),
-    )
+      applyBotTurn(
+        tx,
+        { workspaceId, conversationId },
+        { kind: 'answer', reply: 'second', subintentId: secondSubintent },
+      ),
+    );
 
-    const row = await conversationRow(conversationId)
-    expect(row.subintent_id).toBe(firstSubintent)
+    const row = await conversationRow(conversationId);
+    expect(row.subintent_id).toBe(firstSubintent);
 
-    const events = await eventsFor(conversationId)
-    expect(events.filter((e) => e.type === 'intent_set').length).toBe(1)
-  })
+    const events = await eventsFor(conversationId);
+    expect(events.filter((e) => e.type === 'intent_set').length).toBe(1);
+  });
 
   it('handoff flips to open, posts one public system message, no internal note, assigns, appends bot_handoff', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
-    const availableAgent = await seedAgent()
-    await seedWorkspaceMember({ workspaceId, agentId: availableAgent })
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
+    const availableAgent = await seedAgent();
+    await seedWorkspaceMember({ workspaceId, agentId: availableAgent });
 
     await withWorkspace(workspaceId, (tx) =>
-      applyBotTurn(tx, { workspaceId, conversationId }, { kind: 'handoff', reason: 'model', subintentId: null }),
-    )
+      applyBotTurn(
+        tx,
+        { workspaceId, conversationId },
+        { kind: 'handoff', reason: 'model', subintentId: null },
+      ),
+    );
 
-    const msgs = await messagesFor(conversationId)
-    expect(msgs).toEqual([{ author_type: 'system', visibility: 'public', body: HANDOFF_PLAYER_MESSAGE }])
+    const msgs = await messagesFor(conversationId);
+    expect(msgs).toEqual([
+      { author_type: 'system', visibility: 'public', body: HANDOFF_PLAYER_MESSAGE },
+    ]);
 
-    const row = await conversationRow(conversationId)
-    expect(row.status).toBe('open')
-    expect(row.assigned_agent_id).toBe(availableAgent)
-    expect(row.subintent_id).toBeNull()
+    const row = await conversationRow(conversationId);
+    expect(row.status).toBe('open');
+    expect(row.assigned_agent_id).toBe(availableAgent);
+    expect(row.subintent_id).toBeNull();
 
-    const events = await eventsFor(conversationId)
-    expect(events.map((e) => e.type)).toEqual(['bot_handoff'])
-    expect(events[0].payload).toEqual({ reason: 'model' })
-  })
+    const events = await eventsFor(conversationId);
+    expect(events.map((e) => e.type)).toEqual(['bot_handoff']);
+    expect(events[0].payload).toEqual({ reason: 'model' });
+  });
 
   it('unavailable with a loud reason posts a public message and an internal note, appends bot_unavailable, no intent_set', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
 
     await withWorkspace(workspaceId, (tx) =>
       applyBotTurn(tx, { workspaceId, conversationId }, { kind: 'unavailable', reason: 'error' }),
-    )
+    );
 
-    const msgs = await messagesFor(conversationId)
+    const msgs = await messagesFor(conversationId);
     expect(msgs).toEqual([
       { author_type: 'system', visibility: 'public', body: HANDOFF_PLAYER_MESSAGE },
       { author_type: 'system', visibility: 'internal', body: botFailureNote('error') },
-    ])
+    ]);
 
-    const row = await conversationRow(conversationId)
-    expect(row.status).toBe('open')
-    expect(row.subintent_id).toBeNull()
+    const row = await conversationRow(conversationId);
+    expect(row.status).toBe('open');
+    expect(row.subintent_id).toBeNull();
 
-    const events = await eventsFor(conversationId)
-    expect(events.map((e) => e.type)).toEqual(['bot_unavailable'])
-    expect(events[0].payload).toEqual({ reason: 'error' })
-  })
+    const events = await eventsFor(conversationId);
+    expect(events.map((e) => e.type)).toEqual(['bot_unavailable']);
+    expect(events[0].payload).toEqual({ reason: 'error' });
+  });
 
   it.each(['not_provisioned', 'not_implemented'] as const)(
     'unavailable with silent reason %s posts no internal note but still appends bot_unavailable',
     async (reason) => {
-      const workspaceId = await seedWorkspace()
-      const playerId = await seedPlayer(workspaceId)
-      const conversationId = await seedConversation({ workspaceId, playerId })
+      const workspaceId = await seedWorkspace();
+      const playerId = await seedPlayer(workspaceId);
+      const conversationId = await seedConversation({ workspaceId, playerId });
 
       await withWorkspace(workspaceId, (tx) =>
         applyBotTurn(tx, { workspaceId, conversationId }, { kind: 'unavailable', reason }),
-      )
+      );
 
-      const msgs = await messagesFor(conversationId)
-      expect(msgs).toEqual([{ author_type: 'system', visibility: 'public', body: HANDOFF_PLAYER_MESSAGE }])
+      const msgs = await messagesFor(conversationId);
+      expect(msgs).toEqual([
+        { author_type: 'system', visibility: 'public', body: HANDOFF_PLAYER_MESSAGE },
+      ]);
 
-      const events = await eventsFor(conversationId)
-      expect(events.map((e) => e.type)).toEqual(['bot_unavailable'])
-      expect(events[0].payload).toEqual({ reason })
+      const events = await eventsFor(conversationId);
+      expect(events.map((e) => e.type)).toEqual(['bot_unavailable']);
+      expect(events[0].payload).toEqual({ reason });
     },
-  )
+  );
 
   it('no active agent leaves assigned_agent_id null but still flips status to open', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
 
     await withWorkspace(workspaceId, (tx) =>
-      applyBotTurn(tx, { workspaceId, conversationId }, { kind: 'unavailable', reason: 'not_provisioned' }),
-    )
+      applyBotTurn(
+        tx,
+        { workspaceId, conversationId },
+        { kind: 'unavailable', reason: 'not_provisioned' },
+      ),
+    );
 
-    const row = await conversationRow(conversationId)
-    expect(row.status).toBe('open')
-    expect(row.assigned_agent_id).toBeNull()
-  })
+    const row = await conversationRow(conversationId);
+    expect(row.status).toBe('open');
+    expect(row.assigned_agent_id).toBeNull();
+  });
 
   it('is atomic: an event-append failure rolls back the message and status change', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
 
     // A conversation_id that cannot exist forces appendEvent's insert to violate
     // the FK inside the same transaction applyBotTurn runs its writes in — this
     // proves rollback without mocking anything.
     await expect(
       withWorkspace(workspaceId, async (tx) => {
-        await applyBotTurn(tx, { workspaceId, conversationId: '00000000-0000-0000-0000-000000000000' }, {
-          kind: 'handoff',
-          reason: 'model',
-          subintentId: null,
-        })
+        await applyBotTurn(
+          tx,
+          { workspaceId, conversationId: '00000000-0000-0000-0000-000000000000' },
+          {
+            kind: 'handoff',
+            reason: 'model',
+            subintentId: null,
+          },
+        );
       }),
-    ).rejects.toThrow()
+    ).rejects.toThrow();
 
-    const row = await conversationRow(conversationId)
-    expect(row.status).toBe('bot_active')
-    expect(await messagesFor(conversationId)).toEqual([])
-  })
+    const row = await conversationRow(conversationId);
+    expect(row.status).toBe('bot_active');
+    expect(await messagesFor(conversationId)).toEqual([]);
+  });
 
   it('cross-tenant FK is refused by the database, not a handler', async () => {
-    const workspaceA = await seedWorkspace()
-    const workspaceB = await seedWorkspace()
-    const playerA = await seedPlayer(workspaceA)
-    const conversationId = await seedConversation({ workspaceId: workspaceA, playerId: playerA })
-    const intentB = await seedIntent(workspaceB)
-    const subintentB = await seedSubintent({ workspaceId: workspaceB, intentId: intentB })
+    const workspaceA = await seedWorkspace();
+    const workspaceB = await seedWorkspace();
+    const playerA = await seedPlayer(workspaceA);
+    const conversationId = await seedConversation({ workspaceId: workspaceA, playerId: playerA });
+    const intentB = await seedIntent(workspaceB);
+    const subintentB = await seedSubintent({ workspaceId: workspaceB, intentId: intentB });
 
     await expect(
       withWorkspace(workspaceA, async (tx) => {
         await tx.execute(
           // Raw SQL: the point is proving the database's composite FK refuses this,
           // not that application code happens not to attempt it.
-          require('drizzle-orm').sql`update conversation set subintent_id = ${subintentB} where id = ${conversationId}`,
-        )
+          require('drizzle-orm')
+            .sql`update conversation set subintent_id = ${subintentB} where id = ${conversationId}`,
+        );
       }),
-    ).rejects.toThrow()
-  })
-})
+    ).rejects.toThrow();
+  });
+});
 ```
 
 - [ ] **Step 2: Run the tests to verify they fail**
@@ -1016,25 +1110,25 @@ Expected: FAIL — `../src/domain/bot/applyBotTurn.ts` does not exist.
 
 ```ts
 // backend/src/domain/bot/applyBotTurn.ts
-import { eq, isNull } from 'drizzle-orm'
-import type { BotTurnDecision } from './botTurn.ts'
-import { SILENT_UNAVAILABLE_REASONS } from './botTurn.ts'
-import { botFailureNote, HANDOFF_PLAYER_MESSAGE } from './messages.ts'
-import { assignOnHandoff } from './assignOnHandoff.ts'
-import { postMessage, type PostedMessageRow } from '../conversations/postMessage.ts'
-import { appendEvent } from '../../shared/events/appendEvent.ts'
-import type { Tx } from '../../shared/db/withWorkspace.ts'
-import { conversation, intent, subintent } from '../../shared/db/schema/index.ts'
+import { eq, isNull } from 'drizzle-orm';
+import type { BotTurnDecision } from './botTurn.ts';
+import { SILENT_UNAVAILABLE_REASONS } from './botTurn.ts';
+import { botFailureNote, HANDOFF_PLAYER_MESSAGE } from './messages.ts';
+import { assignOnHandoff } from './assignOnHandoff.ts';
+import { postMessage, type PostedMessageRow } from '../conversations/postMessage.ts';
+import { appendEvent } from '../../shared/events/appendEvent.ts';
+import type { Tx } from '../../shared/db/withWorkspace.ts';
+import { conversation, intent, subintent } from '../../shared/db/schema/index.ts';
 
 export type ApplyBotTurnContext = {
-  workspaceId: string
-  conversationId: string
-}
+  workspaceId: string;
+  conversationId: string;
+};
 
 export type ApplyBotTurnResult = {
-  posted: PostedMessageRow[]
-  statusChanged: boolean
-}
+  posted: PostedMessageRow[];
+  statusChanged: boolean;
+};
 
 /**
  * The only writer of a bot-turn outcome. One transaction per call — the caller
@@ -1042,10 +1136,14 @@ export type ApplyBotTurnResult = {
  * lands) owns that transaction via `tx`. Socket emits never happen in here —
  * only after the caller's transaction commits.
  */
-export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: BotTurnDecision): Promise<ApplyBotTurnResult> {
+export async function applyBotTurn(
+  tx: Tx,
+  ctx: ApplyBotTurnContext,
+  decision: BotTurnDecision,
+): Promise<ApplyBotTurnResult> {
   switch (decision.kind) {
     case 'noop':
-      return { posted: [], statusChanged: false }
+      return { posted: [], statusChanged: false };
 
     case 'answer': {
       const posted = await postMessage(tx, {
@@ -1055,9 +1153,9 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
         actorId: null,
         body: decision.reply,
         visibility: 'public',
-      })
-      await classifyIfUnset(tx, ctx, decision.subintentId)
-      return { posted: [posted], statusChanged: false }
+      });
+      await classifyIfUnset(tx, ctx, decision.subintentId);
+      return { posted: [posted], statusChanged: false };
     }
 
     case 'handoff': {
@@ -1068,13 +1166,13 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
         actorId: null,
         body: HANDOFF_PLAYER_MESSAGE,
         visibility: 'public',
-      })
-      if (decision.subintentId) await classifyIfUnset(tx, ctx, decision.subintentId)
-      const assignedAgentId = await assignOnHandoff(tx, ctx.workspaceId)
+      });
+      if (decision.subintentId) await classifyIfUnset(tx, ctx, decision.subintentId);
+      const assignedAgentId = await assignOnHandoff(tx, ctx.workspaceId);
       await tx
         .update(conversation)
         .set({ status: 'open', assignedAgentId })
-        .where(eq(conversation.id, ctx.conversationId))
+        .where(eq(conversation.id, ctx.conversationId));
       await appendEvent(tx, {
         workspaceId: ctx.workspaceId,
         type: 'bot_handoff',
@@ -1082,8 +1180,8 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
         actorId: null,
         actorType: 'bot',
         payload: { reason: decision.reason },
-      })
-      return { posted: [posted], statusChanged: true }
+      });
+      return { posted: [posted], statusChanged: true };
     }
 
     case 'unavailable': {
@@ -1096,7 +1194,7 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
           body: HANDOFF_PLAYER_MESSAGE,
           visibility: 'public',
         }),
-      ]
+      ];
       if (!SILENT_UNAVAILABLE_REASONS.has(decision.reason)) {
         posted.push(
           await postMessage(tx, {
@@ -1107,13 +1205,13 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
             body: botFailureNote(decision.reason),
             visibility: 'internal',
           }),
-        )
+        );
       }
-      const assignedAgentId = await assignOnHandoff(tx, ctx.workspaceId)
+      const assignedAgentId = await assignOnHandoff(tx, ctx.workspaceId);
       await tx
         .update(conversation)
         .set({ status: 'open', assignedAgentId })
-        .where(eq(conversation.id, ctx.conversationId))
+        .where(eq(conversation.id, ctx.conversationId));
       await appendEvent(tx, {
         workspaceId: ctx.workspaceId,
         type: 'bot_unavailable',
@@ -1121,8 +1219,8 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
         actorId: null,
         actorType: 'bot',
         payload: { reason: decision.reason },
-      })
-      return { posted, statusChanged: true }
+      });
+      return { posted, statusChanged: true };
     }
   }
 }
@@ -1132,21 +1230,25 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
  * to reclassify — reclassification is the agent console's `intent_corrected`.
  * Snapshots both names as literals so a later rename does not rewrite history.
  */
-async function classifyIfUnset(tx: Tx, ctx: ApplyBotTurnContext, subintentId: string): Promise<void> {
+async function classifyIfUnset(
+  tx: Tx,
+  ctx: ApplyBotTurnContext,
+  subintentId: string,
+): Promise<void> {
   const updated = await tx
     .update(conversation)
     .set({ subintentId, classificationSource: 'bot' })
     .where(eq(conversation.id, ctx.conversationId) && isNull(conversation.subintentId))
-    .returning({ id: conversation.id })
+    .returning({ id: conversation.id });
 
-  if (updated.length === 0) return
+  if (updated.length === 0) return;
 
   const [names] = await tx
     .select({ subintentName: subintent.name, intentName: intent.name })
     .from(subintent)
     .innerJoin(intent, eq(intent.id, subintent.intentId))
     .where(eq(subintent.id, subintentId))
-    .limit(1)
+    .limit(1);
 
   await appendEvent(tx, {
     workspaceId: ctx.workspaceId,
@@ -1154,8 +1256,12 @@ async function classifyIfUnset(tx: Tx, ctx: ApplyBotTurnContext, subintentId: st
     conversationId: ctx.conversationId,
     actorId: null,
     actorType: 'bot',
-    payload: { source: 'bot', subintent_name: names?.subintentName ?? null, intent_name: names?.intentName ?? null },
-  })
+    payload: {
+      source: 'bot',
+      subintent_name: names?.subintentName ?? null,
+      intent_name: names?.intentName ?? null,
+    },
+  });
 }
 ```
 
@@ -1173,7 +1279,7 @@ Expected: PASS, all nine tests (seven `it` + two from `it.each`).
 In `backend/src/domain/bot/index.ts`, add:
 
 ```ts
-export * from './applyBotTurn.ts'
+export * from './applyBotTurn.ts';
 ```
 
 - [ ] **Step 6: Commit**
@@ -1188,10 +1294,12 @@ git commit -m "feat(bot): add applyBotTurn with all four outcomes as one transac
 ### Task 8: `sendPlayerMessage` — `bot_active` default and the not-provisioned inline fallback
 
 **Files:**
+
 - Modify: `backend/src/surface/services/messagesService.ts`
 - Modify: `backend/tests/surface.messages.test.ts`
 
 **Interfaces:**
+
 - Consumes: `applyBotTurn` from `../../domain/bot/index.ts`, `resolveBotConfig` from `../../domain/bot/index.ts` (already exported via `botConfig.ts`).
 - Produces: no new exports — `sendPlayerMessage`'s external signature is unchanged. Internally, the function now computes a `shouldEnqueue: boolean` that this plan does **not** act on (see Global Constraints) — Part 2 adds the `if (shouldEnqueue) enqueueBotTurn(...)` call and the import it needs.
 
@@ -1202,62 +1310,68 @@ Run: `cd backend && grep -n "status.*open\|'bot_active'\|bot_active" tests/surfa
 Find the existing assertion that a newly created conversation has `status: 'open'` (per the spec, this exact assertion must be **replaced**, not extended). Update it to:
 
 ```ts
-  it('creates a new conversation at bot_active, not open', async () => {
-    // ...existing setup (workspace/player/token) unchanged...
-    const res = await request(server.url)
-      .post('/surface/messages')
-      .set('Authorization', `Bearer ${playerToken}`)
-      .send({ body: 'hi' })
-      .expect(200)
+it('creates a new conversation at bot_active, not open', async () => {
+  // ...existing setup (workspace/player/token) unchanged...
+  const res = await request(server.url)
+    .post('/surface/messages')
+    .set('Authorization', `Bearer ${playerToken}`)
+    .send({ body: 'hi' })
+    .expect(200);
 
-    const { rows } = await ownerPool.query(`select status from conversation where id = $1`, [res.body.conversation_id])
-    expect(rows[0].status).toBe('bot_active')
-  })
+  const { rows } = await ownerPool.query(`select status from conversation where id = $1`, [
+    res.body.conversation_id,
+  ]);
+  expect(rows[0].status).toBe('bot_active');
+});
 ```
 
 Add a new test for the not-provisioned branch:
 
 ```ts
-  it('a not-provisioned bot hands off inline: open, assigned, one public system message, no internal note, one bot_unavailable event, no job', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const availableAgent = await seedAgent()
-    await seedWorkspaceMember({ workspaceId, agentId: availableAgent })
-    await seedBotConfig({ workspaceId, isProvisioned: false })
-    const playerToken = await mintToken({ workspace_id: workspaceId, player_id: playerId, external_player_id: 'p1' })
+it('a not-provisioned bot hands off inline: open, assigned, one public system message, no internal note, one bot_unavailable event, no job', async () => {
+  const workspaceId = await seedWorkspace();
+  const playerId = await seedPlayer(workspaceId);
+  const availableAgent = await seedAgent();
+  await seedWorkspaceMember({ workspaceId, agentId: availableAgent });
+  await seedBotConfig({ workspaceId, isProvisioned: false });
+  const playerToken = await mintToken({
+    workspace_id: workspaceId,
+    player_id: playerId,
+    external_player_id: 'p1',
+  });
 
-    const res = await request(server.url)
-      .post('/surface/messages')
-      .set('Authorization', `Bearer ${playerToken}`)
-      .send({ body: 'hi' })
-      .expect(200)
+  const res = await request(server.url)
+    .post('/surface/messages')
+    .set('Authorization', `Bearer ${playerToken}`)
+    .send({ body: 'hi' })
+    .expect(200);
 
-    const conversationId = res.body.conversation_id
+  const conversationId = res.body.conversation_id;
 
-    const { rows: convRows } = await ownerPool.query(
-      `select status, assigned_agent_id from conversation where id = $1`,
-      [conversationId],
-    )
-    expect(convRows[0].status).toBe('open')
-    expect(convRows[0].assigned_agent_id).toBe(availableAgent)
+  const { rows: convRows } = await ownerPool.query(
+    `select status, assigned_agent_id from conversation where id = $1`,
+    [conversationId],
+  );
+  expect(convRows[0].status).toBe('open');
+  expect(convRows[0].assigned_agent_id).toBe(availableAgent);
 
-    const { rows: msgRows } = await ownerPool.query(
-      `select author_type, visibility from message where conversation_id = $1 and author_type = 'system'`,
-      [conversationId],
-    )
-    expect(msgRows.length).toBe(1)
-    expect(msgRows[0].visibility).toBe('public')
+  const { rows: msgRows } = await ownerPool.query(
+    `select author_type, visibility from message where conversation_id = $1 and author_type = 'system'`,
+    [conversationId],
+  );
+  expect(msgRows.length).toBe(1);
+  expect(msgRows[0].visibility).toBe('public');
 
-    const { rows: eventRows } = await ownerPool.query(
-      `select type, payload from event where conversation_id = $1 and type = 'bot_unavailable'`,
-      [conversationId],
-    )
-    expect(eventRows.length).toBe(1)
-    expect(eventRows[0].payload).toEqual({ reason: 'not_provisioned' })
+  const { rows: eventRows } = await ownerPool.query(
+    `select type, payload from event where conversation_id = $1 and type = 'bot_unavailable'`,
+    [conversationId],
+  );
+  expect(eventRows.length).toBe(1);
+  expect(eventRows[0].payload).toEqual({ reason: 'not_provisioned' });
 
-    // Only the player's own message comes back in the response body.
-    expect(res.body.message.body).toBe('hi')
-  })
+  // Only the player's own message comes back in the response body.
+  expect(res.body.message.body).toBe('hi');
+});
 ```
 
 (Read the existing top of `tests/surface.messages.test.ts` first for its exact import list and `request`/`mintToken`/`seedWorkspace` helper names — match them exactly; the snippets above assume the same helper names used elsewhere in this plan and in `tests/realtime.internalNote.test.ts`.)
@@ -1272,51 +1386,59 @@ Expected: FAIL on both — creation still hardcodes `'open'`, and there is no no
 In `backend/src/surface/services/messagesService.ts`, add imports:
 
 ```ts
-import { applyBotTurn, resolveBotConfig } from '../../domain/bot/index.ts'
+import { applyBotTurn, resolveBotConfig } from '../../domain/bot/index.ts';
 ```
 
 Change the creation branch — remove the explicit `status: 'open'`:
 
 ```ts
-      const [created] = await tx
-        .insert(conversation)
-        .values({ workspaceId: ctx.workspaceId, playerId: ctx.playerId, sessionId: latestSession?.id ?? null })
-        .returning({ id: conversation.id })
-      if (!created) throw new Error('conversation insert returned nothing')
-      conversationId = created.id
-      inboxStatus = 'bot_active'
+const [created] = await tx
+  .insert(conversation)
+  .values({
+    workspaceId: ctx.workspaceId,
+    playerId: ctx.playerId,
+    sessionId: latestSession?.id ?? null,
+  })
+  .returning({ id: conversation.id });
+if (!created) throw new Error('conversation insert returned nothing');
+conversationId = created.id;
+inboxStatus = 'bot_active';
 ```
 
 Add the gating logic after `postMessage`, before the `return { conversationId, posted, inboxStatus }` line. Track a `shouldEnqueue` local that this plan does not consume:
 
 ```ts
-    const posted = await postMessage(tx, {
-      workspaceId: ctx.workspaceId,
-      conversationId,
-      authorType: 'player',
-      actorId: ctx.playerId,
-      body: body.body,
-    })
+const posted = await postMessage(tx, {
+  workspaceId: ctx.workspaceId,
+  conversationId,
+  authorType: 'player',
+  actorId: ctx.playerId,
+  body: body.body,
+});
 
-    let shouldEnqueue = false
-    const [afterPost] = await tx
-      .select({ status: conversation.status })
-      .from(conversation)
-      .where(eq(conversation.id, conversationId))
-      .limit(1)
+let shouldEnqueue = false;
+const [afterPost] = await tx
+  .select({ status: conversation.status })
+  .from(conversation)
+  .where(eq(conversation.id, conversationId))
+  .limit(1);
 
-    if (afterPost?.status === 'bot_active') {
-      const config = await resolveBotConfig(tx, ctx.workspaceId)
-      if (config.isProvisioned) {
-        // Part 2 (2026-08-12-bot-turn-async-pipeline.md) enqueues bot-turns here.
-        shouldEnqueue = true
-      } else {
-        await applyBotTurn(tx, { workspaceId: ctx.workspaceId, conversationId }, { kind: 'unavailable', reason: 'not_provisioned' })
-        inboxStatus = 'open'
-      }
-    }
+if (afterPost?.status === 'bot_active') {
+  const config = await resolveBotConfig(tx, ctx.workspaceId);
+  if (config.isProvisioned) {
+    // Part 2 (2026-08-12-bot-turn-async-pipeline.md) enqueues bot-turns here.
+    shouldEnqueue = true;
+  } else {
+    await applyBotTurn(
+      tx,
+      { workspaceId: ctx.workspaceId, conversationId },
+      { kind: 'unavailable', reason: 'not_provisioned' },
+    );
+    inboxStatus = 'open';
+  }
+}
 
-    return { conversationId, posted, inboxStatus, shouldEnqueue }
+return { conversationId, posted, inboxStatus, shouldEnqueue };
 ```
 
 `shouldEnqueue` is deliberately unused past the transaction in this plan — it is present on the object `withWorkspace`'s callback returns, but nothing in `sendPlayerMessage` reads it, matching the "produces the value, does not consume it" boundary from Global Constraints. Do not add an `if (result.shouldEnqueue) ...` call; that line belongs to Part 2.
@@ -1345,53 +1467,59 @@ git commit -m "feat(bot): sendPlayerMessage creates at bot_active and resolves n
 ### Task 9: Extend `realtime.internalNote.test.ts` for a bot-authored note
 
 **Files:**
+
 - Modify: `backend/tests/realtime.internalNote.test.ts`
 
 **Interfaces:**
+
 - Consumes: `applyBotTurn`, `withWorkspace`, existing realtime test helpers (`connectClient`, `startRealtimeServer`).
 
-The existing file proves an *agent*-authored internal note never reaches `conv:{id}:player`. This task proves the same guarantee for the bot's failure note, going through `applyBotTurn` → `emitMessageToRooms` rather than the HTTP route (since there is no route here — this plan performs the emit itself is not correct either; **`applyBotTurn` never emits**, so the realistic path to test is: call `applyBotTurn` in a transaction, then call `emitMessageToRooms` with the returned `posted` messages, the same way `sendPlayerMessage`'s not-provisioned branch will after commit). This mirrors Task 8's production code path exactly.
+The existing file proves an _agent_-authored internal note never reaches `conv:{id}:player`. This task proves the same guarantee for the bot's failure note, going through `applyBotTurn` → `emitMessageToRooms` rather than the HTTP route (since there is no route here — this plan performs the emit itself is not correct either; **`applyBotTurn` never emits**, so the realistic path to test is: call `applyBotTurn` in a transaction, then call `emitMessageToRooms` with the returned `posted` messages, the same way `sendPlayerMessage`'s not-provisioned branch will after commit). This mirrors Task 8's production code path exactly.
 
 - [ ] **Step 1: Write the failing test**
 
 Add to the existing `describe('internal notes never reach the player room', …)` block in `backend/tests/realtime.internalNote.test.ts`:
 
 ```ts
-  it('a bot unavailable outcome posts an internal note that never reaches conv:{id}:player', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
+it('a bot unavailable outcome posts an internal note that never reaches conv:{id}:player', async () => {
+  const workspaceId = await seedWorkspace();
+  const playerId = await seedPlayer(workspaceId);
+  const conversationId = await seedConversation({ workspaceId, playerId });
 
-    const playerToken = await mintToken({ workspace_id: workspaceId, player_id: playerId, external_player_id: 'p1' })
-    const playerSocket = connectClient(server.url, { token: playerToken, role: 'player' })
-    await waitFor(playerSocket, 'connect')
-    await new Promise<boolean>((resolve) =>
-      playerSocket.emit('join_conversation', { conversation_id: conversationId }, resolve),
-    )
+  const playerToken = await mintToken({
+    workspace_id: workspaceId,
+    player_id: playerId,
+    external_player_id: 'p1',
+  });
+  const playerSocket = connectClient(server.url, { token: playerToken, role: 'player' });
+  await waitFor(playerSocket, 'connect');
+  await new Promise<boolean>((resolve) =>
+    playerSocket.emit('join_conversation', { conversation_id: conversationId }, resolve),
+  );
 
-    const playerReceived: unknown[] = []
-    playerSocket.on('message:new', (payload: unknown) => playerReceived.push(payload))
+  const playerReceived: unknown[] = [];
+  playerSocket.on('message:new', (payload: unknown) => playerReceived.push(payload));
 
-    const { applyBotTurn } = await import('../src/domain/bot/applyBotTurn.ts')
-    const { withWorkspace } = await import('../src/shared/db/withWorkspace.ts')
-    const { toAgentView, toPlayerView } = await import('../src/domain/conversations/index.ts')
-    const { emitMessageToRooms } = await import('../src/shared/realtime/emit.ts')
-    const { getIo } = await import('../src/shared/realtime/socketServer.ts')
+  const { applyBotTurn } = await import('../src/domain/bot/applyBotTurn.ts');
+  const { withWorkspace } = await import('../src/shared/db/withWorkspace.ts');
+  const { toAgentView, toPlayerView } = await import('../src/domain/conversations/index.ts');
+  const { emitMessageToRooms } = await import('../src/shared/realtime/emit.ts');
+  const { getIo } = await import('../src/shared/realtime/socketServer.ts');
 
-    const { posted } = await withWorkspace(workspaceId, (tx) =>
-      applyBotTurn(tx, { workspaceId, conversationId }, { kind: 'unavailable', reason: 'error' }),
-    )
-    for (const msg of posted) {
-      emitMessageToRooms(getIo(), conversationId, toPlayerView(msg), toAgentView(msg))
-    }
+  const { posted } = await withWorkspace(workspaceId, (tx) =>
+    applyBotTurn(tx, { workspaceId, conversationId }, { kind: 'unavailable', reason: 'error' }),
+  );
+  for (const msg of posted) {
+    emitMessageToRooms(getIo(), conversationId, toPlayerView(msg), toAgentView(msg));
+  }
 
-    await new Promise((resolve) => setTimeout(resolve, 150))
+  await new Promise((resolve) => setTimeout(resolve, 150));
 
-    // Two messages were posted (public handoff + internal note); only the
-    // public one may reach the player.
-    expect(playerReceived.length).toBe(1)
-    playerSocket.close()
-  })
+  // Two messages were posted (public handoff + internal note); only the
+  // public one may reach the player.
+  expect(playerReceived.length).toBe(1);
+  playerSocket.close();
+});
 ```
 
 - [ ] **Step 2: Run the test to verify it fails**
@@ -1442,6 +1570,7 @@ This plan adds no new route and no new Zod schema — `sendPlayerMessage`'s requ
 **Known gap surfaced during exploration, not a task omission:** the spec's §Design decisions text says `conversation` "already carries its own `UNIQUE (workspace_id, id)` from the forms slice" — that unique key does not exist in the current schema (the forms slice hasn't landed). It is irrelevant to this plan: the new composite FK's parent key lives on `subintent`, not `conversation`, so nothing here depends on the missing key. Flagging it here rather than silently building around it.
 
 **Judgment calls made, for the plan's reviewer:**
+
 - `BotTurnInput` is minimal (`{workspaceId, conversationId}`) since no consumer needing more exists until Part 2/spec 2/spec 4.
 - The composite FK is the first one in the codebase; Task 1 spells out Drizzle's `foreignKey()` syntax explicitly rather than pointing at a nonexistent precedent.
 - Task 9's test reaches into `applyBotTurn` + manual `emitMessageToRooms` rather than through an HTTP route, because no route triggers a bot `unavailable` outcome by itself yet outside `sendPlayerMessage`'s not-provisioned branch (already covered end-to-end in Task 8) — this test exists specifically to pin the realtime-room guarantee at the `applyBotTurn` output layer, which is where Part 2's orchestrator will also plug in.

@@ -1,10 +1,10 @@
-import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
-import { devLogin, fetchAgents, fetchDevAgents } from '../api/adminApi.ts'
-import { saveAdminSession } from '../lib/adminSession.ts'
-import { ApiError } from '../../../lib/httpClient.ts'
-import '../../../admin-console.css'
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
+import { devLogin, fetchAgents, fetchDevAgents } from '../api/adminApi.ts';
+import { saveAdminSession } from '../lib/adminSession.ts';
+import { ApiError } from '../../../lib/httpClient.ts';
+import '../../../admin-console.css';
 
 /**
  * Stands in for the real Google OAuth sign-in ([[agent-auth-google-oauth-domain-restricted]]
@@ -14,56 +14,58 @@ import '../../../admin-console.css'
  * with 403 regardless of what this page lets through.
  */
 export function AdminLogin() {
-  const navigate = useNavigate()
-  const [error, setError] = useState<string | null>(null)
-  const [pendingId, setPendingId] = useState<string | null>(null)
-  const agentsQuery = useQuery({ queryKey: ['adminDevAgents'], queryFn: fetchDevAgents })
+  const navigate = useNavigate();
+  const [error, setError] = useState<string | null>(null);
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const agentsQuery = useQuery({ queryKey: ['adminDevAgents'], queryFn: fetchDevAgents });
 
   const onPick = async (agentId: string) => {
-    setError(null)
-    setPendingId(agentId)
+    setError(null);
+    setPendingId(agentId);
     try {
-      const login = await devLogin(agentId)
+      const login = await devLogin(agentId);
 
       // GET /admin/agents is itself gated by requireAdminAccess — a genuine
       // non-admin 403s on this call before we ever get to read is_admin off
       // its response, so that 403 IS the "not an admin" answer, not a generic
       // failure. Only a non-403 (network, 5xx) falls through to the catch below.
-      let agentsResult: { agents: Awaited<ReturnType<typeof fetchAgents>>['agents'] } | undefined
+      let agentsResult: { agents: Awaited<ReturnType<typeof fetchAgents>>['agents'] } | undefined;
       try {
-        agentsResult = await fetchAgents(login.token)
+        agentsResult = await fetchAgents(login.token);
       } catch (err) {
         if (err instanceof ApiError && err.status === 403) {
-          setError(`${login.agent.display_name} is not an admin.`)
-          return
+          setError(`${login.agent.display_name} is not an admin.`);
+          return;
         }
-        throw err
+        throw err;
       }
 
-      const self = agentsResult.agents.find((a) => a.id === login.agent.id)
+      const self = agentsResult.agents.find((a) => a.id === login.agent.id);
       if (!self?.is_admin) {
-        setError(`${login.agent.display_name} is not an admin.`)
-        return
+        setError(`${login.agent.display_name} is not an admin.`);
+        return;
       }
       saveAdminSession({
         token: login.token,
         agentId: login.agent.id,
         displayName: login.agent.display_name,
         isSuperAdmin: self.is_super_admin,
-      })
-      navigate('/dashboard/overview')
+      });
+      navigate('/dashboard/overview');
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not sign in as that agent.')
+      setError(err instanceof ApiError ? err.message : 'Could not sign in as that agent.');
     } finally {
-      setPendingId(null)
+      setPendingId(null);
     }
-  }
+  };
 
   return (
     <main className="flex min-h-screen w-full items-center justify-center bg-bg text-text">
       <div className="w-full max-w-sm rounded-card border border-zinc-200 p-6 shadow-sm">
         <h1 className="text-lg font-semibold">Admin sign-in (dev picker)</h1>
-        <p className="mt-1 text-sm text-muted">Stands in for Google OAuth until that slice ships.</p>
+        <p className="mt-1 text-sm text-muted">
+          Stands in for Google OAuth until that slice ships.
+        </p>
 
         {agentsQuery.isPending && <p className="mt-4 text-sm text-muted">Loading agents…</p>}
         {agentsQuery.isError && <p className="mt-4 text-sm text-red-600">Could not load agents.</p>}
@@ -85,5 +87,5 @@ export function AdminLogin() {
         </ul>
       </div>
     </main>
-  )
+  );
 }

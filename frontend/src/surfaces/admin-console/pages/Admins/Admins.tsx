@@ -1,15 +1,24 @@
-import { useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { toast } from 'sonner'
-import { fetchAgents, setAdminFlag, setSuperAdminFlag } from '../../api/adminApi.ts'
-import { ApiError } from '../../../../lib/httpClient.ts'
-import { loadAdminSession } from '../../lib/adminSession.ts'
-import { Input } from '../../components/ui/input.tsx'
-import { Switch } from '../../components/ui/switch.tsx'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table.tsx'
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { fetchAgents, setAdminFlag, setSuperAdminFlag } from '../../api/adminApi.ts';
+import { ApiError } from '../../../../lib/httpClient.ts';
+import { loadAdminSession } from '../../lib/adminSession.ts';
+import { Input } from '../../components/ui/input.tsx';
+import { Switch } from '../../components/ui/switch.tsx';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '../../components/ui/table.tsx';
 
 function reportError(error: unknown) {
-  toast.error(error instanceof ApiError ? error.message : 'Something went wrong. Please try again.')
+  toast.error(
+    error instanceof ApiError ? error.message : 'Something went wrong. Please try again.',
+  );
 }
 
 /**
@@ -19,32 +28,33 @@ function reportError(error: unknown) {
  * the is_admin/is_super_admin flags themselves.
  */
 export function Admins() {
-  const session = loadAdminSession()
-  const queryClient = useQueryClient()
-  const [query, setQuery] = useState('')
+  const session = loadAdminSession();
+  const queryClient = useQueryClient();
+  const [query, setQuery] = useState('');
 
   const agentsQuery = useQuery({
     queryKey: ['adminAgentDirectory', query],
     queryFn: () => fetchAgents(session!.token, query || undefined),
     enabled: !!session,
-  })
+  });
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['adminAgentDirectory'] })
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['adminAgentDirectory'] });
 
   const adminMutation = useMutation({
-    mutationFn: (args: { id: string; isAdmin: boolean }) => setAdminFlag(session!.token, args.id, args.isAdmin),
+    mutationFn: (args: { id: string; isAdmin: boolean }) =>
+      setAdminFlag(session!.token, args.id, args.isAdmin),
     onSuccess: invalidate,
     onError: reportError,
-  })
+  });
 
   const superAdminMutation = useMutation({
     mutationFn: (args: { id: string; isSuperAdmin: boolean }) =>
       setSuperAdminFlag(session!.token, args.id, args.isSuperAdmin),
     onSuccess: invalidate,
     onError: reportError,
-  })
+  });
 
-  if (!session) return null
+  if (!session) return null;
 
   if (!session.isSuperAdmin) {
     return (
@@ -52,10 +62,10 @@ export function Admins() {
         <h1 className="text-sm font-semibold">Admins</h1>
         <p className="text-sm text-muted">Only a super admin can manage admin access.</p>
       </div>
-    )
+    );
   }
 
-  const agents = agentsQuery.data?.agents ?? []
+  const agents = agentsQuery.data?.agents ?? [];
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -106,14 +116,18 @@ export function Admins() {
                   <Switch
                     checked={agent.is_admin}
                     disabled={agent.id === session.agentId}
-                    onCheckedChange={(checked) => adminMutation.mutate({ id: agent.id, isAdmin: checked })}
+                    onCheckedChange={(checked) =>
+                      adminMutation.mutate({ id: agent.id, isAdmin: checked })
+                    }
                   />
                 </TableCell>
                 <TableCell>
                   <Switch
                     checked={agent.is_super_admin}
                     disabled={agent.id === session.agentId}
-                    onCheckedChange={(checked) => superAdminMutation.mutate({ id: agent.id, isSuperAdmin: checked })}
+                    onCheckedChange={(checked) =>
+                      superAdminMutation.mutate({ id: agent.id, isSuperAdmin: checked })
+                    }
                   />
                 </TableCell>
               </TableRow>
@@ -122,5 +136,5 @@ export function Admins() {
         </Table>
       </div>
     </div>
-  )
+  );
 }

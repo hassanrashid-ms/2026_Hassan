@@ -14,16 +14,16 @@ Source of truth for product behaviour is `Docs/Customer Support Tool - CRM v2.tx
 ## What this is
 
 A form is a short set of structured questions attached to a subintent, asked in the chat before the
-player reaches a human. It exists to remove a round trip: *"A purchase problem needs a receipt and a
+player reaches a human. It exists to remove a round trip: _"A purchase problem needs a receipt and a
 store; a bug needs steps and a device. Asking before handoff saves an exchange, and in async support
-an exchange is hours or days."*
+an exchange is hours or days."_
 
 The questions are asked **one at a time, in a card pinned above the composer** — not as a modal, and
 not as conversation turns. The player answers, or skips; either way they reach an agent.
 
 ### The hard constraint
 
-*"Nothing may prevent a player reaching a human."* Every decision below is checked against it. The
+_"Nothing may prevent a player reaching a human."_ Every decision below is checked against it. The
 two places it bites are the skip (always present, one tap, cannot be removed) and the abandonment
 sweeper (§2.6), and it is the reason `is_required` stays soft.
 
@@ -31,11 +31,11 @@ sweeper (§2.6), and it is the reason `is_required` stays soft.
 
 ## Slices
 
-| Slice | Ships | Done when |
-|---|---|---|
-| **1** Data model + seed | The forms half of the 2026-08-11 data-model spec, plus three published forms mapped to seeded subintents | `pnpm db:setup && pnpm db:seed` yields subintents that resolve to a published form |
-| **2** Player Q&A | The offer at handoff, the pinned card, answer-per-step, skip, the gated status transition, the sweeper | A player rejects an article, answers inline, and the ticket reaches the queue only on submit/skip |
-| **3** Agent display | The form section in the context rail | An agent opens the rail and reads what was answered and what was not |
+| Slice                   | Ships                                                                                                    | Done when                                                                                         |
+| ----------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| **1** Data model + seed | The forms half of the 2026-08-11 data-model spec, plus three published forms mapped to seeded subintents | `pnpm db:setup && pnpm db:seed` yields subintents that resolve to a published form                |
+| **2** Player Q&A        | The offer at handoff, the pinned card, answer-per-step, skip, the gated status transition, the sweeper   | A player rejects an article, answers inline, and the ticket reaches the queue only on submit/skip |
+| **3** Agent display     | The form section in the context rail                                                                     | An agent opens the rail and reads what was answered and what was not                              |
 
 Each slice depends only on the one before it.
 
@@ -61,7 +61,7 @@ Every column, constraint, composite FK and design rationale in that document sta
 **ordering** (§Migration steps 1–5, 8) stands. Its verification sections
 (`tests/forms.dataModel.test.ts`, `tests/forms.types.test.ts`) stand.
 
-**One line of it is stale.** It says *"`drizzle-kit` push via `pnpm db:setup`"*. That is no longer
+**One line of it is stale.** It says _"`drizzle-kit` push via `pnpm db:setup`"_. That is no longer
 how this repo migrates: `backend/src/shared/db/setup.ts:22` records that push was deliberately
 removed, and `setup.ts:35` applies committed migrations through drizzle-orm's `migrate()`. Slice 1
 uses `pnpm db:generate` and commits a hand-ordered `0004_forms.sql`, following the `0002`/`0003`
@@ -73,8 +73,8 @@ Three amendments follow. Nothing else in that spec changes.
 
 ## 1.2 Amendment — the modal premise is reverted
 
-That spec's premise is *"structured, Google-Form-style UIs opened in a modal — not questions asked
-turn-by-turn in the thread"*, recorded in `docs/project-overview.md` on 2026-08-10. This design
+That spec's premise is _"structured, Google-Form-style UIs opened in a modal — not questions asked
+turn-by-turn in the thread"_, recorded in `docs/project-overview.md` on 2026-08-10. This design
 reverts it: the questions are asked one at a time in the thread.
 
 **The storage shape is unaffected.** Append-only `form_answer` rows keyed by `field_key`, each
@@ -90,39 +90,39 @@ What changes is prose, in three places:
 
 ## 1.3 Amendment — `form_status` is derived from the answer rows
 
-The inherited spec defines `partial` as *"submitted with a required field left blank"*, which
+The inherited spec defines `partial` as _"submitted with a required field left blank"_, which
 presumes a submit button over a whole form. With one question at a time and a skip that can land at
 any point, status is derived instead:
 
-| `status` | Condition | Agent reads |
-|---|---|---|
-| `completed` | every field in the version has ≥1 answer | all questions answered |
-| `partial` | ≥1 answer **and** ≥1 field with none | "2 answered · 4 not answered" |
-| `skipped` | zero answers | "Player skipped the questions" |
+| `status`    | Condition                                | Agent reads                    |
+| ----------- | ---------------------------------------- | ------------------------------ |
+| `completed` | every field in the version has ≥1 answer | all questions answered         |
+| `partial`   | ≥1 answer **and** ≥1 field with none     | "2 answered · 4 not answered"  |
+| `skipped`   | zero answers                             | "Player skipped the questions" |
 
-This costs no column. The inherited spec already says *"Missing fields are derived: the version's
-field keys minus the keys that have at least one answer"* — the same derivation, read once more to
+This costs no column. The inherited spec already says _"Missing fields are derived: the version's
+field keys minus the keys that have at least one answer"_ — the same derivation, read once more to
 pick the status.
 
 Consequences worth stating:
 
 - **`status` records the outcome, not the action.** A player who answers every question cannot skip
   (the card is gone), and a player who skips at question one has no answers, so the derived status
-  and the button pressed never disagree in a way an agent can act on. *Which* action terminated the
+  and the button pressed never disagree in a way an agent can act on. _Which_ action terminated the
   submission — submit, skip, or the sweeper — is a fact about the turn, and lives in the
   `form_completed` event's payload (§2.2), not in a column.
 - **Partial answers survive a skip.** Two answers followed by a skip is `partial` with both rows
   intact, not `skipped` with the answers discarded. This is the behaviour the agent display in
   slice 3 depends on.
-- `is_required` stays soft. A required field left blank still lands, because *"nothing about a form
-  may block a player reaching a human."*
+- `is_required` stays soft. A required field left blank still lands, because _"nothing about a form
+  may block a player reaching a human."_
 
 The three statuses remain terminal, and there is still no path back to `in_progress`.
 
 ## 1.4 Amendment — six usable field types, seven declared
 
-The product spec is explicit: *"Six field types only — short text, long text, choice, date, number,
-attachment — because a form is for collecting facts, not for building a UI."* The inherited data
+The product spec is explicit: _"Six field types only — short text, long text, choice, date, number,
+attachment — because a form is for collecting facts, not for building a UI."_ The inherited data
 model declares seven, adding `time`.
 
 The enum stays at seven. Removing a value from a shipped enum is a migration for no gain, and the
@@ -140,13 +140,16 @@ inherited spec's reasoning for freezing the wire contract once applies to `time`
 
 ```ts
 export type ResolvedForm = {
-  formId: string
-  formName: string
-  version: number
-  fields: FormField[]
-}
+  formId: string;
+  formName: string;
+  version: number;
+  fields: FormField[];
+};
 
-export async function resolveSubintentForm(tx: Tx, subintentId: string): Promise<ResolvedForm | null>
+export async function resolveSubintentForm(
+  tx: Tx,
+  subintentId: string,
+): Promise<ResolvedForm | null>;
 ```
 
 The inherited spec's three conditions, all of which must hold:
@@ -165,9 +168,9 @@ the conversation proceeds without a form. One function, so slice 2 has exactly o
 
 `backend/src/shared/db/seedForms.ts`, beside `seedTaxonomy.ts`, consumed by `seed.ts`.
 
-Three forms, matching the product spec's *"Starting templates: purchase receipt, bug report, account
-recovery"*, each published at `version = 1`. Each serves several subintents, exercising the spec's
-cardinality: *"A subintent maps to exactly one form. A form can serve several subintents."*
+Three forms, matching the product spec's _"Starting templates: purchase receipt, bug report, account
+recovery"_, each published at `version = 1`. Each serves several subintents, exercising the spec's
+cardinality: _"A subintent maps to exactly one form. A form can serve several subintents."_
 
 Mapping is by subintent **name**, resolved against `SEED_TAXONOMY` at seed time, so a taxonomy edit
 does not strand a hardcoded uuid.
@@ -176,35 +179,35 @@ does not strand a hardcoded uuid.
 
 The four fields drawn in the product spec's own mockup (page 23, screen C). Nothing invented.
 
-| key | label | type | required | options |
-|---|---|---|---|---|
-| `store` | Store | `choice` | yes | Apple App Store, Google Play, Other |
-| `order_or_receipt_id` | Order or receipt ID | `short_text` | yes | — |
-| `purchase_date` | Date of purchase | `date` | yes | — |
-| `what_you_expected` | What you expected | `long_text` | yes | — |
+| key                   | label               | type         | required | options                             |
+| --------------------- | ------------------- | ------------ | -------- | ----------------------------------- |
+| `store`               | Store               | `choice`     | yes      | Apple App Store, Google Play, Other |
+| `order_or_receipt_id` | Order or receipt ID | `short_text` | yes      | —                                   |
+| `purchase_date`       | Date of purchase    | `date`       | yes      | —                                   |
+| `what_you_expected`   | What you expected   | `long_text`  | yes      | —                                   |
 
 Serves: Missing Purchase, Double Charge, Refund Status, Refund Requests, Billing Errors.
 
 ### Bug report
 
-| key | label | type | required |
-|---|---|---|---|
-| `what_happened` | What happened | `long_text` | yes |
-| `steps_to_reproduce` | Steps to reproduce | `long_text` | no |
-| `when_it_happened` | When it happened | `date` | no |
-| `device_model` | Device model | `short_text` | no |
-| `os_version` | OS version | `short_text` | no |
+| key                  | label              | type         | required |
+| -------------------- | ------------------ | ------------ | -------- |
+| `what_happened`      | What happened      | `long_text`  | yes      |
+| `steps_to_reproduce` | Steps to reproduce | `long_text`  | no       |
+| `when_it_happened`   | When it happened   | `date`       | no       |
+| `device_model`       | Device model       | `short_text` | no       |
+| `os_version`         | OS version         | `short_text` | no       |
 
 Serves: Game Crashes, Performance Issues, Connection Problems.
 
 ### Account recovery
 
-| key | label | type | required | options |
-|---|---|---|---|---|
-| `last_known_player_id` | Your last known player ID | `short_text` | yes | — |
-| `linked_account` | Linked account | `choice` | yes | Google Play, Apple Game Center, Guest, Not sure |
-| `last_played` | When you last played | `date` | no | — |
-| `what_changed` | What changed before you lost access | `long_text` | yes | — |
+| key                    | label                               | type         | required | options                                         |
+| ---------------------- | ----------------------------------- | ------------ | -------- | ----------------------------------------------- |
+| `last_known_player_id` | Your last known player ID           | `short_text` | yes      | —                                               |
+| `linked_account`       | Linked account                      | `choice`     | yes      | Google Play, Apple Game Center, Guest, Not sure |
+| `last_played`          | When you last played                | `date`       | no       | —                                               |
+| `what_changed`         | What changed before you lost access | `long_text`  | yes      | —                                               |
 
 Serves: Account Recovery, Lost Progress, Data Recovery, Device Transfer.
 
@@ -252,8 +255,8 @@ That is the whole condition. Two exclusions fall out of it without special-casin
 
 And one exclusion is explicit:
 
-- `asked_for_person` — the product spec requires *"Immediate redirect to an agent. Not after three
-  turns, not after a failed answer."* Putting four questions in front of someone who just asked for
+- `asked_for_person` — the product spec requires _"Immediate redirect to an agent. Not after three
+  turns, not after a failed answer."_ Putting four questions in front of someone who just asked for
   a human is the exact behaviour that rule forbids.
 
 `article_rejected`, `no_article` and `sensitive` all offer a form when a subintent resolves.
@@ -297,31 +300,31 @@ skipped produce the identical `form_submission` row, and they need opposite fixe
 nobody wanted, the other is a form that lost the player halfway. Following the existing rule that a
 negative outcome must be falsifiable rather than inferred from absence.
 
-`confirm_phase` gains `'form'`. `enums.ts:30` already reserves it: *"The forms slice adds 'form'."*
+`confirm_phase` gains `'form'`. `enums.ts:30` already reserves it: _"The forms slice adds 'form'."_
 
 ### Events
 
-Three types. `event.type` is `text` (*"new types arrive every slice"*), so none needs a migration.
+Three types. `event.type` is `text` (_"new types arrive every slice"_), so none needs a migration.
 All three are written through `appendEvent`, in the same transaction as the state change they
 explain, with `actorType: 'player'` and `actorId` the player id — except `form_offered`, which the
 bot writes, and the sweeper's `form_completed`, which is `'system'` with a null actor.
 
-| Type | When | Payload |
-|---|---|---|
-| `form_offered` | The offer transaction | `{ form_id, form_version, field_count }` |
+| Type                  | When                                       | Payload                                                       |
+| --------------------- | ------------------------------------------ | ------------------------------------------------------------- |
+| `form_offered`        | The offer transaction                      | `{ form_id, form_version, field_count }`                      |
 | `form_field_answered` | Every accepted `POST /surface/form/answer` | `{ form_id, field_key, field_type, position, is_correction }` |
-| `form_completed` | The terminate transaction | `{ status, terminated_by, answered_count, field_count }` |
+| `form_completed`      | The terminate transaction                  | `{ status, terminated_by, answered_count, field_count }`      |
 
 **`form_field_answered` carries no answer value.** The value's durable home is `form_answer.value`,
 which is RLS-scoped, append-only and read through one path. Copying player-written text into `event`
 would put PII in a second table with different access characteristics and no consumer that needs it
-— and *"treat `state.raw` as PII by default"* is the same instinct. The event records *that* a field
-was answered and *which*, which is the whole of what the analysis needs.
+— and _"treat `state.raw` as PII by default"_ is the same instinct. The event records _that_ a field
+was answered and _which_, which is the whole of what the analysis needs.
 
 What it makes answerable, and nothing else in the schema can:
 
 - **Per-question drop-off.** A submission that timed out after question three is
-  indistinguishable, in `form_answer`, from one that timed out after question three *last week* —
+  indistinguishable, in `form_answer`, from one that timed out after question three _last week_ —
   but the gap between consecutive `form_field_answered` rows and the `form_completed` that never
   came is where a question that loses players shows up. A form nobody finishes is a form worth
   rewriting, and today that is invisible.
@@ -349,8 +352,8 @@ degraded to `null` on any miss.
 
 ### Why the transition is gated at all
 
-An agent picking up a handed-off conversation *"should not have to ask anything the bot already
-covered."* If the ticket enters the queue at offer time, an agent can claim it and start replying
+An agent picking up a handed-off conversation _"should not have to ask anything the bot already
+covered."_ If the ticket enters the queue at offer time, an agent can claim it and start replying
 while the player is still on question two, which produces exactly the round trip the form exists to
 remove. Gating the transition means the queue only ever receives finished tickets.
 
@@ -377,7 +380,7 @@ POST /surface/form/skip
 6. Append `form_field_answered`, in the same transaction — a row written without its event, or an
    event without its row, is the divergence `appendEvent` exists to prevent.
 
-A rejected answer writes neither. The event means *an answer was accepted*, so emitting one for a
+A rejected answer writes neither. The event means _an answer was accepted_, so emitting one for a
 validation failure would put a question in the drop-off numbers as answered when the player is still
 looking at it.
 
@@ -396,7 +399,7 @@ was answered; and to preserve partial answers on skip it has to send them anyway
 even buy a simpler client.
 
 Also rejected: a server-driven wizard returning the next question per call. Nothing in the product
-spec asks for conditional branching — *"a form is for collecting facts, not for building a UI"* — so
+spec asks for conditional branching — _"a form is for collecting facts, not for building a UI"_ — so
 it pays for an unused capability and makes the card unable to render without a round trip.
 
 ## 2.4 Wire and state
@@ -413,7 +416,7 @@ the agent and player rooms, so no new socket event is needed — it is called on
 `frontend/src/surfaces/webview/pages/SupportChat.tsx:168`:
 
 ```ts
-const confirmPending = (messagesQuery.data?.confirm_phase ?? 'none') !== 'none'
+const confirmPending = (messagesQuery.data?.confirm_phase ?? 'none') !== 'none';
 ```
 
 Adding a third enum value silently makes the yes/no resolution banner render during the form phase.
@@ -442,7 +445,7 @@ composer
 - **One field at a time**, with a `2 of 4` counter.
 - **Back**, on every question but the first. It returns to the previous question with that field's
   current answer prefilled, read from the answers the card already holds. Changing it and pressing
-  **Next** writes a *second* `form_answer` row — never an update, per
+  **Next** writes a _second_ `form_answer` row — never an update, per
   `REVOKE UPDATE ON form_answer` — and the newest `created_at` wins on read. That second write is
   what sets `is_correction: true` on its `form_field_answered` event.
 
@@ -453,8 +456,9 @@ composer
   Pressing **Next** without changing a prefilled answer writes nothing. Re-submitting an identical
   value would inflate the correction rate with events that record no correction, and the append-only
   table would grow rows that differ only by timestamp.
+
 - **"Skip and talk to an agent"** — the product spec's own button label (page 23, note 3). Present on
-  every question. *"The skip option cannot be removed — a form must never block reaching support."*
+  every question. _"The skip option cannot be removed — a form must never block reaching support."_
 - **The composer is disabled while the card is showing.** Same treatment the resolution banner
   already gets (`disabled={send.isPending || confirmPending || settled}`), extended with the form
   phase. There is no dead-end, because skip is one tap and always visible.
@@ -474,7 +478,7 @@ questionnaire noise that slice 3 renders properly anyway.
 
 Gating the status transition creates a failure mode that does not exist today: a player who force-
 quits mid-form leaves a conversation in `bot_active` with `confirm_phase = 'form'`, no agent
-assigned, and nothing aware of it. That is *"nothing may prevent a player reaching a human"*
+assigned, and nothing aware of it. That is _"nothing may prevent a player reaching a human"_
 violated by accident.
 
 `backend/src/shared/jobs/formTimeout.ts`, on the `sessionTimeout.ts` pattern:
@@ -567,8 +571,8 @@ follow-up.
 A third stacked section in `frontend/src/surfaces/agent-console/pages/Inbox/components/ContextRail.tsx`,
 below Player state and Tickets. Same rail, no tabs, no new surface.
 
-The rail exists so an agent can *"diagnose most issues without leaving the conversation view"*, and
-*"the agent never has to ask for something a form already collected"* is the same argument applied to
+The rail exists so an agent can _"diagnose most issues without leaving the conversation view"_, and
+_"the agent never has to ask for something a form already collected"_ is the same argument applied to
 form answers.
 
 Served by extending `GET /agent/conversations/:id/context` with a `form` block rather than adding an
@@ -578,20 +582,20 @@ endpoint — one rail, one query, one failure mode.
 
 `pages/Inbox/components/context/FormPanel.tsx`. Five states, one of which is nothing:
 
-| State | Rail shows |
-|---|---|
-| No form for this subintent | **Section omitted entirely** |
-| `in_progress` | "Player is answering · 2 of 4", plus the answers so far |
-| `completed` | Every field, labelled, in `position` order |
-| `partial` | Answered fields, then the gaps rendered as "Not answered" |
-| `skipped` | "Player skipped the questions" |
+| State                      | Rail shows                                                |
+| -------------------------- | --------------------------------------------------------- |
+| No form for this subintent | **Section omitted entirely**                              |
+| `in_progress`              | "Player is answering · 2 of 4", plus the answers so far   |
+| `completed`                | Every field, labelled, in `position` order                |
+| `partial`                  | Answered fields, then the gaps rendered as "Not answered" |
+| `skipped`                  | "Player skipped the questions"                            |
 
 The omission follows the rail's existing precedent — the `raw` section is omitted when it is `{}`
 "rather than opening onto nothing". An empty panel explaining an absence is worse than no panel.
 
-`partial` and `skipped` are the two states carrying the product requirement. *"Skipping still hands
+`partial` and `skipped` are the two states carrying the product requirement. _"Skipping still hands
 off. The conversation is marked as form-skipped so the agent knows to ask rather than wondering where
-the details went."* A skipped form must therefore be a visible row, never a missing section — the
+the details went."_ A skipped form must therefore be a visible row, never a missing section — the
 agent has to be able to tell "declined" from "never offered".
 
 Gaps in a `partial` render as rows rather than being dropped, for the same reason.
@@ -599,24 +603,24 @@ Gaps in a `partial` render as rows rather than being dropped, for the same reaso
 ### Versioning
 
 **Labels resolve against the submission's snapshotted `form_version`, never the current one.**
-*"Editing a live form creates v4. Answers already collected stay readable against v3."* This is the
+_"Editing a live form creates v4. Answers already collected stay readable against v3."_ This is the
 first real consumer of `form_submission.form_version` and the reason that column exists. The section
 header names it: "Purchase receipt · v1".
 
 **Values render from the answer's own snapshotted `field_type`**, not from the resolved field — the
-inherited spec snapshots it precisely so *"`value` is interpretable without resolving the version."*
+inherited spec snapshots it precisely so _"`value` is interpretable without resolving the version."_
 Only labels need the version join.
 
 ### Not shown
 
-Correction history. The read rule is *"the row with the greatest `created_at`"* for a
+Correction history. The read rule is _"the row with the greatest `created_at`"_ for a
 `(form_submission_id, field_key)`; older rows stay queryable, but revision history in a rail nobody
 asked for is noise.
 
 ## 3.3 Query invalidation
 
-`ContextRail`'s query is deliberately socket-free with a long `staleTime`, because *"the snapshot is
-immutable by construction and ticket history changes on the order of days."*
+`ContextRail`'s query is deliberately socket-free with a long `staleTime`, because _"the snapshot is
+immutable by construction and ticket history changes on the order of days."_
 
 **A form in progress is not immutable.** And the unassigned queue is
 `assigned_agent_id IS NULL AND status NOT IN (resolved, closed)`, which includes `bot_active` — so an

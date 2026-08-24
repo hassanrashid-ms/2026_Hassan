@@ -27,8 +27,8 @@ any point while they own the conversation, without needing to offer an article f
 post the same fixed question, render the same player-facing Yes/No banner, and are answered through
 one shared handler.
 
-**Nothing about spec 4's `resolve`/`handoff` outcomes changes.** This only widens *what can put a
-conversation into "waiting on a yes/no"* — an article offer (bot) or an explicit ask (agent) — while
+**Nothing about spec 4's `resolve`/`handoff` outcomes changes.** This only widens _what can put a
+conversation into "waiting on a yes/no"_ — an article offer (bot) or an explicit ask (agent) — while
 keeping the safety property spec 4 established: the bot still never decides it is done on its own,
 and here, neither does the general mechanism decide anything — a human (player) always answers.
 
@@ -78,13 +78,15 @@ cost. The forms slice still adds a `'form'` value later, unchanged from spec 4's
 `POST /agent/conversations/:id/ask-resolved`
 
 **Guard:**
+
 - `conversation.status` must be `open` or `awaiting_player` (the agent must own the conversation).
 - `conversation.confirm_phase` must currently be `'none'`. Rejects a double-ask, and rejects a
   replayed request — the same job spec 4's `bot_phase` guard does for the bot.
 
 **Effect**, one transaction, per this repo's rule that every state change writes `conversation` and
 `event` together:
-- Post a `system`, public message with the fixed copy: *"Did this solve it?"* — the same string the
+
+- Post a `system`, public message with the fixed copy: _"Did this solve it?"_ — the same string the
   bot's flow posts.
 - Set `confirm_phase = 'agent_ask'`.
 - Append event `resolution_check_requested`, `{ source: 'agent', actorId: <agentId> }`.
@@ -103,19 +105,19 @@ and writes nothing.
 
 **Yes:**
 
-| `confirm_phase` | Outcome |
-|---|---|
-| `bot_article` | Spec 4's `resolve` outcome, unchanged: status → `resolved`, `conversation_resolved` event with `{ source: 'bot', confirmed_by: 'player' }`. No message posted. |
-| `agent_ask` | Same status transition: status → `resolved`, `conversation_resolved` event with `{ source: 'agent', confirmed_by: 'player' }`. No message posted — the status change is the confirmation, same reasoning as spec 4's. |
+| `confirm_phase` | Outcome                                                                                                                                                                                                               |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bot_article`   | Spec 4's `resolve` outcome, unchanged: status → `resolved`, `conversation_resolved` event with `{ source: 'bot', confirmed_by: 'player' }`. No message posted.                                                        |
+| `agent_ask`     | Same status transition: status → `resolved`, `conversation_resolved` event with `{ source: 'agent', confirmed_by: 'player' }`. No message posted — the status change is the confirmation, same reasoning as spec 4's. |
 
 Both branches set `confirm_phase → 'none'`.
 
 **No:**
 
-| `confirm_phase` | Outcome |
-|---|---|
-| `bot_article` | Spec 4's existing `handoff('article_rejected')`, unchanged: status → `open`, `assignOnHandoff`, handoff message posted, `bot_article_rejected` + `bot_handoff` events. |
-| `agent_ask` | `confirm_phase → 'none'`. Status is untouched (stays `open`/`awaiting_player`) — a human already owns the conversation, so there is nothing to hand off. Event `resolution_check_declined`, `{ source: 'agent' }`. No message posted; the agent sees the decline live via socket update. |
+| `confirm_phase` | Outcome                                                                                                                                                                                                                                                                                  |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bot_article`   | Spec 4's existing `handoff('article_rejected')`, unchanged: status → `open`, `assignOnHandoff`, handoff message posted, `bot_article_rejected` + `bot_handoff` events.                                                                                                                   |
+| `agent_ask`     | `confirm_phase → 'none'`. Status is untouched (stays `open`/`awaiting_player`) — a human already owns the conversation, so there is nothing to hand off. Event `resolution_check_declined`, `{ source: 'agent' }`. No message posted; the agent sees the decline live via socket update. |
 
 ---
 
@@ -127,6 +129,7 @@ confirmation. No branching on source in the frontend — the backend decides wha
 
 **Agent console** (`surfaces/agent-console/pages/Inbox/components/ThreadPanel.tsx`): add an "Ask if
 resolved" button.
+
 - Enabled when status is `open` or `awaiting_player` and `confirm_phase === 'none'`.
 - Disabled, with a "Waiting on player" tooltip, while `confirm_phase === 'agent_ask'`.
 - Calls `POST /agent/conversations/:id/ask-resolved`.
@@ -140,10 +143,10 @@ No new UI is needed for the response — the existing status badge flipping to `
 
 New types, `actorType: 'agent'` / `'player'` as noted:
 
-| Type | Payload | Actor |
-|---|---|---|
-| `resolution_check_requested` | `{ source: 'agent' }` | agent |
-| `resolution_check_declined` | `{ source: 'agent' }` | player |
+| Type                         | Payload               | Actor  |
+| ---------------------------- | --------------------- | ------ |
+| `resolution_check_requested` | `{ source: 'agent' }` | agent  |
+| `resolution_check_declined`  | `{ source: 'agent' }` | player |
 
 The bot's ask/accept/reject path reuses spec 4's existing `bot_article_offered`,
 `conversation_resolved`, `bot_article_rejected` events unchanged — no new event types needed there.
@@ -154,11 +157,11 @@ The bot's ask/accept/reject path reuses spec 4's existing `bot_article_offered`,
 
 No changes needed. Spec 4's assignment table already anticipates an agent-resolved case:
 
-| Previous state | Assignment on reopen |
-|---|---|
-| Bot-resolved — never assigned to anyone | `assignOnHandoff` |
-| Agent-resolved, previous owner still active | Keep them |
-| Agent-resolved, previous owner deactivated | `assignOnHandoff` |
+| Previous state                              | Assignment on reopen |
+| ------------------------------------------- | -------------------- |
+| Bot-resolved — never assigned to anyone     | `assignOnHandoff`    |
+| Agent-resolved, previous owner still active | Keep them            |
+| Agent-resolved, previous owner deactivated  | `assignOnHandoff`    |
 
 `conversation_resolved.source: 'agent'` (written by this slice) is exactly the signal that table's
 middle row keys off. Reopening after an agent-triggered resolution just works once this slice is

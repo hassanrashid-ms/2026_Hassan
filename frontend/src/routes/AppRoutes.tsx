@@ -1,7 +1,7 @@
-import { Suspense, lazy } from 'react'
-import { Navigate, Route, Routes } from 'react-router-dom'
-import { AgentLogin } from '../surfaces/agent-console/pages/AgentLogin.tsx'
-import { AdminLogin } from '../surfaces/admin-console/pages/AdminLogin.tsx'
+import { Suspense, lazy } from 'react';
+import { Navigate, Route, Routes } from 'react-router-dom';
+import { AgentLogin } from '../surfaces/agent-console/pages/AgentLogin.tsx';
+import { AdminLogin } from '../surfaces/admin-console/pages/AdminLogin.tsx';
 
 /*
  * The agent console's router. The player surface is NOT here: it has its own
@@ -14,25 +14,31 @@ import { AdminLogin } from '../surfaces/admin-console/pages/AdminLogin.tsx'
  * from here, so its Tailwind preflight reset stays in its own chunk.
  */
 const AgentConsoleShell = lazy(async () => ({
-  default: (await import('../surfaces/agent-console/components/AgentConsoleShell.tsx')).AgentConsoleShell,
-}))
-const Inbox = lazy(async () => ({ default: (await import('../surfaces/agent-console/pages/Inbox/Inbox.tsx')).Inbox }))
-const Tickets = lazy(async () => ({ default: (await import('../surfaces/agent-console/pages/Tickets/Tickets.tsx')).Tickets }))
+  default: (await import('../surfaces/agent-console/components/AgentConsoleShell.tsx'))
+    .AgentConsoleShell,
+}));
+const Inbox = lazy(async () => ({
+  default: (await import('../surfaces/agent-console/pages/Inbox/Inbox.tsx')).Inbox,
+}));
+const Tickets = lazy(async () => ({
+  default: (await import('../surfaces/agent-console/pages/Tickets/Tickets.tsx')).Tickets,
+}));
 const KnowledgeBase = lazy(async () => ({
-  default: (await import('../surfaces/agent-console/pages/KnowledgeBase/KnowledgeBase.tsx')).KnowledgeBase,
-}))
+  default: (await import('../surfaces/agent-console/pages/KnowledgeBase/KnowledgeBase.tsx'))
+    .KnowledgeBase,
+}));
 const Forms = lazy(async () => ({
   default: (await import('../surfaces/agent-console/pages/Forms/Forms.tsx')).Forms,
-}))
+}));
 const Taxonomy = lazy(async () => ({
   default: (await import('../surfaces/agent-console/pages/Taxonomy/Taxonomy.tsx')).Taxonomy,
-}))
+}));
 const BotConfigPage = lazy(async () => ({
   default: (await import('../surfaces/agent-console/pages/BotConfig/BotConfig.tsx')).BotConfig,
-}))
+}));
 const AgentNotFound = lazy(async () => ({
   default: (await import('../surfaces/agent-console/pages/NotFound.tsx')).NotFound,
-}))
+}));
 
 /*
  * The admin console's shell and pages, lazy for the same reason as the agent
@@ -41,20 +47,22 @@ const AgentNotFound = lazy(async () => ({
  * its own chunk and never reaches the other two surfaces.
  */
 const AdminConsoleShell = lazy(async () => ({
-  default: (await import('../surfaces/admin-console/components/AdminConsoleShell.tsx')).AdminConsoleShell,
-}))
+  default: (await import('../surfaces/admin-console/components/AdminConsoleShell.tsx'))
+    .AdminConsoleShell,
+}));
 const Overview = lazy(async () => ({
   default: (await import('../surfaces/admin-console/pages/Overview/Overview.tsx')).Overview,
-}))
+}));
 const WorkspaceDetail = lazy(async () => ({
-  default: (await import('../surfaces/admin-console/pages/WorkspaceDetail/WorkspaceDetail.tsx')).WorkspaceDetail,
-}))
+  default: (await import('../surfaces/admin-console/pages/WorkspaceDetail/WorkspaceDetail.tsx'))
+    .WorkspaceDetail,
+}));
 const Admins = lazy(async () => ({
   default: (await import('../surfaces/admin-console/pages/Admins/Admins.tsx')).Admins,
-}))
+}));
 const AdminNotFound = lazy(async () => ({
   default: (await import('../surfaces/admin-console/pages/NotFound.tsx')).NotFound,
-}))
+}));
 
 export function AppRoutes() {
   return (
@@ -104,5 +112,5 @@ export function AppRoutes() {
         <Route path="*" element={<AdminNotFound />} />
       </Route>
     </Routes>
-  )
+  );
 }

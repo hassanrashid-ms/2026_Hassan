@@ -1,15 +1,15 @@
-import { Tabs, TabsList, TabsTrigger } from '@/surfaces/webview/components/ui/tabs'
+import { Tabs, TabsList, TabsTrigger } from '@/surfaces/webview/components/ui/tabs';
 
-export const ALL_INTENTS = 'all'
+export const ALL_INTENTS = 'all';
 
-type Intent = { id: string; name: string }
+type Intent = { id: string; name: string };
 
 type CategoryTabsProps = {
-  intents: readonly Intent[]
+  intents: readonly Intent[];
   /** null means "All". */
-  intentId: string | null
-  onIntentChange: (intentId: string | null) => void
-}
+  intentId: string | null;
+  onIntentChange: (intentId: string | null) => void;
+};
 
 /**
  * The selected intent is passed straight back to fetchArticles as `intentId`, so
@@ -18,7 +18,7 @@ type CategoryTabsProps = {
  * regression note in the design doc.
  */
 export function CategoryTabs({ intents, intentId, onIntentChange }: CategoryTabsProps) {
-  if (intents.length === 0) return null
+  if (intents.length === 0) return null;
 
   return (
     <Tabs
@@ -34,5 +34,5 @@ export function CategoryTabs({ intents, intentId, onIntentChange }: CategoryTabs
         ))}
       </TabsList>
     </Tabs>
-  )
+  );
 }

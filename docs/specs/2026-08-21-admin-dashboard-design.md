@@ -85,19 +85,19 @@ and `crm_admin` must never be reachable from a non-`/admin` route.
 
 All routes below are under `/admin/*` and require `is_admin = true` unless marked super-admin-only.
 
-| Endpoint | Purpose |
-|---|---|
-| `GET /admin/workspaces` | List all workspaces with member counts and created date — powers the Overview page |
-| `POST /admin/workspaces` | Create a workspace (`name`, `slug`); `422` on duplicate slug |
-| `PATCH /admin/workspaces/:id` | Rename (`name` only — `slug` is immutable after creation) |
-| `GET /admin/workspaces/:id/members` | List `workspace_member` rows (`agent` / `team_lead`) for one workspace |
-| `POST /admin/workspaces/:id/members` | Grant access: `{ email, role: agent\|team_lead }`. If no `agent` row exists for that email, create one with `status = 'invited'`, then upsert the `workspace_member` row |
-| `PATCH /admin/workspaces/:id/members/:agentId` | Change role (`agent` ↔ `team_lead`), or set `deactivated_at` to remove access |
-| `GET /admin/workspaces/:id/secret` | Secret metadata (`created_at`, `expires_at`) — never the raw value after creation |
-| `POST /admin/workspaces/:id/secret/rotate` | Rotate: insert new `workspace_secret` row, set the previous row's `expires_at`. Raw secret is returned **once**, in this response body only |
-| `GET /admin/agents` | Directory of all agents (search by email/name), with `is_admin` / `is_super_admin` flags — used when granting admin |
-| `PATCH /admin/agents/:id/admin` | **Super-admin only.** Grant or revoke `is_admin` |
-| `PATCH /admin/agents/:id/super-admin` | **Super-admin only.** Grant or revoke `is_super_admin` |
+| Endpoint                                       | Purpose                                                                                                                                                                  |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `GET /admin/workspaces`                        | List all workspaces with member counts and created date — powers the Overview page                                                                                       |
+| `POST /admin/workspaces`                       | Create a workspace (`name`, `slug`); `422` on duplicate slug                                                                                                             |
+| `PATCH /admin/workspaces/:id`                  | Rename (`name` only — `slug` is immutable after creation)                                                                                                                |
+| `GET /admin/workspaces/:id/members`            | List `workspace_member` rows (`agent` / `team_lead`) for one workspace                                                                                                   |
+| `POST /admin/workspaces/:id/members`           | Grant access: `{ email, role: agent\|team_lead }`. If no `agent` row exists for that email, create one with `status = 'invited'`, then upsert the `workspace_member` row |
+| `PATCH /admin/workspaces/:id/members/:agentId` | Change role (`agent` ↔ `team_lead`), or set `deactivated_at` to remove access                                                                                            |
+| `GET /admin/workspaces/:id/secret`             | Secret metadata (`created_at`, `expires_at`) — never the raw value after creation                                                                                        |
+| `POST /admin/workspaces/:id/secret/rotate`     | Rotate: insert new `workspace_secret` row, set the previous row's `expires_at`. Raw secret is returned **once**, in this response body only                              |
+| `GET /admin/agents`                            | Directory of all agents (search by email/name), with `is_admin` / `is_super_admin` flags — used when granting admin                                                      |
+| `PATCH /admin/agents/:id/admin`                | **Super-admin only.** Grant or revoke `is_admin`                                                                                                                         |
+| `PATCH /admin/agents/:id/super-admin`          | **Super-admin only.** Grant or revoke `is_super_admin`                                                                                                                   |
 
 On first Google sign-in (existing/future OAuth flow, out of scope here — this is the integration
 seam it must honor): match the incoming email against `agent`. If a row exists with

@@ -1,6 +1,6 @@
-import { useState } from 'react'
-import { SendHorizontal } from 'lucide-react'
-import { cn } from '@/surfaces/webview/lib/cn'
+import { useState } from 'react';
+import { SendHorizontal } from 'lucide-react';
+import { cn } from '@/surfaces/webview/lib/cn';
 
 /**
  * Same behaviour as features/chat/components/Composer.tsx — trim, ignore empty,
@@ -11,17 +11,23 @@ import { cn } from '@/surfaces/webview/lib/cn'
  * Composer guarantees that by omitting a prop; this one guarantees it by not
  * having the control at all, which is the stronger version of the same rule.
  */
-export function ChatComposer({ onSend, disabled }: { onSend: (body: string) => void; disabled?: boolean }) {
-  const [value, setValue] = useState('')
+export function ChatComposer({
+  onSend,
+  disabled,
+}: {
+  onSend: (body: string) => void;
+  disabled?: boolean;
+}) {
+  const [value, setValue] = useState('');
 
   const submit = () => {
-    const trimmed = value.trim()
-    if (trimmed.length === 0) return
-    onSend(trimmed)
-    setValue('')
-  }
+    const trimmed = value.trim();
+    if (trimmed.length === 0) return;
+    onSend(trimmed);
+    setValue('');
+  };
 
-  const empty = value.trim().length === 0
+  const empty = value.trim().length === 0;
 
   return (
     <div
@@ -37,8 +43,8 @@ export function ChatComposer({ onSend, disabled }: { onSend: (body: string) => v
         onChange={(event) => setValue(event.target.value)}
         onKeyDown={(event) => {
           if (event.key === 'Enter' && !event.shiftKey) {
-            event.preventDefault()
-            submit()
+            event.preventDefault();
+            submit();
           }
         }}
         placeholder="Type a message…"
@@ -57,11 +63,13 @@ export function ChatComposer({ onSend, disabled }: { onSend: (body: string) => v
         aria-label="Send message"
         className={cn(
           'inline-flex size-11 shrink-0 items-center justify-center rounded-full transition-colors outline-none',
-          empty || disabled === true ? 'bg-surface text-muted' : 'bg-accent text-accent-fg active:bg-accent-deep',
+          empty || disabled === true
+            ? 'bg-surface text-muted'
+            : 'bg-accent text-accent-fg active:bg-accent-deep',
         )}
       >
         <SendHorizontal size={24} className="shrink-0" />
       </button>
     </div>
-  )
+  );
 }

@@ -20,19 +20,21 @@ This design adds a new **Tickets** page: a 4-column overview board, and narrows 
 ## Pages affected
 
 ### Inbox (`surfaces/agent-console/pages/Inbox/`)
+
 - Drops the `Tabs`/`TabsList` switcher and the "Unassigned" tab.
 - Becomes a single list scoped to `assignedAgentId = currentAgent.id`, status in (`open`, `awaiting_player`, `escalated`).
 - Behavior otherwise unchanged (thread view, claim/reply/etc. still live here for the agent's own tickets).
 
 ### Tickets (new page, new nav item)
+
 Four columns, always shown side by side, in this order:
 
-| Column | Filter | Notes |
-|---|---|---|
-| Mine | `assignedAgentId = currentAgent.id`, status in (open, awaiting_player, escalated) | Same data as Inbox; duplicated here intentionally so Tickets is a full overview |
-| Agent Assigned | `assignedAgentId IS NOT NULL`, status in (open, awaiting_player, escalated) | Team-wide; a ticket appears here **and** in Mine if it's the current agent's — overlap is intentional |
-| Unassigned | `assignedAgentId IS NULL`, status in (open, escalated) | Changed from today's definition — excludes `bot_active` |
-| Bot Handling | `status = bot_active` | Bot owns these; no claim action; read access only, with a takeover path (below) |
+| Column         | Filter                                                                            | Notes                                                                                                 |
+| -------------- | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Mine           | `assignedAgentId = currentAgent.id`, status in (open, awaiting_player, escalated) | Same data as Inbox; duplicated here intentionally so Tickets is a full overview                       |
+| Agent Assigned | `assignedAgentId IS NOT NULL`, status in (open, awaiting_player, escalated)       | Team-wide; a ticket appears here **and** in Mine if it's the current agent's — overlap is intentional |
+| Unassigned     | `assignedAgentId IS NULL`, status in (open, escalated)                            | Changed from today's definition — excludes `bot_active`                                               |
+| Bot Handling   | `status = bot_active`                                                             | Bot owns these; no claim action; read access only, with a takeover path (below)                       |
 
 Row content matches the existing queue row shape from the product spec: Player, Subintent, Status, Priority, Assignee, Labels, Age. Default sort per column: priority first, then oldest player message (same default as the product spec's queue).
 

@@ -5,11 +5,17 @@ import type {
   PlayerMessageView,
   PlayerMessagesResponse,
   ResolutionAnswerResponse,
-} from '@support/types'
-import { apiCall } from '../../../lib/httpClient.ts'
+} from '@support/types';
+import { apiCall } from '../../../lib/httpClient.ts';
 
-export function fetchPlayerMessages(token: string, sessionId: string): Promise<PlayerMessagesResponse> {
-  return apiCall<PlayerMessagesResponse>(`/surface/messages?session_id=${encodeURIComponent(sessionId)}`, token)
+export function fetchPlayerMessages(
+  token: string,
+  sessionId: string,
+): Promise<PlayerMessagesResponse> {
+  return apiCall<PlayerMessagesResponse>(
+    `/surface/messages?session_id=${encodeURIComponent(sessionId)}`,
+    token,
+  );
 }
 
 /**
@@ -25,7 +31,7 @@ export function sendPlayerMessage(
   return apiCall(`/surface/messages`, token, {
     method: 'POST',
     body: JSON.stringify(sessionId ? { body, session_id: sessionId } : { body }),
-  })
+  });
 }
 
 /**
@@ -37,11 +43,14 @@ export function openNewTicket(token: string, sessionId?: string): Promise<NewTic
   return apiCall(`/surface/new-ticket`, token, {
     method: 'POST',
     body: JSON.stringify(sessionId ? { session_id: sessionId } : {}),
-  })
+  });
 }
 
 export function markPlayerMessagesRead(token: string, upToSeq: number): Promise<{ ok: true }> {
-  return apiCall(`/surface/messages/read`, token, { method: 'POST', body: JSON.stringify({ up_to_seq: upToSeq }) })
+  return apiCall(`/surface/messages/read`, token, {
+    method: 'POST',
+    body: JSON.stringify({ up_to_seq: upToSeq }),
+  });
 }
 
 /**
@@ -49,11 +58,15 @@ export function markPlayerMessagesRead(token: string, upToSeq: number): Promise<
  * decides what the tap means from confirm_phase, which is why the webview never
  * branches on it.
  */
-export function answerResolution(token: string, helped: boolean, sessionId?: string): Promise<ResolutionAnswerResponse> {
+export function answerResolution(
+  token: string,
+  helped: boolean,
+  sessionId?: string,
+): Promise<ResolutionAnswerResponse> {
   return apiCall(`/surface/resolution-answer`, token, {
     method: 'POST',
     body: JSON.stringify(sessionId ? { helped, session_id: sessionId } : { helped }),
-  })
+  });
 }
 
 /**
@@ -70,21 +83,23 @@ export function postFormAnswer(
   return apiCall(`/surface/form/answer`, token, {
     method: 'POST',
     body: JSON.stringify(
-      sessionId ? { field_key: fieldKey, value, session_id: sessionId } : { field_key: fieldKey, value },
+      sessionId
+        ? { field_key: fieldKey, value, session_id: sessionId }
+        : { field_key: fieldKey, value },
     ),
-  })
+  });
 }
 
 export function submitForm(token: string, sessionId?: string): Promise<FormTerminateResponse> {
   return apiCall(`/surface/form/submit`, token, {
     method: 'POST',
     body: JSON.stringify(sessionId ? { session_id: sessionId } : {}),
-  })
+  });
 }
 
 export function skipForm(token: string, sessionId?: string): Promise<FormTerminateResponse> {
   return apiCall(`/surface/form/skip`, token, {
     method: 'POST',
     body: JSON.stringify(sessionId ? { session_id: sessionId } : {}),
-  })
+  });
 }

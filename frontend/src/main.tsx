@@ -1,16 +1,16 @@
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { BrowserRouter } from 'react-router-dom'
-import { Toaster, toast } from 'sonner'
-import { AppRoutes } from './routes/AppRoutes.tsx'
-import { ApiError } from './lib/httpClient.ts'
-import { handleSessionExpired } from './surfaces/agent-console/lib/authErrorHandling.ts'
-import { handleAdminSessionExpired } from './surfaces/admin-console/lib/adminAuthErrorHandling.ts'
-import './styles.css'
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { BrowserRouter } from 'react-router-dom';
+import { Toaster, toast } from 'sonner';
+import { AppRoutes } from './routes/AppRoutes.tsx';
+import { ApiError } from './lib/httpClient.ts';
+import { handleSessionExpired } from './surfaces/agent-console/lib/authErrorHandling.ts';
+import { handleAdminSessionExpired } from './surfaces/admin-console/lib/adminAuthErrorHandling.ts';
+import './styles.css';
 
-const root = document.getElementById('root')
-if (!root) throw new Error('#root is missing from index.html')
+const root = document.getElementById('root');
+if (!root) throw new Error('#root is missing from index.html');
 
 // One choke point for every query/mutation failure across the console: an
 // expired or revoked session (401) redirects to login instead of leaving the
@@ -26,19 +26,21 @@ if (!root) throw new Error('#root is missing from index.html')
 function handleQueryError(error: unknown) {
   if (error instanceof ApiError && error.status === 401) {
     if (window.location.pathname.startsWith('/dashboard')) {
-      handleAdminSessionExpired()
+      handleAdminSessionExpired();
     } else {
-      handleSessionExpired()
+      handleSessionExpired();
     }
-    return
+    return;
   }
-  toast.error(error instanceof ApiError ? error.message : 'Something went wrong. Please try again.')
+  toast.error(
+    error instanceof ApiError ? error.message : 'Something went wrong. Please try again.',
+  );
 }
 
 const queryClient = new QueryClient({
   queryCache: new QueryCache({ onError: handleQueryError }),
   mutationCache: new MutationCache({ onError: handleQueryError }),
-})
+});
 
 createRoot(root).render(
   <StrictMode>
@@ -49,4 +51,4 @@ createRoot(root).render(
       <Toaster richColors position="top-right" />
     </QueryClientProvider>
   </StrictMode>,
-)
+);

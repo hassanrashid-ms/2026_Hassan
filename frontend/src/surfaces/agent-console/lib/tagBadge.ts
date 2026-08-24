@@ -10,8 +10,10 @@ const TAG_BADGE_CLASSES: string[] = [
   'border-transparent bg-indigo-100 text-indigo-800',
   'border-transparent bg-violet-100 text-violet-800',
   'border-transparent bg-pink-100 text-pink-800',
-]
+];
 
 export function tagBadgeClassName(colorIndex: number): string {
-  return TAG_BADGE_CLASSES[((colorIndex % TAG_BADGE_CLASSES.length) + TAG_BADGE_CLASSES.length) % TAG_BADGE_CLASSES.length]!
+  return TAG_BADGE_CLASSES[
+    ((colorIndex % TAG_BADGE_CLASSES.length) + TAG_BADGE_CLASSES.length) % TAG_BADGE_CLASSES.length
+  ]!;
 }

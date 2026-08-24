@@ -1,6 +1,6 @@
-import { useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { AgentArticleDetail, IntentView } from '@support/types'
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { AgentArticleDetail, IntentView } from '@support/types';
 import {
   MDXEditor,
   headingsPlugin,
@@ -14,8 +14,8 @@ import {
   BlockTypeSelect,
   CreateLink,
   UndoRedo,
-} from '@mdxeditor/editor'
-import '@mdxeditor/editor/style.css'
+} from '@mdxeditor/editor';
+import '@mdxeditor/editor/style.css';
 import {
   archiveArticle,
   createArticle,
@@ -24,26 +24,38 @@ import {
   publishArticle,
   updateArticle,
   generateKeywords,
-} from '../../../api/agentApi.ts'
-import { canEditFields, canPublish, parseKeywordsInput } from '../articleForm.ts'
-import { Button } from '../../../components/ui/button.tsx'
-import { Input } from '../../../components/ui/input.tsx'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../components/ui/select.tsx'
-import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from '../../../components/ui/sheet.tsx'
-import { Skeleton } from '../../../components/ui/skeleton.tsx'
-import { Switch } from '../../../components/ui/switch.tsx'
-import { Loader2 } from 'lucide-react'
+} from '../../../api/agentApi.ts';
+import { canEditFields, canPublish, parseKeywordsInput } from '../articleForm.ts';
+import { Button } from '../../../components/ui/button.tsx';
+import { Input } from '../../../components/ui/input.tsx';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../../../components/ui/select.tsx';
+import {
+  Sheet,
+  SheetContent,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from '../../../components/ui/sheet.tsx';
+import { Skeleton } from '../../../components/ui/skeleton.tsx';
+import { Switch } from '../../../components/ui/switch.tsx';
+import { Loader2 } from 'lucide-react';
 
-type Draft = { title: string; body: string; keywordsInput: string; intentId: string }
+type Draft = { title: string; body: string; keywordsInput: string; intentId: string };
 
 function draftFrom(article: AgentArticleDetail | null): Draft {
-  if (!article) return { title: '', body: '', keywordsInput: '', intentId: '' }
+  if (!article) return { title: '', body: '', keywordsInput: '', intentId: '' };
   return {
     title: article.title,
     body: article.body,
     keywordsInput: article.keywords.join(', '),
     intentId: article.intent_id ?? '',
-  }
+  };
 }
 
 export function ArticleEditorSheet({
@@ -53,18 +65,18 @@ export function ArticleEditorSheet({
   onOpenChange,
   onCreated,
 }: {
-  token: string
-  articleId: string | null
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  onCreated: (id: string) => void
+  token: string;
+  articleId: string | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onCreated: (id: string) => void;
 }) {
-  const intents = useQuery({ queryKey: ['admin-intents'], queryFn: () => fetchIntents(token) })
+  const intents = useQuery({ queryKey: ['admin-intents'], queryFn: () => fetchIntents(token) });
   const selected = useQuery({
     queryKey: ['admin-article', articleId],
     queryFn: () => fetchArticle(token, articleId!),
     enabled: articleId !== null,
-  })
+  });
 
   // MDXEditor reads `markdown` only when it mounts — later prop changes are
   // ignored — so a form rendered before the fetch lands keeps a blank body for
@@ -73,7 +85,7 @@ export function ArticleEditorSheet({
   // until both queries have answered, then mount it once with real values. The
   // same gate stops the Category select from flashing "Uncategorized" before
   // the intents arrive.
-  const loading = (articleId !== null && selected.isLoading) || intents.isLoading
+  const loading = (articleId !== null && selected.isLoading) || intents.isLoading;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -83,7 +95,10 @@ export function ArticleEditorSheet({
         </SheetHeader>
 
         {loading ? (
-          <div className="flex min-h-0 flex-1 flex-col gap-4 p-4" data-testid="article-editor-skeleton">
+          <div
+            className="flex min-h-0 flex-1 flex-col gap-4 p-4"
+            data-testid="article-editor-skeleton"
+          >
             <Skeleton className="h-3 w-14" />
             <Skeleton className="h-9 w-full" />
             <Skeleton className="h-3 w-20" />
@@ -96,7 +111,12 @@ export function ArticleEditorSheet({
         ) : selected.isError ? (
           <div className="flex min-h-0 flex-1 flex-col items-start gap-3 p-4">
             <p className="text-sm text-muted">This article could not be loaded.</p>
-            <Button type="button" variant="outline" size="sm" onClick={() => void selected.refetch()}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void selected.refetch()}
+            >
               Retry
             </Button>
           </div>
@@ -114,7 +134,7 @@ export function ArticleEditorSheet({
         )}
       </SheetContent>
     </Sheet>
-  )
+  );
 }
 
 function ArticleEditorForm({
@@ -124,15 +144,15 @@ function ArticleEditorForm({
   intents,
   onCreated,
 }: {
-  token: string
-  articleId: string | null
-  article: AgentArticleDetail | null
-  intents: IntentView[]
-  onCreated: (id: string) => void
+  token: string;
+  articleId: string | null;
+  article: AgentArticleDetail | null;
+  intents: IntentView[];
+  onCreated: (id: string) => void;
 }) {
-  const queryClient = useQueryClient()
-  const [draft, setDraft] = useState<Draft>(() => draftFrom(article))
-  const [useAIKeywords, setUseAIKeywords] = useState(false)
+  const queryClient = useQueryClient();
+  const [draft, setDraft] = useState<Draft>(() => draftFrom(article));
+  const [useAIKeywords, setUseAIKeywords] = useState(false);
   // The value MDXEditor's `markdown` prop is seeded with. Deliberately NOT
   // kept in sync with draft.body on every keystroke — MDXEditor treats a
   // prop change as an authoritative external reset and re-parses the whole
@@ -140,17 +160,17 @@ function ArticleEditorForm({
   // (list-ifying a multi-line selection only applied to the last line) and
   // corrupting the link dialog's selection-anchor rect. It only needs to
   // change when switching articles, which remounting already handles.
-  const [editorSeed] = useState(() => article?.body ?? '')
+  const [editorSeed] = useState(() => article?.body ?? '');
 
   const generateKeywordsMutation = useMutation({
     mutationFn: () => generateKeywords(token, { title: draft.title, body: draft.body }),
     onSuccess: (data) => setDraft((d) => ({ ...d, keywordsInput: data.keywords.join(', ') })),
-  })
+  });
 
   const invalidateArticles = () => {
-    void queryClient.invalidateQueries({ queryKey: ['admin-articles'] })
-    void queryClient.invalidateQueries({ queryKey: ['admin-article', articleId] })
-  }
+    void queryClient.invalidateQueries({ queryKey: ['admin-articles'] });
+    void queryClient.invalidateQueries({ queryKey: ['admin-article', articleId] });
+  };
 
   const createDraft = useMutation({
     mutationFn: () =>
@@ -161,10 +181,10 @@ function ArticleEditorForm({
         intent_id: draft.intentId || undefined,
       }),
     onSuccess: (created: AgentArticleDetail) => {
-      invalidateArticles()
-      onCreated(created.id)
+      invalidateArticles();
+      onCreated(created.id);
     },
-  })
+  });
 
   const saveDraft = useMutation({
     mutationFn: () =>
@@ -175,20 +195,27 @@ function ArticleEditorForm({
         intent_id: draft.intentId || null,
       }),
     onSuccess: invalidateArticles,
-  })
+  });
 
-  const publish = useMutation({ mutationFn: () => publishArticle(token, articleId!), onSuccess: invalidateArticles })
-  const archive = useMutation({ mutationFn: () => archiveArticle(token, articleId!), onSuccess: invalidateArticles })
+  const publish = useMutation({
+    mutationFn: () => publishArticle(token, articleId!),
+    onSuccess: invalidateArticles,
+  });
+  const archive = useMutation({
+    mutationFn: () => archiveArticle(token, articleId!),
+    onSuccess: invalidateArticles,
+  });
 
-  const state = article?.state ?? 'draft'
-  const editable = articleId === null || canEditFields(state)
+  const state = article?.state ?? 'draft';
+  const editable = articleId === null || canEditFields(state);
 
   return (
     <>
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
         {!editable && (
           <p className="rounded-md bg-amber-100 px-3 py-2 text-xs text-amber-900">
-            This article is {state} and can no longer be edited{state === 'published' ? ' — only Archive is available.' : '.'}
+            This article is {state} and can no longer be edited
+            {state === 'published' ? ' — only Archive is available.' : '.'}
           </p>
         )}
 
@@ -207,7 +234,11 @@ function ArticleEditorForm({
             <label className="text-xs font-medium text-muted">Keywords</label>
             <div className="flex items-center gap-2">
               <label className="text-xs text-muted">Generate with AI</label>
-              <Switch checked={useAIKeywords} onCheckedChange={setUseAIKeywords} disabled={!editable} />
+              <Switch
+                checked={useAIKeywords}
+                onCheckedChange={setUseAIKeywords}
+                disabled={!editable}
+              />
             </div>
           </div>
           {useAIKeywords ? (
@@ -223,7 +254,9 @@ function ArticleEditorForm({
                 onClick={() => generateKeywordsMutation.mutate()}
                 disabled={generateKeywordsMutation.isPending || !draft.title || !draft.body}
               >
-                {generateKeywordsMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {generateKeywordsMutation.isPending && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
                 Generate
               </Button>
             </div>
@@ -299,7 +332,12 @@ function ArticleEditorForm({
           </Button>
         ) : (
           <>
-            <Button type="button" variant="outline" onClick={() => archive.mutate()} disabled={archive.isPending}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => archive.mutate()}
+              disabled={archive.isPending}
+            >
               Archive
             </Button>
             <Button
@@ -321,5 +359,5 @@ function ArticleEditorForm({
         )}
       </SheetFooter>
     </>
-  )
+  );
 }

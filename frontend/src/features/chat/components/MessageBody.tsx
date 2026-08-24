@@ -1,5 +1,5 @@
-import { lazy } from 'react'
-import type { ChatAuthorType } from './types.ts'
+import { lazy } from 'react';
+import type { ChatAuthorType } from './types.ts';
 
 /*
  * Lazy, and lazy HERE rather than at each call site, so both surfaces share one
@@ -15,7 +15,7 @@ import type { ChatAuthorType } from './types.ts'
  */
 const ArticleBody = lazy(() =>
   import('@/features/articles/components/ArticleBody').then((m) => ({ default: m.ArticleBody })),
-)
+);
 
 /*
  * The whole rule, in one place so neither surface can drift.
@@ -27,18 +27,18 @@ const ArticleBody = lazy(() =>
  * depends on against an adversarial input source. `system` bodies are server copy
  * with no markdown in them, and get the same literal treatment.
  */
-const MARKDOWN_AUTHORS: ReadonlySet<ChatAuthorType> = new Set(['bot', 'agent'])
+const MARKDOWN_AUTHORS: ReadonlySet<ChatAuthorType> = new Set(['bot', 'agent']);
 
 export function MessageBody({
   authorType,
   body,
   dark = false,
 }: {
-  authorType: ChatAuthorType
-  body: string
+  authorType: ChatAuthorType;
+  body: string;
   /** The bubble behind this body is a dark, on-brand background (e.g. the agent-console's own-message bubble) rather than the light `bg`/`surface` an article page renders on — so markdown body text should render in the light `accent-fg` colour instead of the default dark `text`. */
-  dark?: boolean
+  dark?: boolean;
 }) {
-  if (!MARKDOWN_AUTHORS.has(authorType)) return <>{body}</>
-  return <ArticleBody markdown={body} dark={dark} />
+  if (!MARKDOWN_AUTHORS.has(authorType)) return <>{body}</>;
+  return <ArticleBody markdown={body} dark={dark} />;
 }
