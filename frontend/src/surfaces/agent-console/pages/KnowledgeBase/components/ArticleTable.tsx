@@ -56,7 +56,13 @@ export function ArticleTable({
                 onClick={() => onSelect(a.id)}
                 className={cn('cursor-pointer', selectedId === a.id && 'bg-accent-soft')}
               >
-                <TableCell className="font-medium">{a.title}</TableCell>
+                {/* max-w-0 + w-full lets the cell shrink below its content's natural
+                    width in an auto-layout table — without it, `truncate` alone has no
+                    bound to clip against, and a long title wraps character-by-character
+                    once the sheet next to it eats most of the available width. */}
+                <TableCell className="max-w-0 w-full truncate font-medium" title={a.title}>
+                  {a.title}
+                </TableCell>
                 <TableCell>
                   <Badge variant={STATE_BADGE_VARIANT[a.state]}>{a.state}</Badge>
                 </TableCell>
