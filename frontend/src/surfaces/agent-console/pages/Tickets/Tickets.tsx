@@ -239,19 +239,6 @@ export function Tickets() {
     return undefined;
   })();
 
-  if (!session) return null;
-  if (conversationId) {
-    return (
-      <ConversationDetailPane
-        token={session.token}
-        agentId={session.agentId}
-        conversationId={conversationId}
-        summary={summary}
-        onBack={() => navigate('/tickets')}
-      />
-    );
-  }
-
   const [columnOrder, setColumnOrder] = useState<ConversationListFilter[]>(() => {
     const saved = localStorage.getItem('ticketsColumnOrder');
     if (saved) {
@@ -267,6 +254,19 @@ export function Tickets() {
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
+
+  if (!session) return null;
+  if (conversationId) {
+    return (
+      <ConversationDetailPane
+        token={session.token}
+        agentId={session.agentId}
+        conversationId={conversationId}
+        summary={summary}
+        onBack={() => navigate('/tickets')}
+      />
+    );
+  }
 
   function handleDragEnd(event: any) {
     const { active, over } = event;
