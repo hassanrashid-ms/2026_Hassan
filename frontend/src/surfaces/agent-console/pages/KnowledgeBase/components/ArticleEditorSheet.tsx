@@ -99,7 +99,10 @@ export function ArticleEditorSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="flex flex-col gap-0 p-0 sm:max-w-2xl">
+      <SheetContent
+        side="right"
+        className="flex flex-col gap-0 p-0 sm:max-w-2xl lg:w-[70vw] lg:max-w-none"
+      >
         <SheetHeader>
           <SheetTitle>{articleId ? 'Edit Article' : 'New Article'}</SheetTitle>
         </SheetHeader>
