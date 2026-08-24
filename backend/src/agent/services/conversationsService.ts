@@ -9,6 +9,7 @@ import { appendEvent } from '../../shared/events/appendEvent.ts';
 import { appendChangeLog } from '../../shared/changeLog/appendChangeLog.ts';
 import {
   agent,
+  attachment,
   conversation,
   conversationTag,
   message,
@@ -17,6 +18,7 @@ import {
   subintent,
   workspaceMember,
 } from '../../shared/db/schema/index.ts';
+import { presignGetObject } from '../../shared/storage/presign.ts';
 import { withWorkspace, type Tx } from '../../shared/db/withWorkspace.ts';
 import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts';
 import { getConversationTags } from './tagsService.ts';
@@ -492,7 +494,7 @@ export async function getAgentConversationMessages(
   ctx: AgentContext,
   conversationId: string,
 ): Promise<AgentMessageView[] | null> {
-  return withWorkspace(ctx.workspaceId, async (tx) => {
+  const rows = await withWorkspace(ctx.workspaceId, async (tx) => {
     const [found] = await tx
       .select({ id: conversation.id })
       .from(conversation)
@@ -500,7 +502,7 @@ export async function getAgentConversationMessages(
       .limit(1);
     if (!found) return null;
 
-    const rows = await tx
+    return tx
       .select({
         id: message.id,
         conversationId: message.conversationId,
@@ -515,13 +517,51 @@ export async function getAgentConversationMessages(
         createdAt: message.createdAt,
         authorAgentName: agent.displayName,
         authorPlayerName: player.externalId,
+        attachmentId: attachment.id,
+        attachmentStorageKey: attachment.storageKey,
+        attachmentMimeType: attachment.mimeType,
+        attachmentByteSize: attachment.byteSize,
       })
       .from(message)
       .innerJoin(conversation, eq(conversation.id, message.conversationId))
       .innerJoin(player, eq(player.id, conversation.playerId))
       .leftJoin(agent, eq(agent.id, message.authorAgentId))
+      .leftJoin(attachment, eq(attachment.messageId, message.id))
       .where(eq(message.conversationId, conversationId))
       .orderBy(message.seq);
-    return rows.map(toAgentView);
   });
+
+  if (rows === null) return null;
+
+  // Filenames aren't stored on `attachment` (see design doc §4 — only
+  // storage_key/mime_type/byte_size), so the list view reads the filename off
+  // the message body: the send response (Task 4) is the only place the real
+  // filename is known, from the client's own request, and it already becomes
+  // the message body there.
+  //
+  // storageKey is looked up from `rows` by message id rather than carried on
+  // `view` itself, because AgentMessageView's `attachment` shape (Task 4 Step
+  // 1) has no storageKey field on the wire — it is signing-internal, never
+  // sent to a client.
+  const storageKeyByMessageId = new Map(
+    rows.filter((r) => r.attachmentStorageKey).map((r) => [r.id, r.attachmentStorageKey!]),
+  );
+  const views = rows.map((row) => toAgentView({ ...row, attachmentFilename: row.body }));
+
+  return Promise.all(
+    views.map(async (view) => {
+      if (!view.attachment) return view;
+      const storageKey = storageKeyByMessageId.get(view.id);
+      if (!storageKey) return view;
+      try {
+        const url = await presignGetObject(storageKey);
+        return { ...view, attachment: { ...view.attachment, url } };
+      } catch {
+        // Signing failed for an existing attachment row — omit the URL rather
+        // than throwing, per the design doc: a broken attachment must not break
+        // loading the rest of the thread.
+        return view;
+      }
+    }),
+  );
 }

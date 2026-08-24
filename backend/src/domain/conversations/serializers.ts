@@ -9,6 +9,22 @@ function authorName(row: PostedMessageRow): string {
 }
 
 /**
+ * Non-URL attachment fields only — signing is async and these serializers are
+ * synchronous, so `url` is always emitted as `null` here and the caller (the
+ * service) fills it in afterward, or leaves it `null` if signing fails.
+ */
+function toAttachmentFields(row: PostedMessageRow) {
+  if (!row.attachmentId) return null;
+  return {
+    id: row.attachmentId,
+    filename: row.attachmentFilename ?? '',
+    mime_type: row.attachmentMimeType ?? '',
+    byte_size: row.attachmentByteSize ?? 0,
+    url: null as string | null,
+  };
+}
+
+/**
  * Explicit whitelist: returns null for any row whose visibility is not
  * 'public'. The caller (a player-facing service) must filter the nulls out —
  * see docs/decisions/2026-08-04-three-audience-api-structure.md. Never add a
@@ -27,9 +43,7 @@ export function toPlayerView(row: PostedMessageRow): PlayerMessageView | null {
     read_at: row.readAt ? row.readAt.toISOString() : null,
     created_at: row.createdAt.toISOString(),
     article_id: row.articleId,
-    // Populated only by the GET read path (Task 5); the send path never
-    // reaches toPlayerView with attachment data yet.
-    attachment: null,
+    attachment: toAttachmentFields(row),
   };
 }
 
@@ -47,8 +61,10 @@ export function toAgentView(row: PostedMessageRow): AgentMessageView {
     read_at: row.readAt ? row.readAt.toISOString() : null,
     created_at: row.createdAt.toISOString(),
     article_id: row.articleId,
-    // The caller (sendAgentMessage) overrides this with the real row when the
-    // send included an attachment; every other agent-view call site has none.
-    attachment: null,
+    // sendAgentMessage overrides this with the real row when the send
+    // included an attachment (postMessage's insert result never carries
+    // attachment fields); every other call site relies on this join-derived
+    // value, present only when the row came from a message-list join.
+    attachment: toAttachmentFields(row),
   };
 }

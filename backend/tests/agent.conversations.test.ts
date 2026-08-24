@@ -8,6 +8,8 @@ import { errorMiddleware } from '../src/errors.ts';
 import { signAgentSession } from '../src/shared/auth/agentSession.ts';
 import { closeSocketServer, createSocketServer } from '../src/shared/realtime/socketServer.ts';
 import { conversationsRouter } from '../src/agent/routers/conversationsRouter.ts';
+import { messagesRouter } from '../src/agent/routers/messagesRouter.ts';
+import { presignPutObject } from '../src/shared/storage/presign.ts';
 import {
   closeOwnerPool,
   ownerPool,
@@ -31,6 +33,15 @@ app.use(express.json());
 app.use(requireAgentSession, conversationsRouter);
 app.use(errorMiddleware);
 
+// A second standalone app carrying messagesRouter, needed only to produce a
+// real attachment row + real stored object via POST /messages ahead of the
+// list-read test below — see agent.messages.test.ts for the file that
+// otherwise owns this router's coverage.
+const messagesApp = express();
+messagesApp.use(express.json());
+messagesApp.use(requireAgentSession, messagesRouter);
+messagesApp.use(errorMiddleware);
+
 // claimConversationHandler calls getIo() after a successful claim, so this
 // file's own process needs a live Socket.io instance even though no test
 // connects a client to it — a bare, unlistened http server is enough to
@@ -47,6 +58,23 @@ afterAll(async () => {
 });
 
 beforeEach(truncateAll);
+
+async function setupAssignedAgent(workspaceId: string, conversationId: string) {
+  const { rows } = await ownerPool.query<{ id: string }>(
+    `insert into agent (email, display_name) values ('agent1@example.test', 'Agent One') returning id`,
+  );
+  const agentId = rows[0]!.id;
+  await ownerPool.query(
+    `insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`,
+    [workspaceId, agentId],
+  );
+  await ownerPool.query(`update conversation set assigned_agent_id = $2 where id = $1`, [
+    conversationId,
+    agentId,
+  ]);
+  const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId });
+  return { agentId, token };
+}
 
 async function setupAgent(workspaceId: string) {
   const { rows } = await ownerPool.query<{ id: string }>(
@@ -584,5 +612,47 @@ describe('GET /agent/conversations/:id/messages', () => {
       .get(`/conversations/${conversationB}/messages`)
       .set('Authorization', `Bearer ${token}`)
       .expect(404);
+  });
+});
+
+describe('GET /agent/conversations/:id/messages with an attachment', () => {
+  it('returns a fetchable presigned url for a message with an attachment', async () => {
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
+    const { agentId, token } = await setupAssignedAgent(workspaceId, conversationId);
+
+    const key = `pending/${workspaceId}/${agentId}/${crypto.randomUUID()}.png`;
+    const fileBody = Buffer.from('fake-png-bytes');
+    const { url: putUrl } = await presignPutObject({
+      key,
+      contentType: 'image/png',
+      contentLength: fileBody.length,
+    });
+    await fetch(putUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'image/png', 'Content-Length': String(fileBody.length) },
+      body: fileBody,
+    });
+
+    await request(messagesApp)
+      .post('/messages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        conversation_id: conversationId,
+        body: '',
+        attachment: { key, filename: 'shot.png', mime_type: 'image/png', byte_size: fileBody.length },
+      })
+      .expect(200);
+
+    const res = await request(app)
+      .get(`/conversations/${conversationId}/messages`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
+    const withAttachment = res.body.messages.find((m: { attachment: unknown }) => m.attachment);
+    expect(withAttachment.attachment.url).toBeTruthy();
+    const getRes = await fetch(withAttachment.attachment.url);
+    expect(getRes.status).toBe(200);
   });
 });

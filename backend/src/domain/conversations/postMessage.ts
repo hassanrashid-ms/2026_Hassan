@@ -51,6 +51,11 @@ export type PostedMessageRow = {
   authorAgentName?: string | null;
   /** The conversation player's external id, populated by message-list joins. */
   authorPlayerName?: string | null;
+  /** Populated by message-list joins only; absent on the immediate postMessage() insert result. */
+  attachmentId?: string | null;
+  attachmentFilename?: string | null;
+  attachmentMimeType?: string | null;
+  attachmentByteSize?: number | null;
   body: string;
   articleId: string | null;
   visibility: 'public' | 'internal';
