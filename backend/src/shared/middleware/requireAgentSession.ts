@@ -2,7 +2,14 @@ import type { RequestHandler } from 'express'
 import { sendError } from '../../errors.ts'
 import { InvalidAgentSession, verifyAgentSession } from '../auth/agentSession.ts'
 
-export type AgentContext = { agentId: string; workspaceId: string }
+/**
+ * `workspaceId` is always a string by the time a handler sees it: for a
+ * regular agent it comes straight off the JWT; for an admin (`isAdmin: true`)
+ * it starts empty here and is filled in by `resolveConsoleWorkspace` (mounted
+ * on the agent router only) before any /agent/* handler runs. /admin/* handlers
+ * never read it — they use `adminDb` under `crm_admin`, not RLS.
+ */
+export type AgentContext = { agentId: string; workspaceId: string; isAdmin: boolean }
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -23,7 +30,10 @@ export const requireAgentSession: RequestHandler = async (req, res, next) => {
 
   try {
     const claims = await verifyAgentSession(rest.join(' ').trim())
-    req.agent = { agentId: claims.agent_id, workspaceId: claims.workspace_id }
+    req.agent =
+      'is_admin' in claims && claims.is_admin
+        ? { agentId: claims.agent_id, workspaceId: '', isAdmin: true }
+        : { agentId: claims.agent_id, workspaceId: claims.workspace_id, isAdmin: false }
     next()
   } catch (error) {
     if (error instanceof InvalidAgentSession) {

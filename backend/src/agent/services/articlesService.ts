@@ -132,3 +132,21 @@ export async function archiveArticle(ctx: AgentContext, id: string): Promise<Arc
     return { ok: true, article: toDetail(row) }
   })
 }
+
+import { callModel } from '../../domain/bot/openaiClient.ts'
+
+export async function generateKeywords(title: string, body: string): Promise<string[]> {
+  const prompt = `You are a helpful assistant that generates keywords for an article.
+Given the following title and body, extract or generate up to 5 relevant keywords.
+Format the output as a comma-separated list of keywords.
+
+Title: ${title}
+
+Body: ${body}
+
+Keywords:`
+
+  const response = await callModel([{ role: 'user', content: prompt }])
+  const text = response.text || ''
+  return text.split(',').map((k) => k.trim()).filter((k) => k.length > 0)
+}

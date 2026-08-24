@@ -9,6 +9,7 @@ const EXPECTED_TABLES = [
   'bot_config',
   'change_log',
   'conversation',
+  'conversation_tag',
   'declared_field',
   'event',
   'form',
@@ -22,6 +23,7 @@ const EXPECTED_TABLES = [
   'resolution_cycle',
   'session',
   'subintent',
+  'tag',
   'workspace',
   'workspace_member',
   'workspace_secret',
@@ -139,11 +141,11 @@ describe('schema', () => {
     expect(cols.has('id')).toBe(false)
     expect(cols.get('is_provisioned')?.nullable).toBe(false)
     expect(cols.get('is_provisioned')?.hasDefault).toBe(true)
-    expect(cols.get('prompt')?.nullable).toBe(true)
+    expect(cols.get('prompt')?.nullable).toBe(false)
     // Rules are their own column, not appended into prompt: separately stored,
     // separately audited, joined only at send time by buildSystemPrompt.
-    expect(cols.get('rules')?.type).toBe('text')
-    expect(cols.get('rules')?.nullable).toBe(true)
+    expect(cols.get('rules')?.type).toBe('jsonb')
+    expect(cols.get('rules')?.nullable).toBe(false)
     expect(cols.get('updated_at')?.nullable).toBe(false)
 
     const { rows } = await ownerPool.query<{ column_name: string }>(

@@ -63,7 +63,7 @@ async function seedAgentWithRole(
     ])
   }
   const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId })
-  return { agentId, token, ctx: { agentId, workspaceId } }
+  return { agentId, token, ctx: { agentId, workspaceId, isAdmin: role === 'admin' } }
 }
 
 const FIELDS: FormField[] = [

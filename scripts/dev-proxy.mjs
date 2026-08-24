@@ -8,10 +8,10 @@
  * two independent tunnels that can die independently of each other.
  *
  * Routing is a fixed path-prefix list matching backend/src/app.ts's mounts
- * (/docs, /auth, /sdk, /surface, /agent) plus /socket.io for the realtime
- * chat connection; everything else — the built frontend, /embed/support —
- * goes to the frontend server. Update PROXY_API_PREFIXES if app.ts ever
- * mounts a new top-level route.
+ * (/docs, /auth, /sdk, /surface, /agent, /admin) plus /socket.io for the
+ * realtime chat connection; everything else — the built frontend,
+ * /embed/support — goes to the frontend server. Update PROXY_API_PREFIXES if
+ * app.ts ever mounts a new top-level route.
  */
 import http from 'node:http'
 import httpProxy from 'http-proxy'
@@ -19,7 +19,7 @@ import httpProxy from 'http-proxy'
 const PROXY_PORT = Number(process.env.DEV_PROXY_PORT ?? 8787)
 const API_TARGET = `http://localhost:${process.env.API_PORT ?? 4000}`
 const WEB_TARGET = `http://localhost:${process.env.WEB_PORT ?? 5173}`
-const API_PREFIXES = ['/docs', '/auth', '/sdk', '/surface', '/agent', '/socket.io']
+const API_PREFIXES = ['/docs', '/auth', '/sdk', '/surface', '/agent', '/admin', '/socket.io']
 
 const proxy = httpProxy.createProxyServer({ ws: true })
 proxy.on('error', (err, _req, res) => {

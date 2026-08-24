@@ -82,13 +82,16 @@ No new backend endpoint is needed — no token is minted, the admin's own login 
   (`claimConversation`, `takeOverConversation`), and `appendEvent.ts` — none of them look up or
   require a `workspace_member` row.
 
-## Known follow-up (not addressed by this spec)
+## Known follow-up (audited, no gap found)
 
-Some agent-console routes may be gated by a bare workspace-role check (e.g. team-lead-only actions)
-with no `isAdmin` bypass, unlike `requireTeamLeadOrAdmin`. An admin opening a workspace via this flow
-could hit an unexpected `403` on such a route. This needs a grep-and-fix pass across
-`shared/middleware/*` before this is considered full parity with a real member — tracked here as a
-gap, not fixed by this spec.
+Audited every role-gated route in `agent/routers/*` for a bare `requireWorkspaceRole` check with no
+admin bypass. None exists: `botConfigRouter`, `formsRouter`, and `taxonomyRouter` are the only routers
+that gate at all, and every gate they use is `requireAdminRole` or `requireTeamLeadOrAdmin` — both
+already check `agent.is_admin` first. `conversationsRouter`, `messagesRouter`, `articlesRouter`,
+`tagsRouter`, and `agentsRouter` have no role gate at all. An admin opening a workspace via this flow
+hits no unexpected `403`s today. If a future route adds a bare `requireWorkspaceRole(...)` call
+without going through one of those two, it would reintroduce this gap — this note is what to check
+against.
 
 ## Testing
 

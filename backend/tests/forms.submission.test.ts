@@ -223,15 +223,16 @@ describe('completeFormAndHandoff', () => {
         .orderBy(asc(message.createdAt), asc(message.id)),
     )
     expect(rows).toHaveLength(2)
+    const publicMsg = rows.find((r) => r.visibility === 'public')!
+    const internalMsg = rows.find((r) => r.visibility === 'internal')!
+    
     // First message should be the public summary
-    expect(rows[0]!.authorType).toBe('system')
-    expect(rows[0]!.visibility).toBe('public')
+    expect(publicMsg.authorType).toBe('system')
     // Second message should be the internal answers
-    expect(rows[1]!.authorType).toBe('system')
-    expect(rows[1]!.visibility).toBe('internal')
-    expect(rows[1]!.body).toContain('Form Submitted')
-    expect(rows[1]!.body).toContain('A') // Field label A
-    expect(rows[1]!.body).toContain('B') // Field label B
+    expect(internalMsg.authorType).toBe('system')
+    expect(internalMsg.body).toContain('Form Submitted')
+    expect(internalMsg.body).toContain('A') // Field label A
+    expect(internalMsg.body).toContain('B') // Field label B
   })
 
   it('returns null on a second call and writes nothing the second time', async () => {

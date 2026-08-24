@@ -172,7 +172,7 @@ export function Tickets() {
 
   useEffect(() => {
     if (!session) return
-    const socket = createSocket(session.token, 'agent')
+    const socket = createSocket(session.token, 'agent', session.workspaceId)
     socket.on('connect_error', (error) => {
       if (error.message === 'unauthorized') handleSessionExpired()
     })

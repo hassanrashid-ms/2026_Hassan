@@ -1,0 +1,36 @@
+/*
+ * The admin-console surface's entire stylesheet.
+ *
+ * Imported only by AdminConsoleShell.tsx via a lazy route — never by main.tsx
+ * or any statically-reachable module. Mirrors webview.css's and
+ * agent-console.css's isolation: Vite concatenates every statically reachable
+ * stylesheet into one bundle, so a static import here would leak Tailwind's
+ * preflight reset into the other two surfaces.
+ */
+
+@import "tailwindcss";
+
+@theme {
+  --color-bg:          #ffffff;
+  --color-surface:     #fafafa;  /* zinc-50, admin-console's neutral card background */
+  --color-accent:      #52525b;  /* zinc-600, primary — distinguishes this surface from agent-console's slate */
+  --color-accent-deep: #27272a;  /* zinc-800 */
+  --color-accent-soft: #f4f4f5;  /* zinc-100, selected row / active tab background */
+  --color-accent-fg:   #ffffff;
+  --color-text:        #18181b;  /* zinc-900 */
+  --color-muted:       #71717a;  /* zinc-500 */
+  --radius-card:       0.75rem;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+@utility no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}

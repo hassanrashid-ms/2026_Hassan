@@ -23,6 +23,7 @@ import {
   fetchIntents,
   publishArticle,
   updateArticle,
+  generateKeywords,
 } from '../../../api/agentApi.ts'
 import { canEditFields, canPublish, parseKeywordsInput } from '../articleForm.ts'
 import { Button } from '../../../components/ui/button.tsx'
@@ -30,6 +31,8 @@ import { Input } from '../../../components/ui/input.tsx'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../components/ui/select.tsx'
 import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from '../../../components/ui/sheet.tsx'
 import { Skeleton } from '../../../components/ui/skeleton.tsx'
+import { Switch } from '../../../components/ui/switch.tsx'
+import { Loader2 } from 'lucide-react'
 
 type Draft = { title: string; body: string; keywordsInput: string; intentId: string }
 
@@ -129,6 +132,7 @@ function ArticleEditorForm({
 }) {
   const queryClient = useQueryClient()
   const [draft, setDraft] = useState<Draft>(() => draftFrom(article))
+  const [useAIKeywords, setUseAIKeywords] = useState(false)
   // The value MDXEditor's `markdown` prop is seeded with. Deliberately NOT
   // kept in sync with draft.body on every keystroke — MDXEditor treats a
   // prop change as an authoritative external reset and re-parses the whole
@@ -137,6 +141,11 @@ function ArticleEditorForm({
   // corrupting the link dialog's selection-anchor rect. It only needs to
   // change when switching articles, which remounting already handles.
   const [editorSeed] = useState(() => article?.body ?? '')
+
+  const generateKeywordsMutation = useMutation({
+    mutationFn: () => generateKeywords(token, { title: draft.title, body: draft.body }),
+    onSuccess: (data) => setDraft((d) => ({ ...d, keywordsInput: data.keywords.join(', ') })),
+  })
 
   const invalidateArticles = () => {
     void queryClient.invalidateQueries({ queryKey: ['admin-articles'] })
@@ -194,13 +203,38 @@ function ArticleEditorForm({
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-muted">Keywords</label>
-          <Input
-            placeholder="refund, billing, cancel subscription"
-            value={draft.keywordsInput}
-            disabled={!editable}
-            onChange={(e) => setDraft({ ...draft, keywordsInput: e.target.value })}
-          />
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-medium text-muted">Keywords</label>
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-muted">Generate with AI</label>
+              <Switch checked={useAIKeywords} onCheckedChange={setUseAIKeywords} disabled={!editable} />
+            </div>
+          </div>
+          {useAIKeywords ? (
+            <div className="flex gap-2">
+              <Input
+                placeholder="refund, billing, cancel subscription"
+                value={draft.keywordsInput}
+                disabled={true}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => generateKeywordsMutation.mutate()}
+                disabled={generateKeywordsMutation.isPending || !draft.title || !draft.body}
+              >
+                {generateKeywordsMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Generate
+              </Button>
+            </div>
+          ) : (
+            <Input
+              placeholder="refund, billing, cancel subscription"
+              value={draft.keywordsInput}
+              disabled={!editable}
+              onChange={(e) => setDraft({ ...draft, keywordsInput: e.target.value })}
+            />
+          )}
         </div>
 
         <div className="flex flex-col gap-1.5">

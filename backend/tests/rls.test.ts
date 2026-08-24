@@ -171,7 +171,7 @@ describe('row-level security', () => {
 
   it('keeps bot_config updatable — its writer is ON CONFLICT DO UPDATE', async () => {
     await ownerPool.query(
-      `insert into bot_config (workspace_id, is_provisioned) values ($1, false)`,
+      `insert into bot_config (workspace_id, is_provisioned, prompt, rules, tools_config, limits_config) values ($1, false, '', '[]', '[]', '[]')`,
       [WS_A],
     )
     const rows = await asWorkspace(WS_A, async () => {

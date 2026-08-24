@@ -34,6 +34,11 @@ export const UpdateArticleBody = z.object({
   intent_id: z.uuid().nullable().optional(),
 })
 
+export const GenerateKeywordsBody = z.object({
+  title: z.string().min(1).max(200),
+  body: z.string().min(1),
+})
+
 export const PublicArticleListQuery = z.object({
   intentId: z.uuid().optional(),
   q: z.string().min(1).max(200).optional(),

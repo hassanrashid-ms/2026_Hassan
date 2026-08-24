@@ -3,6 +3,7 @@ import { loadEnv } from '../src/env.ts'
 
 const valid = {
   DATABASE_URL: 'postgres://support_app:pw@localhost:5432/support',
+  ADMIN_DATABASE_URL: 'postgres://crm_admin:crm_admin@localhost:5432/support',
   MIGRATION_DATABASE_URL: 'postgres://support_owner:pw@localhost:5432/support',
   REDIS_URL: 'redis://localhost:6379',
   WEAVIATE_URL: 'https://weaviate-test.example.com',

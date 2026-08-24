@@ -6,9 +6,12 @@ import type { Server as HttpServer } from 'node:http'
 import { getEnv } from '../../env.ts'
 import { InvalidAgentSession, verifyAgentSession } from '../auth/agentSession.ts'
 import { InvalidPlayerToken, verifyPlayerToken } from '../auth/playerToken.ts'
-import { conversation } from '../db/schema/index.ts'
-import { withWorkspace } from '../db/withWorkspace.ts'
+import { z } from 'zod'
+import { conversation, workspace } from '../db/schema/index.ts'
+import { withoutWorkspace, withWorkspace } from '../db/withWorkspace.ts'
 import { agentRoom, inboxRoom, playerRoom } from './rooms.ts'
+
+const uuidSchema = z.uuid()
 
 export type PlayerSocketData = { role: 'player'; workspaceId: string; playerId: string }
 export type AgentSocketData = { role: 'agent'; workspaceId: string; agentId: string }
@@ -48,7 +51,7 @@ export function createSocketServer(httpServer: HttpServer): Server {
   })
 
   io.use(async (socket, next) => {
-    const auth = socket.handshake.auth as { token?: unknown; role?: unknown }
+    const auth = socket.handshake.auth as { token?: unknown; role?: unknown; workspaceId?: unknown }
     if (typeof auth.token !== 'string' || (auth.role !== 'player' && auth.role !== 'agent')) {
       next(new Error('unauthorized'))
       return
@@ -59,7 +62,31 @@ export function createSocketServer(httpServer: HttpServer): Server {
         socket.data = { role: 'player', workspaceId: claims.workspace_id, playerId: claims.player_id } satisfies PlayerSocketData
       } else {
         const claims = await verifyAgentSession(auth.token)
-        socket.data = { role: 'agent', workspaceId: claims.workspace_id, agentId: claims.agent_id } satisfies AgentSocketData
+        // Admin claims carry no workspace_id (see
+        // 2026-08-21-superadmin-workspace-console-access-design.md) — the
+        // client supplies it per connection instead, mirroring
+        // resolveConsoleWorkspace's REST header check. A regular agent's own
+        // claim is authoritative; auth.workspaceId is never consulted for them.
+        let workspaceId: string
+        if ('is_admin' in claims && claims.is_admin) {
+          const parsed = uuidSchema.safeParse(auth.workspaceId)
+          if (!parsed.success) {
+            next(new Error('unauthorized'))
+            return
+          }
+          const exists = await withoutWorkspace(async (tx) => {
+            const [row] = await tx.select({ id: workspace.id }).from(workspace).where(eq(workspace.id, parsed.data)).limit(1)
+            return row !== undefined
+          })
+          if (!exists) {
+            next(new Error('unauthorized'))
+            return
+          }
+          workspaceId = parsed.data
+        } else {
+          workspaceId = claims.workspace_id
+        }
+        socket.data = { role: 'agent', workspaceId, agentId: claims.agent_id } satisfies AgentSocketData
       }
       next()
     } catch (error) {

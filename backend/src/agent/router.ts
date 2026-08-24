@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { requireAgentSession } from '../shared/middleware/requireAgentSession.ts'
+import { resolveConsoleWorkspace } from '../shared/middleware/resolveConsoleWorkspace.ts'
 import { authRouter } from './routers/authRouter.ts'
 import { conversationsRouter } from './routers/conversationsRouter.ts'
 import { messagesRouter } from './routers/messagesRouter.ts'
@@ -16,6 +17,7 @@ export const agentRouter = Router()
 agentRouter.use(authRouter)
 
 agentRouter.use(requireAgentSession)
+agentRouter.use(resolveConsoleWorkspace)
 agentRouter.use(taxonomyRouter)
 agentRouter.use(tagsRouter)
 agentRouter.use(articlesRouter)

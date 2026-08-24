@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { fetchConversationContext } from '../../../api/agentApi.ts'
+import { loadAgentSession } from '../../../lib/agentSession.ts'
 import { createSocket } from '../../../../../features/chat/api/socket.ts'
 import { handleSessionExpired } from '../../../lib/authErrorHandling.ts'
 import { ApiError } from '../../../../../lib/httpClient.ts'
@@ -44,7 +45,7 @@ export function ContextRail({
   // invalidation leaves the panel stale rather than wrong, and the next
   // navigation corrects it.
   useEffect(() => {
-    const socket = createSocket(token, 'agent')
+    const socket = createSocket(token, 'agent', loadAgentSession()?.workspaceId)
     // Inside 'connect', not once at setup: rooms live on the server's socket
     // instance, so every reconnect lands in a socket that has joined nothing.
     socket.on('connect', () => {

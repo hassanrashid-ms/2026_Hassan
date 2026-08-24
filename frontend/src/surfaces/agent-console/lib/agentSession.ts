@@ -14,6 +14,16 @@ export type StoredAgentSession = {
   displayName: string
   workspaceSlug: string
   /**
+   * Sent as X-Workspace-Id on every API call and socket connection. For a
+   * regular agent it's cosmetic — their JWT already carries a real
+   * workspace_id and that's what the server uses. For an admin session opened
+   * from the admin-console Overview page (no workspace_id in their token —
+   * see 2026-08-21-superadmin-workspace-console-access-design.md), this is
+   * the only thing that tells the server which workspace to scope to. Optional
+   * so existing fixtures/tests that predate this field keep compiling.
+   */
+  workspaceId?: string
+  /**
    * Optional because the current dev-login response (`POST /agent/auth/dev-login`)
    * doesn't return a role yet — real role plumbing through Google OAuth is a
    * separate backend slice. Every role gate below treats a missing role as

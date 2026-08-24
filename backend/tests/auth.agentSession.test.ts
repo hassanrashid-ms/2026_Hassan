@@ -26,6 +26,12 @@ describe('agent session token', () => {
     await expect(verifyAgentSession(token)).rejects.toThrow(InvalidAgentSession)
   })
 
+  it('round-trips admin claims with no workspace_id', async () => {
+    const token = await signAgentSession({ agent_id: 'a1', is_admin: true })
+    const claims = await verifyAgentSession(token)
+    expect(claims).toEqual({ agent_id: 'a1', is_admin: true })
+  })
+
   it('rejects a token missing a required claim', async () => {
     const { SignJWT } = await import('jose')
     const key = new TextEncoder().encode(process.env.AGENT_SESSION_JWT_SECRET)

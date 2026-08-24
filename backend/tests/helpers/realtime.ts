@@ -26,6 +26,9 @@ export async function startRealtimeServer(): Promise<{ url: string; close: () =>
   }
 }
 
-export function connectClient(url: string, auth: { token: string; role: 'player' | 'agent' }): Socket {
+export function connectClient(
+  url: string,
+  auth: { token: string; role: 'player' | 'agent'; workspaceId?: string },
+): Socket {
   return ioClient(url, { auth, transports: ['websocket'], forceNew: true })
 }

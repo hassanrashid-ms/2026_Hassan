@@ -19,6 +19,7 @@ import {
   claimConversation,
 } from '../../../api/agentApi.ts'
 import { TagPicker } from './TagPicker.tsx'
+import { loadAgentSession } from '../../../lib/agentSession.ts'
 import { createSocket } from '../../../../../features/chat/api/socket.ts'
 import { handleSessionExpired } from '../../../lib/authErrorHandling.ts'
 import { tagBadgeClassName } from '../../../lib/tagBadge.ts'
@@ -222,7 +223,7 @@ export function ThreadPanel({
 
   useEffect(() => {
     if (!conversationId) return
-    const socket = createSocket(token, 'agent')
+    const socket = createSocket(token, 'agent', loadAgentSession()?.workspaceId)
     // Inside 'connect', not once at setup: rooms live on the server's socket
     // instance, so every reconnect — a backend restart, a laptop waking, a
     // dropped websocket — lands in a socket that has joined nothing. Emitting

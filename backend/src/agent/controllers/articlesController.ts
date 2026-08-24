@@ -9,7 +9,9 @@ import {
   listArticles,
   publishArticle,
   updateArticle,
+  generateKeywords,
 } from '../services/articlesService.ts'
+import { GenerateKeywordsBody } from '@support/types'
 
 const ArticleIdParams = z.object({ id: z.uuid() })
 
@@ -105,4 +107,19 @@ export const archiveArticleHandler: RequestHandler = async (req, res) => {
     return
   }
   res.status(200).json(result.article)
+}
+
+export const generateKeywordsHandler: RequestHandler = async (req, res) => {
+  const body = GenerateKeywordsBody.safeParse(req.body)
+  if (!body.success) {
+    sendError(res, 422, 'invalid_request', 'title and body are required.')
+    return
+  }
+  
+  try {
+    const keywords = await generateKeywords(body.data.title, body.data.body)
+    res.status(200).json({ keywords })
+  } catch (error) {
+    sendError(res, 500, 'internal', 'Failed to generate keywords.')
+  }
 }

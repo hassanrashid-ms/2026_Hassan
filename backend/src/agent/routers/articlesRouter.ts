@@ -6,6 +6,7 @@ import {
   listArticlesHandler,
   publishArticleHandler,
   updateArticleHandler,
+  generateKeywordsHandler,
 } from '../controllers/articlesController.ts'
 
 export const articlesRouter = Router()
@@ -15,3 +16,4 @@ articlesRouter.post('/articles', createArticleHandler)
 articlesRouter.patch('/articles/:id', updateArticleHandler)
 articlesRouter.post('/articles/:id/publish', publishArticleHandler)
 articlesRouter.post('/articles/:id/archive', archiveArticleHandler)
+articlesRouter.post('/articles/generate-keywords', generateKeywordsHandler)

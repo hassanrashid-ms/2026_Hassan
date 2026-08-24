@@ -1,11 +1,13 @@
-import { useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { Inbox as InboxIcon, BookOpen, ClipboardList, LogOut, Settings, Tags } from 'lucide-react'
 // agent-console.css is imported HERE and nowhere else — never from main.tsx or
 // any statically-reachable module, so its Tailwind preflight never leaks into
 // the webview surface (mirrors WebviewShell.tsx's isolation of webview.css).
 import '@/agent-console.css'
-import { canBuildForms, clearAgentSession, isAdmin, loadAgentSession } from '../lib/agentSession.ts'
+import { readConsoleBoot } from '@/lib/consoleBoot.ts'
+import { scrubToken } from '@/lib/boot.ts'
+import { canBuildForms, clearAgentSession, isAdmin, loadAgentSession, saveAgentSession } from '../lib/agentSession.ts'
 import { Avatar, AvatarFallback } from './ui/avatar.tsx'
 import { Button } from './ui/button.tsx'
 import { Separator } from './ui/separator.tsx'
@@ -30,9 +32,34 @@ const BOT_CONFIG_NAV_ITEM = { to: '/bot-config', label: 'Bot Config', icon: Sett
 
 export function AgentConsoleShell() {
   const navigate = useNavigate()
-  const session = loadAgentSession()
+  const [session, setSession] = useState(loadAgentSession)
+  // StrictMode double-invokes mount effects in development — mirrors
+  // WebviewShell.tsx's startedRef guard for the same reason: scrubToken
+  // removes the fragment as a side effect of the first run, so a naive
+  // second run would read an already-scrubbed URL and see no boot data.
+  const bootConsumedRef = useRef(false)
 
+  // One effect, not two: boot consumption and the login redirect must not run
+  // as independent effects on the same commit — the redirect would otherwise
+  // read the pre-boot `session` (still null) and fire navigate('/login')
+  // before the boot-triggered setSession has had a chance to re-render.
   useEffect(() => {
+    if (!bootConsumedRef.current) {
+      bootConsumedRef.current = true
+      const boot = readConsoleBoot(window.location)
+      if (boot) {
+        saveAgentSession({
+          token: boot.token,
+          agentId: boot.agentId,
+          displayName: boot.displayName,
+          workspaceSlug: '',
+          workspaceId: boot.workspaceId,
+        })
+        scrubToken(window.history, window.location)
+        setSession(loadAgentSession())
+        return
+      }
+    }
     if (!session) navigate('/login')
   }, [session, navigate])
 

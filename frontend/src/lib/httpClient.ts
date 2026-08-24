@@ -1,6 +1,15 @@
 const BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000'
 
 /**
+ * Dev/staging only: VITE_API_BASE_URL sometimes points at an ngrok free-tier
+ * tunnel (for phone/Unity testing through cloudflared/ngrok — see vite.config.ts).
+ * That tier serves an HTML "click to continue" interstitial — still a 200 — to
+ * any request lacking this header, which .json() then fails to parse. Sending
+ * it unconditionally is a no-op against a real backend, which never looks at it.
+ */
+const NGROK_SKIP_WARNING_HEADER = { 'ngrok-skip-browser-warning': 'true' }
+
+/**
  * Carries the HTTP status alongside the message so a caller can tell a 404 from
  * any other failure. Still an Error with the same message, so every existing
  * `catch`/`error.message` site is unaffected.
@@ -14,7 +23,19 @@ export class ApiError extends Error {
   }
 }
 
-export async function apiCall<T>(path: string, token: string, init: RequestInit = {}): Promise<T> {
+/**
+ * `workspaceId`, when supplied, becomes an `X-Workspace-Id` header. It matters
+ * only for an admin session — a regular agent's workspace comes from their own
+ * JWT and the server never reads this header for them — so passing it
+ * unconditionally is harmless. See
+ * 2026-08-21-superadmin-workspace-console-access-design.md.
+ */
+export async function apiCall<T>(
+  path: string,
+  token: string,
+  init: RequestInit = {},
+  workspaceId?: string,
+): Promise<T> {
   let res: Response
   try {
     res = await fetch(`${BASE}${path}`, {
@@ -22,6 +43,8 @@ export async function apiCall<T>(path: string, token: string, init: RequestInit 
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
+        ...(workspaceId ? { 'X-Workspace-Id': workspaceId } : {}),
+        ...NGROK_SKIP_WARNING_HEADER,
         ...(init.headers ?? {}),
       },
     })

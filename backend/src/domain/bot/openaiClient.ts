@@ -77,13 +77,13 @@ function withTimeout<T>(promise: Promise<T>): Promise<T> {
  * throws a typed error — `toolLoop` maps errors to reasons and never
  * inspects an SDK exception shape directly.
  */
-export async function callModel(messages: ChatMessage[], tools: unknown[], trace?: ModelTraceContext): Promise<ModelResponse> {
+export async function callModel(messages: ChatMessage[], tools?: unknown[], trace?: ModelTraceContext): Promise<ModelResponse> {
   const response = await withTimeout(
     getClient(trace).chat.completions.create({
       model: getEnv().OPENAI_MODEL,
       temperature: 0,
       messages: messages as never,
-      tools: tools as never,
+      ...(tools && tools.length > 0 ? { tools: tools as never } : {}),
     }) as unknown as Promise<{ choices: [{ message: { content: string | null; refusal?: string | null; tool_calls?: { id: string; function: { name: string; arguments: string } }[] } }] }>,
   )
 

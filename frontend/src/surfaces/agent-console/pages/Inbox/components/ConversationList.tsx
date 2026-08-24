@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import type { AgentConversationsResponse, ConversationStatusValue } from '@support/types'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchInbox } from '../../../api/agentApi.ts'
+import { loadAgentSession } from '../../../lib/agentSession.ts'
 import { createSocket } from '../../../../../features/chat/api/socket.ts'
 import { handleSessionExpired } from '../../../lib/authErrorHandling.ts'
 import { ScrollArea } from '../../../components/ui/scroll-area.tsx'
@@ -27,7 +28,7 @@ export function ConversationList({
   })
 
   useEffect(() => {
-    const socket = createSocket(token, 'agent')
+    const socket = createSocket(token, 'agent', loadAgentSession()?.workspaceId)
     let refetchTimer: ReturnType<typeof setTimeout> | undefined
 
     socket.on('connect_error', (err) => {
