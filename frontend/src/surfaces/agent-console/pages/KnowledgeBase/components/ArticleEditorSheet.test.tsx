@@ -126,6 +126,55 @@ describe('ArticleEditorSheet markdown import', () => {
     await waitFor(() => expect(screen.getByText('Go to Settings > Subscriptions.')).toBeTruthy());
   });
 
+  it('does not truncate content at a thematic break or a fenced code block', async () => {
+    vi.spyOn(agentApi, 'fetchArticle').mockResolvedValue(EXISTING_ARTICLE);
+    vi.spyOn(agentApi, 'fetchIntents').mockResolvedValue({ intents: [] });
+
+    renderWithClient(
+      <ArticleEditorSheet
+        token="tok"
+        articleId="art-1"
+        open
+        onOpenChange={() => {}}
+        onCreated={() => {}}
+      />,
+    );
+
+    await screen.findByDisplayValue('Refunds');
+
+    const fileContent = [
+      '# Troubleshooting',
+      '',
+      'Intro paragraph before the first divider.',
+      '',
+      '---',
+      '',
+      '## Step 1',
+      '',
+      'Some instructions.',
+      '',
+      '```text',
+      'C:\\Users\\<YourUsername>\\AppData\\Local\\crash.log',
+      '```',
+      '',
+      '## Contact Support',
+      '',
+      'Text after the code block must still be present.',
+    ].join('\n');
+    const file = new File([fileContent], 'troubleshooting.md', { type: 'text/markdown' });
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+
+    await userEvent.upload(input, file);
+
+    await waitFor(() =>
+      expect(screen.getByText('Intro paragraph before the first divider.')).toBeTruthy(),
+    );
+    // Content after both the thematic break and the fenced code block must survive.
+    expect(screen.getByText('Some instructions.')).toBeTruthy();
+    expect(screen.getByText('Contact Support')).toBeTruthy();
+    expect(screen.getByText('Text after the code block must still be present.')).toBeTruthy();
+  });
+
   it('shows an error toast and changes nothing when the file is empty', async () => {
     vi.spyOn(agentApi, 'fetchArticle').mockResolvedValue(EXISTING_ARTICLE);
     vi.spyOn(agentApi, 'fetchIntents').mockResolvedValue({ intents: [] });

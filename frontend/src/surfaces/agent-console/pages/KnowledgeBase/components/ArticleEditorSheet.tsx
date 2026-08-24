@@ -9,6 +9,9 @@ import {
   linkPlugin,
   linkDialogPlugin,
   quotePlugin,
+  thematicBreakPlugin,
+  codeBlockPlugin,
+  codeMirrorPlugin,
   toolbarPlugin,
   BoldItalicUnderlineToggles,
   ListsToggle,
@@ -363,6 +366,30 @@ function ArticleEditorForm({
                 linkPlugin(),
                 linkDialogPlugin(),
                 quotePlugin(),
+                // Without these, MDXEditor's markdown parser throws on the first
+                // `---` divider or fenced code block it hits and silently drops
+                // everything after — invisible while authoring by hand via the
+                // toolbar, but real-world imported markdown routinely has both.
+                // codeBlockPlugin alone still throws on render unless a
+                // matching CodeBlockEditorDescriptor exists, so codeMirrorPlugin
+                // must be registered too — it supplies that descriptor.
+                thematicBreakPlugin(),
+                codeBlockPlugin({ defaultCodeBlockLanguage: '' }),
+                codeMirrorPlugin({
+                  codeBlockLanguages: {
+                    '': 'Plain text',
+                    text: 'Plain text',
+                    txt: 'Plain text',
+                    bash: 'Bash',
+                    sh: 'Shell',
+                    json: 'JSON',
+                    js: 'JavaScript',
+                    ts: 'TypeScript',
+                    yaml: 'YAML',
+                    html: 'HTML',
+                    css: 'CSS',
+                  },
+                }),
                 toolbarPlugin({
                   toolbarContents: () => (
                     <>
