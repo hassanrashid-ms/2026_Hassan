@@ -19,7 +19,8 @@ import {
   claimConversation,
 } from '../../../api/agentApi.ts'
 import { TagPicker } from './TagPicker.tsx'
-import { loadAgentSession } from '../../../lib/agentSession.ts'
+import { AssignPicker } from './AssignPicker.tsx'
+import { loadAgentSession, canBuildForms } from '../../../lib/agentSession.ts'
 import { createSocket } from '../../../../../features/chat/api/socket.ts'
 import { handleSessionExpired } from '../../../lib/authErrorHandling.ts'
 import { tagBadgeClassName } from '../../../lib/tagBadge.ts'
@@ -74,6 +75,8 @@ export function ThreadPanel({
   onBack,
   takeOverAvailable = false,
   claimAvailable = false,
+  assignedAgentId,
+  assignedAgentName,
 }: {
   token: string
   conversationId: string | null
@@ -90,6 +93,8 @@ export function ThreadPanel({
   onBack?: () => void
   takeOverAvailable?: boolean
   claimAvailable?: boolean
+  assignedAgentId?: string | null
+  assignedAgentName?: string | null
 }) {
   const queryClient = useQueryClient()
   const [pending, setPending] = useState<PendingMessage[]>([])
@@ -308,6 +313,14 @@ export function ThreadPanel({
           </Badge>
         ))}
         {conversationId && <TagPicker token={token} conversationId={conversationId} attachedTagIds={tags.map((t) => t.id)} />}
+        {conversationId && canBuildForms(loadAgentSession()) && (
+          <AssignPicker
+            token={token}
+            conversationId={conversationId}
+            currentAssigneeId={assignedAgentId}
+            currentAssigneeName={assignedAgentName}
+          />
+        )}
         <div className="ml-auto flex items-center gap-2">
           {takeOverAvailable && (
             <Button type="button" size="sm" disabled={takeOver.isPending} onClick={() => takeOver.mutate()}>

@@ -119,6 +119,13 @@ export function claimConversation(token: string, conversationId: string): Promis
   return call(`/agent/conversations/${conversationId}/claim`, token, { method: 'POST' })
 }
 
+export function reassignConversation(token: string, conversationId: string, agentId: string): Promise<{ reassigned: boolean }> {
+  return call(`/agent/conversations/${conversationId}/assign`, token, {
+    method: 'PATCH',
+    body: JSON.stringify({ agentId }),
+  })
+}
+
 /**
  * The header row for one conversation. Required, not an optimisation: an older
  * ticket is in neither the `unassigned` nor the `mine` list and never will be,

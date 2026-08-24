@@ -58,6 +58,7 @@ export function ConversationDetailPane({
   // ownership has to come from the assigned-agent id itself, never from which
   // queue bucket the row was found in.
   const assignedAgentId = summary?.assigned_agent_id ?? detail.data?.assigned_agent?.id ?? null
+  const assignedAgentName = detail.data?.assigned_agent?.display_name ?? null
   const isOwnedByMe = assignedAgentId === agentId
 
   return (
@@ -79,6 +80,8 @@ export function ConversationDetailPane({
         onBack={onBack}
         takeOverAvailable={status === 'bot_active'}
         claimAvailable={!!status && status !== 'resolved' && status !== 'closed' && status !== 'bot_active' && !isOwnedByMe}
+        assignedAgentId={assignedAgentId}
+        assignedAgentName={assignedAgentName}
       />
       <ContextRail token={token} conversationId={conversationId} open={railOpen} onOpenChange={openRail} />
     </>
