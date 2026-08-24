@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { BotConfigView } from '@support/types';
 import { saveBotConfig } from '../../../api/agentApi.ts';
@@ -9,6 +9,7 @@ import { HistoryPanel } from './HistoryPanel.tsx';
 export function PromptTab({ token, config }: { token: string; config: BotConfigView | undefined }) {
   const queryClient = useQueryClient();
   const [prompt, setPrompt] = useState(config?.prompt ?? '');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (config) setPrompt(config.prompt);
@@ -21,6 +22,33 @@ export function PromptTab({ token, config }: { token: string; config: BotConfigV
     onSuccess: () => void invalidate(),
   });
 
+  const insertPlaceholder = (placeholder: string) => {
+    if (!textareaRef.current) {
+      setPrompt((p) => p + placeholder);
+      return;
+    }
+    const start = textareaRef.current.selectionStart;
+    const end = textareaRef.current.selectionEnd;
+    const newPrompt = prompt.substring(0, start) + placeholder + prompt.substring(end);
+    setPrompt(newPrompt);
+    
+    // Set cursor position after React re-renders
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        const newCursorPos = start + placeholder.length;
+        textareaRef.current.setSelectionRange(newCursorPos, newCursorPos);
+      }
+    }, 0);
+  };
+
+  const placeholders = [
+    { tag: '{{subintents}}', desc: 'the current subintent list' },
+    { tag: '{{articles}}', desc: 'the published article titles and summaries' },
+    { tag: '{{player_level}}', desc: 'from the player state snapshot' },
+    { tag: '{{spend_tier}}', desc: 'from the player state snapshot' },
+  ];
+
   if (!config) return null;
 
   return (
@@ -29,7 +57,30 @@ export function PromptTab({ token, config }: { token: string; config: BotConfigV
         <label htmlFor="bot-config-prompt" className="text-xs font-medium text-muted">
           Prompt
         </label>
+        
+        <div className="mb-2 text-xs text-muted-foreground">
+          <p className="mb-1 font-semibold text-slate-800">Available placeholders</p>
+          <ul className="mb-2 space-y-1">
+            {placeholders.map((p) => (
+              <li key={p.tag} className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => insertPlaceholder(p.tag)}
+                  className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-slate-700 hover:bg-slate-200"
+                >
+                  {p.tag}
+                </button>
+                <span>{p.desc}</span>
+              </li>
+            ))}
+          </ul>
+          <p>
+            Placeholders are filled at run time. The prompt never contains a hard-coded subintent or article. Editing the list of subintents therefore changes the bot&apos;s behaviour without touching the prompt.
+          </p>
+        </div>
+
         <Textarea
+          ref={textareaRef}
           id="bot-config-prompt"
           aria-label="Prompt"
           value={prompt}
