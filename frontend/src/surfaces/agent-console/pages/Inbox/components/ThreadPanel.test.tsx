@@ -6,16 +6,19 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { AgentMessageView } from '@support/types';
 import { ThreadPanel } from './ThreadPanel.tsx';
 import {
+  claimConversation,
   detachTag,
   escalateConversation,
   fetchConversationContext,
   fetchConversationMessages,
   markAgentMessagesRead,
   putFileToUploadUrl,
+  reassignConversation,
   requestUpload,
   sendAgentMessage,
 } from '../../../api/agentApi.ts';
 import { createSocket } from '../../../../../features/chat/api/socket.ts';
+import { saveAgentSession } from '../../../lib/agentSession.ts';
 
 vi.mock('../../../api/agentApi.ts');
 vi.mock('../../../../../features/chat/api/socket.ts');
@@ -130,6 +133,46 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(markAgentMessagesRead).mockResolvedValue({ ok: true } as never);
   vi.mocked(fetchConversationContext).mockResolvedValue(conversationContext() as never);
+});
+
+describe('ThreadPanel take over', () => {
+  it('claims an unassigned conversation via claim, not reassign', async () => {
+    fakeSocket();
+    vi.mocked(fetchConversationMessages).mockResolvedValue({ messages: [] } as never);
+    vi.mocked(claimConversation).mockResolvedValue({ claimed: true } as never);
+    saveAgentSession({
+      token: 't',
+      agentId: 'me-1',
+      displayName: 'Me',
+      workspaceSlug: 'ws',
+    });
+
+    renderPanel({ claimAvailable: true, assignedAgentId: null });
+    await userEvent.click(await screen.findByRole('button', { name: 'Take over' }));
+
+    await waitFor(() => expect(claimConversation).toHaveBeenCalledWith('t', 'c1'));
+    expect(reassignConversation).not.toHaveBeenCalled();
+  });
+
+  it('takes over a conversation already assigned to another agent by reassigning it to me', async () => {
+    fakeSocket();
+    vi.mocked(fetchConversationMessages).mockResolvedValue({ messages: [] } as never);
+    vi.mocked(reassignConversation).mockResolvedValue({ reassigned: true } as never);
+    saveAgentSession({
+      token: 't',
+      agentId: 'me-1',
+      displayName: 'Me',
+      workspaceSlug: 'ws',
+    });
+
+    renderPanel({ claimAvailable: true, assignedAgentId: 'someone-else' });
+    await userEvent.click(await screen.findByRole('button', { name: 'Take over' }));
+
+    await waitFor(() =>
+      expect(reassignConversation).toHaveBeenCalledWith('t', 'c1', 'me-1'),
+    );
+    expect(claimConversation).not.toHaveBeenCalled();
+  });
 });
 
 describe('ThreadPanel room membership', () => {

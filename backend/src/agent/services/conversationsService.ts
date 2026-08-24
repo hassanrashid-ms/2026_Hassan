@@ -286,18 +286,26 @@ export async function reassignConversation(
     if (!ACTIVE_AGENT_STATUSES.includes(conv.status))
       return { ok: false, reason: 'invalid_status' };
 
-    const [member] = await tx
-      .select({ id: workspaceMember.id })
-      .from(workspaceMember)
-      .where(
-        and(
-          eq(workspaceMember.workspaceId, ctx.workspaceId),
-          eq(workspaceMember.agentId, targetAgentId),
-          isNull(workspaceMember.deactivatedAt),
-        ),
-      )
-      .limit(1);
-    if (!member) return { ok: false, reason: 'agent_not_found' };
+    // A self-assign skips the workspace_member lookup: the actor is already
+    // scoped into this workspace (JWT for a regular agent, X-Workspace-Id for
+    // a global admin — see resolveConsoleWorkspace.ts), and a global admin
+    // holds no workspace_member row anywhere by design, so the membership
+    // check exists only to validate a *different* target picked off the
+    // AssignPicker dropdown.
+    if (targetAgentId !== ctx.agentId) {
+      const [member] = await tx
+        .select({ id: workspaceMember.id })
+        .from(workspaceMember)
+        .where(
+          and(
+            eq(workspaceMember.workspaceId, ctx.workspaceId),
+            eq(workspaceMember.agentId, targetAgentId),
+            isNull(workspaceMember.deactivatedAt),
+          ),
+        )
+        .limit(1);
+      if (!member) return { ok: false, reason: 'agent_not_found' };
+    }
 
     const [targetAgent] = await tx
       .select({ status: agent.status })

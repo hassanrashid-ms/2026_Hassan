@@ -154,4 +154,33 @@ describe('resolveConsoleWorkspace', () => {
     );
     expect(rows[0]!.author_agent_id).toBe(adminId);
   });
+
+  it('lets an admin take over a conversation already assigned to another agent, with no membership row of their own', async () => {
+    const workspaceId = await seedWorkspace();
+    const conversationId = await claimableConversation(workspaceId);
+    const otherAgentId = await seedAgent();
+    await ownerPool.query(
+      `insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`,
+      [workspaceId, otherAgentId],
+    );
+    await ownerPool.query(`update conversation set assigned_agent_id = $2 where id = $1`, [
+      conversationId,
+      otherAgentId,
+    ]);
+    const adminId = await seedAgent(undefined, { isAdmin: true });
+    const token = await signAgentSession({ agent_id: adminId, is_admin: true });
+
+    await request(app)
+      .patch(`/conversations/${conversationId}/assign`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ agentId: adminId })
+      .expect(200);
+
+    const { rows } = await ownerPool.query<{ assigned_agent_id: string | null }>(
+      `select assigned_agent_id from conversation where id = $1`,
+      [conversationId],
+    );
+    expect(rows[0]!.assigned_agent_id).toBe(adminId);
+  });
 });

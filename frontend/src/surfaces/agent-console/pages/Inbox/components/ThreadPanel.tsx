@@ -7,6 +7,7 @@ import type {
 } from '@support/types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Archive, Clock, MessageSquare, PanelRight, X } from 'lucide-react';
+import { toast } from 'sonner';
 import {
   askResolved,
   detachTag,
@@ -17,6 +18,7 @@ import {
   sendAgentMessage,
   takeOverConversation,
   claimConversation,
+  reassignConversation,
   requestUpload,
   putFileToUploadUrl,
   cancelUpload,
@@ -243,22 +245,32 @@ export function ThreadPanel({
     onSuccess: invalidateAfterEscalationChange,
   });
 
+  const invalidateAfterTakeOver = () => {
+    void queryClient.invalidateQueries({ queryKey: ['conversation', conversationId, 'detail'] });
+    void queryClient.invalidateQueries({ queryKey: ['tickets'] });
+    void queryClient.invalidateQueries({ queryKey: ['inbox', 'mine'] });
+  };
+
   const takeOver = useMutation({
     mutationFn: () => takeOverConversation(token, conversationId!),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['conversation', conversationId, 'detail'] });
-      void queryClient.invalidateQueries({ queryKey: ['tickets'] });
-      void queryClient.invalidateQueries({ queryKey: ['inbox', 'mine'] });
-    },
+    onSuccess: invalidateAfterTakeOver,
+    onError: () => toast.error("Couldn't take over this conversation."),
   });
 
+  // A conversation with no assigned agent yet is claimed via the claim
+  // endpoint; one already held by another agent has to go through reassign
+  // instead — claim's WHERE clause only ever matches an unassigned row, so
+  // calling it here would 200 with `claimed: false` and silently do nothing.
   const claim = useMutation({
-    mutationFn: () => claimConversation(token, conversationId!),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['conversation', conversationId, 'detail'] });
-      void queryClient.invalidateQueries({ queryKey: ['tickets'] });
-      void queryClient.invalidateQueries({ queryKey: ['inbox', 'mine'] });
+    mutationFn: async () => {
+      if (assignedAgentId) {
+        await reassignConversation(token, conversationId!, loadAgentSession()!.agentId);
+        return;
+      }
+      await claimConversation(token, conversationId!);
     },
+    onSuccess: invalidateAfterTakeOver,
+    onError: () => toast.error("Couldn't take over this conversation."),
   });
 
   // Escalated can only move forward to resolved — asking is the only path there, since there is
