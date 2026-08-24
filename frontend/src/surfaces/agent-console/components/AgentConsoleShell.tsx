@@ -27,6 +27,7 @@ import {
 import { fetchPresence, updatePresence, type DisplayStatus } from '../api/agentApi.ts';
 import { createSocket } from '../../../features/chat/api/socket.ts';
 import { Avatar, AvatarFallback } from './ui/avatar.tsx';
+import { Badge } from './ui/badge.tsx';
 import { Button } from './ui/button.tsx';
 import { Separator } from './ui/separator.tsx';
 import {
@@ -43,26 +44,34 @@ const PRESENCE_OPTIONS: { value: 'online' | 'away'; label: string }[] = [
   { value: 'away', label: 'Away' },
 ];
 
+// Section labels mirror the role tiers the items are actually gated by below
+// (canBuildForms / isAdmin) — they encode the real permission boundary, not
+// decoration.
 const NAV_ITEMS = [
-  { to: '/inbox', label: 'Inbox', icon: InboxIcon },
-  { to: '/tickets', label: 'Tickets', icon: ClipboardList },
-  { to: '/articles', label: 'Knowledge Base', icon: BookOpen },
-  { to: '/taxonomy', label: 'Taxonomy', icon: Tags },
+  { to: '/inbox', label: 'Inbox', icon: InboxIcon, group: 'Workspace' },
+  { to: '/tickets', label: 'Tickets', icon: ClipboardList, group: 'Workspace' },
+  { to: '/articles', label: 'Knowledge Base', icon: BookOpen, group: 'Workspace' },
+  { to: '/taxonomy', label: 'Taxonomy', icon: Tags, group: 'Workspace' },
 ];
 
 // Team Lead + Admin only — an Agent would 403 at the API anyway
 // (requireWorkspaceRole('team_lead', 'admin') on formsRouter), so hiding the
 // link here is UX, not the enforcement point.
-const FORMS_NAV_ITEM = { to: '/forms', label: 'Forms', icon: ClipboardList };
+const FORMS_NAV_ITEM = { to: '/forms', label: 'Forms', icon: ClipboardList, group: 'Manage' };
 
 // Team Lead + Admin only, same gate as Forms above — an Agent would 403 at
 // the API anyway once /agent/workload is implemented.
-const WORKLOAD_NAV_ITEM = { to: '/workload', label: 'Team', icon: Gauge };
+const WORKLOAD_NAV_ITEM = { to: '/workload', label: 'Team', icon: Gauge, group: 'Manage' };
 
 // Admin-only in the permission matrix ("Edit bot prompt or rules" is Admin).
 // Hiding the link here is UX, not the enforcement point — the API still
 // requires admin on POST/rollback.
-const BOT_CONFIG_NAV_ITEM = { to: '/bot-config', label: 'Bot Config', icon: Settings };
+const BOT_CONFIG_NAV_ITEM = {
+  to: '/bot-config',
+  label: 'Bot Config',
+  icon: Settings,
+  group: 'Admin',
+};
 
 // Team Lead + Admin can read (GET /agent/workspace-settings), same gate as
 // Forms/Workload above — only Admin can write, enforced client-side inside
@@ -71,6 +80,13 @@ const WORKSPACE_SETTINGS_NAV_ITEM = {
   to: '/workspace-settings',
   label: 'Workspace Settings',
   icon: SlidersHorizontal,
+  group: 'Manage',
+};
+
+const ROLE_LABEL: Record<string, string> = {
+  agent: 'Agent',
+  team_lead: 'Team Lead',
+  admin: 'Admin',
 };
 
 export function AgentConsoleShell() {
@@ -144,6 +160,16 @@ export function AgentConsoleShell() {
     ...(isAdmin(session) ? [BOT_CONFIG_NAV_ITEM] : []),
   ];
 
+  // Preserves NAV_ITEMS/FORMS/WORKLOAD/etc.'s declaration order within each
+  // group, and only emits a group header for a group that actually has
+  // visible items for this session's role.
+  const groups: { name: string; items: typeof navItems }[] = [];
+  for (const item of navItems) {
+    const group = groups.find((g) => g.name === item.group);
+    if (group) group.items.push(item);
+    else groups.push({ name: item.group, items: [item] });
+  }
+
   const initials = session.displayName
     .split(' ')
     .map((part) => part[0])
@@ -151,32 +177,51 @@ export function AgentConsoleShell() {
     .join('')
     .toUpperCase();
 
+  const roleLabel = session.role ? ROLE_LABEL[session.role] : undefined;
+
   return (
     <div className="flex h-screen w-screen bg-bg text-text">
-      <aside className="flex w-56 shrink-0 flex-col border-r border-slate-200 bg-surface">
-        <div className="px-4 py-4 text-sm font-semibold">Support Console</div>
+      <aside className="flex w-60 shrink-0 flex-col border-r border-border bg-surface">
+        <div className="flex items-center gap-2.5 px-4 py-4">
+          <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent-deep text-sm font-semibold text-accent-fg">
+            S
+          </div>
+          <div className="flex min-w-0 flex-col">
+            <span className="truncate text-sm font-semibold text-text">Support</span>
+            <span className="truncate text-xs text-muted">Agent Console</span>
+          </div>
+        </div>
         <Separator />
-        <nav className="flex flex-col gap-1 p-2">
-          {navItems.map(({ to, label, icon: Icon }) => (
-            <NavLink
-              key={to}
-              to={to}
-              className={({ isActive }) =>
-                cn(
-                  'flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                  isActive ? 'bg-accent-soft text-text' : 'text-muted hover:bg-accent-soft/60',
-                )
-              }
-            >
-              <Icon className="size-4" />
-              {label}
-            </NavLink>
+        <nav className="flex flex-1 flex-col gap-4 overflow-y-auto p-2 pt-3">
+          {groups.map((group) => (
+            <div key={group.name} className="flex flex-col gap-1">
+              <div className="px-3 text-xs font-semibold tracking-wide text-muted uppercase">
+                {group.name}
+              </div>
+              {group.items.map(({ to, label, icon: Icon }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  className={({ isActive }) =>
+                    cn(
+                      'flex items-center gap-2 rounded-md border-l-2 py-2 pr-3 pl-2.5 text-sm font-medium transition-colors',
+                      isActive
+                        ? 'border-accent bg-accent-soft text-accent-deep'
+                        : 'border-transparent text-muted hover:bg-accent-soft/60 hover:text-text',
+                    )
+                  }
+                >
+                  <Icon className="size-4" />
+                  {label}
+                </NavLink>
+              ))}
+            </div>
           ))}
         </nav>
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center justify-between border-b border-slate-200 px-4">
+        <header className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4">
           <div className="flex items-center gap-2">
             <div className="relative">
               <Avatar className="size-7">
@@ -205,6 +250,11 @@ export function AgentConsoleShell() {
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
+            {roleLabel && (
+              <Badge variant="secondary" className="text-muted">
+                {roleLabel}
+              </Badge>
+            )}
           </div>
           <Button
             variant="ghost"

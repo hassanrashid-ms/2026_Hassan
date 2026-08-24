@@ -13,9 +13,10 @@
 @theme {
   --color-bg: #ffffff;
   --color-surface: #fafafa; /* zinc-50, admin-console's neutral card background */
-  --color-accent: #52525b; /* zinc-600, primary — distinguishes this surface from agent-console's slate */
-  --color-accent-deep: #27272a; /* zinc-800 */
-  --color-accent-soft: #f4f4f5; /* zinc-100, selected row / active tab background */
+  --color-border: #e4e4e7; /* zinc-200 */
+  --color-accent: #0f766e; /* teal-700 — a real hue, not just a gray shade, so admin reads as a distinct control surface from agent-console's indigo at a glance */
+  --color-accent-deep: #134e4a; /* teal-900 */
+  --color-accent-soft: #f0fdfa; /* teal-50, selected row / active tab background */
   --color-accent-fg: #ffffff;
   --color-text: #18181b; /* zinc-900 */
   --color-muted: #71717a; /* zinc-500 */
