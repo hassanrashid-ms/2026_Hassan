@@ -1046,18 +1046,15 @@ Expected: FAIL — `res.body.message.attachment` is `undefined` (schema/service 
 
 - [ ] **Step 4: Implement the claim logic in the service**
 
-In `backend/src/agent/services/messagesService.ts`, add imports and rewrite `sendAgentMessage`:
+In `backend/src/agent/services/messagesService.ts`, add these imports (this file returns typed outcomes, never calls `sendError` — that stays the controller's job, so don't import it here):
 
 ```ts
-import { copyObject, headObject } from '../../shared/storage/presign.ts';
-import { deleteObject } from '../../shared/storage/presign.ts';
+import { randomUUID } from 'node:crypto';
+import { copyObject, deleteObject, headObject } from '../../shared/storage/presign.ts';
 import { attachment } from '../../shared/db/schema/index.ts';
-import { sendError } from '../../errors.ts'; // only if not already imported elsewhere in this file — this file returns typed results, not responses, so skip this import; the controller maps outcomes to sendError.
 ```
 
-(Remove the `sendError` import line above — this service returns typed outcomes; only the controller calls `sendError`. Keep `copyObject`, `headObject`, `deleteObject`, `attachment` as the real additions.)
-
-Replace the `SendAgentMessageResult` type and `sendAgentMessage` function body:
+Then replace the `SendAgentMessageResult` type and `sendAgentMessage` function body:
 
 ```ts
 export type SendAgentMessageResult =
@@ -1081,7 +1078,7 @@ export async function sendAgentMessage(
       return { outcome: 'attachment_mismatch' };
     }
     const extension = body.attachment.key.slice(body.attachment.key.lastIndexOf('.'));
-    claimedDestKey = `ws/${ctx.workspaceId}/attachments/${crypto.randomUUID()}${extension}`;
+    claimedDestKey = `ws/${ctx.workspaceId}/attachments/${randomUUID()}${extension}`;
     await copyObject({ sourceKey: body.attachment.key, destKey: claimedDestKey });
     pendingKeyToDelete = body.attachment.key;
   }
@@ -1181,8 +1178,6 @@ export async function sendAgentMessage(
   return { outcome: 'ok', message: agentView };
 }
 ```
-
-Note `crypto.randomUUID()` — Node's global `crypto` is already available (no import needed) in this codebase's runtime; confirm by checking another file's usage (`uploadsService.ts` from Task 3 imports it explicitly from `node:crypto` instead — for consistency, add `import { randomUUID } from 'node:crypto';` at the top of `messagesService.ts` and use `randomUUID()` in place of `crypto.randomUUID()` above).
 
 - [ ] **Step 5: Update the controller to map the two new outcomes**
 
@@ -1392,34 +1387,19 @@ export async function getAgentConversationMessages(
   if (rows === null) return null;
 
   // Filenames aren't stored on `attachment` (see design doc §4 — only
-  // storage_key/mime_type/byte_size), so the list view falls back to a fixed
-  // label. The send response (Task 4) is the only place the real filename is
-  // known, from the client's own request, and it already becomes the message
-  // body there — so the body itself carries the filename for display.
-  const views = rows.map((row) =>
-    toAgentView({ ...row, attachmentFilename: row.body, attachmentByteSize: row.attachmentByteSize }),
-  );
-
-  return Promise.all(
-    views.map(async (view) => {
-      if (!view.attachment) return view;
-      const url = await presignGetObject(row_storage_key_lookup(rows, view.id));
-      return url ? { ...view, attachment: { ...view.attachment, url } } : view;
-    }),
-  );
-}
-```
-
-The `row_storage_key_lookup` placeholder above is wrong — replace the whole signing block with a direct map lookup instead, since `storageKey` was selected but dropped when building `views`. Rewrite Step 5's final part as:
-
-```ts
+  // storage_key/mime_type/byte_size), so the list view reads the filename off
+  // the message body: the send response (Task 4) is the only place the real
+  // filename is known, from the client's own request, and it already becomes
+  // the message body there.
+  //
+  // storageKey is looked up from `rows` by message id rather than carried on
+  // `view` itself, because AgentMessageView's `attachment` shape (Task 4 Step
+  // 1) has no storageKey field on the wire — it is signing-internal, never
+  // sent to a client.
   const storageKeyByMessageId = new Map(
     rows.filter((r) => r.attachmentStorageKey).map((r) => [r.id, r.attachmentStorageKey!]),
   );
-
-  const views = rows.map((row) =>
-    toAgentView({ ...row, attachmentFilename: row.body }),
-  );
+  const views = rows.map((row) => toAgentView({ ...row, attachmentFilename: row.body }));
 
   return Promise.all(
     views.map(async (view) => {
@@ -1437,6 +1417,7 @@ The `row_storage_key_lookup` placeholder above is wrong — replace the whole si
       }
     }),
   );
+}
 ```
 
 - [ ] **Step 6: Run the test to verify it passes**
@@ -2100,4 +2081,4 @@ git commit -m "Wire image attachments into the agent-console chat composer"
 
 - **Spec coverage:** §2 infra → Task 1. §3 signed-URL practices → enforced in Task 1's `presign.ts` (exact TTLs, ContentType/ContentLength signing, server-generated keys) and Task 3's ownership-by-path-segment cancel. §4 data model + `article_attachment` relationship note → Task 2. §5 endpoints → Tasks 3-5. §6 frontend → Task 6. §7 error table → Tasks 3-4. §8 testing → a test step in every task.
 - **Type consistency:** `AgentMessageView.attachment` shape (`id, filename, mime_type, byte_size, url`) is identical across Task 4 (send response), Task 5 (list response), and Task 6 (frontend `ChatAttachment`/`toChatMessage` mapping) — verified field-by-field when writing Task 6.
-- **No placeholder steps:** every step above contains real, complete code — the one exception (Step 5 of Task 5) is intentionally shown mid-correction, matching how the actual mistake and fix would be discovered while implementing, and the corrected final version is given immediately after.
+- **No placeholder steps:** every step above contains real, complete code, including the storage-key lookup in Task 5 Step 5 (signed via a `Map` keyed by message id, since `AgentMessageView.attachment` carries no `storageKey` on the wire).
