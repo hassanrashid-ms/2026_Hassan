@@ -4,7 +4,6 @@ import { closeDb } from '../src/shared/db/client.ts';
 import { withWorkspace } from '../src/shared/db/withWorkspace.ts';
 import { resolutionCycle } from '../src/shared/db/schema/index.ts';
 import {
-  INACTIVITY_WINDOW_HOURS,
   closeResolutionCycle,
   nextInactivityDueAt,
   openResolutionCycle,
@@ -48,9 +47,10 @@ const cycles = (workspaceId: string, conversationId: string) =>
   );
 
 describe('resolutionCycle helper', () => {
-  it('exposes a 24 hour window', () => {
-    expect(INACTIVITY_WINDOW_HOURS).toBe(24);
-    expect(nextInactivityDueAt(NOW).toISOString()).toBe(plus24h.toISOString());
+  it('shifts by the given window', () => {
+    expect(nextInactivityDueAt(NOW, 24).toISOString()).toBe(plus24h.toISOString());
+    const plus48h = new Date(NOW.getTime() + 48 * 3_600_000);
+    expect(nextInactivityDueAt(NOW, 48).toISOString()).toBe(plus48h.toISOString());
   });
 
   it('opens cycle 1 with a null clock, then cycle 2 on the next open', async () => {
@@ -106,6 +106,23 @@ describe('resolutionCycle helper', () => {
     );
     expect((await cycles(workspaceId, conversationId))[0]!.inactivityDueAt!.toISOString()).toBe(
       plus24h.toISOString(),
+    );
+  });
+
+  it('touch uses the workspace inactivity_window_hours', async () => {
+    const workspaceId = await seedWorkspace({ slug: 'demo-game-48h', inactivityWindowHours: 48 });
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
+    await withWorkspace(workspaceId, (tx) =>
+      openResolutionCycle(tx, { workspaceId, conversationId }),
+    );
+
+    await withWorkspace(workspaceId, (tx) =>
+      touchInactivityClock(tx, { conversationId, now: NOW }),
+    );
+    const plus48h = new Date(NOW.getTime() + 48 * 3_600_000);
+    expect((await cycles(workspaceId, conversationId))[0]!.inactivityDueAt!.toISOString()).toBe(
+      plus48h.toISOString(),
     );
   });
 

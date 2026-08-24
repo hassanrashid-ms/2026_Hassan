@@ -93,13 +93,20 @@ REVOKE UPDATE, DELETE ON form_answer FROM crm_admin;
 REVOKE INSERT, UPDATE ON workspace FROM support_app;
 REVOKE INSERT, UPDATE ON workspace_secret FROM support_app;
 
--- ...with one column-scoped exception. conversation.number is allocated on the
+-- ...with column-scoped exceptions. conversation.number is allocated on the
 -- request path (allocateTicketNumber), which needs to bump this counter and
 -- nothing else on the row. Granting the column rather than the table keeps
 -- secret_hash unwritable by support_app, which is the whole point of the
 -- REVOKE above. This is the same narrowing named as future work for `agent`,
 -- applied one table over.
 GRANT UPDATE (ticket_seq) ON workspace TO support_app;
+
+-- Same narrowing for the workspace-settings admin screen (agent console,
+-- requireAdminRole-gated): these four are operational tuning knobs an admin
+-- edits over the request path, not identity/secret fields, so they're safe
+-- to grant without opening up the whole row the way crm_admin can.
+GRANT UPDATE (max_assigned_tickets, auto_close_days, inactivity_window_hours, form_timeout_minutes)
+  ON workspace TO support_app;
 
 -- crm_admin is exactly the role that IS allowed to write workspace and
 -- workspace_secret — that is the whole point of the admin dashboard's

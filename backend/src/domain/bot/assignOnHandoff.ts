@@ -1,6 +1,6 @@
-import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, lt, sql } from 'drizzle-orm';
 import type { Tx } from '../../shared/db/withWorkspace.ts';
-import { agent, conversation, workspaceMember } from '../../shared/db/schema/index.ts';
+import { agent, conversation, workspace, workspaceMember } from '../../shared/db/schema/index.ts';
 
 const LIVE_STATUSES = ['open', 'awaiting_player', 'escalated'] as const;
 
@@ -20,6 +20,7 @@ export async function assignOnHandoff(tx: Tx, workspaceId: string): Promise<stri
     })
     .from(workspaceMember)
     .innerJoin(agent, eq(agent.id, workspaceMember.agentId))
+    .innerJoin(workspace, eq(workspace.id, workspaceMember.workspaceId))
     .leftJoin(
       conversation,
       and(eq(conversation.assignedAgentId, agent.id), eq(conversation.workspaceId, workspaceId)),
@@ -31,7 +32,9 @@ export async function assignOnHandoff(tx: Tx, workspaceId: string): Promise<stri
         eq(agent.status, 'active'),
       ),
     )
-    .groupBy(agent.id)
+    .groupBy(agent.id, workspace.maxAssignedTickets)
+    // Excludes agents already at capacity — not just deprioritizes them.
+    .having(lt(liveCount, workspace.maxAssignedTickets))
     .orderBy(liveCount, asc(agent.id))
     .limit(1);
 

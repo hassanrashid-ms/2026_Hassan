@@ -4,12 +4,6 @@ import { withWorkspace, withoutWorkspace } from '../db/withWorkspace.ts';
 import { completeFormAndHandoff, emitFormTerminated } from '../../domain/forms/index.ts';
 import { logger } from '../logging/logger.ts';
 
-/**
- * Far longer than any plausible fill time, far shorter than a support SLA. A
- * constant in one file, tunable without a schema change.
- */
-export const FORM_TIMEOUT_MINUTES = 30;
-
 export type SweepAbandonedFormsOptions = {
   now?: Date;
   timeoutMinutes?: number;
@@ -36,15 +30,19 @@ export async function sweepAbandonedForms(
   options: SweepAbandonedFormsOptions = {},
 ): Promise<number> {
   const now = options.now ?? new Date();
-  const timeoutMinutes = options.timeoutMinutes ?? FORM_TIMEOUT_MINUTES;
-  const cutoff = new Date(now.getTime() - timeoutMinutes * 60_000);
 
   const workspaces = await withoutWorkspace(async (tx) =>
-    tx.select({ id: workspace.id }).from(workspace).where(isNull(workspace.disabledAt)),
+    tx
+      .select({ id: workspace.id, formTimeoutMinutes: workspace.formTimeoutMinutes })
+      .from(workspace)
+      .where(isNull(workspace.disabledAt)),
   );
 
   let terminated = 0;
   for (const ws of workspaces) {
+    const timeoutMinutes = options.timeoutMinutes ?? ws.formTimeoutMinutes;
+    const cutoff = new Date(now.getTime() - timeoutMinutes * 60_000);
+
     const stale = await withWorkspace(ws.id, async (tx) =>
       tx
         .select({ id: formSubmission.id, conversationId: formSubmission.conversationId })

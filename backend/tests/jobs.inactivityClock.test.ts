@@ -90,7 +90,7 @@ describe('runInactivityClock — stage 1 (ask)', () => {
       'inactivity_ask',
     );
     expect((await readCycle(workspaceId, conversationId)).inactivityDueAt!.toISOString()).toBe(
-      nextInactivityDueAt(NOW).toISOString(),
+      nextInactivityDueAt(NOW, 24).toISOString(),
     );
   });
 

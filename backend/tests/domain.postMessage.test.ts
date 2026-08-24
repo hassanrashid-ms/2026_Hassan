@@ -174,7 +174,7 @@ describe('postMessage inactivity clock touch', () => {
       }),
     );
     expect((await due(workspaceId, conversationId))!.toISOString()).toBe(
-      nextInactivityDueAt(NOW).toISOString(),
+      nextInactivityDueAt(NOW, 24).toISOString(),
     );
   });
 
@@ -191,7 +191,7 @@ describe('postMessage inactivity clock touch', () => {
       }),
     );
     expect((await due(workspaceId, conversationId))!.toISOString()).toBe(
-      nextInactivityDueAt(NOW).toISOString(),
+      nextInactivityDueAt(NOW, 24).toISOString(),
     );
   });
 

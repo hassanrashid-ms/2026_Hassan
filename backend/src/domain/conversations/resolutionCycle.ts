@@ -1,19 +1,23 @@
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
-import { resolutionCycle } from '../../shared/db/schema/index.ts';
+import { resolutionCycle, workspace } from '../../shared/db/schema/index.ts';
 import type { Tx } from '../../shared/db/withWorkspace.ts';
-
-/**
- * Both stages of the clock use the same window: 24h of silence before the ask,
- * 24h more before the timeout. A constant in one file — a per-workspace setting
- * would be a schema change and nobody has asked for one.
- */
-export const INACTIVITY_WINDOW_HOURS = 24;
 
 /** The four terminal outcomes a cycle can record. Mirrors the resolution_source enum. */
 export type ResolutionKind = 'bot' | 'agent' | 'player_confirmed' | 'timed_out';
 
-export function nextInactivityDueAt(from: Date): Date {
-  return new Date(from.getTime() + INACTIVITY_WINDOW_HOURS * 3_600_000);
+/** Both stages of the clock use the same window: N hours of silence before the ask, N more before the timeout. */
+export function nextInactivityDueAt(from: Date, windowHours: number): Date {
+  return new Date(from.getTime() + windowHours * 3_600_000);
+}
+
+async function inactivityWindowHours(tx: Tx, workspaceId: string): Promise<number> {
+  const [row] = await tx
+    .select({ inactivityWindowHours: workspace.inactivityWindowHours })
+    .from(workspace)
+    .where(eq(workspace.id, workspaceId));
+
+  if (!row) throw new Error(`inactivityWindowHours: no workspace ${workspaceId}`);
+  return row.inactivityWindowHours;
 }
 
 /**
@@ -53,9 +57,21 @@ export async function touchInactivityClock(
   tx: Tx,
   args: { conversationId: string; now: Date },
 ): Promise<void> {
+  const [open] = await tx
+    .select({ workspaceId: resolutionCycle.workspaceId })
+    .from(resolutionCycle)
+    .where(
+      and(
+        eq(resolutionCycle.conversationId, args.conversationId),
+        isNull(resolutionCycle.resolvedAt),
+      ),
+    );
+  if (!open) return;
+
+  const windowHours = await inactivityWindowHours(tx, open.workspaceId);
   await tx
     .update(resolutionCycle)
-    .set({ inactivityDueAt: nextInactivityDueAt(args.now) })
+    .set({ inactivityDueAt: nextInactivityDueAt(args.now, windowHours) })
     .where(
       and(
         eq(resolutionCycle.conversationId, args.conversationId),

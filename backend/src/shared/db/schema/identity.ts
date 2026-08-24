@@ -36,6 +36,12 @@ export const workspace = pgTable('workspace', {
    * column rather than an env var so one noisy tenant can be tuned alone.
    */
   autoCloseDays: integer('auto_close_days').notNull().default(7),
+  /** Cap on live tickets assignOnHandoff will place on one agent before skipping them. */
+  maxAssignedTickets: integer('max_assigned_tickets').notNull().default(5),
+  /** Hours of silence before a player is asked to confirm resolution. */
+  inactivityWindowHours: integer('inactivity_window_hours').notNull().default(24),
+  /** Minutes a form submission waits before sweepAbandonedForms auto-hands it off. */
+  formTimeoutMinutes: integer('form_timeout_minutes').notNull().default(30),
   /** Set to refuse token minting without deleting anything. */
   disabledAt: timestamp('disabled_at', tz),
   createdAt: timestamp('created_at', tz).notNull().defaultNow(),

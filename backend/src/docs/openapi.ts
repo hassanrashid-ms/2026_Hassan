@@ -1570,6 +1570,46 @@ registry.registerPath({
 
 registry.registerPath({
   method: 'get',
+  path: '/agent/workspace-settings',
+  summary: 'Agent Get Workspace Settings',
+  description:
+    'Per-workspace ticket-handling settings: max_assigned_tickets (assignOnHandoff cap), auto_close_days, inactivity_window_hours, form_timeout_minutes. Team Lead or Admin.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  responses: {
+    200: { description: 'Current workspace settings' },
+    403: { description: 'Forbidden — Team Lead or Admin role required' },
+  },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/agent/workspace-settings',
+  summary: 'Agent Save Workspace Settings',
+  description: 'Replaces all four workspace settings at once. Admin-only.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: z.object({
+            max_assigned_tickets: z.number().int().min(1).max(100).openapi({ example: 5 }),
+            auto_close_days: z.number().int().min(1).max(365).openapi({ example: 7 }),
+            inactivity_window_hours: z.number().int().min(1).max(720).openapi({ example: 24 }),
+            form_timeout_minutes: z.number().int().min(1).max(1440).openapi({ example: 30 }),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: { description: 'Workspace settings after the save' },
+    403: { description: 'Forbidden — admin role required' },
+    422: { description: 'A field is missing or outside its allowed bounds' },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
   path: '/agent/bot-config/history',
   summary: 'Agent Get Bot Config Audit Trail',
   description:

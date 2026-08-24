@@ -117,6 +117,44 @@ describe('assignOnHandoff', () => {
     expect(result).toBeNull();
   });
 
+  it('excludes an agent at the max-assigned-tickets cap, picking an under-cap agent', async () => {
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const atCap = await seedAgent();
+    const underCap = await seedAgent();
+    await seedWorkspaceMember({ workspaceId, agentId: atCap });
+    await seedWorkspaceMember({ workspaceId, agentId: underCap });
+    await ownerPool.query(`update workspace set max_assigned_tickets = 1 where id = $1`, [
+      workspaceId,
+    ]);
+
+    const c1 = await seedConversation({ workspaceId, playerId });
+    await assignConversationTo(c1, atCap, 'open');
+
+    const result = await withWorkspace(workspaceId, (tx) => assignOnHandoff(tx, workspaceId));
+    expect(result).toBe(underCap);
+  });
+
+  it('returns null when every active agent is at or over the cap', async () => {
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const agentA = await seedAgent();
+    const agentB = await seedAgent();
+    await seedWorkspaceMember({ workspaceId, agentId: agentA });
+    await seedWorkspaceMember({ workspaceId, agentId: agentB });
+    await ownerPool.query(`update workspace set max_assigned_tickets = 1 where id = $1`, [
+      workspaceId,
+    ]);
+
+    const c1 = await seedConversation({ workspaceId, playerId });
+    await assignConversationTo(c1, agentA, 'open');
+    const c2 = await seedConversation({ workspaceId, playerId });
+    await assignConversationTo(c2, agentB, 'escalated');
+
+    const result = await withWorkspace(workspaceId, (tx) => assignOnHandoff(tx, workspaceId));
+    expect(result).toBeNull();
+  });
+
   it('only counts open, awaiting_player, escalated as live — not resolved or closed', async () => {
     const workspaceId = await seedWorkspace();
     const playerId = await seedPlayer(workspaceId);

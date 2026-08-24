@@ -40,8 +40,12 @@ beforeEach(truncateAll);
  * imported: a shared fixture across test files couples two suites that need to
  * diverge independently.
  */
-async function offeredAt(startedAt: Date, answers: string[]) {
-  const workspaceId = await seedWorkspace();
+async function offeredAt(
+  startedAt: Date,
+  answers: string[],
+  workspaceOverrides: { slug?: string; formTimeoutMinutes?: number } = {},
+) {
+  const workspaceId = await seedWorkspace(workspaceOverrides);
   const agentId = await seedAgent();
   await seedWorkspaceMember({ workspaceId, agentId });
   const playerId = await seedPlayer(workspaceId);
@@ -146,5 +150,29 @@ describe('sweepAbandonedForms', () => {
     await offeredAt(minutesAgo(45), []);
     await offeredAt(minutesAgo(45), []);
     expect(await sweepAbandonedForms({ now: NOW, timeoutMinutes: 30 })).toBe(2);
+  });
+
+  it('uses each workspace\'s own form_timeout_minutes', async () => {
+    // Stale under a 10-minute window, not yet stale under a 60-minute one.
+    const short = await offeredAt(minutesAgo(20), [], {
+      slug: 'short-timeout',
+      formTimeoutMinutes: 10,
+    });
+    const long = await offeredAt(minutesAgo(20), [], {
+      slug: 'long-timeout',
+      formTimeoutMinutes: 60,
+    });
+
+    expect(await sweepAbandonedForms({ now: NOW })).toBe(1);
+
+    const [shortSub] = await withWorkspace(short.workspaceId, (tx) =>
+      tx.select().from(formSubmission),
+    );
+    expect(shortSub!.status).toBe('skipped');
+
+    const [longSub] = await withWorkspace(long.workspaceId, (tx) =>
+      tx.select().from(formSubmission),
+    );
+    expect(longSub!.status).toBe('in_progress');
   });
 });
