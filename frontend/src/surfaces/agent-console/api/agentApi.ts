@@ -197,15 +197,13 @@ export function markAgentMessagesRead(
 }
 
 /**
- * `/agent/workload` has no backend implementation yet — this type is a local
- * frontend-side contract, not sourced from `@support/types`, since that
- * package is the SDK↔server wire contract and this endpoint doesn't exist on
- * the server side yet.
+ * `/agent/workload` is a local frontend-side contract, not sourced from
+ * `@support/types`, since that package is the SDK↔server wire contract.
  */
 export type AgentWorkloadEntry = {
   agentId: string;
-  displayName: string;
-  open: number;
+  agentName: string;
+  openCount: number;
   resolved7d: number;
 };
 

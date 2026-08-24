@@ -36,9 +36,9 @@ beforeEach(() => {
   });
   vi.spyOn(agentApi, 'fetchWorkload').mockResolvedValue({
     agents: [
-      { agentId: '1', displayName: 'Alice', open: 3, resolved7d: 10 },
-      { agentId: '2', displayName: 'Bob', open: 8, resolved7d: 2 },
-      { agentId: '3', displayName: 'Carol', open: 5, resolved7d: 20 },
+      { agentId: '1', agentName: 'Alice', openCount: 3, resolved7d: 10 },
+      { agentId: '2', agentName: 'Bob', openCount: 8, resolved7d: 2 },
+      { agentId: '3', agentName: 'Carol', openCount: 5, resolved7d: 20 },
     ],
   });
 });

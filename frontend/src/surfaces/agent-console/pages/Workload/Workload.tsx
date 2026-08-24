@@ -29,8 +29,9 @@ function sortAgents(
 ): AgentWorkloadEntry[] {
   const sorted = [...agents].sort((a, b) => {
     let cmp: number;
-    if (column === 'agent') cmp = a.displayName.localeCompare(b.displayName);
-    else cmp = a[column] - b[column];
+    if (column === 'agent') cmp = a.agentName.localeCompare(b.agentName);
+    else if (column === 'open') cmp = a.openCount - b.openCount;
+    else cmp = a.resolved7d - b.resolved7d;
     return direction === 'asc' ? cmp : -cmp;
   });
   return sorted;
@@ -95,8 +96,8 @@ export function Workload() {
           <TableBody>
             {sortedAgents.map((agent) => (
               <TableRow key={agent.agentId}>
-                <TableCell className="font-medium">{agent.displayName}</TableCell>
-                <TableCell>{agent.open}</TableCell>
+                <TableCell className="font-medium">{agent.agentName}</TableCell>
+                <TableCell>{agent.openCount}</TableCell>
                 <TableCell>{agent.resolved7d}</TableCell>
               </TableRow>
             ))}
