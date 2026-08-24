@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { loadAgentSession } from '../../lib/agentSession.ts';
-import { CategorySidebar } from './components/CategorySidebar.tsx';
 import { ArticleTable } from './components/ArticleTable.tsx';
 import { ArticleEditorSheet } from './components/ArticleEditorSheet.tsx';
 
@@ -23,9 +22,6 @@ export function KnowledgeBase() {
 
   return (
     <div className="flex h-full min-h-0">
-      <div className="w-56 shrink-0">
-        <CategorySidebar token={session.token} />
-      </div>
       <div className="min-w-0 flex-1">
         <ArticleTable
           token={session.token}

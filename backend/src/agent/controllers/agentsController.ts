@@ -19,7 +19,12 @@ export const setAgentLeaveHandler: RequestHandler = async (req, res) => {
   const params = LeaveParams.safeParse(req.params);
   const body = LeaveBody.safeParse(req.body);
   if (!params.success || !body.success) {
-    sendError(res, 400, 'invalid_request', 'onLeave must be a boolean; days must be a positive integer.');
+    sendError(
+      res,
+      400,
+      'invalid_request',
+      'onLeave must be a boolean; days must be a positive integer.',
+    );
     return;
   }
 
@@ -34,7 +39,12 @@ export const setAgentLeaveHandler: RequestHandler = async (req, res) => {
     if (result.reason === 'not_found') {
       sendError(res, 404, 'agent_not_found', 'Agent not found in this workspace.');
     } else {
-      sendError(res, 409, 'invalid_status', 'Agent is deactivated or invited; leave status cannot be changed.');
+      sendError(
+        res,
+        409,
+        'invalid_status',
+        'Agent is deactivated or invited; leave status cannot be changed.',
+      );
     }
     return;
   }

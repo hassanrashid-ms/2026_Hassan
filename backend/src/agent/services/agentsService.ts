@@ -67,7 +67,10 @@ export async function setAgentLeaveStatus(
       .from(workspaceMember)
       .innerJoin(agent, eq(agent.id, workspaceMember.agentId))
       .where(
-        and(eq(workspaceMember.workspaceId, workspaceId), eq(workspaceMember.agentId, targetAgentId)),
+        and(
+          eq(workspaceMember.workspaceId, workspaceId),
+          eq(workspaceMember.agentId, targetAgentId),
+        ),
       )
       .limit(1);
 

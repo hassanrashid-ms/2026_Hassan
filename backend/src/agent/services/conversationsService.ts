@@ -479,7 +479,7 @@ export async function getWorkspaceWorkload(ctx: AgentContext): Promise<Workspace
       status:
         member.agentStatus === 'on_leave'
           ? 'on_leave'
-          : presenceByAgent.get(member.agentId) ?? 'offline',
+          : (presenceByAgent.get(member.agentId) ?? 'offline'),
       onLeaveSince: member.agentStatus === 'on_leave' ? member.onLeaveSince : null,
       onLeaveUntil: member.agentStatus === 'on_leave' ? member.onLeaveUntil : null,
     }));

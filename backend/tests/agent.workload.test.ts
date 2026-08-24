@@ -159,9 +159,7 @@ describe('GET /agent/workload', () => {
       .expect(200);
 
     const firstRow = res.body.agents.find((a: { agentId: string }) => a.agentId === firstAgentId);
-    const secondRow = res.body.agents.find(
-      (a: { agentId: string }) => a.agentId === secondAgentId,
-    );
+    const secondRow = res.body.agents.find((a: { agentId: string }) => a.agentId === secondAgentId);
     expect(firstRow.resolved7d).toBe(0);
     expect(secondRow.resolved7d).toBe(1);
   });
@@ -197,9 +195,7 @@ describe('GET /agent/workload', () => {
       .set('Authorization', `Bearer ${teamLeadToken}`)
       .expect(200);
 
-    const row = res.body.agents.find(
-      (a: { agentId: string }) => a.agentId === deactivatedAgentId,
-    );
+    const row = res.body.agents.find((a: { agentId: string }) => a.agentId === deactivatedAgentId);
     expect(row).toBeUndefined();
   });
 
@@ -237,10 +233,7 @@ describe('GET /agent/workload', () => {
     const workspaceId = await seedWorkspace();
     const { token: agentToken } = await seedAgentWithRole(workspaceId, 'agent');
 
-    await request(app)
-      .get('/workload')
-      .set('Authorization', `Bearer ${agentToken}`)
-      .expect(403);
+    await request(app).get('/workload').set('Authorization', `Bearer ${agentToken}`).expect(403);
   });
 
   it('reports offline by default, online once connected, and away once set', async () => {
@@ -260,9 +253,7 @@ describe('GET /agent/workload', () => {
     const offlineRow = res.body.agents.find(
       (a: { agentId: string }) => a.agentId === offlineAgentId,
     );
-    const onlineRow = res.body.agents.find(
-      (a: { agentId: string }) => a.agentId === onlineAgentId,
-    );
+    const onlineRow = res.body.agents.find((a: { agentId: string }) => a.agentId === onlineAgentId);
     expect(offlineRow.status).toBe('offline');
     expect(onlineRow.status).toBe('online');
   });

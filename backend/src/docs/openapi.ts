@@ -560,7 +560,8 @@ const AgentWorkspaceWorkloadSchema = z.object({
       }),
       onLeaveSince: z.iso.datetime().nullable(),
       onLeaveUntil: z.iso.datetime().nullable().openapi({
-        description: 'Planned return date, if a duration was set. Null = indefinite. Not auto-enforced.',
+        description:
+          'Planned return date, if a duration was set. Null = indefinite. Not auto-enforced.',
       }),
     }),
   ),
@@ -638,7 +639,8 @@ registry.registerPath({
           schema: z.object({
             onLeave: z.boolean(),
             days: z.number().int().positive().optional().openapi({
-              description: 'Only meaningful when onLeave is true. Sets a planned return date; omitted = indefinite.',
+              description:
+                'Only meaningful when onLeave is true. Sets a planned return date; omitted = indefinite.',
             }),
           }),
         },

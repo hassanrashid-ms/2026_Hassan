@@ -68,14 +68,20 @@ describe('GET /workspace-settings', () => {
     const workspaceId = await seedWorkspace();
     const { token } = await seedAgentWithRole(workspaceId, 'team_lead');
 
-    await request(app).get('/workspace-settings').set('Authorization', `Bearer ${token}`).expect(200);
+    await request(app)
+      .get('/workspace-settings')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
   });
 
   it('forbids a plain agent', async () => {
     const workspaceId = await seedWorkspace();
     const { token } = await seedAgentWithRole(workspaceId, 'agent');
 
-    await request(app).get('/workspace-settings').set('Authorization', `Bearer ${token}`).expect(403);
+    await request(app)
+      .get('/workspace-settings')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(403);
   });
 });
 

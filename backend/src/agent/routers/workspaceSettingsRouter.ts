@@ -8,5 +8,9 @@ import {
 
 /** Same read/write role split as botConfigRouter: Team Lead + Admin read, Admin only writes. */
 export const workspaceSettingsRouter = Router();
-workspaceSettingsRouter.get('/workspace-settings', requireTeamLeadOrAdmin, getWorkspaceSettingsHandler);
+workspaceSettingsRouter.get(
+  '/workspace-settings',
+  requireTeamLeadOrAdmin,
+  getWorkspaceSettingsHandler,
+);
 workspaceSettingsRouter.post('/workspace-settings', requireAdminRole, saveWorkspaceSettingsHandler);

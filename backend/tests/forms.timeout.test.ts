@@ -152,7 +152,7 @@ describe('sweepAbandonedForms', () => {
     expect(await sweepAbandonedForms({ now: NOW, timeoutMinutes: 30 })).toBe(2);
   });
 
-  it('uses each workspace\'s own form_timeout_minutes', async () => {
+  it("uses each workspace's own form_timeout_minutes", async () => {
     // Stale under a 10-minute window, not yet stale under a 60-minute one.
     const short = await offeredAt(minutesAgo(20), [], {
       slug: 'short-timeout',

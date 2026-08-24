@@ -1,7 +1,10 @@
 import type { RequestHandler } from 'express';
 import { z } from 'zod';
 import { sendError } from '../../errors.ts';
-import { getWorkspaceSettings, saveWorkspaceSettings } from '../services/workspaceSettingsService.ts';
+import {
+  getWorkspaceSettings,
+  saveWorkspaceSettings,
+} from '../services/workspaceSettingsService.ts';
 
 export const getWorkspaceSettingsHandler: RequestHandler = async (req, res) => {
   res.status(200).json(await getWorkspaceSettings(req.agent!));
