@@ -1,6 +1,13 @@
 import { useRef, useState } from 'react';
 import { Paperclip, X } from 'lucide-react';
 
+// Mirrors backend/src/shared/storage/presign.ts's ALLOWED_IMAGE_MIME_TYPES /
+// MAX_ATTACHMENT_BYTES. Duplicated rather than imported — the frontend
+// doesn't import backend code — so a fast client-side rejection matches what
+// the server would reject anyway, instead of round-tripping to find out.
+const ALLOWED_IMAGE_MIME_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+
 export type UploadedAttachment = {
   key: string;
   filename: string;
@@ -9,7 +16,11 @@ export type UploadedAttachment = {
 };
 
 type ComposerProps = {
-  onSend: (body: string, visibility?: 'public' | 'internal', attachment?: UploadedAttachment) => void;
+  onSend: (
+    body: string,
+    visibility?: 'public' | 'internal',
+    attachment?: UploadedAttachment,
+  ) => void;
   disabled?: boolean;
   /** Only the agent console passes this. The player surface's Composer usage omits it, so
    *  onSend is always called with visibility undefined there — there is no code path for a
@@ -42,6 +53,7 @@ export function Composer({
   const [pendingAttachment, setPendingAttachment] = useState<UploadedAttachment | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const clearAttachment = () => {
@@ -58,15 +70,31 @@ export function Composer({
     setVisibility('public');
     setPendingAttachment(null);
     setPreviewUrl(null);
+    setUploadError(null);
   };
 
   const handleFilePicked = async (file: File) => {
     if (!onUpload) return;
+    setUploadError(null);
+
+    if (!ALLOWED_IMAGE_MIME_TYPES.includes(file.type)) {
+      setUploadError('Only PNG, JPEG, WebP or GIF images are supported.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+    if (file.size > MAX_ATTACHMENT_BYTES) {
+      setUploadError('Images must be 10 MB or smaller.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
     setUploading(true);
     try {
       const uploaded = await onUpload(file);
       setPendingAttachment(uploaded);
       setPreviewUrl(URL.createObjectURL(file));
+    } catch {
+      setUploadError('Upload failed. Please try again.');
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -77,7 +105,11 @@ export function Composer({
     <div className="flex shrink-0 flex-col gap-2 border-t border-muted/20 bg-bg p-2">
       {pendingAttachment && previewUrl && (
         <div className="flex items-center gap-2">
-          <img src={previewUrl} alt={pendingAttachment.filename} className="h-14 w-14 rounded-md object-cover" />
+          <img
+            src={previewUrl}
+            alt={pendingAttachment.filename}
+            className="h-14 w-14 rounded-md object-cover"
+          />
           <button
             type="button"
             aria-label="Remove attachment"
@@ -88,6 +120,7 @@ export function Composer({
           </button>
         </div>
       )}
+      {uploadError && <span className="text-xs text-red-600">{uploadError}</span>}
       <div className="flex items-center gap-2">
         {allowVisibilityToggle && (
           <div className="flex shrink-0 gap-1" role="radiogroup" aria-label="Message visibility">

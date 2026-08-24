@@ -59,9 +59,33 @@ describe('MessageBody', () => {
       <MessageBody
         authorType="agent"
         body="screenshot.png"
-        attachment={{ id: 'a1', filename: 'screenshot.png', mimeType: 'image/png', byteSize: 3, url: 'https://example.test/x' }}
+        attachment={{
+          id: 'a1',
+          filename: 'screenshot.png',
+          mimeType: 'image/png',
+          byteSize: 3,
+          url: 'https://example.test/x',
+        }}
       />,
     );
+    expect(screen.getByAltText('screenshot.png')).toHaveAttribute('src', 'https://example.test/x');
+  });
+
+  it('renders both the typed text and the image when a message has real text and an attachment', () => {
+    render(
+      <MessageBody
+        authorType="agent"
+        body="here's the fix, see the red arrow"
+        attachment={{
+          id: 'a1',
+          filename: 'screenshot.png',
+          mimeType: 'image/png',
+          byteSize: 3,
+          url: 'https://example.test/x',
+        }}
+      />,
+    );
+    expect(screen.getByText("here's the fix, see the red arrow")).toBeInTheDocument();
     expect(screen.getByAltText('screenshot.png')).toHaveAttribute('src', 'https://example.test/x');
   });
 
@@ -70,7 +94,13 @@ describe('MessageBody', () => {
       <MessageBody
         authorType="agent"
         body="screenshot.png"
-        attachment={{ id: 'a1', filename: 'screenshot.png', mimeType: 'image/png', byteSize: 3, url: null }}
+        attachment={{
+          id: 'a1',
+          filename: 'screenshot.png',
+          mimeType: 'image/png',
+          byteSize: 3,
+          url: null,
+        }}
       />,
     );
     expect(screen.getByText(/Attachment unavailable/)).toBeInTheDocument();

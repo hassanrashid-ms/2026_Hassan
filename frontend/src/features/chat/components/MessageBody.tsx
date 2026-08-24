@@ -41,12 +41,23 @@ export function MessageBody({
   /** The bubble behind this body is a dark, on-brand background (e.g. the agent-console's own-message bubble) rather than the light `bg`/`surface` an article page renders on — so markdown body text should render in the light `accent-fg` colour instead of the default dark `text`. */
   dark?: boolean;
 }) {
-  const text = !MARKDOWN_AUTHORS.has(authorType) ? <>{body}</> : <ArticleBody markdown={body} dark={dark} />;
+  const text = !MARKDOWN_AUTHORS.has(authorType) ? (
+    <>{body}</>
+  ) : (
+    <ArticleBody markdown={body} dark={dark} />
+  );
 
   if (!attachment) return text;
 
+  // When a send carries no typed text, the server stores the filename as the
+  // body (see sendAgentMessage) purely so the row always has non-empty text.
+  // That's an implementation detail, not something the agent actually typed —
+  // showing it a second time above the image would read as a duplicated caption.
+  const hasTypedText = body.trim().length > 0 && body !== attachment.filename;
+
   return (
     <div className="flex flex-col gap-1">
+      {hasTypedText && text}
       {attachment.url ? (
         <img
           src={attachment.url}
@@ -57,7 +68,9 @@ export function MessageBody({
           }}
         />
       ) : (
-        <span className="text-xs italic opacity-75">Attachment unavailable — {attachment.filename}</span>
+        <span className="text-xs italic opacity-75">
+          Attachment unavailable — {attachment.filename}
+        </span>
       )}
     </div>
   );

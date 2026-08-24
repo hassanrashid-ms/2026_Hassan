@@ -33,7 +33,10 @@ import {
   reconcilePending,
   type PendingMessage,
 } from '../../../../../features/chat/hooks/chatReconcile.ts';
-import { Composer, type UploadedAttachment } from '../../../../../features/chat/components/Composer.tsx';
+import {
+  Composer,
+  type UploadedAttachment,
+} from '../../../../../features/chat/components/Composer.tsx';
 import type { ChatMessage } from '../../../../../features/chat/components/types.ts';
 import { Badge } from '../../../components/ui/badge.tsx';
 import { Button } from '../../../components/ui/button.tsx';
@@ -512,6 +515,10 @@ export function ThreadPanel({
           was the most visible part of the lag it was meant to explain. Each
           send is independent, so a second one need not wait on the first. */}
       <Composer
+        // Known limitation (see the design doc's "Out of scope"): a `public`
+        // attachment sent here is not yet visible to the player — the webview
+        // read path doesn't join `attachment` until that phase ships. Only
+        // other agents viewing this thread see the image today.
         onSend={(body, visibility, attachment) => send.mutate({ body, visibility, attachment })}
         allowVisibilityToggle
         allowAttachments
