@@ -9,7 +9,7 @@ import {
 } from '../../shared/storage/presign.ts';
 import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts';
 
-function extensionFor(contentType: string): string {
+export function extensionFor(contentType: string): string {
   switch (contentType) {
     case 'image/png':
       return 'png';

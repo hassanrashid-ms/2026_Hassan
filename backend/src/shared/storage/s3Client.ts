@@ -35,8 +35,7 @@ export function getS3Client(): S3Client {
   // rely on SDK-computed checksums anywhere in this app.
   cached.middlewareStack.add(
     (next) => async (args) => {
-      const headers = (args.request as { headers?: Record<string, string> } | undefined)
-        ?.headers;
+      const headers = (args.request as { headers?: Record<string, string> } | undefined)?.headers;
       if (headers) {
         for (const name of Object.keys(headers)) {
           const lower = name.toLowerCase();

@@ -4,7 +4,13 @@ import type { z } from 'zod';
 import { MarkAgentReadBody, SendAgentMessageBody, type AgentMessageView } from '@support/types';
 import { postMessage, toAgentView, toPlayerView } from '../../domain/conversations/index.ts';
 import { attachment, conversation, message } from '../../shared/db/schema/index.ts';
-import { copyObject, deleteObject, headObject } from '../../shared/storage/presign.ts';
+import {
+  ALLOWED_IMAGE_MIME_TYPES,
+  MAX_ATTACHMENT_BYTES,
+  copyObject,
+  deleteObject,
+  headObject,
+} from '../../shared/storage/presign.ts';
 import { withWorkspace } from '../../shared/db/withWorkspace.ts';
 import { appendEvent } from '../../shared/events/appendEvent.ts';
 import {
@@ -14,6 +20,8 @@ import {
 } from '../../shared/realtime/emit.ts';
 import { getIo } from '../../shared/realtime/socketServer.ts';
 import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts';
+import { extensionFor } from './uploadsService.ts';
+import { logger } from '../../shared/logging/logger.ts';
 
 export type SendAgentMessageResult =
   | { outcome: 'ok'; message: AgentMessageView }
@@ -30,6 +38,16 @@ export async function sendAgentMessage(
   let pendingKeyToDelete: string | null = null;
 
   if (body.attachment) {
+    // Ownership check on a fully client-supplied key: only this agent's own
+    // pending prefix may be claimed. Wrong-tenant/wrong-agent keys collapse
+    // into the same outcome as "missing" — same "404 not 403" convention as
+    // cancelUpload — so a claim attempt never reveals whether some other
+    // agent's object exists at all.
+    const expectedPrefix = `pending/${ctx.workspaceId}/${ctx.agentId}/`;
+    if (!body.attachment.key.startsWith(expectedPrefix)) {
+      return { outcome: 'attachment_not_found' };
+    }
+
     const real = await headObject(body.attachment.key);
     if (!real) return { outcome: 'attachment_not_found' };
     if (
@@ -38,8 +56,22 @@ export async function sendAgentMessage(
     ) {
       return { outcome: 'attachment_mismatch' };
     }
-    const extension = body.attachment.key.slice(body.attachment.key.lastIndexOf('.'));
-    claimedDestKey = `ws/${ctx.workspaceId}/attachments/${randomUUID()}${extension}`;
+    // Defense-in-depth: re-check the allowlist/size cap against the real,
+    // HEAD-verified values at claim time too, not only at presign time —
+    // presign-time checks alone would trust whatever the object turned out
+    // to actually be.
+    if (
+      !ALLOWED_IMAGE_MIME_TYPES.includes(
+        real.contentType as (typeof ALLOWED_IMAGE_MIME_TYPES)[number],
+      ) ||
+      real.contentLength > MAX_ATTACHMENT_BYTES
+    ) {
+      return { outcome: 'attachment_mismatch' };
+    }
+
+    // Server-generated key only: the extension comes from the HEAD-verified
+    // content type, never parsed out of the client-supplied key.
+    claimedDestKey = `ws/${ctx.workspaceId}/attachments/${randomUUID()}.${extensionFor(real.contentType)}`;
     await copyObject({ sourceKey: body.attachment.key, destKey: claimedDestKey });
     pendingKeyToDelete = body.attachment.key;
   }
@@ -116,7 +148,20 @@ export async function sendAgentMessage(
   // (still cancellable/reusable) rather than deleting it out from under a
   // send that didn't actually happen.
   if (result.outcome === 'ok' && pendingKeyToDelete) {
-    await deleteObject(pendingKeyToDelete);
+    try {
+      await deleteObject(pendingKeyToDelete);
+    } catch (error) {
+      // Genuinely best-effort: the message already committed, so a transient
+      // storage error here must never surface as a failed send to the agent
+      // (that invites an accidental duplicate resend of a message that went
+      // through). Log and move on.
+      logger.warn(
+        'attachments',
+        `failed to delete pending object ${pendingKeyToDelete} after claim: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
   }
 
   if (result.outcome !== 'ok') return result;

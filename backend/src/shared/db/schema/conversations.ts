@@ -132,30 +132,37 @@ export const message = pgTable(
   ],
 );
 
-export const attachment = pgTable('attachment', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  workspaceId: uuid('workspace_id')
-    .notNull()
-    .references(() => workspace.id, { onDelete: 'restrict' }),
-  /**
-   * Exactly one parent, deliberately not polymorphic — see
-   * docs/specs/2026-08-24-minio-attachments-agent-chat-design.md §4. No row
-   * exists until the owning message sends: an abandoned upload is bytes in
-   * `pending/`, never a row here.
-   */
-  messageId: uuid('message_id')
-    .notNull()
-    .references(() => message.id, { onDelete: 'restrict' }),
-  /** `ws/{workspaceId}/attachments/{uuid}.{ext}` once claimed. Never a URL — reads sign this fresh. */
-  storageKey: text('storage_key').notNull(),
-  /** The real, client-declared original filename — used for display only, never trusted for content type or size. */
-  filename: text('filename').notNull(),
-  /** Verified via HEAD at claim time, never the client-declared value. */
-  mimeType: text('mime_type').notNull(),
-  /** Verified via HEAD at claim time, never the client-declared value. */
-  byteSize: integer('byte_size').notNull(),
-  createdAt: timestamp('created_at', tz).notNull().defaultNow(),
-});
+export const attachment = pgTable(
+  'attachment',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspace.id, { onDelete: 'restrict' }),
+    /**
+     * Exactly one parent, deliberately not polymorphic — see
+     * docs/specs/2026-08-24-minio-attachments-agent-chat-design.md §4. No row
+     * exists until the owning message sends: an abandoned upload is bytes in
+     * `pending/`, never a row here.
+     */
+    messageId: uuid('message_id')
+      .notNull()
+      .references(() => message.id, { onDelete: 'restrict' }),
+    /** `ws/{workspaceId}/attachments/{uuid}.{ext}` once claimed. Never a URL — reads sign this fresh. */
+    storageKey: text('storage_key').notNull(),
+    /** The real, client-declared original filename — used for display only, never trusted for content type or size. */
+    filename: text('filename').notNull(),
+    /** Client-declared value, proven equal to a HEAD-verified read at claim time — see sendAgentMessage's mismatch check — never stored unverified. */
+    mimeType: text('mime_type').notNull(),
+    /** Client-declared value, proven equal to a HEAD-verified read at claim time — see sendAgentMessage's mismatch check — never stored unverified. */
+    byteSize: integer('byte_size').notNull(),
+    createdAt: timestamp('created_at', tz).notNull().defaultNow(),
+  },
+  (t) => [
+    // At most one attachment per message — the read path's leftJoin assumes this.
+    uniqueIndex('attachment_message_id_uk').on(t.messageId),
+  ],
+);
 
 /**
  * One row per resolution attempt. Cycle 1 opens with the conversation; every

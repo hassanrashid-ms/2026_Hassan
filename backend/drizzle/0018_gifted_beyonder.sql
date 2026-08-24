@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "attachment_message_id_uk" ON "attachment" USING btree ("message_id");

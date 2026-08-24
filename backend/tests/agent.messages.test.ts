@@ -122,7 +122,11 @@ describe('POST /agent/messages with an attachment', () => {
   async function uploadFixtureImage(workspaceId: string, agentId: string) {
     const key = `pending/${workspaceId}/${agentId}/${crypto.randomUUID()}.png`;
     const body = Buffer.from('fake-png-bytes');
-    const { url } = await presignPutObject({ key, contentType: 'image/png', contentLength: body.length });
+    const { url } = await presignPutObject({
+      key,
+      contentType: 'image/png',
+      contentLength: body.length,
+    });
     await fetch(url, {
       method: 'PUT',
       headers: { 'Content-Type': 'image/png', 'Content-Length': String(body.length) },
@@ -180,6 +184,86 @@ describe('POST /agent/messages with an attachment', () => {
       })
       .expect(422);
     expect(res.body.error.code).toBe('attachment_not_found');
+  });
+
+  it("422s with attachment_not_found when the key belongs to a different agent's pending prefix", async () => {
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
+    const { token } = await setupAssignedAgent(workspaceId, conversationId);
+    const otherAgentId = crypto.randomUUID();
+    const key = await uploadFixtureImage(workspaceId, otherAgentId);
+
+    const res = await request(app)
+      .post('/messages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        conversation_id: conversationId,
+        body: '',
+        attachment: { key, filename: 'screenshot.png', mime_type: 'image/png', byte_size: 14 },
+      })
+      .expect(422);
+    expect(res.body.error.code).toBe('attachment_not_found');
+  });
+
+  it("422s with attachment_not_found when the key belongs to a different workspace's pending prefix", async () => {
+    const workspaceId = await seedWorkspace();
+    const otherWorkspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
+    const { agentId, token } = await setupAssignedAgent(workspaceId, conversationId);
+    const key = await uploadFixtureImage(otherWorkspaceId, agentId);
+
+    const res = await request(app)
+      .post('/messages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        conversation_id: conversationId,
+        body: '',
+        attachment: { key, filename: 'screenshot.png', mime_type: 'image/png', byte_size: 14 },
+      })
+      .expect(422);
+    expect(res.body.error.code).toBe('attachment_not_found');
+  });
+
+  it('422s with attachment_mismatch when the real object exceeds the size cap even though the declared value agrees', async () => {
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
+    const { agentId, token } = await setupAssignedAgent(workspaceId, conversationId);
+
+    // Constructed directly via presignPutObject, bypassing the normal
+    // /agent/uploads endpoint (which already blocks an oversized declared
+    // byte_size at presign time) — this proves the claim-time re-check is
+    // real defense-in-depth, not just a mirror of the presign-time check.
+    const key = `pending/${workspaceId}/${agentId}/${crypto.randomUUID()}.png`;
+    const oversizedBody = Buffer.alloc(10 * 1024 * 1024 + 1, 1);
+    const { url } = await presignPutObject({
+      key,
+      contentType: 'image/png',
+      contentLength: oversizedBody.length,
+    });
+    await fetch(url, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'image/png', 'Content-Length': String(oversizedBody.length) },
+      body: oversizedBody,
+    });
+
+    const res = await request(app)
+      .post('/messages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        conversation_id: conversationId,
+        body: '',
+        attachment: {
+          key,
+          filename: 'screenshot.png',
+          mime_type: 'image/png',
+          byte_size: oversizedBody.length,
+        },
+      })
+      .expect(422);
+    expect(res.body.error.code).toBe('attachment_mismatch');
   });
 
   it('422s with attachment_mismatch when declared byte_size disagrees with the real object', async () => {
