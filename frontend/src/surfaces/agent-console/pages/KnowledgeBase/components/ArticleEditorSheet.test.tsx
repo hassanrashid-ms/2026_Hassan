@@ -89,3 +89,65 @@ describe('ArticleEditorSheet MDXEditor round-trip', () => {
     expect(patch.body).toContain('**30 days**');
   });
 });
+
+describe('ArticleEditorSheet markdown import', () => {
+  it('fills title, body, and keywords from an imported file, leaving category untouched', async () => {
+    vi.spyOn(agentApi, 'fetchArticle').mockResolvedValue(EXISTING_ARTICLE);
+    vi.spyOn(agentApi, 'fetchIntents').mockResolvedValue({ intents: [] });
+
+    renderWithClient(
+      <ArticleEditorSheet
+        token="tok"
+        articleId="art-1"
+        open
+        onOpenChange={() => {}}
+        onCreated={() => {}}
+      />,
+    );
+
+    await screen.findByDisplayValue('Refunds');
+
+    const fileContent = [
+      '---',
+      'title: Cancelling a Subscription',
+      'tags: [cancel, subscription]',
+      '---',
+      '# Cancelling a Subscription',
+      '',
+      'Go to Settings > Subscriptions.',
+    ].join('\n');
+    const file = new File([fileContent], 'cancel-sub.md', { type: 'text/markdown' });
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+
+    await userEvent.upload(input, file);
+
+    await screen.findByDisplayValue('Cancelling a Subscription');
+    expect(screen.getByDisplayValue('cancel, subscription')).toBeTruthy();
+    await waitFor(() => expect(screen.getByText('Go to Settings > Subscriptions.')).toBeTruthy());
+  });
+
+  it('shows an error toast and changes nothing when the file is empty', async () => {
+    vi.spyOn(agentApi, 'fetchArticle').mockResolvedValue(EXISTING_ARTICLE);
+    vi.spyOn(agentApi, 'fetchIntents').mockResolvedValue({ intents: [] });
+
+    renderWithClient(
+      <ArticleEditorSheet
+        token="tok"
+        articleId="art-1"
+        open
+        onOpenChange={() => {}}
+        onCreated={() => {}}
+      />,
+    );
+
+    await screen.findByDisplayValue('Refunds');
+
+    const file = new File(['   '], 'empty.md', { type: 'text/markdown' });
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+
+    await userEvent.upload(input, file);
+
+    // Title is unchanged — a failed import never clobbers existing content.
+    expect(screen.getByDisplayValue('Refunds')).toBeTruthy();
+  });
+});

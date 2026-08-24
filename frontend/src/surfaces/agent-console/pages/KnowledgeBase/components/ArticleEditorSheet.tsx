@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AgentArticleDetail, IntentView } from '@support/types';
 import {
@@ -25,7 +26,13 @@ import {
   updateArticle,
   generateKeywords,
 } from '../../../api/agentApi.ts';
-import { canEditFields, canPublish, parseKeywordsInput } from '../articleForm.ts';
+import {
+  canEditFields,
+  canPublish,
+  EmptyMarkdownFileError,
+  parseKeywordsInput,
+  parseMarkdownImport,
+} from '../articleForm.ts';
 import { Button } from '../../../components/ui/button.tsx';
 import { Input } from '../../../components/ui/input.tsx';
 import {
@@ -44,7 +51,7 @@ import {
 } from '../../../components/ui/sheet.tsx';
 import { Skeleton } from '../../../components/ui/skeleton.tsx';
 import { Switch } from '../../../components/ui/switch.tsx';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Upload } from 'lucide-react';
 
 type Draft = { title: string; body: string; keywordsInput: string; intentId: string };
 
@@ -159,8 +166,35 @@ function ArticleEditorForm({
   // document from scratch, which was clobbering multi-block operations
   // (list-ifying a multi-line selection only applied to the last line) and
   // corrupting the link dialog's selection-anchor rect. It only needs to
-  // change when switching articles, which remounting already handles.
-  const [editorSeed] = useState(() => article?.body ?? '');
+  // change when switching articles or importing a file, both of which force
+  // a remount via `editorVersion` in the key below.
+  const [editorSeed, setEditorSeed] = useState(() => article?.body ?? '');
+  const [editorVersion, setEditorVersion] = useState(0);
+  const importInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImportFile = async (file: File) => {
+    try {
+      const content = await file.text();
+      const imported = parseMarkdownImport(content, file.name);
+      setDraft({
+        title: imported.title,
+        body: imported.body,
+        keywordsInput: imported.keywordsInput,
+        intentId: draft.intentId,
+      });
+      setEditorSeed(imported.body);
+      setEditorVersion((v) => v + 1);
+      if (imported.frontmatterError) {
+        toast.error("Couldn't parse frontmatter — imported the file as plain markdown.");
+      }
+    } catch (error) {
+      if (error instanceof EmptyMarkdownFileError) {
+        toast.error('File is empty.');
+      } else {
+        toast.error('Could not read that file.');
+      }
+    }
+  };
 
   const generateKeywordsMutation = useMutation({
     mutationFn: () => generateKeywords(token, { title: draft.title, body: draft.body }),
@@ -218,6 +252,30 @@ function ArticleEditorForm({
             {state === 'published' ? ' — only Archive is available.' : '.'}
           </p>
         )}
+
+        <div className="flex justify-end">
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".md,.markdown"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = '';
+              if (file) void handleImportFile(file);
+            }}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={!editable}
+            onClick={() => importInputRef.current?.click()}
+          >
+            <Upload className="mr-2 h-4 w-4" />
+            Import from Markdown
+          </Button>
+        </div>
 
         <div className="flex flex-col gap-1.5">
           <label className="text-xs font-medium text-muted">Title</label>
@@ -294,6 +352,7 @@ function ArticleEditorForm({
           <label className="text-xs font-medium text-muted">Body</label>
           <div className="min-h-64 rounded-md border border-slate-200">
             <MDXEditor
+              key={editorVersion}
               markdown={editorSeed}
               readOnly={!editable}
               onChange={(markdown) => setDraft((d) => ({ ...d, body: markdown }))}
