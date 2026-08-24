@@ -7,6 +7,7 @@ import {
   getConversationContextHandler,
   getConversationDetailHandler,
   getConversationMessagesHandler,
+  getWorkspaceWorkloadHandler,
   listConversationsHandler,
   reclassifyConversationHandler,
   reassignConversationHandler,
@@ -16,6 +17,7 @@ import {
 
 export const conversationsRouter = Router();
 conversationsRouter.get('/conversations', listConversationsHandler);
+conversationsRouter.get('/workload', requireTeamLeadOrAdmin, getWorkspaceWorkloadHandler);
 conversationsRouter.get('/conversations/:id', getConversationDetailHandler);
 conversationsRouter.get('/conversations/:id/context', getConversationContextHandler);
 conversationsRouter.post('/conversations/:id/claim', claimConversationHandler);

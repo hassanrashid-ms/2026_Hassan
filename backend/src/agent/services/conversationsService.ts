@@ -13,6 +13,7 @@ import {
   conversationTag,
   message,
   player,
+  resolutionCycle,
   subintent,
   workspaceMember,
 } from '../../shared/db/schema/index.ts';
@@ -380,6 +381,74 @@ export async function reclassifyConversation(
       changes: [{ field: 'subintent_id', before: conv.subintentId, after: subintentId }],
     });
     return { ok: true, subintentId, status: conv.status };
+  });
+}
+
+export type WorkspaceWorkloadAgent = {
+  agentId: string;
+  agentName: string;
+  openCount: number;
+  resolved7d: number;
+};
+
+export type WorkspaceWorkload = { agents: WorkspaceWorkloadAgent[] };
+
+export async function getWorkspaceWorkload(ctx: AgentContext): Promise<WorkspaceWorkload> {
+  return withWorkspace(ctx.workspaceId, async (tx) => {
+    const openRows = await tx
+      .select({
+        agentId: conversation.assignedAgentId,
+        count: sql<number>`count(*)`,
+      })
+      .from(conversation)
+      .where(
+        and(
+          isNotNull(conversation.assignedAgentId),
+          inArray(conversation.status, ACTIVE_AGENT_STATUSES),
+        ),
+      )
+      .groupBy(conversation.assignedAgentId);
+
+    const resolvedRows = await tx
+      .select({
+        agentId: conversation.assignedAgentId,
+        count: sql<number>`count(*)`,
+      })
+      .from(resolutionCycle)
+      .innerJoin(conversation, eq(conversation.id, resolutionCycle.conversationId))
+      .where(
+        and(
+          sql`${resolutionCycle.resolvedAt} >= now() - interval '7 days'`,
+          isNotNull(conversation.assignedAgentId),
+        ),
+      )
+      .groupBy(conversation.assignedAgentId);
+
+    const roster = await tx
+      .select({ agentId: workspaceMember.agentId, agentName: agent.displayName })
+      .from(workspaceMember)
+      .innerJoin(agent, eq(agent.id, workspaceMember.agentId))
+      .where(
+        and(
+          eq(workspaceMember.workspaceId, ctx.workspaceId),
+          inArray(workspaceMember.role, ['agent', 'team_lead']),
+          isNull(workspaceMember.deactivatedAt),
+        ),
+      );
+
+    const openByAgent = new Map(openRows.map((r) => [r.agentId as string, Number(r.count)]));
+    const resolvedByAgent = new Map(
+      resolvedRows.map((r) => [r.agentId as string, Number(r.count)]),
+    );
+
+    const agents: WorkspaceWorkloadAgent[] = roster.map((member) => ({
+      agentId: member.agentId,
+      agentName: member.agentName,
+      openCount: openByAgent.get(member.agentId) ?? 0,
+      resolved7d: resolvedByAgent.get(member.agentId) ?? 0,
+    }));
+
+    return { agents };
   });
 }
 

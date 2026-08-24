@@ -196,6 +196,27 @@ export function markAgentMessagesRead(
   });
 }
 
+/**
+ * `/agent/workload` has no backend implementation yet — this type is a local
+ * frontend-side contract, not sourced from `@support/types`, since that
+ * package is the SDK↔server wire contract and this endpoint doesn't exist on
+ * the server side yet.
+ */
+export type AgentWorkloadEntry = {
+  agentId: string;
+  displayName: string;
+  open: number;
+  resolved7d: number;
+};
+
+export type AgentWorkloadResponse = {
+  agents: AgentWorkloadEntry[];
+};
+
+export function fetchWorkload(token: string): Promise<AgentWorkloadResponse> {
+  return call('/agent/workload', token);
+}
+
 export function fetchIntents(token: string): Promise<IntentsResponse> {
   return call('/agent/intents', token);
 }

@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { Inbox as InboxIcon, BookOpen, ClipboardList, LogOut, Settings, Tags } from 'lucide-react';
+import {
+  Inbox as InboxIcon,
+  BookOpen,
+  ClipboardList,
+  LogOut,
+  Settings,
+  Tags,
+  Gauge,
+} from 'lucide-react';
 // agent-console.css is imported HERE and nowhere else — never from main.tsx or
 // any statically-reachable module, so its Tailwind preflight never leaks into
 // the webview surface (mirrors WebviewShell.tsx's isolation of webview.css).
@@ -30,6 +38,10 @@ const NAV_ITEMS = [
 // (requireWorkspaceRole('team_lead', 'admin') on formsRouter), so hiding the
 // link here is UX, not the enforcement point.
 const FORMS_NAV_ITEM = { to: '/forms', label: 'Forms', icon: ClipboardList };
+
+// Team Lead + Admin only, same gate as Forms above — an Agent would 403 at
+// the API anyway once /agent/workload is implemented.
+const WORKLOAD_NAV_ITEM = { to: '/workload', label: 'Workload', icon: Gauge };
 
 // Admin-only in the permission matrix ("Edit bot prompt or rules" is Admin).
 // Hiding the link here is UX, not the enforcement point — the API still
@@ -72,7 +84,7 @@ export function AgentConsoleShell() {
   if (!session) return null;
 
   const navItems = [
-    ...(canBuildForms(session) ? [...NAV_ITEMS, FORMS_NAV_ITEM] : NAV_ITEMS),
+    ...(canBuildForms(session) ? [...NAV_ITEMS, FORMS_NAV_ITEM, WORKLOAD_NAV_ITEM] : NAV_ITEMS),
     ...(isAdmin(session) ? [BOT_CONFIG_NAV_ITEM] : []),
   ];
 

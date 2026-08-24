@@ -1,8 +1,15 @@
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { AgentConsoleShell } from './AgentConsoleShell.tsx';
-import { loadAgentSession } from '../lib/agentSession.ts';
+import { loadAgentSession, type StoredAgentSession } from '../lib/agentSession.ts';
+
+vi.mock('../lib/agentSession.ts', async () => {
+  const actual = await vi.importActual<typeof import('../lib/agentSession.ts')>(
+    '../lib/agentSession.ts',
+  );
+  return { ...actual, loadAgentSession: vi.fn(actual.loadAgentSession) };
+});
 
 function setLocation(url: string) {
   window.history.pushState(null, '', url);
@@ -51,5 +58,41 @@ describe('AgentConsoleShell console-boot bootstrap', () => {
     renderShell();
 
     expect(await screen.findByText('Login Screen')).toBeInTheDocument();
+  });
+});
+
+const AGENT_SESSION: StoredAgentSession = {
+  token: 't',
+  agentId: 'a1',
+  displayName: 'Agent A',
+  workspaceSlug: 'ws',
+  role: 'agent',
+};
+const TEAM_LEAD_SESSION: StoredAgentSession = { ...AGENT_SESSION, role: 'team_lead' };
+const ADMIN_SESSION: StoredAgentSession = { ...AGENT_SESSION, role: 'admin' };
+
+describe('AgentConsoleShell Workload nav gating', () => {
+  it('hides the Workload nav item for an agent role session', () => {
+    vi.mocked(loadAgentSession).mockReturnValue(AGENT_SESSION);
+
+    renderShell();
+
+    expect(screen.queryByRole('link', { name: /workload/i })).not.toBeInTheDocument();
+  });
+
+  it('shows the Workload nav item for a team_lead role session', () => {
+    vi.mocked(loadAgentSession).mockReturnValue(TEAM_LEAD_SESSION);
+
+    renderShell();
+
+    expect(screen.getByRole('link', { name: /workload/i })).toBeInTheDocument();
+  });
+
+  it('shows the Workload nav item for an admin role session', () => {
+    vi.mocked(loadAgentSession).mockReturnValue(ADMIN_SESSION);
+
+    renderShell();
+
+    expect(screen.getByRole('link', { name: /workload/i })).toBeInTheDocument();
   });
 });

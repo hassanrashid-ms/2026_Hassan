@@ -33,6 +33,9 @@ const Forms = lazy(async () => ({
 const Taxonomy = lazy(async () => ({
   default: (await import('../surfaces/agent-console/pages/Taxonomy/Taxonomy.tsx')).Taxonomy,
 }));
+const Workload = lazy(async () => ({
+  default: (await import('../surfaces/agent-console/pages/Workload/Workload.tsx')).Workload,
+}));
 const BotConfigPage = lazy(async () => ({
   default: (await import('../surfaces/agent-console/pages/BotConfig/BotConfig.tsx')).BotConfig,
 }));
@@ -86,6 +89,7 @@ export function AppRoutes() {
         <Route path="forms" element={<Forms />} />
         <Route path="forms/:id" element={<Forms />} />
         <Route path="taxonomy" element={<Taxonomy />} />
+        <Route path="workload" element={<Workload />} />
         <Route path="bot-config" element={<BotConfigPage />} />
         <Route path="*" element={<AgentNotFound />} />
       </Route>

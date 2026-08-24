@@ -547,6 +547,33 @@ registry.registerPath({
   },
 });
 
+const AgentWorkspaceWorkloadSchema = z.object({
+  agents: z.array(
+    z.object({
+      agentId: z.uuid(),
+      agentName: z.string(),
+      openCount: z.number().int(),
+      resolved7d: z.number().int(),
+    }),
+  ),
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/agent/workload',
+  summary: 'Agent Workspace Workload',
+  description:
+    'Per-agent open ticket counts and 7-day resolved counts for every active agent/team lead in the workspace. Team lead or admin role required.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  responses: {
+    200: {
+      description: 'Workspace workload by agent',
+      content: { 'application/json': { schema: AgentWorkspaceWorkloadSchema } },
+    },
+    403: { description: 'Forbidden — team lead or admin role required' },
+  },
+});
+
 const AgentSubintentSchema = z
   .object({ intent_name: z.string(), subintent_name: z.string() })
   .nullable();

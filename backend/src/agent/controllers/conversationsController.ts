@@ -11,6 +11,7 @@ import { toAgentView, toPlayerView } from '../../domain/conversations/index.ts';
 import {
   claimConversation,
   getAgentConversationMessages,
+  getWorkspaceWorkload,
   listConversations,
   reclassifyConversation,
   reassignConversation,
@@ -297,6 +298,12 @@ export const getConversationDetailHandler: RequestHandler = async (req, res) => 
     return;
   }
   res.status(200).json(detail);
+};
+
+export const getWorkspaceWorkloadHandler: RequestHandler = async (req, res) => {
+  const ctx = req.agent!;
+  const workload = await getWorkspaceWorkload(ctx);
+  res.status(200).json(workload);
 };
 
 export const getConversationContextHandler: RequestHandler = async (req, res) => {
