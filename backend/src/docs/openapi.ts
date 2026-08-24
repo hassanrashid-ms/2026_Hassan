@@ -708,6 +708,30 @@ registry.registerPath({
 })
 
 registry.registerPath({
+  method: 'patch',
+  path: '/agent/conversations/{id}/subintent',
+  summary: 'Agent Reclassify Conversation',
+  description: 'Reclassifies a conversation to a different subintent.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: {
+    params: z.object({ id: z.uuid() }),
+    body: { content: { 'application/json': { schema: z.object({ subintentId: z.uuid() }) } } },
+  },
+  responses: {
+    200: {
+      description: 'Reclassify result',
+      content: {
+        'application/json': {
+          schema: z.object({ reclassified: z.boolean() }),
+        },
+      },
+    },
+    404: { description: 'Conversation not found' },
+    409: { description: 'Target subintent does not exist or is archived' },
+  },
+})
+
+registry.registerPath({
   method: 'post',
   path: '/agent/conversations/{id}/ask-resolved',
   summary: 'Agent Ask If Resolved',

@@ -8,6 +8,7 @@ import {
   getConversationDetailHandler,
   getConversationMessagesHandler,
   listConversationsHandler,
+  reclassifyConversationHandler,
   reassignConversationHandler,
   takeOverConversationHandler,
   unescalateConversationHandler,
@@ -24,3 +25,4 @@ conversationsRouter.post('/conversations/:id/ask-resolved', askResolvedHandler)
 conversationsRouter.post('/conversations/:id/escalate', escalateConversationHandler)
 conversationsRouter.post('/conversations/:id/unescalate', unescalateConversationHandler)
 conversationsRouter.patch('/conversations/:id/assign', requireTeamLeadOrAdmin, reassignConversationHandler)
+conversationsRouter.patch('/conversations/:id/subintent', reclassifyConversationHandler)

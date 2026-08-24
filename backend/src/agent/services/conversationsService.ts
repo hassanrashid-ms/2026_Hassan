@@ -2,6 +2,7 @@ import { and, desc, eq, exists, ilike, inArray, isNull, isNotNull, or, sql } fro
 import type { AgentConversationSummary, AgentMessageView } from '@support/types'
 import { postMessage, toAgentView, type PostedMessageRow } from '../../domain/conversations/index.ts'
 import { appendEvent } from '../../shared/events/appendEvent.ts'
+import { appendChangeLog } from '../../shared/changeLog/appendChangeLog.ts'
 import { agent, conversation, conversationTag, message, player, subintent, workspaceMember } from '../../shared/db/schema/index.ts'
 import { withWorkspace, type Tx } from '../../shared/db/withWorkspace.ts'
 import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts'
@@ -229,6 +230,47 @@ export async function reassignConversation(ctx: AgentContext, conversationId: st
     })
     const posted = await postReassignedNotice(tx, ctx, conversationId, targetAgentId)
     return { ok: true, status: row!.status, posted }
+  })
+}
+
+export type ReclassifyResult =
+  | { ok: true; subintentId: string; status: string }
+  | { ok: false; reason: 'not_found' | 'invalid_subintent' }
+
+export async function reclassifyConversation(ctx: AgentContext, conversationId: string, subintentId: string): Promise<ReclassifyResult> {
+  return withWorkspace(ctx.workspaceId, async (tx) => {
+    const [conv] = await tx
+      .select({ id: conversation.id, subintentId: conversation.subintentId, status: conversation.status })
+      .from(conversation)
+      .where(eq(conversation.id, conversationId))
+      .limit(1)
+    if (!conv) return { ok: false, reason: 'not_found' }
+
+    const [target] = await tx
+      .select({ id: subintent.id })
+      .from(subintent)
+      .where(and(eq(subintent.id, subintentId), eq(subintent.workspaceId, ctx.workspaceId), isNull(subintent.archivedAt)))
+      .limit(1)
+    if (!target) return { ok: false, reason: 'invalid_subintent' }
+
+    await tx.update(conversation).set({ subintentId, classificationSource: 'agent' }).where(eq(conversation.id, conversationId))
+
+    await appendEvent(tx, {
+      workspaceId: ctx.workspaceId,
+      type: 'conversation_reclassified',
+      conversationId,
+      actorId: ctx.agentId,
+      actorType: 'agent',
+      payload: { from_subintent_id: conv.subintentId, to_subintent_id: subintentId, classification_source: 'agent' },
+    })
+    await appendChangeLog(tx, {
+      workspaceId: ctx.workspaceId,
+      entityType: 'conversation',
+      entityId: conversationId,
+      actorId: ctx.agentId,
+      changes: [{ field: 'subintent_id', before: conv.subintentId, after: subintentId }],
+    })
+    return { ok: true, subintentId, status: conv.status }
   })
 }
 

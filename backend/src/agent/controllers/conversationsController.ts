@@ -4,7 +4,7 @@ import { sendError } from '../../errors.ts'
 import { getIo } from '../../shared/realtime/socketServer.ts'
 import { emitInboxChanged, emitMessageToRooms, emitPhaseChanged } from '../../shared/realtime/emit.ts'
 import { toAgentView, toPlayerView } from '../../domain/conversations/index.ts'
-import { claimConversation, getAgentConversationMessages, listConversations, reassignConversation, takeOverConversation } from '../services/conversationsService.ts'
+import { claimConversation, getAgentConversationMessages, listConversations, reclassifyConversation, reassignConversation, takeOverConversation } from '../services/conversationsService.ts'
 import { askResolved } from '../services/resolutionService.ts'
 import { escalateConversation, unescalateConversation } from '../services/escalationService.ts'
 import { getConversationContext, getConversationDetail } from '../services/conversationContextService.ts'
@@ -95,6 +95,31 @@ export const reassignConversationHandler: RequestHandler = async (req, res) => {
   emitInboxChanged(getIo(), ctx.workspaceId, params.data.id, result.status)
   emitMessageToRooms(getIo(), params.data.id, toPlayerView(result.posted), toAgentView(result.posted))
   res.status(200).json({ reassigned: true })
+}
+
+const ReclassifyBody = z.object({ subintentId: z.uuid() })
+
+const RECLASSIFY_ERRORS = {
+  not_found: [404, 'Conversation not found.'],
+  invalid_subintent: [409, 'Target subintent does not exist or is archived.'],
+} as const
+
+export const reclassifyConversationHandler: RequestHandler = async (req, res) => {
+  const ctx = req.agent!
+  const params = ConversationIdParams.safeParse(req.params)
+  const body = ReclassifyBody.safeParse(req.body)
+  if (!params.success || !body.success) {
+    sendError(res, 422, 'invalid_request', 'id must be a uuid, body must be { subintentId: uuid }.')
+    return
+  }
+  const result = await reclassifyConversation(ctx, params.data.id, body.data.subintentId)
+  if (!result.ok) {
+    const [status, message] = RECLASSIFY_ERRORS[result.reason]
+    sendError(res, status, result.reason, message)
+    return
+  }
+  emitInboxChanged(getIo(), ctx.workspaceId, params.data.id, result.status)
+  res.status(200).json({ reclassified: true })
 }
 
 export const getConversationMessagesHandler: RequestHandler = async (req, res) => {
