@@ -23,6 +23,18 @@ export const SendAgentMessageBody = z.object({
   visibility: z.enum(['public', 'internal']).default('public'),
 });
 
+export const RequestUploadBody = z.object({
+  filename: z.string().min(1).max(255),
+  content_type: z.string().min(1),
+  byte_size: z.number().int().positive(),
+});
+
+export type RequestUploadResponse = {
+  key: string;
+  upload_url: string;
+  expires_at: string;
+};
+
 export const MarkPlayerReadBody = z.object({ up_to_seq: z.number().int().nonnegative() });
 
 export const MarkAgentReadBody = z.object({

@@ -25,7 +25,10 @@ export type ErrorCode =
   | 'agent_not_found'
   | 'agent_not_active'
   | 'invalid_subintent'
-  | 'not_connected';
+  | 'not_connected'
+  | 'unsupported_media_type'
+  | 'attachment_not_found'
+  | 'attachment_mismatch';
 
 export function sendError(res: Response, status: number, code: ErrorCode, message: string): void {
   res.status(status).json({ error: { code, message } });

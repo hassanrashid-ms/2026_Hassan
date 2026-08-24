@@ -12,6 +12,7 @@ import { workspaceSettingsRouter } from './routers/workspaceSettingsRouter.ts';
 import { formsRouter } from './routers/formsRouter.ts';
 import { agentsRouter } from './routers/agentsRouter.ts';
 import { presenceRouter } from './routers/presenceRouter.ts';
+import { uploadsRouter } from './routers/uploadsRouter.ts';
 
 export const agentRouter = Router();
 
@@ -28,5 +29,6 @@ agentRouter.use(workspaceSettingsRouter);
 agentRouter.use(formsRouter);
 agentRouter.use(conversationsRouter);
 agentRouter.use(messagesRouter);
+agentRouter.use(uploadsRouter);
 agentRouter.use(agentsRouter);
 agentRouter.use(presenceRouter);
