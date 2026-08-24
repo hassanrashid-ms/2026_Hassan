@@ -12,11 +12,13 @@ import {
   thematicBreakPlugin,
   codeBlockPlugin,
   codeMirrorPlugin,
+  imagePlugin,
   toolbarPlugin,
   BoldItalicUnderlineToggles,
   ListsToggle,
   BlockTypeSelect,
   CreateLink,
+  InsertImage,
   UndoRedo,
 } from '@mdxeditor/editor';
 import '@mdxeditor/editor/style.css';
@@ -400,6 +402,10 @@ function ArticleEditorForm({
                     css: 'CSS',
                   },
                 }),
+                // No imageUploadHandler — there's no upload endpoint (see
+                // articleAttachment: schema-only, no upload route). Images are
+                // inserted/imported by URL only, same as CreateLink.
+                imagePlugin(),
                 toolbarPlugin({
                   toolbarContents: () => (
                     <>
@@ -408,6 +414,7 @@ function ArticleEditorForm({
                       <BlockTypeSelect />
                       <ListsToggle />
                       <CreateLink />
+                      <InsertImage />
                     </>
                   ),
                 }),

@@ -203,6 +203,47 @@ describe('ArticleEditorSheet markdown import', () => {
     expect(screen.getByText('Text after the code block must still be present.')).toBeTruthy();
   });
 
+  it('does not drop content around a markdown image', async () => {
+    vi.spyOn(agentApi, 'fetchArticle').mockResolvedValue(EXISTING_ARTICLE);
+    vi.spyOn(agentApi, 'fetchIntents').mockResolvedValue({ intents: [] });
+
+    renderWithClient(
+      <ArticleEditorSheet
+        token="tok"
+        articleId="art-1"
+        open
+        onOpenChange={() => {}}
+        onCreated={() => {}}
+      />,
+    );
+
+    await screen.findByDisplayValue('Refunds');
+
+    const fileContent = [
+      '# Cancelling a Subscription',
+      '',
+      'Go to Settings > Subscriptions, then follow the screenshot below.',
+      '',
+      '![Subscriptions screen](https://placehold.co/600x400?text=Subscriptions)',
+      '',
+      'Tap Cancel to confirm.',
+    ].join('\n');
+    const file = new File([fileContent], 'cancel-sub.md', { type: 'text/markdown' });
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+
+    await userEvent.upload(input, file);
+
+    await waitFor(() =>
+      expect(
+        screen.getByText('Go to Settings > Subscriptions, then follow the screenshot below.'),
+      ).toBeTruthy(),
+    );
+    // jsdom never resolves MDXEditor's Suspense-based image load, so the <img> itself
+    // doesn't render here — this only guards against the image node breaking the parse
+    // and truncating everything after it, same class of bug as the divider/code-block fix.
+    expect(screen.getByText('Tap Cancel to confirm.')).toBeTruthy();
+  });
+
   it('shows an error toast and changes nothing when the file is empty', async () => {
     vi.spyOn(agentApi, 'fetchArticle').mockResolvedValue(EXISTING_ARTICLE);
     vi.spyOn(agentApi, 'fetchIntents').mockResolvedValue({ intents: [] });
