@@ -354,7 +354,14 @@ function ArticleEditorForm({
           </Select>
         </div>
 
-        <div className="flex min-h-0 flex-1 flex-col gap-1.5">
+        {/* No `flex-1 min-h-0` here: that combination is for a section that scrolls on
+            its own, which this doesn't (it has no overflow-y-auto of its own). Applied
+            to a child of the already-scrollable form container below, it instead let
+            flexbox shrink this field below the editor's actual content height once the
+            whole form got tall enough — the bordered box would stop growing and the
+            editor's content would render past its bottom edge, uncontained. A plain
+            block here just contributes its full height to the form's own scroll area. */}
+        <div className="flex flex-col gap-1.5">
           <label className="text-xs font-medium text-muted">Body</label>
           <div className="min-h-64 rounded-md border border-slate-200">
             <MDXEditor

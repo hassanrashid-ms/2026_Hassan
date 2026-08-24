@@ -90,6 +90,34 @@ describe('ArticleEditorSheet MDXEditor round-trip', () => {
   });
 });
 
+describe('ArticleEditorSheet body field sizing', () => {
+  it('does not shrink the Body field below its content — no flex-1/min-h-0 on that wrapper', async () => {
+    vi.spyOn(agentApi, 'fetchArticle').mockResolvedValue(EXISTING_ARTICLE);
+    vi.spyOn(agentApi, 'fetchIntents').mockResolvedValue({ intents: [] });
+
+    renderWithClient(
+      <ArticleEditorSheet
+        token="tok"
+        articleId="art-1"
+        open
+        onOpenChange={() => {}}
+        onCreated={() => {}}
+      />,
+    );
+
+    await screen.findByDisplayValue('Refunds');
+
+    // That combination is for a section that scrolls on its own (it isn't — the form
+    // container above it owns the scrollbar). Applied here, it let flexbox shrink this
+    // field below the editor's actual content once the whole form got tall enough,
+    // so the bordered box stopped growing and content rendered past its bottom edge.
+    const bodyLabel = screen.getByText('Body');
+    const bodyFieldWrapper = bodyLabel.parentElement!;
+    expect(bodyFieldWrapper.className).not.toMatch(/\bflex-1\b/);
+    expect(bodyFieldWrapper.className).not.toMatch(/\bmin-h-0\b/);
+  });
+});
+
 describe('ArticleEditorSheet markdown import', () => {
   it('fills title, body, and keywords from an imported file, leaving category untouched', async () => {
     vi.spyOn(agentApi, 'fetchArticle').mockResolvedValue(EXISTING_ARTICLE);
