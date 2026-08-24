@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { closeDb } from '../src/shared/db/client.ts';
@@ -239,5 +240,18 @@ describe('postMessage inactivity clock touch', () => {
       }),
     );
     expect(await due(workspaceId, conversationId)).toBeNull();
+  });
+});
+
+describe('attachment table', () => {
+  it('rejects an attachment row with no matching message', async () => {
+    const workspaceId = await seedWorkspace();
+    await expect(
+      ownerPool.query(
+        `insert into attachment (workspace_id, message_id, storage_key, mime_type, byte_size)
+         values ($1, $2, 'ws/x/attachments/y.png', 'image/png', 10)`,
+        [workspaceId, randomUUID()],
+      ),
+    ).rejects.toThrow();
   });
 });
