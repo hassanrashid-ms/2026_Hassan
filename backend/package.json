@@ -14,10 +14,13 @@
     "db:seed": "node --experimental-strip-types src/shared/db/seed.ts",
     "db:backfill-bot-config": "node --experimental-strip-types src/shared/db/migrations/backfillBotConfig.ts",
     "db:studio": "drizzle-kit studio",
-    "weaviate:setup": "node --experimental-strip-types scripts/setup-weaviate-collection.ts"
+    "weaviate:setup": "node --experimental-strip-types scripts/setup-weaviate-collection.ts",
+    "minio:setup": "node --experimental-strip-types scripts/setup-minio-bucket.ts"
   },
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "^9.1.0",
+    "@aws-sdk/client-s3": "^3.1116.0",
+    "@aws-sdk/s3-request-presigner": "^3.1116.0",
     "@langfuse/openai": "^5.10.0",
     "@langfuse/otel": "^5.10.0",
     "@opentelemetry/sdk-node": "^0.221.0",
