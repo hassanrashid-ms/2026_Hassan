@@ -27,6 +27,9 @@ export function toPlayerView(row: PostedMessageRow): PlayerMessageView | null {
     read_at: row.readAt ? row.readAt.toISOString() : null,
     created_at: row.createdAt.toISOString(),
     article_id: row.articleId,
+    // Populated only by the GET read path (Task 5); the send path never
+    // reaches toPlayerView with attachment data yet.
+    attachment: null,
   };
 }
 
@@ -44,5 +47,8 @@ export function toAgentView(row: PostedMessageRow): AgentMessageView {
     read_at: row.readAt ? row.readAt.toISOString() : null,
     created_at: row.createdAt.toISOString(),
     article_id: row.articleId,
+    // The caller (sendAgentMessage) overrides this with the real row when the
+    // send included an attachment; every other agent-view call site has none.
+    attachment: null,
   };
 }

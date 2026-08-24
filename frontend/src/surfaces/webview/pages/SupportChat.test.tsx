@@ -371,6 +371,7 @@ describe('SupportChat article delivery', () => {
             delivery_state: 'sent',
             read_at: null,
             article_id: 'art-1',
+            attachment: null,
           },
         ],
       }),

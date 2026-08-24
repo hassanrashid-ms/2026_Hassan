@@ -1,8 +1,10 @@
+import { randomUUID } from 'node:crypto';
 import { and, eq, lte, ne } from 'drizzle-orm';
 import type { z } from 'zod';
 import { MarkAgentReadBody, SendAgentMessageBody, type AgentMessageView } from '@support/types';
 import { postMessage, toAgentView, toPlayerView } from '../../domain/conversations/index.ts';
-import { conversation, message } from '../../shared/db/schema/index.ts';
+import { attachment, conversation, message } from '../../shared/db/schema/index.ts';
+import { copyObject, deleteObject, headObject } from '../../shared/storage/presign.ts';
 import { withWorkspace } from '../../shared/db/withWorkspace.ts';
 import { appendEvent } from '../../shared/events/appendEvent.ts';
 import {
@@ -16,12 +18,34 @@ import type { AgentContext } from '../../shared/middleware/requireAgentSession.t
 export type SendAgentMessageResult =
   | { outcome: 'ok'; message: AgentMessageView }
   | { outcome: 'forbidden' }
-  | { outcome: 'not_found' };
+  | { outcome: 'not_found' }
+  | { outcome: 'attachment_not_found' }
+  | { outcome: 'attachment_mismatch' };
 
 export async function sendAgentMessage(
   ctx: AgentContext,
   body: z.infer<typeof SendAgentMessageBody>,
 ): Promise<SendAgentMessageResult> {
+  let claimedDestKey: string | null = null;
+  let pendingKeyToDelete: string | null = null;
+
+  if (body.attachment) {
+    const real = await headObject(body.attachment.key);
+    if (!real) return { outcome: 'attachment_not_found' };
+    if (
+      real.contentType !== body.attachment.mime_type ||
+      real.contentLength !== body.attachment.byte_size
+    ) {
+      return { outcome: 'attachment_mismatch' };
+    }
+    const extension = body.attachment.key.slice(body.attachment.key.lastIndexOf('.'));
+    claimedDestKey = `ws/${ctx.workspaceId}/attachments/${randomUUID()}${extension}`;
+    await copyObject({ sourceKey: body.attachment.key, destKey: claimedDestKey });
+    pendingKeyToDelete = body.attachment.key;
+  }
+
+  const messageBody = body.body.trim().length > 0 ? body.body : body.attachment!.filename;
+
   const result = await withWorkspace(ctx.workspaceId, async (tx) => {
     const [found] = await tx
       .select({
@@ -42,9 +66,30 @@ export async function sendAgentMessage(
       authorType: 'agent',
       actorId: ctx.agentId,
       authorAgentId: ctx.agentId,
-      body: body.body,
+      body: messageBody,
       visibility: body.visibility,
     });
+
+    let attachmentRow: { id: string; filename: string; mimeType: string; byteSize: number } | null =
+      null;
+    if (body.attachment && claimedDestKey) {
+      const [insertedAttachment] = await tx
+        .insert(attachment)
+        .values({
+          workspaceId: ctx.workspaceId,
+          messageId: posted.id,
+          storageKey: claimedDestKey,
+          mimeType: body.attachment.mime_type,
+          byteSize: body.attachment.byte_size,
+        })
+        .returning();
+      attachmentRow = {
+        id: insertedAttachment!.id,
+        filename: body.attachment.filename,
+        mimeType: body.attachment.mime_type,
+        byteSize: body.attachment.byte_size,
+      };
+    }
 
     let inboxStatus: 'awaiting_player' | null = null;
     if (body.visibility !== 'internal' && found.status === 'open') {
@@ -62,12 +107,31 @@ export async function sendAgentMessage(
       inboxStatus = 'awaiting_player';
     }
 
-    return { outcome: 'ok', posted, inboxStatus } as const;
+    return { outcome: 'ok', posted, attachmentRow, inboxStatus } as const;
   });
+
+  // Best-effort cleanup of the pending original — only after the transaction
+  // committed, so a failed transaction leaves the pending object in place
+  // (still cancellable/reusable) rather than deleting it out from under a
+  // send that didn't actually happen.
+  if (result.outcome === 'ok' && pendingKeyToDelete) {
+    await deleteObject(pendingKeyToDelete);
+  }
 
   if (result.outcome !== 'ok') return result;
 
-  const agentView = toAgentView(result.posted);
+  const agentView: AgentMessageView = {
+    ...toAgentView(result.posted),
+    attachment: result.attachmentRow
+      ? {
+          id: result.attachmentRow.id,
+          filename: result.attachmentRow.filename,
+          mime_type: result.attachmentRow.mimeType,
+          byte_size: result.attachmentRow.byteSize,
+          url: null, // populated only by the GET read path (Task 5), never on the immediate send response
+        }
+      : null,
+  };
   const playerView = toPlayerView(result.posted);
   emitMessageToRooms(getIo(), body.conversation_id, playerView, agentView);
   if (result.inboxStatus) {

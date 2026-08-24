@@ -17,11 +17,24 @@ export const SendMessageBody = z.object({
   session_id: z.uuid().optional(),
 });
 
-export const SendAgentMessageBody = z.object({
-  conversation_id: z.uuid(),
-  body: z.string().min(1).max(4000),
-  visibility: z.enum(['public', 'internal']).default('public'),
-});
+export const SendAgentMessageBody = z
+  .object({
+    conversation_id: z.uuid(),
+    body: z.string().max(4000),
+    visibility: z.enum(['public', 'internal']).default('public'),
+    attachment: z
+      .object({
+        key: z.string().min(1),
+        filename: z.string().min(1).max(255),
+        mime_type: z.string().min(1),
+        byte_size: z.number().int().positive(),
+      })
+      .optional(),
+  })
+  .refine((v) => v.body.trim().length > 0 || v.attachment !== undefined, {
+    message: 'body must be non-empty, or an attachment must be provided',
+    path: ['body'],
+  });
 
 export const RequestUploadBody = z.object({
   filename: z.string().min(1).max(255),
@@ -65,12 +78,34 @@ export type PlayerMessageView = {
    * affordance from this; the model is never asked to write a link.
    */
   article_id: string | null;
+  /**
+   * The signed `url` is added later by the GET read path (Task 5) — this task
+   * only inserts the row and returns its non-URL fields on the send response,
+   * so `url` is always null until then. Null when the message has no
+   * attachment. Same shape as AgentMessageView's, kept symmetric ahead of the
+   * webview phase, even though this phase only ever populates it via the
+   * agent send path.
+   */
+  attachment: {
+    id: string;
+    filename: string;
+    mime_type: string;
+    byte_size: number;
+    url: string | null;
+  } | null;
 };
 
 /** Same fields as PlayerMessageView plus the two an agent may see and a player may not. */
 export type AgentMessageView = PlayerMessageView & {
   author_agent_id: string | null;
   visibility: 'public' | 'internal';
+  attachment: {
+    id: string;
+    filename: string;
+    mime_type: string;
+    byte_size: number;
+    url: string | null;
+  } | null;
 };
 
 export type PlayerMessagesResponse = {

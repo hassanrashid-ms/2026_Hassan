@@ -20,6 +20,19 @@ export const postAgentMessageHandler: RequestHandler = async (req, res) => {
     sendError(res, 404, 'not_found', 'Conversation not found.');
     return;
   }
+  if (result.outcome === 'attachment_not_found') {
+    sendError(res, 422, 'attachment_not_found', 'The uploaded file was not found or has expired.');
+    return;
+  }
+  if (result.outcome === 'attachment_mismatch') {
+    sendError(
+      res,
+      422,
+      'attachment_mismatch',
+      'The uploaded file does not match its declared type or size.',
+    );
+    return;
+  }
   if (result.outcome === 'forbidden') {
     sendError(res, 403, 'forbidden', 'This conversation is not assigned to you.');
     return;

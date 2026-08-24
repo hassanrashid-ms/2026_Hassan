@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import express from 'express';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { req as request } from './helpers/http.ts';
+import { presignPutObject } from '../src/shared/storage/presign.ts';
 import { closeDb } from '../src/shared/db/client.ts';
 import { requireAgentSession } from '../src/shared/middleware/requireAgentSession.ts';
 import { errorMiddleware } from '../src/errors.ts';
@@ -114,6 +115,90 @@ describe('POST /agent/messages', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ conversation_id: conversationB, body: 'hi' })
       .expect(404);
+  });
+});
+
+describe('POST /agent/messages with an attachment', () => {
+  async function uploadFixtureImage(workspaceId: string, agentId: string) {
+    const key = `pending/${workspaceId}/${agentId}/${crypto.randomUUID()}.png`;
+    const body = Buffer.from('fake-png-bytes');
+    const { url } = await presignPutObject({ key, contentType: 'image/png', contentLength: body.length });
+    await fetch(url, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'image/png', 'Content-Length': String(body.length) },
+      body,
+    });
+    return key;
+  }
+
+  it('claims the pending object and inserts an attachment row, using the filename as body when body is empty', async () => {
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
+    const { agentId, token } = await setupAssignedAgent(workspaceId, conversationId);
+    const key = await uploadFixtureImage(workspaceId, agentId);
+
+    const res = await request(app)
+      .post('/messages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        conversation_id: conversationId,
+        body: '',
+        attachment: { key, filename: 'screenshot.png', mime_type: 'image/png', byte_size: 14 },
+      })
+      .expect(200);
+
+    expect(res.body.message.body).toBe('screenshot.png');
+    expect(res.body.message.attachment).toMatchObject({
+      filename: 'screenshot.png',
+      mime_type: 'image/png',
+      byte_size: 14,
+    });
+
+    const { rows } = await ownerPool.query(
+      `select storage_key from attachment where message_id = $1`,
+      [res.body.message.id],
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].storage_key).toContain(`ws/${workspaceId}/attachments/`);
+  });
+
+  it('422s with attachment_not_found when the pending key does not exist', async () => {
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
+    const { agentId, token } = await setupAssignedAgent(workspaceId, conversationId);
+    const bogusKey = `pending/${workspaceId}/${agentId}/${crypto.randomUUID()}.png`;
+
+    const res = await request(app)
+      .post('/messages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        conversation_id: conversationId,
+        body: '',
+        attachment: { key: bogusKey, filename: 'ghost.png', mime_type: 'image/png', byte_size: 14 },
+      })
+      .expect(422);
+    expect(res.body.error.code).toBe('attachment_not_found');
+  });
+
+  it('422s with attachment_mismatch when declared byte_size disagrees with the real object', async () => {
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
+    const { agentId, token } = await setupAssignedAgent(workspaceId, conversationId);
+    const key = await uploadFixtureImage(workspaceId, agentId);
+
+    const res = await request(app)
+      .post('/messages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        conversation_id: conversationId,
+        body: '',
+        attachment: { key, filename: 'screenshot.png', mime_type: 'image/png', byte_size: 999999 },
+      })
+      .expect(422);
+    expect(res.body.error.code).toBe('attachment_mismatch');
   });
 });
 

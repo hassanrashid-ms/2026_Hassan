@@ -69,6 +69,15 @@ const AgentMessageViewSchema = z.object({
     description:
       'The article a bot answer was written from, or null. Clients render their own "Read more" from it.',
   }),
+  attachment: z
+    .object({
+      id: z.uuid(),
+      filename: z.string(),
+      mime_type: z.string(),
+      byte_size: z.number().int().positive(),
+      url: z.string().nullable(),
+    })
+    .nullable(),
 });
 
 // Register Component Schemas
@@ -985,6 +994,14 @@ registry.registerPath({
           schema: z.object({
             body: z.string().min(1),
             visibility: z.enum(['public', 'internal']).optional(),
+            attachment: z
+              .object({
+                key: z.string().min(1),
+                filename: z.string().min(1).max(255),
+                mime_type: z.string().min(1),
+                byte_size: z.number().int().positive(),
+              })
+              .optional(),
           }),
         },
       },
