@@ -56,7 +56,41 @@ describe('PATCH /agent/agents/:agentId/leave', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ onLeave: true })
       .expect(200);
-    expect(res.body).toEqual({ status: 'on_leave' });
+    expect(res.body.status).toBe('on_leave');
+    expect(res.body.onLeaveSince).not.toBeNull();
+    expect(res.body.onLeaveUntil).toBeNull();
+
+    const log = await ownerPool.query(
+      `select field, before_value, after_value, actor_id from change_log where entity_type = 'agent' and entity_id = $1 order by field`,
+      [targetId],
+    );
+    // on_leave_until stays null before and after (no days given) — appendChangeLog
+    // drops that no-op field, leaving only the two fields that actually changed.
+    expect(log.rows.map((r) => r.field)).toEqual(['on_leave_since', 'status']);
+    expect(log.rows.find((r) => r.field === 'status')).toMatchObject({
+      before_value: 'active',
+      after_value: 'on_leave',
+      actor_id: leadId,
+    });
+  });
+
+  it('sets a planned return date when days is provided', async () => {
+    const workspaceId = await seedWorkspace();
+    const leadId = await seedAgent();
+    await seedWorkspaceMember({ workspaceId, agentId: leadId, role: 'team_lead' });
+    const targetId = await seedAgent();
+    await seedWorkspaceMember({ workspaceId, agentId: targetId, role: 'agent' });
+    const token = await tokenFor(leadId, workspaceId);
+
+    const res = await request(app)
+      .patch(`/agents/${targetId}/leave`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ onLeave: true, days: 5 })
+      .expect(200);
+    expect(res.body.onLeaveUntil).not.toBeNull();
+    expect(new Date(res.body.onLeaveUntil).getTime()).toBeGreaterThan(
+      new Date(res.body.onLeaveSince).getTime(),
+    );
   });
 
   it('clearing on_leave falls back to live presence', async () => {
@@ -74,7 +108,7 @@ describe('PATCH /agent/agents/:agentId/leave', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ onLeave: false })
       .expect(200);
-    expect(res.body).toEqual({ status: 'online' });
+    expect(res.body).toEqual({ status: 'online', onLeaveSince: null, onLeaveUntil: null });
   });
 
   it('403s for a plain agent caller', async () => {

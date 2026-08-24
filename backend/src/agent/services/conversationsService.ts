@@ -392,6 +392,8 @@ export type WorkspaceWorkloadAgent = {
   openCount: number;
   resolved7d: number;
   status: 'online' | 'away' | 'offline' | 'on_leave';
+  onLeaveSince: Date | null;
+  onLeaveUntil: Date | null;
 };
 
 export type WorkspaceWorkload = { agents: WorkspaceWorkloadAgent[] };
@@ -432,6 +434,8 @@ export async function getWorkspaceWorkload(ctx: AgentContext): Promise<Workspace
         agentId: workspaceMember.agentId,
         agentName: agent.displayName,
         agentStatus: agent.status,
+        onLeaveSince: agent.onLeaveSince,
+        onLeaveUntil: agent.onLeaveUntil,
       })
       .from(workspaceMember)
       .innerJoin(agent, eq(agent.id, workspaceMember.agentId))
@@ -476,6 +480,8 @@ export async function getWorkspaceWorkload(ctx: AgentContext): Promise<Workspace
         member.agentStatus === 'on_leave'
           ? 'on_leave'
           : presenceByAgent.get(member.agentId) ?? 'offline',
+      onLeaveSince: member.agentStatus === 'on_leave' ? member.onLeaveSince : null,
+      onLeaveUntil: member.agentStatus === 'on_leave' ? member.onLeaveUntil : null,
     }));
 
     return { agents };

@@ -558,6 +558,10 @@ const AgentWorkspaceWorkloadSchema = z.object({
         description:
           'on_leave overrides live presence unconditionally; otherwise online/away from Redis while connected, offline otherwise (including when Redis is unreachable).',
       }),
+      onLeaveSince: z.iso.datetime().nullable(),
+      onLeaveUntil: z.iso.datetime().nullable().openapi({
+        description: 'Planned return date, if a duration was set. Null = indefinite. Not auto-enforced.',
+      }),
     }),
   ),
 });
@@ -624,18 +628,33 @@ registry.registerPath({
   path: '/agent/agents/{agentId}/leave',
   summary: 'Set Agent Leave Status',
   description:
-    "Team lead/admin toggle of the on_leave account flag for another agent in the workspace. Restricted to the active <-> on_leave transition; 409 if the target is deactivated or invited. Emits presence_changed with the resulting display status (on_leave, or the target's live presence if leave is cleared).",
+    "Team lead/admin toggle of the on_leave account flag for another agent in the workspace. Restricted to the active <-> on_leave transition; 409 if the target is deactivated or invited. Emits presence_changed with the resulting display status (on_leave, or the target's live presence if leave is cleared). Also writes a change_log audit row (entity_type 'agent') for status/on_leave_since/on_leave_until.",
   security: [{ [bearerAgentJwt.name]: [] }],
   request: {
     params: z.object({ agentId: z.uuid() }),
-    body: { content: { 'application/json': { schema: z.object({ onLeave: z.boolean() }) } } },
+    body: {
+      content: {
+        'application/json': {
+          schema: z.object({
+            onLeave: z.boolean(),
+            days: z.number().int().positive().optional().openapi({
+              description: 'Only meaningful when onLeave is true. Sets a planned return date; omitted = indefinite.',
+            }),
+          }),
+        },
+      },
+    },
   },
   responses: {
     200: {
       description: 'Leave status updated',
       content: {
         'application/json': {
-          schema: z.object({ status: z.enum(['online', 'away', 'offline', 'on_leave']) }),
+          schema: z.object({
+            status: z.enum(['online', 'away', 'offline', 'on_leave']),
+            onLeaveSince: z.iso.datetime().nullable(),
+            onLeaveUntil: z.iso.datetime().nullable(),
+          }),
         },
       },
     },

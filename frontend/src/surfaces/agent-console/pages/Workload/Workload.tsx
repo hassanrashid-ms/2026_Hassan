@@ -21,7 +21,13 @@ import {
 import { Avatar, AvatarFallback } from '../../components/ui/avatar.tsx';
 import { Button } from '../../components/ui/button.tsx';
 import { PresenceDot } from '../../components/PresenceDot.tsx';
+import { LeaveDialog } from '../../components/LeaveDialog.tsx';
 import { cn } from '../../lib/cn.ts';
+
+function daysSince(iso: string): number {
+  const ms = Date.now() - new Date(iso).getTime();
+  return Math.max(0, Math.floor(ms / (24 * 60 * 60 * 1000)));
+}
 
 type SortColumn = 'agent' | 'open' | 'resolved7d';
 type SortDirection = 'asc' | 'desc';
@@ -69,17 +75,33 @@ export function Workload() {
     enabled: session !== null,
   });
 
+  const [leaveDialog, setLeaveDialog] = useState<{ agent: AgentWorkloadEntry; mode: 'set' | 'clear' } | null>(
+    null,
+  );
+
   useEffect(() => {
     if (!session) return;
     const socket = createSocket(session.token, 'agent', session.workspaceId);
     socket.on(
       'presence_changed',
-      (payload: { agentId: string; status: DisplayStatus }) => {
+      (payload: {
+        agentId: string;
+        status: DisplayStatus;
+        onLeaveSince?: string | null;
+        onLeaveUntil?: string | null;
+      }) => {
         queryClient.setQueryData<AgentWorkloadResponse>(['workload'], (current) => {
           if (!current) return current;
           return {
             agents: current.agents.map((agent) =>
-              agent.agentId === payload.agentId ? { ...agent, status: payload.status } : agent,
+              agent.agentId === payload.agentId
+                ? {
+                    ...agent,
+                    status: payload.status,
+                    onLeaveSince: payload.status === 'on_leave' ? payload.onLeaveSince ?? agent.onLeaveSince : null,
+                    onLeaveUntil: payload.status === 'on_leave' ? payload.onLeaveUntil ?? agent.onLeaveUntil : null,
+                  }
+                : agent,
             ),
           };
         });
@@ -90,13 +112,20 @@ export function Workload() {
     };
   }, [session, queryClient]);
 
-  async function handleToggleLeave(agentId: string, nextOnLeave: boolean) {
+  async function handleConfirmLeave(agentId: string, nextOnLeave: boolean, days?: number) {
     if (!session) return;
-    const { status } = await setAgentLeave(session.token, agentId, nextOnLeave);
+    const { status, onLeaveSince, onLeaveUntil } = await setAgentLeave(
+      session.token,
+      agentId,
+      nextOnLeave,
+      days,
+    );
     queryClient.setQueryData<AgentWorkloadResponse>(['workload'], (current) => {
       if (!current) return current;
       return {
-        agents: current.agents.map((a) => (a.agentId === agentId ? { ...a, status } : a)),
+        agents: current.agents.map((a) =>
+          a.agentId === agentId ? { ...a, status, onLeaveSince, onLeaveUntil } : a,
+        ),
       };
     });
   }
@@ -163,15 +192,22 @@ export function Workload() {
                       />
                     </div>
                     <span data-testid="agent-name">{agent.agentName}</span>
+                    {agent.status === 'on_leave' && agent.onLeaveSince && (
+                      <span data-testid="leave-duration" className="text-xs text-muted">
+                        on leave {daysSince(agent.onLeaveSince)}d
+                      </span>
+                    )}
                   </div>
                 </TableCell>
                 <TableCell>{agent.openCount}</TableCell>
                 <TableCell>{agent.resolved7d}</TableCell>
                 <TableCell>
                   <Button
-                    variant="ghost"
+                    variant="outline"
                     size="sm"
-                    onClick={() => handleToggleLeave(agent.agentId, agent.status !== 'on_leave')}
+                    onClick={() =>
+                      setLeaveDialog({ agent, mode: agent.status === 'on_leave' ? 'clear' : 'set' })
+                    }
                   >
                     {agent.status === 'on_leave' ? 'Clear leave' : 'Set on leave'}
                   </Button>
@@ -188,6 +224,19 @@ export function Workload() {
           </TableBody>
         </Table>
       </div>
+      {leaveDialog && (
+        <LeaveDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setLeaveDialog(null);
+          }}
+          agentName={leaveDialog.agent.agentName}
+          mode={leaveDialog.mode}
+          onConfirm={(days) =>
+            handleConfirmLeave(leaveDialog.agent.agentId, leaveDialog.mode === 'set', days)
+          }
+        />
+      )}
     </div>
   );
 }

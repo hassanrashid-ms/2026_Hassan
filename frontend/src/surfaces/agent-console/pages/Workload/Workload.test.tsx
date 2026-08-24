@@ -56,9 +56,33 @@ beforeEach(() => {
   });
   vi.spyOn(agentApi, 'fetchWorkload').mockResolvedValue({
     agents: [
-      { agentId: '1', agentName: 'Alice', openCount: 3, resolved7d: 10, status: 'online' },
-      { agentId: '2', agentName: 'Bob', openCount: 8, resolved7d: 2, status: 'away' },
-      { agentId: '3', agentName: 'Carol', openCount: 5, resolved7d: 20, status: 'offline' },
+      {
+        agentId: '1',
+        agentName: 'Alice',
+        openCount: 3,
+        resolved7d: 10,
+        status: 'online',
+        onLeaveSince: null,
+        onLeaveUntil: null,
+      },
+      {
+        agentId: '2',
+        agentName: 'Bob',
+        openCount: 8,
+        resolved7d: 2,
+        status: 'away',
+        onLeaveSince: null,
+        onLeaveUntil: null,
+      },
+      {
+        agentId: '3',
+        agentName: 'Carol',
+        openCount: 5,
+        resolved7d: 20,
+        status: 'offline',
+        onLeaveSince: null,
+        onLeaveUntil: null,
+      },
     ],
   });
 });
@@ -139,5 +163,86 @@ describe('Workload presence', () => {
     await screen.findByText('Carol');
     expect(rowStatuses()).toEqual(['away', 'online', 'online']);
     expect(agentApi.fetchWorkload).toHaveBeenCalledTimes(fetchCountAfterLoad);
+  });
+});
+
+describe('Workload leave toggle', () => {
+  it('requires confirming in a dialog before calling setAgentLeave', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(agentApi, 'setAgentLeave').mockResolvedValue({
+      status: 'on_leave',
+      onLeaveSince: '2026-08-20T00:00:00.000Z',
+      onLeaveUntil: null,
+    });
+    renderWithClient();
+
+    await screen.findByText('Alice');
+    const fetchCountAfterLoad = vi.mocked(agentApi.fetchWorkload).mock.calls.length;
+
+    const aliceRow = screen.getByText('Alice').closest('tr')!;
+    await user.click(within(aliceRow).getByRole('button', { name: /set on leave/i }));
+
+    // The click alone must not call the API — a dialog confirmation is required.
+    const dialog = await screen.findByRole('dialog');
+    expect(agentApi.setAgentLeave).not.toHaveBeenCalled();
+
+    await user.click(within(dialog).getByRole('button', { name: /^set on leave$/i }));
+
+    expect(agentApi.setAgentLeave).toHaveBeenCalledWith('t', '1', true, undefined);
+    expect(await within(aliceRow).findByRole('button', { name: /clear leave/i })).toBeInTheDocument();
+    expect(await within(aliceRow).findByText(/on leave/i)).toBeInTheDocument();
+    expect(agentApi.fetchWorkload).toHaveBeenCalledTimes(fetchCountAfterLoad);
+  });
+
+  it('passes the entered day count through to setAgentLeave', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(agentApi, 'setAgentLeave').mockResolvedValue({
+      status: 'on_leave',
+      onLeaveSince: '2026-08-24T00:00:00.000Z',
+      onLeaveUntil: '2026-08-29T00:00:00.000Z',
+    });
+    renderWithClient();
+
+    await screen.findByText('Alice');
+    const aliceRow = screen.getByText('Alice').closest('tr')!;
+    await user.click(within(aliceRow).getByRole('button', { name: /set on leave/i }));
+
+    const dialog = await screen.findByRole('dialog');
+    await user.type(within(dialog).getByRole('spinbutton'), '5');
+    await user.click(within(dialog).getByRole('button', { name: /^set on leave$/i }));
+
+    expect(agentApi.setAgentLeave).toHaveBeenCalledWith('t', '1', true, 5);
+  });
+
+  it('clearing leave sends onLeave: false after confirmation', async () => {
+    const user = userEvent.setup();
+    vi.mocked(agentApi.fetchWorkload).mockResolvedValue({
+      agents: [
+        {
+          agentId: '1',
+          agentName: 'Alice',
+          openCount: 3,
+          resolved7d: 10,
+          status: 'on_leave',
+          onLeaveSince: '2026-08-20T00:00:00.000Z',
+          onLeaveUntil: null,
+        },
+      ],
+    });
+    vi.spyOn(agentApi, 'setAgentLeave').mockResolvedValue({
+      status: 'online',
+      onLeaveSince: null,
+      onLeaveUntil: null,
+    });
+    renderWithClient();
+
+    await screen.findByText('Alice');
+    const aliceRow = screen.getByText('Alice').closest('tr')!;
+    await user.click(within(aliceRow).getByRole('button', { name: /clear leave/i }));
+
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: /^clear leave$/i }));
+
+    expect(agentApi.setAgentLeave).toHaveBeenCalledWith('t', '1', false, undefined);
   });
 });

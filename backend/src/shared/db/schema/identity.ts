@@ -55,6 +55,10 @@ export const agent = pgTable('agent', {
   googleSubject: text('google_subject').unique(),
   displayName: text('display_name').notNull(),
   status: agentStatus('status').notNull().default('active'),
+  /** When the current on_leave period started. Null unless status is on_leave. */
+  onLeaveSince: timestamp('on_leave_since', tz),
+  /** Planned return date for the current on_leave period. Null = indefinite. */
+  onLeaveUntil: timestamp('on_leave_until', tz),
   /** Global: grants access to every workspace. Only a super admin may toggle this. See requireAdminRole. */
   isAdmin: boolean('is_admin').notNull().default(false),
   /** Global: may toggle isAdmin/isSuperAdmin on any agent. */

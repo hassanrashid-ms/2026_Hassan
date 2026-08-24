@@ -11,17 +11,25 @@ export const listAgentsHandler: RequestHandler = async (req, res) => {
   res.status(200).json({ agents });
 };
 
-const LeaveBody = z.object({ onLeave: z.boolean() });
+const LeaveParams = z.object({ agentId: z.uuid() });
+const LeaveBody = z.object({ onLeave: z.boolean(), days: z.number().int().positive().optional() });
 
 export const setAgentLeaveHandler: RequestHandler = async (req, res) => {
   const ctx = req.agent!;
+  const params = LeaveParams.safeParse(req.params);
   const body = LeaveBody.safeParse(req.body);
-  if (!body.success) {
-    sendError(res, 400, 'invalid_request', 'onLeave must be a boolean.');
+  if (!params.success || !body.success) {
+    sendError(res, 400, 'invalid_request', 'onLeave must be a boolean; days must be a positive integer.');
     return;
   }
 
-  const result = await setAgentLeaveStatus(ctx.workspaceId, req.params.agentId, body.data.onLeave);
+  const result = await setAgentLeaveStatus(
+    ctx.workspaceId,
+    params.data.agentId,
+    body.data.onLeave,
+    ctx.agentId,
+    body.data.days,
+  );
   if (!result.ok) {
     if (result.reason === 'not_found') {
       sendError(res, 404, 'agent_not_found', 'Agent not found in this workspace.');
@@ -31,8 +39,15 @@ export const setAgentLeaveHandler: RequestHandler = async (req, res) => {
     return;
   }
 
-  getIo()
-    .to(inboxRoom(ctx.workspaceId))
-    .emit('presence_changed', { agentId: req.params.agentId, status: result.status });
-  res.status(200).json({ status: result.status });
+  getIo().to(inboxRoom(ctx.workspaceId)).emit('presence_changed', {
+    agentId: params.data.agentId,
+    status: result.status,
+    onLeaveSince: result.onLeaveSince,
+    onLeaveUntil: result.onLeaveUntil,
+  });
+  res.status(200).json({
+    status: result.status,
+    onLeaveSince: result.onLeaveSince,
+    onLeaveUntil: result.onLeaveUntil,
+  });
 };

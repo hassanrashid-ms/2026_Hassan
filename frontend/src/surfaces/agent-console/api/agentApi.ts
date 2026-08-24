@@ -209,6 +209,8 @@ export type AgentWorkloadEntry = {
   openCount: number;
   resolved7d: number;
   status: DisplayStatus;
+  onLeaveSince: string | null;
+  onLeaveUntil: string | null;
 };
 
 export type AgentWorkloadResponse = {
@@ -237,10 +239,11 @@ export function setAgentLeave(
   token: string,
   agentId: string,
   onLeave: boolean,
-): Promise<{ status: DisplayStatus }> {
+  days?: number,
+): Promise<{ status: DisplayStatus; onLeaveSince: string | null; onLeaveUntil: string | null }> {
   return call(`/agent/agents/${agentId}/leave`, token, {
     method: 'PATCH',
-    body: JSON.stringify({ onLeave }),
+    body: JSON.stringify({ onLeave, days }),
   });
 }
 
