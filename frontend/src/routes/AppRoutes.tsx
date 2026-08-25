@@ -20,6 +20,10 @@ const AgentConsoleShell = lazy(async () => ({
 const Inbox = lazy(async () => ({
   default: (await import('../surfaces/agent-console/pages/Inbox/Inbox.tsx')).Inbox,
 }));
+const GlobalInbox = lazy(async () => ({
+  default: (await import('../surfaces/agent-console/pages/GlobalInbox/GlobalInbox.tsx'))
+    .GlobalInbox,
+}));
 const Tickets = lazy(async () => ({
   default: (await import('../surfaces/agent-console/pages/Tickets/Tickets.tsx')).Tickets,
 }));
@@ -87,6 +91,7 @@ export function AppRoutes() {
       >
         <Route path="inbox" element={<Inbox />} />
         <Route path="inbox/:conversationId" element={<Inbox />} />
+        <Route path="global-inbox" element={<GlobalInbox />} />
         <Route path="tickets" element={<Tickets />} />
         <Route path="tickets/:conversationId" element={<Tickets />} />
         <Route path="articles" element={<KnowledgeBase />} />

@@ -2,9 +2,10 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AgentConsoleShell } from './AgentConsoleShell.tsx';
 import { loadAgentSession, type StoredAgentSession } from '../lib/agentSession.ts';
-import { fetchPresence, updatePresence } from '../api/agentApi.ts';
+import { fetchMemberships, fetchPresence, updatePresence } from '../api/agentApi.ts';
 import { createSocket } from '../../../features/chat/api/socket.ts';
 
 vi.mock('../lib/agentSession.ts', async () => {
@@ -20,6 +21,7 @@ vi.mock('../api/agentApi.ts', async () => {
     ...actual,
     fetchPresence: vi.fn(),
     updatePresence: vi.fn(),
+    fetchMemberships: vi.fn(),
   };
 });
 
@@ -47,16 +49,20 @@ beforeEach(() => {
   fakeSocket();
   vi.mocked(fetchPresence).mockResolvedValue({ status: 'offline' });
   vi.mocked(updatePresence).mockResolvedValue(undefined);
+  vi.mocked(fetchMemberships).mockResolvedValue({ memberships: [] });
 });
 
 function renderShell() {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <MemoryRouter initialEntries={['/inbox']}>
-      <Routes>
-        <Route path="/login" element={<div>Login Screen</div>} />
-        <Route path="*" element={<AgentConsoleShell />} />
-      </Routes>
-    </MemoryRouter>,
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={['/inbox']}>
+        <Routes>
+          <Route path="/login" element={<div>Login Screen</div>} />
+          <Route path="*" element={<AgentConsoleShell />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 

@@ -1,5 +1,6 @@
 import type {
   AgentArticleDetail,
+  AgentConversationSummary,
   AgentConversationsResponse,
   AgentMessagesResponse,
   AgentMessageView,
@@ -55,6 +56,19 @@ export type MembershipView = {
 
 export function fetchMemberships(token: string): Promise<{ memberships: MembershipView[] }> {
   return call('/agent/memberships', token);
+}
+
+export type GlobalInboxTicket = AgentConversationSummary & {
+  workspace: { id: string; slug: string };
+};
+
+export type GlobalInboxResponse = {
+  conversations: GlobalInboxTicket[];
+  failed_workspaces: string[];
+};
+
+export function fetchGlobalInbox(token: string): Promise<GlobalInboxResponse> {
+  return call('/agent/global-inbox', token);
 }
 
 /**

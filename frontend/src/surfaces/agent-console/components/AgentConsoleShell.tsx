@@ -3,6 +3,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   Inbox as InboxIcon,
+  Globe,
   BookOpen,
   ClipboardList,
   ChevronDown,
@@ -52,6 +53,7 @@ const PRESENCE_OPTIONS: { value: 'online' | 'away'; label: string }[] = [
 // decoration.
 const NAV_ITEMS = [
   { to: '/inbox', label: 'Inbox', icon: InboxIcon, group: 'Workspace' },
+  { to: '/global-inbox', label: 'Global Inbox', icon: Globe, group: 'Workspace' },
   { to: '/tickets', label: 'Tickets', icon: ClipboardList, group: 'Workspace' },
   { to: '/articles', label: 'Knowledge Base', icon: BookOpen, group: 'Workspace' },
   { to: '/taxonomy', label: 'Taxonomy', icon: Tags, group: 'Workspace' },
