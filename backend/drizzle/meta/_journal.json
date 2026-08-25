@@ -134,6 +134,13 @@
       "when": 1787576302496,
       "tag": "0018_gifted_beyonder",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1787638977569,
+      "tag": "0019_tranquil_giant_girl",
+      "breakpoints": true
     }
   ]
 }

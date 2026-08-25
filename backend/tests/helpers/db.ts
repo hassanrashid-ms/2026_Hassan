@@ -17,6 +17,7 @@ import { getEnv } from '../../src/env.ts';
 export const ownerPool = new Pool({ connectionString: getEnv().MIGRATION_DATABASE_URL, max: 4 });
 
 const SCOPED_TABLES = [
+  'article_attachment',
   'attachment',
   'resolution_cycle',
   'form_answer',

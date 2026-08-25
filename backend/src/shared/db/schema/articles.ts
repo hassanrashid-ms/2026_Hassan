@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { integer, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 import { articleState } from './enums.ts';
 import { agent, workspace } from './identity.ts';
 import { intent } from './taxonomy.ts';
@@ -10,7 +10,6 @@ export const article = pgTable('article', {
   workspaceId: uuid('workspace_id')
     .notNull()
     .references(() => workspace.id, { onDelete: 'restrict' }),
-  /** Nullable = uncategorized. Articles reference intent, never subintent. */
   intentId: uuid('intent_id').references(() => intent.id, { onDelete: 'restrict' }),
   title: text('title').notNull(),
   body: text('body').notNull(),
@@ -24,7 +23,11 @@ export const article = pgTable('article', {
   createdAt: timestamp('created_at', tz).notNull().defaultNow(),
 });
 
-/** Schema-only in this slice — no upload endpoint, storage_key stays null. */
+/**
+ * No row exists until the object is HEAD-verified and claimed — same convention as
+ * chat's `attachment` table (conversations.ts). Mirrors it exactly: no `status`
+ * column, `storageKey` required from the start.
+ */
 export const articleAttachment = pgTable('article_attachment', {
   id: uuid('id').primaryKey().defaultRandom(),
   workspaceId: uuid('workspace_id')
@@ -33,8 +36,9 @@ export const articleAttachment = pgTable('article_attachment', {
   articleId: uuid('article_id')
     .notNull()
     .references(() => article.id, { onDelete: 'restrict' }),
+  storageKey: text('storage_key').notNull(),
   filename: text('filename').notNull(),
-  storageKey: text('storage_key'),
-  status: text('status').notNull().default('pending'),
+  mimeType: text('mime_type').notNull(),
+  byteSize: integer('byte_size').notNull(),
   createdAt: timestamp('created_at', tz).notNull().defaultNow(),
 });
