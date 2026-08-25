@@ -578,6 +578,41 @@ registry.registerPath({
   },
 });
 
+const GlobalInboxTicketSchema = z.object({
+  id: z.uuid(),
+  player: z.object({ external_player_id: z.string() }),
+  status: z.enum(['new', 'bot_active', 'open', 'awaiting_player', 'escalated', 'resolved', 'closed']),
+  confirm_phase: z.enum(['none', 'bot_article', 'agent_ask', 'form', 'inactivity_ask']),
+  last_message_preview: z.string().nullable(),
+  last_message_at: z.iso.datetime().nullable(),
+  assigned_agent_id: z.uuid().nullable(),
+  assigned_agent_name: z.string().nullable(),
+  priority: z.enum(['p1', 'p2', 'p3', 'p4']),
+  workspace: z.object({ id: z.uuid(), slug: z.string() }),
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/agent/global-inbox',
+  summary: 'Global Inbox (scatter-gather across workspaces)',
+  description:
+    'Active tickets across every workspace this agent belongs to (every workspace for a global admin), top 50 per workspace, merged and sorted by priority/recency. failed_workspaces lists any workspace whose query errored, excluded from the merge rather than failing the whole request.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  responses: {
+    200: {
+      description: 'Merged global inbox',
+      content: {
+        'application/json': {
+          schema: z.object({
+            conversations: z.array(GlobalInboxTicketSchema),
+            failed_workspaces: z.array(z.uuid()),
+          }),
+        },
+      },
+    },
+  },
+});
+
 const AgentWorkspaceWorkloadSchema = z.object({
   agents: z.array(
     z.object({

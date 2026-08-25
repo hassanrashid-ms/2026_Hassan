@@ -13,6 +13,7 @@ import { formsRouter } from './routers/formsRouter.ts';
 import { agentsRouter } from './routers/agentsRouter.ts';
 import { presenceRouter } from './routers/presenceRouter.ts';
 import { membershipsRouter } from './routers/membershipsRouter.ts';
+import { globalInboxRouter } from './routers/globalInboxRouter.ts';
 import { uploadsRouter } from './routers/uploadsRouter.ts';
 
 export const agentRouter = Router();
@@ -22,6 +23,7 @@ agentRouter.use(authRouter);
 
 agentRouter.use(requireAgentSession);
 agentRouter.use(membershipsRouter);
+agentRouter.use(globalInboxRouter);
 agentRouter.use(resolveConsoleWorkspace);
 agentRouter.use(taxonomyRouter);
 agentRouter.use(tagsRouter);
