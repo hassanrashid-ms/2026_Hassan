@@ -1,6 +1,10 @@
 import type { RequestHandler } from 'express';
 import { z } from 'zod';
-import { CreateArticleBody, FinalizeArticleAttachmentBody, UpdateArticleBody } from '@support/types';
+import {
+  CreateArticleBody,
+  FinalizeArticleAttachmentBody,
+  UpdateArticleBody,
+} from '@support/types';
 import { sendError } from '../../errors.ts';
 import { deleteObject } from '../../shared/storage/presign.ts';
 import {
@@ -132,10 +136,20 @@ export const finalizeArticleAttachmentHandler: RequestHandler = async (req, res)
       return;
     }
     if (result.reason === 'attachment_not_found') {
-      sendError(res, 422, 'attachment_not_found', 'The uploaded file was not found or has expired.');
+      sendError(
+        res,
+        422,
+        'attachment_not_found',
+        'The uploaded file was not found or has expired.',
+      );
       return;
     }
-    sendError(res, 422, 'attachment_mismatch', 'The uploaded file does not match its declared type or size.');
+    sendError(
+      res,
+      422,
+      'attachment_mismatch',
+      'The uploaded file does not match its declared type or size.',
+    );
     return;
   }
   // Best-effort, after the transaction committed — same reasoning as sendAgentMessage:

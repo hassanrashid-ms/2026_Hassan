@@ -161,7 +161,10 @@ export async function updateArticle(
 
 export type FinalizeArticleAttachmentResult =
   | { ok: true; attachment: ArticleAttachmentView; pendingKey: string }
-  | { ok: false; reason: 'not_found' | 'not_draft' | 'attachment_not_found' | 'attachment_mismatch' };
+  | {
+      ok: false;
+      reason: 'not_found' | 'not_draft' | 'attachment_not_found' | 'attachment_mismatch';
+    };
 
 function extensionFor(mimeType: string): string {
   switch (mimeType) {
@@ -204,7 +207,9 @@ export async function finalizeArticleAttachment(
     // Defense-in-depth: re-check the allowlist/size cap against the
     // HEAD-verified values, not only the client-declared ones.
     if (
-      !ALLOWED_IMAGE_MIME_TYPES.includes(real.contentType as (typeof ALLOWED_IMAGE_MIME_TYPES)[number]) ||
+      !ALLOWED_IMAGE_MIME_TYPES.includes(
+        real.contentType as (typeof ALLOWED_IMAGE_MIME_TYPES)[number],
+      ) ||
       real.contentLength > MAX_ATTACHMENT_BYTES
     ) {
       return { ok: false, reason: 'attachment_mismatch' };
@@ -279,7 +284,10 @@ export async function archiveArticle(ctx: AgentContext, id: string): Promise<Arc
       .returning();
     if (!row) return { ok: false, reason: 'not_found' };
     await deleteArticleObject(row.id);
-    return { ok: true, article: { ...toDetail(row), attachments: await attachmentsFor(tx, row.id) } };
+    return {
+      ok: true,
+      article: { ...toDetail(row), attachments: await attachmentsFor(tx, row.id) },
+    };
   });
 }
 

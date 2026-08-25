@@ -297,7 +297,11 @@ describe('POST /agent/articles/:id/attachments', () => {
       .send({ key, filename: 'diagram.png', mime_type: 'image/png', byte_size: 14 })
       .expect(200);
 
-    expect(res.body).toMatchObject({ filename: 'diagram.png', mime_type: 'image/png', byte_size: 14 });
+    expect(res.body).toMatchObject({
+      filename: 'diagram.png',
+      mime_type: 'image/png',
+      byte_size: 14,
+    });
     expect(res.body.url).toBeTruthy();
 
     const { rows } = await ownerPool.query(
