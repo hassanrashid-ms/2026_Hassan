@@ -40,6 +40,7 @@ beforeEach(() => {
     title: 'harmless',
     body: 'harmless',
     keywords: [],
+    attachments: [],
     intent_id: null,
     published_at: null,
   });

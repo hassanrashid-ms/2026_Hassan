@@ -127,6 +127,7 @@ beforeEach(() => {
     title: 'Refund timing',
     body: 'Refunds take **48 hours**.',
     keywords: [],
+    attachments: [],
     intent_id: null,
     published_at: null,
   });
