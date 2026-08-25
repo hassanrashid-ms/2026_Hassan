@@ -35,10 +35,7 @@ export const requireAgentSession: RequestHandler = async (req, res, next) => {
 
   try {
     const claims = await verifyAgentSession(rest.join(' ').trim());
-    req.agent =
-      'is_admin' in claims && claims.is_admin
-        ? { agentId: claims.agent_id, workspaceId: '', isAdmin: true }
-        : { agentId: claims.agent_id, workspaceId: claims.workspace_id, isAdmin: false };
+    req.agent = { agentId: claims.agent_id, workspaceId: '', isAdmin: claims.is_admin };
     next();
   } catch (error) {
     if (error instanceof InvalidAgentSession) {

@@ -87,7 +87,7 @@ export async function devLogin(agentId: string): Promise<DevLoginResult> {
       return row ?? null;
     });
     if (membership) {
-      const token = await signAgentSession({ agent_id: agentRow.id, workspace_id: ws.id });
+      const token = await signAgentSession({ agent_id: agentRow.id });
       return {
         token,
         agent: { id: agentRow.id, display_name: agentRow.displayName },
