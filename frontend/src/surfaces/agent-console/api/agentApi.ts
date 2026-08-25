@@ -8,6 +8,7 @@ import type {
   AgentConversationDetail,
   ArchiveIntentResponse,
   ArchiveSubintentResponse,
+  ArticleAttachmentView,
   AskResolvedResponse,
   AttachTagResponse,
   BotConfigView,
@@ -427,6 +428,22 @@ export function publishArticle(token: string, id: string): Promise<AgentArticleD
 
 export function archiveArticle(token: string, id: string): Promise<AgentArticleDetail> {
   return call(`/agent/articles/${id}/archive`, token, { method: 'POST' });
+}
+
+export function finalizeArticleAttachment(
+  token: string,
+  articleId: string,
+  input: { key: string; filename: string; mimeType: string; byteSize: number },
+): Promise<ArticleAttachmentView> {
+  return call(`/agent/articles/${articleId}/attachments`, token, {
+    method: 'POST',
+    body: JSON.stringify({
+      key: input.key,
+      filename: input.filename,
+      mime_type: input.mimeType,
+      byte_size: input.byteSize,
+    }),
+  });
 }
 
 export function fetchForms(token: string): Promise<FormsListResponse> {
