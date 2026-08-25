@@ -556,6 +556,28 @@ registry.registerPath({
   },
 });
 
+const MembershipViewSchema = z.object({
+  workspace_id: z.uuid(),
+  workspace_slug: z.string(),
+  workspace_name: z.string(),
+  role: z.enum(['agent', 'team_lead', 'admin']),
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/agent/memberships',
+  summary: 'List My Workspace Memberships',
+  description:
+    'Every active workspace this agent belongs to, or every workspace for a global admin. Powers the workspace switcher.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  responses: {
+    200: {
+      description: 'Memberships list',
+      content: { 'application/json': { schema: z.object({ memberships: z.array(MembershipViewSchema) }) } },
+    },
+  },
+});
+
 const AgentWorkspaceWorkloadSchema = z.object({
   agents: z.array(
     z.object({
