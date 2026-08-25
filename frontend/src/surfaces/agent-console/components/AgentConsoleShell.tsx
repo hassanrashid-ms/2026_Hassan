@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   Inbox as InboxIcon,
   BookOpen,
@@ -23,8 +24,10 @@ import {
   isAdmin,
   loadAgentSession,
   saveAgentSession,
+  saveLastActiveWorkspaceId,
 } from '../lib/agentSession.ts';
-import { fetchPresence, updatePresence, type DisplayStatus } from '../api/agentApi.ts';
+import { fetchMemberships, fetchPresence, updatePresence, type DisplayStatus } from '../api/agentApi.ts';
+import { WorkspaceSwitcher } from './WorkspaceSwitcher.tsx';
 import { createSocket } from '../../../features/chat/api/socket.ts';
 import { Avatar, AvatarFallback } from './ui/avatar.tsx';
 import { Badge } from './ui/badge.tsx';
@@ -134,6 +137,29 @@ export function AgentConsoleShell() {
       cancelled = true;
     };
   }, [session]);
+
+  const membershipsForFallback = useQuery({
+    queryKey: ['memberships'],
+    queryFn: () => fetchMemberships(session!.token),
+    enabled: session !== null,
+  });
+
+  useEffect(() => {
+    if (!session || !membershipsForFallback.data) return;
+    const memberships = membershipsForFallback.data.memberships;
+    if (memberships.length === 0) return;
+    const stillValid = memberships.some((m) => m.workspace_id === session.workspaceId);
+    if (stillValid) return;
+    const fallback = memberships[0]!;
+    saveAgentSession({
+      ...session,
+      workspaceId: fallback.workspace_id,
+      workspaceSlug: fallback.workspace_slug,
+      role: fallback.role,
+    });
+    saveLastActiveWorkspaceId(fallback.workspace_id);
+    setSession(loadAgentSession());
+  }, [session, membershipsForFallback.data]);
 
   useEffect(() => {
     if (!session) return;
@@ -255,6 +281,7 @@ export function AgentConsoleShell() {
                 {roleLabel}
               </Badge>
             )}
+            <WorkspaceSwitcher session={session} />
           </div>
           <Button
             variant="ghost"
