@@ -398,3 +398,38 @@ describe('GET /agent/articles/:id with an attachment', () => {
     expect(getRes.status).toBe(200);
   });
 });
+
+describe('POST /agent/articles/:id/publish with empty fields', () => {
+  it('409s when body is empty', async () => {
+    const workspaceId = await seedWorkspace();
+    const { token } = await seedAgent(workspaceId);
+    const created = await request(app)
+      .post('/articles')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: 'Refund policy', body: '' })
+      .expect(201);
+
+    const res = await request(app)
+      .post(`/articles/${created.body.id}/publish`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(409);
+    expect(res.body.error.message).toMatch(/non-empty/i);
+  });
+
+  it('allows creating and updating a draft with an empty body', async () => {
+    const workspaceId = await seedWorkspace();
+    const { token } = await seedAgent(workspaceId);
+    const created = await request(app)
+      .post('/articles')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: '', body: '' })
+      .expect(201);
+    expect(created.body.title).toBe('');
+
+    await request(app)
+      .patch(`/articles/${created.body.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: 'Now has a title' })
+      .expect(200);
+  });
+});
