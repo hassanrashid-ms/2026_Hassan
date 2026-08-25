@@ -40,6 +40,7 @@ import {
   parseMarkdownImport,
 } from '../articleForm.ts';
 import { useArticleAutosave } from '../hooks/useArticleAutosave.ts';
+import { ImageDialogAdapter } from './ImageDialogAdapter.tsx';
 import { Button } from '../../../components/ui/button.tsx';
 import { Input } from '../../../components/ui/input.tsx';
 import {
@@ -431,6 +432,7 @@ function ArticleEditorForm({
                     const id = src.slice('attachment:'.length);
                     return attachments.find((a) => a.id === id)?.url ?? src;
                   },
+                  ImageDialog: ImageDialogAdapter,
                 }),
                 toolbarPlugin({
                   toolbarContents: () => (

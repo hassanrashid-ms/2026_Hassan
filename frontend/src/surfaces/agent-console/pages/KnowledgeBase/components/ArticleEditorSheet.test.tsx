@@ -347,20 +347,13 @@ describe('ArticleEditorSheet image upload', () => {
 
     await screen.findByDisplayValue('Refunds');
 
-    // MDXEditor's InsertImage toolbar control opens a dialog rather than
-    // exposing a bare file input directly — open it, then drive the file
-    // input the dialog renders (it isn't associated with its <label> by id,
-    // so it's selected by the `file` name react-hook-form registers it under).
+    // MDXEditor's InsertImage toolbar control opens our ImageDialogAdapter in
+    // place of the stock dialog — drive its drop zone's hidden file input.
     await userEvent.click(screen.getByRole('button', { name: 'Insert image' }));
 
-    const fileInput = document.querySelector('input[type="file"][name="file"]') as HTMLInputElement;
+    const fileInput = screen.getByLabelText('Browse for an image') as HTMLInputElement;
     const file = new File([new Uint8Array(3)], 'diagram.png', { type: 'image/png' });
     await userEvent.upload(fileInput, file);
-
-    const altInput = document.querySelector('input[name="altText"]') as HTMLInputElement;
-    fireEvent.change(altInput, { target: { value: 'diagram.png' } });
-
-    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     // jsdom never resolves MDXEditor's Suspense-based image load (same
     // documented limitation as the markdown-image-import test above), so the
@@ -376,5 +369,39 @@ describe('ArticleEditorSheet image upload', () => {
       mimeType: 'image/png',
       byteSize: 3,
     });
+  });
+
+  it('inserts a plain markdown src via the Link tab with no attachment API call', async () => {
+    vi.spyOn(agentApi, 'fetchArticle').mockResolvedValue(EXISTING_ARTICLE);
+    vi.spyOn(agentApi, 'fetchIntents').mockResolvedValue({ intents: [] });
+    // A prior test in this file already drove an upload through this same
+    // spied module method — vi.spyOn returns the same mock instance rather
+    // than a fresh one, so its call history carries over across tests.
+    const finalizeSpy = vi.spyOn(agentApi, 'finalizeArticleAttachment').mockClear();
+
+    renderWithClient(
+      <ArticleEditorSheet
+        token="tok"
+        articleId="art-1"
+        open
+        onOpenChange={() => {}}
+        onCreated={() => {}}
+      />,
+    );
+
+    await screen.findByDisplayValue('Refunds');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Insert image' }));
+    await userEvent.click(screen.getByRole('tab', { name: 'Link' }));
+    await userEvent.type(
+      screen.getByPlaceholderText('https://...'),
+      'https://placehold.co/600x400?text=Screenshot',
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Insert' }));
+
+    await waitFor(() =>
+      expect(document.querySelector('[data-lexical-decorator]')).toBeTruthy(),
+    );
+    expect(finalizeSpy).not.toHaveBeenCalled();
   });
 });
