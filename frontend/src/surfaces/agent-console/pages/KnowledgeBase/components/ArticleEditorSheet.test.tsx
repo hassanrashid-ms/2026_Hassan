@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ArticleEditorSheet } from './ArticleEditorSheet.tsx';
@@ -21,6 +21,7 @@ const EXISTING_ARTICLE = {
   published_by: null,
   published_at: null,
   created_at: '2026-08-01T00:00:00Z',
+  attachments: [],
 };
 
 describe('ArticleEditorSheet loading', () => {
@@ -57,7 +58,7 @@ describe('ArticleEditorSheet loading', () => {
 });
 
 describe('ArticleEditorSheet MDXEditor round-trip', () => {
-  it('writes markdown in and saves the same markdown back out', async () => {
+  it('writes markdown in and autosaves the same markdown back out', async () => {
     vi.spyOn(agentApi, 'fetchArticle').mockResolvedValue(EXISTING_ARTICLE);
     vi.spyOn(agentApi, 'fetchIntents').mockResolvedValue({ intents: [] });
     const updateSpy = vi.spyOn(agentApi, 'updateArticle').mockResolvedValue(EXISTING_ARTICLE);
@@ -74,8 +75,18 @@ describe('ArticleEditorSheet MDXEditor round-trip', () => {
 
     await screen.findByDisplayValue('Refunds');
 
-    const saveButton = screen.getByRole('button', { name: /save/i });
-    await userEvent.click(saveButton);
+    // Any field edit is enough to trigger the debounced autosave — the body
+    // itself was already populated into the draft by MDXEditor's own mount-time
+    // onChange, so this exercises the same round-trip the old Save button did.
+    vi.useFakeTimers();
+    fireEvent.change(screen.getByPlaceholderText('Article title'), {
+      target: { value: 'Refunds!' },
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(800);
+    });
+    vi.useRealTimers();
 
     await waitFor(() =>
       expect(updateSpy).toHaveBeenCalledWith(
@@ -267,5 +278,103 @@ describe('ArticleEditorSheet markdown import', () => {
 
     // Title is unchanged — a failed import never clobbers existing content.
     expect(screen.getByDisplayValue('Refunds')).toBeTruthy();
+  });
+});
+
+describe('ArticleEditorSheet autosave status', () => {
+  it('shows Unsaved then Saved as the agent types, with no Save or Create Draft button', async () => {
+    vi.spyOn(agentApi, 'fetchArticle').mockResolvedValue(EXISTING_ARTICLE);
+    vi.spyOn(agentApi, 'fetchIntents').mockResolvedValue({ intents: [] });
+    vi.spyOn(agentApi, 'updateArticle').mockResolvedValue(EXISTING_ARTICLE);
+
+    renderWithClient(
+      <ArticleEditorSheet
+        token="tok"
+        articleId="art-1"
+        open
+        onOpenChange={() => {}}
+        onCreated={() => {}}
+      />,
+    );
+
+    await screen.findByDisplayValue('Refunds');
+
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Create Draft' })).toBeNull();
+
+    vi.useFakeTimers();
+    fireEvent.change(screen.getByPlaceholderText('Article title'), {
+      target: { value: 'New title' },
+    });
+    expect(screen.getByText('Unsaved')).toBeTruthy();
+
+    await act(async () => {
+      vi.advanceTimersByTime(800);
+    });
+    vi.useRealTimers();
+
+    await screen.findByText('Saved');
+  });
+});
+
+describe('ArticleEditorSheet image upload', () => {
+  it('uploads an image and inserts an attachment: reference into the body', async () => {
+    vi.spyOn(agentApi, 'fetchArticle').mockResolvedValue(EXISTING_ARTICLE);
+    vi.spyOn(agentApi, 'fetchIntents').mockResolvedValue({ intents: [] });
+    vi.spyOn(agentApi, 'requestUpload').mockResolvedValue({
+      key: 'pending/ws/agent/uuid.png',
+      upload_url: 'https://minio.local/put',
+      expires_at: new Date().toISOString(),
+    });
+    vi.spyOn(agentApi, 'putFileToUploadUrl').mockResolvedValue(undefined);
+    const finalizeSpy = vi.spyOn(agentApi, 'finalizeArticleAttachment').mockResolvedValue({
+      id: 'a1',
+      filename: 'diagram.png',
+      mime_type: 'image/png',
+      byte_size: 3,
+      url: 'https://minio.local/signed',
+    });
+
+    renderWithClient(
+      <ArticleEditorSheet
+        token="tok"
+        articleId="art-1"
+        open
+        onOpenChange={() => {}}
+        onCreated={() => {}}
+      />,
+    );
+
+    await screen.findByDisplayValue('Refunds');
+
+    // MDXEditor's InsertImage toolbar control opens a dialog rather than
+    // exposing a bare file input directly — open it, then drive the file
+    // input the dialog renders (it isn't associated with its <label> by id,
+    // so it's selected by the `file` name react-hook-form registers it under).
+    await userEvent.click(screen.getByRole('button', { name: 'Insert image' }));
+
+    const fileInput = document.querySelector('input[type="file"][name="file"]') as HTMLInputElement;
+    const file = new File([new Uint8Array(3)], 'diagram.png', { type: 'image/png' });
+    await userEvent.upload(fileInput, file);
+
+    const altInput = document.querySelector('input[name="altText"]') as HTMLInputElement;
+    fireEvent.change(altInput, { target: { value: 'diagram.png' } });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    // jsdom never resolves MDXEditor's Suspense-based image load (same
+    // documented limitation as the markdown-image-import test above), so the
+    // inserted image renders as its lexical decorator/placeholder node rather
+    // than a real <img>. That the node landed at all, with the upload having
+    // gone through finalizeArticleAttachment, is what proves the wiring works.
+    await waitFor(() =>
+      expect(document.querySelector('[data-lexical-decorator]')).toBeTruthy(),
+    );
+    expect(finalizeSpy).toHaveBeenCalledWith('tok', 'art-1', {
+      key: 'pending/ws/agent/uuid.png',
+      filename: 'diagram.png',
+      mimeType: 'image/png',
+      byteSize: 3,
+    });
   });
 });

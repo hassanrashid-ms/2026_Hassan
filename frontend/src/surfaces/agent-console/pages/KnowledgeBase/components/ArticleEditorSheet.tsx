@@ -1,7 +1,7 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { AgentArticleDetail, IntentView } from '@support/types';
+import type { AgentArticleDetail, ArticleAttachmentView, IntentView } from '@support/types';
 import {
   MDXEditor,
   headingsPlugin,
@@ -24,11 +24,12 @@ import {
 import '@mdxeditor/editor/style.css';
 import {
   archiveArticle,
-  createArticle,
   fetchArticle,
   fetchIntents,
+  finalizeArticleAttachment,
   publishArticle,
-  updateArticle,
+  putFileToUploadUrl,
+  requestUpload,
   generateKeywords,
 } from '../../../api/agentApi.ts';
 import {
@@ -38,6 +39,7 @@ import {
   parseKeywordsInput,
   parseMarkdownImport,
 } from '../articleForm.ts';
+import { useArticleAutosave } from '../hooks/useArticleAutosave.ts';
 import { Button } from '../../../components/ui/button.tsx';
 import { Input } from '../../../components/ui/input.tsx';
 import {
@@ -168,6 +170,10 @@ function ArticleEditorForm({
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<Draft>(() => draftFrom(article));
   const [useAIKeywords, setUseAIKeywords] = useState(false);
+  const [attachments, setAttachments] = useState<ArticleAttachmentView[]>(
+    article?.attachments ?? [],
+  );
+  const [resolvedArticleId, setResolvedArticleId] = useState(articleId);
   // The value MDXEditor's `markdown` prop is seeded with. Deliberately NOT
   // kept in sync with draft.body on every keystroke — MDXEditor treats a
   // prop change as an authoritative external reset and re-parses the whole
@@ -214,37 +220,37 @@ function ArticleEditorForm({
     void queryClient.invalidateQueries({ queryKey: ['admin-article', articleId] });
   };
 
-  const createDraft = useMutation({
-    mutationFn: () =>
-      createArticle(token, {
-        title: draft.title,
-        body: draft.body,
-        keywords: parseKeywordsInput(draft.keywordsInput),
-        intent_id: draft.intentId || undefined,
-      }),
-    onSuccess: (created: AgentArticleDetail) => {
+  const autosave = useArticleAutosave({
+    token,
+    articleId: resolvedArticleId,
+    onCreated: (id) => {
+      setResolvedArticleId(id);
       invalidateArticles();
-      onCreated(created.id);
+      onCreated(id);
+    },
+    fields: {
+      title: draft.title,
+      body: draft.body,
+      keywords: parseKeywordsInput(draft.keywordsInput),
+      intentId: draft.intentId || undefined,
     },
   });
 
-  const saveDraft = useMutation({
-    mutationFn: () =>
-      updateArticle(token, articleId!, {
-        title: draft.title,
-        body: draft.body,
-        keywords: parseKeywordsInput(draft.keywordsInput),
-        intent_id: draft.intentId || null,
-      }),
-    onSuccess: invalidateArticles,
-  });
+  useEffect(() => {
+    return () => {
+      void autosave.flush();
+    };
+    // No react-hooks/exhaustive-deps plugin is configured in this repo's
+    // eslint config, so there is no rule to disable here — this effect is
+    // deliberately mount/unmount-only (flush on unmount), not deps-driven.
+  }, []);
 
   const publish = useMutation({
-    mutationFn: () => publishArticle(token, articleId!),
+    mutationFn: () => publishArticle(token, resolvedArticleId!),
     onSuccess: invalidateArticles,
   });
   const archive = useMutation({
-    mutationFn: () => archiveArticle(token, articleId!),
+    mutationFn: () => archiveArticle(token, resolvedArticleId!),
     onSuccess: invalidateArticles,
   });
 
@@ -402,10 +408,30 @@ function ArticleEditorForm({
                     css: 'CSS',
                   },
                 }),
-                // No imageUploadHandler — there's no upload endpoint (see
-                // articleAttachment: schema-only, no upload route). Images are
-                // inserted/imported by URL only, same as CreateLink.
-                imagePlugin(),
+                imagePlugin({
+                  imageUploadHandler: async (file: File) => {
+                    const id = await autosave.ensureArticleId();
+                    const uploaded = await requestUpload(token, {
+                      filename: file.name,
+                      contentType: file.type,
+                      byteSize: file.size,
+                    });
+                    await putFileToUploadUrl(uploaded.upload_url, file);
+                    const attachment = await finalizeArticleAttachment(token, id, {
+                      key: uploaded.key,
+                      filename: file.name,
+                      mimeType: file.type,
+                      byteSize: file.size,
+                    });
+                    setAttachments((current) => [...current, attachment]);
+                    return `attachment:${attachment.id}`;
+                  },
+                  imagePreviewHandler: async (src: string) => {
+                    if (!src.startsWith('attachment:')) return src;
+                    const id = src.slice('attachment:'.length);
+                    return attachments.find((a) => a.id === id)?.url ?? src;
+                  },
+                }),
                 toolbarPlugin({
                   toolbarContents: () => (
                     <>
@@ -425,41 +451,30 @@ function ArticleEditorForm({
       </div>
 
       <SheetFooter className="flex-row justify-end gap-2 border-t border-slate-200">
-        {articleId === null ? (
-          <Button
-            type="button"
-            onClick={() => createDraft.mutate()}
-            disabled={createDraft.isPending || !draft.title || !draft.body}
-          >
-            Create Draft
-          </Button>
-        ) : (
-          <>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => archive.mutate()}
-              disabled={archive.isPending}
-            >
-              Archive
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => saveDraft.mutate()}
-              disabled={!editable || saveDraft.isPending}
-            >
-              Save
-            </Button>
-            <Button
-              type="button"
-              onClick={() => publish.mutate()}
-              disabled={!canPublish(state, draft.title, draft.body) || publish.isPending}
-            >
-              Publish
-            </Button>
-          </>
-        )}
+        <div className="flex items-center gap-2 text-xs text-muted">
+          {autosave.status === 'unsaved' && 'Unsaved'}
+          {autosave.status === 'saving' && 'Saving…'}
+          {autosave.status === 'saved' && 'Saved'}
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => archive.mutate()}
+          disabled={resolvedArticleId === null || archive.isPending}
+        >
+          Archive
+        </Button>
+        <Button
+          type="button"
+          onClick={() => publish.mutate()}
+          disabled={
+            resolvedArticleId === null ||
+            !canPublish(state, draft.title, draft.body) ||
+            publish.isPending
+          }
+        >
+          Publish
+        </Button>
       </SheetFooter>
     </>
   );
