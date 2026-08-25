@@ -3,9 +3,12 @@ import express from 'express';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { req as request } from './helpers/http.ts';
 import { closeDb } from '../src/shared/db/client.ts';
+import { closeAdminDb } from '../src/shared/db/adminClient.ts';
 import { errorMiddleware } from '../src/errors.ts';
 import { requireAgentSession } from '../src/shared/middleware/requireAgentSession.ts';
+import { resolveConsoleWorkspace } from '../src/shared/middleware/resolveConsoleWorkspace.ts';
 import { signAgentSession } from '../src/shared/auth/agentSession.ts';
+import { closeWsAuthRedis } from '../src/shared/auth/wsAuthCache.ts';
 import { closeSocketServer, createSocketServer } from '../src/shared/realtime/socketServer.ts';
 import { botConfigRouter } from '../src/agent/routers/botConfigRouter.ts';
 import { DEFAULT_BOT_PROMPT, buildSystemPrompt } from '../src/domain/bot/defaultPrompt.ts';
@@ -18,7 +21,7 @@ import { closeOwnerPool, ownerPool, seedWorkspace, truncateAll } from './helpers
 // the shared app wiring.
 const app = express();
 app.use(express.json());
-app.use(requireAgentSession, botConfigRouter);
+app.use(requireAgentSession, resolveConsoleWorkspace, botConfigRouter);
 app.use(errorMiddleware);
 
 beforeAll(() => {
@@ -27,7 +30,9 @@ beforeAll(() => {
 
 afterAll(async () => {
   await closeSocketServer();
+  await closeWsAuthRedis();
   await closeDb();
+  await closeAdminDb();
   await closeOwnerPool();
 });
 
@@ -48,7 +53,7 @@ async function seedAgentWithRole(
       [workspaceId, agentId, role],
     );
   }
-  const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId });
+  const token = await signAgentSession({ agent_id: agentId, is_admin: role === 'admin' });
   return { agentId, token };
 }
 
@@ -60,6 +65,7 @@ describe('GET /bot-config', () => {
     const res = await request(app)
       .get('/bot-config')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
 
     expect(res.body.is_provisioned).toBe(false);
@@ -101,6 +107,7 @@ describe('GET /bot-config', () => {
     const res = await request(app)
       .get('/bot-config')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
 
     expect(res.body.is_provisioned).toBe(true);
@@ -129,6 +136,7 @@ describe('GET /bot-config', () => {
     const res = await request(app)
       .get('/bot-config')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
 
     expect(res.body.prompt).toBe('Custom prompt');
@@ -138,7 +146,11 @@ describe('GET /bot-config', () => {
     const workspaceId = await seedWorkspace();
     const { token } = await seedAgentWithRole(workspaceId, 'agent');
 
-    await request(app).get('/bot-config').set('Authorization', `Bearer ${token}`).expect(403);
+    await request(app)
+      .get('/bot-config')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(403);
   });
 
   it('refuses an unauthenticated request with 401', async () => {
@@ -163,6 +175,7 @@ describe('GET /bot-config', () => {
     const res = await request(app)
       .get('/bot-config')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceA)
       .expect(200);
 
     expect(res.body.prompt).toBe(DEFAULT_BOT_PROMPT);
@@ -176,6 +189,7 @@ describe('GET /bot-config', () => {
     const get = await request(app)
       .get('/bot-config')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
     expect(get.body.limits_config).toHaveLength(4);
     expect(get.body.resolved_limits).toEqual({
@@ -189,6 +203,7 @@ describe('GET /bot-config', () => {
     const badSave = await request(app)
       .post('/bot-config')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ limits_config: [{ key: 'max_bot_messages', value: 999 }] })
       .expect(422);
     expect(badSave.body.error.message).toMatch(/max_bot_messages/);
@@ -200,11 +215,13 @@ describe('GET /bot-config', () => {
     const original = await request(app)
       .get('/bot-config')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
 
     await request(app)
       .post('/bot-config')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({
         limits_config: original.body.limits_config.map((l: { key: string; value: number }) =>
           l.key === 'max_unhelped_replies' ? { ...l, value: 5 } : l,
@@ -215,12 +232,14 @@ describe('GET /bot-config', () => {
     const history = await request(app)
       .get('/bot-config/history?field=limits_config')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
     const changeLogId = history.body.entries[0].id;
 
     const restored = await request(app)
       .post('/bot-config/rollback')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ field: 'limits_config', change_log_id: changeLogId, side: 'before' })
       .expect(200);
     expect(restored.body.resolved_limits.max_unhelped_replies).toBe(3);
@@ -235,6 +254,7 @@ describe('POST /bot-config', () => {
     const res = await request(app)
       .post('/bot-config')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ is_provisioned: true, prompt: 'Custom prompt' })
       .expect(200);
 
@@ -257,6 +277,7 @@ describe('POST /bot-config', () => {
     await request(app)
       .post('/bot-config')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ is_provisioned: true, prompt: 'Custom prompt' })
       .expect(200);
 
@@ -277,6 +298,7 @@ describe('POST /bot-config', () => {
     const res = await request(app)
       .post('/bot-config')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ rules: withoutLocked })
       .expect(422);
     expect(res.body.error.message).toContain('no_credentials');
@@ -299,6 +321,7 @@ describe('POST /bot-config', () => {
     const res = await request(app)
       .post('/bot-config')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ rules })
       .expect(200);
     expect(res.body.system_prompt).toContain('Never mention competitor games.');
@@ -315,6 +338,7 @@ describe('POST /bot-config', () => {
     const res = await request(app)
       .post('/bot-config')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ tools_config: toolsConfig })
       .expect(200);
     expect(res.body.enabled_tools).not.toContain('classify');
@@ -329,6 +353,7 @@ describe('POST /bot-config', () => {
     await request(app)
       .post('/bot-config')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ tools_config: missingOne })
       .expect(422);
   });
@@ -340,11 +365,13 @@ describe('POST /bot-config', () => {
     await request(app)
       .post('/bot-config')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ prompt: 'First' })
       .expect(200);
     const res = await request(app)
       .post('/bot-config')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ prompt: 'Second' })
       .expect(200);
 
@@ -364,11 +391,13 @@ describe('POST /bot-config', () => {
     await request(app)
       .post('/bot-config')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ prompt: 'Custom' })
       .expect(200);
     const res = await request(app)
       .post('/bot-config')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ prompt: null })
       .expect(200);
 
@@ -391,11 +420,13 @@ describe('POST /bot-config', () => {
     await request(app)
       .post('/bot-config')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ is_provisioned: true })
       .expect(200);
     await request(app)
       .post('/bot-config')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ is_provisioned: false })
       .expect(200);
 
@@ -413,6 +444,7 @@ describe('POST /bot-config', () => {
     const res = await request(app)
       .post('/bot-config')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ prompt: '   ' })
       .expect(422);
 
@@ -432,11 +464,13 @@ describe('POST /bot-config', () => {
     await request(app)
       .post('/bot-config')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({})
       .expect(422);
     await request(app)
       .post('/bot-config')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ provisioned: true })
       .expect(422);
   });
@@ -451,10 +485,15 @@ describe('POST /bot-config', () => {
     await request(app)
       .post('/bot-config')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ prompt: 'Lead tried to edit' })
       .expect(403);
 
-    await request(app).get('/bot-config').set('Authorization', `Bearer ${token}`).expect(200);
+    await request(app)
+      .get('/bot-config')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
 
     const { rows } = await ownerPool.query<{ count: string }>(
       `select count(*)::text as count from bot_config where workspace_id = $1`,
@@ -470,6 +509,7 @@ describe('POST /bot-config', () => {
     await request(app)
       .post('/bot-config')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ is_provisioned: true })
       .expect(403);
 
@@ -487,6 +527,7 @@ describe('POST /bot-config', () => {
     await request(app)
       .post('/bot-config')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ prompt: 'x' })
       .expect(403);
 
@@ -505,6 +546,7 @@ describe('POST /bot-config', () => {
     await request(app)
       .post('/bot-config')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceA)
       .send({ prompt: 'A' })
       .expect(200);
 
@@ -523,17 +565,20 @@ describe('POST /bot-config/rollback', () => {
     await request(app)
       .post('/bot-config')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ prompt: 'First' })
       .expect(200);
     await request(app)
       .post('/bot-config')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ prompt: 'Second' })
       .expect(200);
 
     const history = await request(app)
       .get('/bot-config/history?field=prompt')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
     const firstChangeId = history.body.entries.find(
       (e: { after_value: unknown }) => e.after_value === 'First',
@@ -542,6 +587,7 @@ describe('POST /bot-config/rollback', () => {
     const res = await request(app)
       .post('/bot-config/rollback')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ field: 'prompt', change_log_id: firstChangeId, side: 'after' })
       .expect(200);
     expect(res.body.prompt).toBe('First');
@@ -559,6 +605,7 @@ describe('POST /bot-config/rollback', () => {
     await request(app)
       .post('/bot-config/rollback')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ field: 'prompt', change_log_id: '999999999', side: 'after' })
       .expect(404);
   });
@@ -570,11 +617,13 @@ describe('POST /bot-config/rollback', () => {
     await request(app)
       .post('/bot-config')
       .set('Authorization', `Bearer ${tokenB}`)
+      .set('X-Workspace-Id', workspaceB)
       .send({ prompt: 'B prompt' })
       .expect(200);
     const historyB = await request(app)
       .get('/bot-config/history')
       .set('Authorization', `Bearer ${tokenB}`)
+      .set('X-Workspace-Id', workspaceB)
       .expect(200);
     const idFromB = historyB.body.entries[0].id;
 
@@ -582,6 +631,7 @@ describe('POST /bot-config/rollback', () => {
     await request(app)
       .post('/bot-config/rollback')
       .set('Authorization', `Bearer ${tokenA}`)
+      .set('X-Workspace-Id', workspaceA)
       .send({ field: 'prompt', change_log_id: idFromB, side: 'after' })
       .expect(404);
   });
@@ -592,17 +642,20 @@ describe('POST /bot-config/rollback', () => {
     await request(app)
       .post('/bot-config')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ prompt: 'X' })
       .expect(200);
     const history = await request(app)
       .get('/bot-config/history?field=prompt')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
     const promptChangeId = history.body.entries[0].id;
 
     await request(app)
       .post('/bot-config/rollback')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ field: 'rules', change_log_id: promptChangeId, side: 'after' })
       .expect(422);
   });
@@ -613,17 +666,20 @@ describe('POST /bot-config/rollback', () => {
     await request(app)
       .post('/bot-config')
       .set('Authorization', `Bearer ${adminToken}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ prompt: 'X' })
       .expect(200);
     const history = await request(app)
       .get('/bot-config/history')
       .set('Authorization', `Bearer ${adminToken}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
     const { token: leadToken } = await seedAgentWithRole(workspaceId, 'team_lead');
 
     await request(app)
       .post('/bot-config/rollback')
       .set('Authorization', `Bearer ${leadToken}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ field: 'prompt', change_log_id: history.body.entries[0].id, side: 'after' })
       .expect(403);
   });
@@ -637,6 +693,7 @@ describe('GET /bot-config/history', () => {
     const res = await request(app)
       .get('/bot-config/history')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
 
     expect(res.body).toEqual({ entries: [], next_cursor: null });
@@ -649,17 +706,20 @@ describe('GET /bot-config/history', () => {
     await request(app)
       .post('/bot-config')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ prompt: 'First' })
       .expect(200);
     await request(app)
       .post('/bot-config')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ prompt: null })
       .expect(200);
 
     const res = await request(app)
       .get('/bot-config/history?field=prompt')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
 
     expect(res.body.entries).toHaveLength(2);
@@ -684,12 +744,14 @@ describe('GET /bot-config/history', () => {
     await request(app)
       .post('/bot-config')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ is_provisioned: true, prompt: 'First' })
       .expect(200);
 
     const res = await request(app)
       .get('/bot-config/history?field=prompt')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
     expect(res.body.entries.every((e: { field: string }) => e.field === 'prompt')).toBe(true);
   });
@@ -701,12 +763,14 @@ describe('GET /bot-config/history', () => {
     await request(app)
       .post('/bot-config')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ is_provisioned: true, prompt: 'First' })
       .expect(200);
 
     const first = await request(app)
       .get('/bot-config/history?limit=1')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
     expect(first.body.entries).toHaveLength(1);
     expect(first.body.next_cursor).toEqual(expect.any(String));
@@ -714,6 +778,7 @@ describe('GET /bot-config/history', () => {
     const second = await request(app)
       .get(`/bot-config/history?limit=1&cursor=${encodeURIComponent(first.body.next_cursor)}`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
     expect(second.body.entries).toHaveLength(1);
 
@@ -730,14 +795,17 @@ describe('GET /bot-config/history', () => {
     await request(app)
       .get('/bot-config/history?limit=0')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(422);
     await request(app)
       .get('/bot-config/history?limit=201')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(422);
     await request(app)
       .get('/bot-config/history?cursor=not-a-cursor!!')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(422);
   });
 
@@ -748,6 +816,7 @@ describe('GET /bot-config/history', () => {
     await request(app)
       .post('/bot-config')
       .set('Authorization', `Bearer ${tokenB}`)
+      .set('X-Workspace-Id', workspaceB)
       .send({ prompt: 'B' })
       .expect(200);
     const { token: tokenA } = await seedAgentWithRole(workspaceA, 'admin');
@@ -755,6 +824,7 @@ describe('GET /bot-config/history', () => {
     const res = await request(app)
       .get('/bot-config/history')
       .set('Authorization', `Bearer ${tokenA}`)
+      .set('X-Workspace-Id', workspaceA)
       .expect(200);
 
     expect(res.body.entries).toEqual([]);
@@ -768,6 +838,7 @@ describe('GET /bot-config/history', () => {
     await request(app)
       .post('/bot-config')
       .set('Authorization', `Bearer ${adminToken}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ prompt: 'First' })
       .expect(200);
     const { token: leadToken } = await seedAgentWithRole(workspaceId, 'team_lead');
@@ -775,6 +846,7 @@ describe('GET /bot-config/history', () => {
     const res = await request(app)
       .get('/bot-config/history')
       .set('Authorization', `Bearer ${leadToken}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
 
     expect(res.body.entries).toHaveLength(1);
@@ -787,6 +859,7 @@ describe('GET /bot-config/history', () => {
     await request(app)
       .get('/bot-config/history')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(403);
   });
 });

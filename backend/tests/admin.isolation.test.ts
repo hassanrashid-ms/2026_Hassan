@@ -29,14 +29,14 @@ describe('requireAdminAccess', () => {
   it('admits a globally is_admin agent', async () => {
     const workspaceId = await seedWorkspace();
     const agentId = await seedAgent(undefined, { isAdmin: true });
-    const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId });
+    const token = await signAgentSession({ agent_id: agentId});
     await request(app).get('/admin/probe').set('Authorization', `Bearer ${token}`).expect(200);
   });
 
   it('refuses a non-admin agent with 403', async () => {
     const workspaceId = await seedWorkspace();
     const agentId = await seedAgent();
-    const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId });
+    const token = await signAgentSession({ agent_id: agentId});
     await request(app).get('/admin/probe').set('Authorization', `Bearer ${token}`).expect(403);
   });
 
@@ -56,7 +56,7 @@ describe('admin cross-workspace isolation', () => {
     const workspaceB = await seedWorkspace({ name: 'Isolated B' });
     const adminId = await seedAgent(undefined, { isAdmin: true });
     // Session names workspace A; the admin endpoint must still see workspace B.
-    const token = await signAgentSession({ agent_id: adminId, workspace_id: workspaceA });
+    const token = await signAgentSession({ agent_id: adminId});
 
     const res = await request(fullApp)
       .get('/admin/workspaces')
@@ -71,7 +71,7 @@ describe('admin cross-workspace isolation', () => {
   it('a non-admin session is refused by the real admin router at 403, not merely the probe', async () => {
     const workspaceId = await seedWorkspace();
     const agentId = await seedAgent();
-    const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId });
+    const token = await signAgentSession({ agent_id: agentId});
 
     await request(fullApp)
       .get('/admin/workspaces')

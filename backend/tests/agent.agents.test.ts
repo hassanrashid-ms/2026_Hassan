@@ -15,7 +15,7 @@ async function setupAgent(workspaceId: string) {
     `insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`,
     [workspaceId, agentId],
   );
-  const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId });
+  const token = await signAgentSession({ agent_id: agentId });
   return { agentId, token };
 }
 
@@ -45,6 +45,7 @@ describe('GET /agent/agents', () => {
     const res = await request(app)
       .get('/agent/agents')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
 
     expect(res.body.agents).toHaveLength(2);

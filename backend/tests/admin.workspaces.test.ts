@@ -31,7 +31,7 @@ beforeEach(truncateAll);
 
 async function adminToken(workspaceId: string): Promise<string> {
   const agentId = await seedAgent(undefined, { isAdmin: true });
-  return signAgentSession({ agent_id: agentId, workspace_id: workspaceId });
+  return signAgentSession({ agent_id: agentId});
 }
 
 describe('GET /admin/workspaces', () => {
@@ -83,7 +83,7 @@ describe('POST /admin/workspaces', () => {
   it('refuses a non-admin agent with 403', async () => {
     const workspaceId = await seedWorkspace();
     const agentId = await seedAgent();
-    const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId });
+    const token = await signAgentSession({ agent_id: agentId});
 
     await request(app)
       .post('/admin/workspaces')

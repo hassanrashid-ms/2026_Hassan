@@ -3,9 +3,12 @@ import express from 'express';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { req as request } from './helpers/http.ts';
 import { closeDb } from '../src/shared/db/client.ts';
+import { closeAdminDb } from '../src/shared/db/adminClient.ts';
 import { requireAgentSession } from '../src/shared/middleware/requireAgentSession.ts';
+import { resolveConsoleWorkspace } from '../src/shared/middleware/resolveConsoleWorkspace.ts';
 import { errorMiddleware } from '../src/errors.ts';
 import { signAgentSession } from '../src/shared/auth/agentSession.ts';
+import { closeWsAuthRedis } from '../src/shared/auth/wsAuthCache.ts';
 import { closeSocketServer, createSocketServer } from '../src/shared/realtime/socketServer.ts';
 import { conversationsRouter } from '../src/agent/routers/conversationsRouter.ts';
 import {
@@ -24,7 +27,7 @@ import {
 // it keeps this task's test run from racing Task 8's over the same file.
 const app = express();
 app.use(express.json());
-app.use(requireAgentSession, conversationsRouter);
+app.use(requireAgentSession, resolveConsoleWorkspace, conversationsRouter);
 app.use(errorMiddleware);
 
 // claimConversationHandler calls getIo() after a successful claim, so this
@@ -38,7 +41,9 @@ beforeAll(() => {
 
 afterAll(async () => {
   await closeSocketServer();
+  await closeWsAuthRedis();
   await closeDb();
+  await closeAdminDb();
   await closeOwnerPool();
 });
 
@@ -53,7 +58,7 @@ async function setupAgent(workspaceId: string) {
     `insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`,
     [workspaceId, agentId],
   );
-  const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId });
+  const token = await signAgentSession({ agent_id: agentId });
   return { agentId, token };
 }
 
@@ -92,7 +97,8 @@ describe('POST /agent/conversations/:id/ask-resolved', () => {
 
     const res = await request(app)
       .post(`/conversations/${conversationId}/ask-resolved`)
-      .set('Authorization', `Bearer ${token}`);
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId);
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ asked: true });
@@ -129,10 +135,12 @@ describe('POST /agent/conversations/:id/ask-resolved', () => {
 
     await request(app)
       .post(`/conversations/${conversationId}/ask-resolved`)
-      .set('Authorization', `Bearer ${token}`);
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId);
     const second = await request(app)
       .post(`/conversations/${conversationId}/ask-resolved`)
-      .set('Authorization', `Bearer ${token}`);
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId);
 
     expect(second.status).toBe(409);
     expect(second.body.error.code).toBe('already_pending');
@@ -152,7 +160,8 @@ describe('POST /agent/conversations/:id/ask-resolved', () => {
 
     const res = await request(app)
       .post(`/conversations/${conversationId}/ask-resolved`)
-      .set('Authorization', `Bearer ${token}`);
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId);
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe('wrong_status');
     expect((await conversationRow(conversationId)).confirm_phase).toBe('none');
@@ -173,6 +182,7 @@ describe('POST /agent/conversations/:id/ask-resolved', () => {
         await request(app)
           .post(`/conversations/${conversationId}/ask-resolved`)
           .set('Authorization', `Bearer ${token}`)
+          .set('X-Workspace-Id', workspaceId)
       ).status,
     ).toBe(409);
   });
@@ -192,6 +202,7 @@ describe('POST /agent/conversations/:id/ask-resolved', () => {
         await request(app)
           .post(`/conversations/${conversationId}/ask-resolved`)
           .set('Authorization', `Bearer ${token}`)
+          .set('X-Workspace-Id', workspaceId)
       ).status,
     ).toBe(200);
   });
@@ -208,7 +219,8 @@ describe('POST /agent/conversations/:id/ask-resolved', () => {
 
     const res = await request(app)
       .post(`/conversations/${conversationId}/ask-resolved`)
-      .set('Authorization', `Bearer ${token}`);
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId);
 
     expect(res.status).toBe(200);
     const row = await conversationRow(conversationId);
@@ -231,6 +243,7 @@ describe('POST /agent/conversations/:id/ask-resolved', () => {
         await request(app)
           .post(`/conversations/${conversationId}/ask-resolved`)
           .set('Authorization', `Bearer ${token}`)
+          .set('X-Workspace-Id', workspaceId)
       ).status,
     ).toBe(200);
   });
@@ -256,7 +269,8 @@ describe('POST /agent/conversations/:id/ask-resolved', () => {
 
     const res = await request(app)
       .post(`/conversations/${conversationId}/ask-resolved`)
-      .set('Authorization', `Bearer ${token}`);
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId);
     expect(res.status).toBe(403);
     expect(res.body.error.code).toBe('not_owner');
     expect((await conversationRow(conversationId)).confirm_phase).toBe('none');
@@ -274,7 +288,8 @@ describe('POST /agent/conversations/:id/ask-resolved', () => {
     await ownerPool.query(`update conversation set status = 'open' where id = $1`, [foreignId]);
     const res = await request(app)
       .post(`/conversations/${foreignId}/ask-resolved`)
-      .set('Authorization', `Bearer ${token}`);
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId);
     expect(res.status).toBe(404);
   });
 
@@ -286,6 +301,7 @@ describe('POST /agent/conversations/:id/ask-resolved', () => {
         await request(app)
           .post('/conversations/not-a-uuid/ask-resolved')
           .set('Authorization', `Bearer ${token}`)
+          .set('X-Workspace-Id', workspaceId)
       ).status,
     ).toBe(422);
   });

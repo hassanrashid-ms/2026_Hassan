@@ -3,9 +3,12 @@ import express from 'express';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { req as request } from './helpers/http.ts';
 import { closeDb } from '../src/shared/db/client.ts';
+import { closeAdminDb } from '../src/shared/db/adminClient.ts';
 import { requireAgentSession } from '../src/shared/middleware/requireAgentSession.ts';
+import { resolveConsoleWorkspace } from '../src/shared/middleware/resolveConsoleWorkspace.ts';
 import { errorMiddleware } from '../src/errors.ts';
 import { signAgentSession } from '../src/shared/auth/agentSession.ts';
+import { closeWsAuthRedis } from '../src/shared/auth/wsAuthCache.ts';
 import { closeSocketServer, createSocketServer } from '../src/shared/realtime/socketServer.ts';
 import { conversationsRouter } from '../src/agent/routers/conversationsRouter.ts';
 import {
@@ -21,7 +24,7 @@ import {
 
 const app = express();
 app.use(express.json());
-app.use(requireAgentSession, conversationsRouter);
+app.use(requireAgentSession, resolveConsoleWorkspace, conversationsRouter);
 app.use(errorMiddleware);
 
 beforeAll(() => {
@@ -30,7 +33,9 @@ beforeAll(() => {
 
 afterAll(async () => {
   await closeSocketServer();
+  await closeWsAuthRedis();
   await closeDb();
+  await closeAdminDb();
   await closeOwnerPool();
 });
 
@@ -51,7 +56,7 @@ async function seedAgentWithRole(
       [workspaceId, agentId, role],
     );
   }
-  const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId });
+  const token = await signAgentSession({ agent_id: agentId, is_admin: role === 'admin' });
   return { agentId, token };
 }
 
@@ -67,6 +72,7 @@ describe('PATCH /agent/conversations/:id/assign', () => {
     const res = await request(app)
       .patch(`/conversations/${conversationId}/assign`)
       .set('Authorization', `Bearer ${teamLeadToken}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ agentId: targetAgentId })
       .expect(200);
 
@@ -90,6 +96,7 @@ describe('PATCH /agent/conversations/:id/assign', () => {
     const res = await request(app)
       .patch(`/conversations/${conversationId}/assign`)
       .set('Authorization', `Bearer ${adminToken}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ agentId: targetAgentId })
       .expect(200);
 
@@ -113,6 +120,7 @@ describe('PATCH /agent/conversations/:id/assign', () => {
     await request(app)
       .patch(`/conversations/${conversationId}/assign`)
       .set('Authorization', `Bearer ${agentToken}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ agentId: targetAgentId })
       .expect(403);
   });
@@ -128,6 +136,7 @@ describe('PATCH /agent/conversations/:id/assign', () => {
     const res = await request(app)
       .patch(`/conversations/${conversationId}/assign`)
       .set('Authorization', `Bearer ${teamLeadToken}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ agentId: targetAgentId })
       .expect(409);
 
@@ -144,6 +153,7 @@ describe('PATCH /agent/conversations/:id/assign', () => {
     const res = await request(app)
       .patch(`/conversations/${conversationId}/assign`)
       .set('Authorization', `Bearer ${teamLeadToken}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ agentId: targetAgentId })
       .expect(404);
 
@@ -166,6 +176,7 @@ describe('PATCH /agent/conversations/:id/assign', () => {
     const res = await request(app)
       .patch(`/conversations/${conversationId}/assign`)
       .set('Authorization', `Bearer ${teamLeadToken}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ agentId: targetAgentId })
       .expect(404);
 
@@ -184,6 +195,7 @@ describe('PATCH /agent/conversations/:id/assign', () => {
     const res = await request(app)
       .patch(`/conversations/${conversationId}/assign`)
       .set('Authorization', `Bearer ${teamLeadToken}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ agentId: targetAgentId })
       .expect(409);
 
@@ -204,6 +216,7 @@ describe('PATCH /agent/conversations/:id/assign', () => {
     await request(app)
       .patch(`/conversations/${conversationId}/assign`)
       .set('Authorization', `Bearer ${teamLeadToken}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ agentId: targetAgentId })
       .expect(200);
 
@@ -230,6 +243,7 @@ describe('PATCH /agent/conversations/:id/assign', () => {
     await request(app)
       .patch(`/conversations/${conversationId}/assign`)
       .set('Authorization', `Bearer ${teamLeadToken}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ agentId: targetAgentId })
       .expect(200);
 

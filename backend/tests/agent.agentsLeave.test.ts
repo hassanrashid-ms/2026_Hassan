@@ -3,9 +3,12 @@ import express from 'express';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { req as request } from './helpers/http.ts';
 import { closeDb } from '../src/shared/db/client.ts';
+import { closeAdminDb } from '../src/shared/db/adminClient.ts';
 import { requireAgentSession } from '../src/shared/middleware/requireAgentSession.ts';
+import { resolveConsoleWorkspace } from '../src/shared/middleware/resolveConsoleWorkspace.ts';
 import { errorMiddleware } from '../src/errors.ts';
 import { signAgentSession } from '../src/shared/auth/agentSession.ts';
+import { closeWsAuthRedis } from '../src/shared/auth/wsAuthCache.ts';
 import { agentsRouter } from '../src/agent/routers/agentsRouter.ts';
 import { incrementPresence, closePresenceRedis } from '../src/shared/realtime/presence.ts';
 import { startRealtimeServer } from './helpers/realtime.ts';
@@ -20,7 +23,7 @@ import {
 
 const app = express();
 app.use(express.json());
-app.use(requireAgentSession, agentsRouter);
+app.use(requireAgentSession, resolveConsoleWorkspace, agentsRouter);
 app.use(errorMiddleware);
 
 let realtime: Awaited<ReturnType<typeof startRealtimeServer>>;
@@ -32,14 +35,16 @@ beforeAll(async () => {
 afterAll(async () => {
   await realtime.close();
   await closePresenceRedis();
+  await closeWsAuthRedis();
   await closeDb();
+  await closeAdminDb();
   await closeOwnerPool();
 });
 
 beforeEach(truncateAll);
 
-async function tokenFor(agentId: string, workspaceId: string): Promise<string> {
-  return signAgentSession({ agent_id: agentId, workspace_id: workspaceId });
+async function tokenFor(agentId: string): Promise<string> {
+  return signAgentSession({ agent_id: agentId });
 }
 
 describe('PATCH /agent/agents/:agentId/leave', () => {
@@ -49,11 +54,12 @@ describe('PATCH /agent/agents/:agentId/leave', () => {
     await seedWorkspaceMember({ workspaceId, agentId: leadId, role: 'team_lead' });
     const targetId = await seedAgent();
     await seedWorkspaceMember({ workspaceId, agentId: targetId, role: 'agent' });
-    const token = await tokenFor(leadId, workspaceId);
+    const token = await tokenFor(leadId);
 
     const res = await request(app)
       .patch(`/agents/${targetId}/leave`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ onLeave: true })
       .expect(200);
     expect(res.body.status).toBe('on_leave');
@@ -80,11 +86,12 @@ describe('PATCH /agent/agents/:agentId/leave', () => {
     await seedWorkspaceMember({ workspaceId, agentId: leadId, role: 'team_lead' });
     const targetId = await seedAgent();
     await seedWorkspaceMember({ workspaceId, agentId: targetId, role: 'agent' });
-    const token = await tokenFor(leadId, workspaceId);
+    const token = await tokenFor(leadId);
 
     const res = await request(app)
       .patch(`/agents/${targetId}/leave`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ onLeave: true, days: 5 })
       .expect(200);
     expect(res.body.onLeaveUntil).not.toBeNull();
@@ -101,11 +108,12 @@ describe('PATCH /agent/agents/:agentId/leave', () => {
     await seedWorkspaceMember({ workspaceId, agentId: targetId, role: 'agent' });
     await ownerPool.query(`update agent set status = 'on_leave' where id = $1`, [targetId]);
     await incrementPresence(targetId);
-    const token = await tokenFor(leadId, workspaceId);
+    const token = await tokenFor(leadId);
 
     const res = await request(app)
       .patch(`/agents/${targetId}/leave`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ onLeave: false })
       .expect(200);
     expect(res.body).toEqual({ status: 'online', onLeaveSince: null, onLeaveUntil: null });
@@ -117,11 +125,12 @@ describe('PATCH /agent/agents/:agentId/leave', () => {
     await seedWorkspaceMember({ workspaceId, agentId: callerId, role: 'agent' });
     const targetId = await seedAgent();
     await seedWorkspaceMember({ workspaceId, agentId: targetId, role: 'agent' });
-    const token = await tokenFor(callerId, workspaceId);
+    const token = await tokenFor(callerId);
 
     await request(app)
       .patch(`/agents/${targetId}/leave`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ onLeave: true })
       .expect(403);
   });
@@ -130,11 +139,12 @@ describe('PATCH /agent/agents/:agentId/leave', () => {
     const workspaceId = await seedWorkspace();
     const leadId = await seedAgent();
     await seedWorkspaceMember({ workspaceId, agentId: leadId, role: 'team_lead' });
-    const token = await tokenFor(leadId, workspaceId);
+    const token = await tokenFor(leadId);
 
     const res = await request(app)
       .patch(`/agents/${randomUUID()}/leave`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ onLeave: true })
       .expect(404);
     expect(res.body.error.code).toBe('agent_not_found');
@@ -147,11 +157,12 @@ describe('PATCH /agent/agents/:agentId/leave', () => {
     const targetId = await seedAgent();
     await seedWorkspaceMember({ workspaceId, agentId: targetId, role: 'agent' });
     await ownerPool.query(`update agent set status = 'deactivated' where id = $1`, [targetId]);
-    const token = await tokenFor(leadId, workspaceId);
+    const token = await tokenFor(leadId);
 
     const res = await request(app)
       .patch(`/agents/${targetId}/leave`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ onLeave: true })
       .expect(409);
     expect(res.body.error.code).toBe('invalid_status');
@@ -163,11 +174,12 @@ describe('PATCH /agent/agents/:agentId/leave', () => {
     await seedWorkspaceMember({ workspaceId, agentId: leadId, role: 'team_lead' });
     const targetId = await seedAgent();
     await seedWorkspaceMember({ workspaceId, agentId: targetId, role: 'agent' });
-    const token = await tokenFor(leadId, workspaceId);
+    const token = await tokenFor(leadId);
 
     const res = await request(app)
       .patch(`/agents/${targetId}/leave`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ onLeave: 'yes' })
       .expect(400);
     expect(res.body.error.code).toBe('invalid_request');

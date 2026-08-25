@@ -6,7 +6,7 @@ import { closeAdminDb } from '../src/shared/db/adminClient.ts';
 import { errorMiddleware } from '../src/errors.ts';
 import { adminRouter } from '../src/admin/router.ts';
 import { signAgentSession } from '../src/shared/auth/agentSession.ts';
-import { closeOwnerPool, seedAgent, seedWorkspace, truncateAll } from './helpers/db.ts';
+import { closeOwnerPool, seedAgent, truncateAll } from './helpers/db.ts';
 
 const app = express();
 app.use(express.json());
@@ -23,13 +23,12 @@ beforeEach(truncateAll);
 
 describe('GET /admin/agents', () => {
   it('lists the directory, filterable by email/name', async () => {
-    const workspaceId = await seedWorkspace();
     const admin = await seedAgent('super@mindstormstudios.com', {
       isAdmin: true,
       isSuperAdmin: true,
     });
     await seedAgent('nomatch@mindstormstudios.com');
-    const token = await signAgentSession({ agent_id: admin, workspace_id: workspaceId });
+    const token = await signAgentSession({ agent_id: admin });
 
     const res = await request(app)
       .get('/admin/agents?q=super')
@@ -47,13 +46,12 @@ describe('GET /admin/agents', () => {
 
 describe('PATCH /admin/agents/:id/admin', () => {
   it('super admin grants admin to another agent', async () => {
-    const workspaceId = await seedWorkspace();
     const superAdmin = await seedAgent('super@mindstormstudios.com', {
       isAdmin: true,
       isSuperAdmin: true,
     });
     const target = await seedAgent('target@mindstormstudios.com');
-    const token = await signAgentSession({ agent_id: superAdmin, workspace_id: workspaceId });
+    const token = await signAgentSession({ agent_id: superAdmin });
 
     const res = await request(app)
       .patch(`/admin/agents/${target}/admin`)
@@ -65,10 +63,9 @@ describe('PATCH /admin/agents/:id/admin', () => {
   });
 
   it('refuses a plain admin (not super admin) with 403', async () => {
-    const workspaceId = await seedWorkspace();
     const plainAdmin = await seedAgent('admin@mindstormstudios.com', { isAdmin: true });
     const target = await seedAgent('target@mindstormstudios.com');
-    const token = await signAgentSession({ agent_id: plainAdmin, workspace_id: workspaceId });
+    const token = await signAgentSession({ agent_id: plainAdmin });
 
     await request(app)
       .patch(`/admin/agents/${target}/admin`)
@@ -80,14 +77,13 @@ describe('PATCH /admin/agents/:id/admin', () => {
 
 describe('PATCH /admin/agents/:id/super-admin', () => {
   it('blocks a super admin from revoking their own flag', async () => {
-    const workspaceId = await seedWorkspace();
     const superAdmin = await seedAgent('super@mindstormstudios.com', {
       isAdmin: true,
       isSuperAdmin: true,
     });
     // A second super admin so "last super admin" is not the reason for the 422.
     await seedAgent('other-super@mindstormstudios.com', { isAdmin: true, isSuperAdmin: true });
-    const token = await signAgentSession({ agent_id: superAdmin, workspace_id: workspaceId });
+    const token = await signAgentSession({ agent_id: superAdmin });
 
     await request(app)
       .patch(`/admin/agents/${superAdmin}/super-admin`)
@@ -97,7 +93,6 @@ describe('PATCH /admin/agents/:id/super-admin', () => {
   });
 
   it('blocks revoking the last super admin', async () => {
-    const workspaceId = await seedWorkspace();
     const onlySuperAdmin = await seedAgent('only-super@mindstormstudios.com', {
       isAdmin: true,
       isSuperAdmin: true,
@@ -106,7 +101,7 @@ describe('PATCH /admin/agents/:id/super-admin', () => {
       isAdmin: true,
       isSuperAdmin: true,
     });
-    const token = await signAgentSession({ agent_id: otherAdmin, workspace_id: workspaceId });
+    const token = await signAgentSession({ agent_id: otherAdmin });
 
     await request(app)
       .patch(`/admin/agents/${onlySuperAdmin}/super-admin`)

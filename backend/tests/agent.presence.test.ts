@@ -3,9 +3,12 @@ import express from 'express';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { req as request } from './helpers/http.ts';
 import { closeDb } from '../src/shared/db/client.ts';
+import { closeAdminDb } from '../src/shared/db/adminClient.ts';
 import { requireAgentSession } from '../src/shared/middleware/requireAgentSession.ts';
+import { resolveConsoleWorkspace } from '../src/shared/middleware/resolveConsoleWorkspace.ts';
 import { errorMiddleware } from '../src/errors.ts';
 import { signAgentSession } from '../src/shared/auth/agentSession.ts';
+import { closeWsAuthRedis } from '../src/shared/auth/wsAuthCache.ts';
 import { presenceRouter } from '../src/agent/routers/presenceRouter.ts';
 import {
   decrementPresence,
@@ -14,11 +17,17 @@ import {
   closePresenceRedis,
 } from '../src/shared/realtime/presence.ts';
 import { connectClient, startRealtimeServer } from './helpers/realtime.ts';
-import { closeOwnerPool, seedWorkspace, truncateAll } from './helpers/db.ts';
+import {
+  closeOwnerPool,
+  seedAgent,
+  seedWorkspace,
+  seedWorkspaceMember,
+  truncateAll,
+} from './helpers/db.ts';
 
 const app = express();
 app.use(express.json());
-app.use(requireAgentSession, presenceRouter);
+app.use(requireAgentSession, resolveConsoleWorkspace, presenceRouter);
 app.use(errorMiddleware);
 
 // One real, listening socket server for the whole file — reused by both the
@@ -35,14 +44,16 @@ beforeAll(async () => {
 afterAll(async () => {
   await realtime.close();
   await closePresenceRedis();
+  await closeWsAuthRedis();
   await closeDb();
+  await closeAdminDb();
   await closeOwnerPool();
 });
 
 beforeEach(truncateAll);
 
-async function tokenFor(agentId: string, workspaceId: string): Promise<string> {
-  return signAgentSession({ agent_id: agentId, workspace_id: workspaceId });
+async function tokenFor(agentId: string): Promise<string> {
+  return signAgentSession({ agent_id: agentId });
 }
 
 function waitFor(socket: ReturnType<typeof connectClient>, event: string): Promise<unknown> {
@@ -91,26 +102,30 @@ describe('presence helper — connect/disconnect counter arithmetic', () => {
 
 describe('GET /agent/presence', () => {
   it('returns offline with no open connection', async () => {
-    const agentId = randomUUID();
     const workspaceId = await seedWorkspace();
-    const token = await tokenFor(agentId, workspaceId);
+    const agentId = await seedAgent();
+    await seedWorkspaceMember({ workspaceId, agentId, role: 'agent' });
+    const token = await tokenFor(agentId);
 
     const res = await request(app)
       .get('/presence')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
     expect(res.body).toEqual({ status: 'offline' });
   });
 
   it('returns online once a connection is open', async () => {
-    const agentId = randomUUID();
     const workspaceId = await seedWorkspace();
-    const token = await tokenFor(agentId, workspaceId);
+    const agentId = await seedAgent();
+    await seedWorkspaceMember({ workspaceId, agentId, role: 'agent' });
+    const token = await tokenFor(agentId);
     await incrementPresence(agentId);
 
     const res = await request(app)
       .get('/presence')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
     expect(res.body).toEqual({ status: 'online' });
   });
@@ -118,41 +133,47 @@ describe('GET /agent/presence', () => {
 
 describe('PATCH /agent/presence', () => {
   it('400s on an unrecognized status', async () => {
-    const agentId = randomUUID();
     const workspaceId = await seedWorkspace();
-    const token = await tokenFor(agentId, workspaceId);
+    const agentId = await seedAgent();
+    await seedWorkspaceMember({ workspaceId, agentId, role: 'agent' });
+    const token = await tokenFor(agentId);
     await incrementPresence(agentId);
 
     const res = await request(app)
       .patch('/presence')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ status: 'busy' })
       .expect(400);
     expect(res.body.error.code).toBe('invalid_request');
   });
 
   it('409s when the caller has no open connection', async () => {
-    const agentId = randomUUID();
     const workspaceId = await seedWorkspace();
-    const token = await tokenFor(agentId, workspaceId);
+    const agentId = await seedAgent();
+    await seedWorkspaceMember({ workspaceId, agentId, role: 'agent' });
+    const token = await tokenFor(agentId);
 
     const res = await request(app)
       .patch('/presence')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ status: 'away' })
       .expect(409);
     expect(res.body.error.code).toBe('not_connected');
   });
 
   it('200s and persists the status when connected', async () => {
-    const agentId = randomUUID();
     const workspaceId = await seedWorkspace();
-    const token = await tokenFor(agentId, workspaceId);
+    const agentId = await seedAgent();
+    await seedWorkspaceMember({ workspaceId, agentId, role: 'agent' });
+    const token = await tokenFor(agentId);
     await incrementPresence(agentId);
 
     const res = await request(app)
       .patch('/presence')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ status: 'away' })
       .expect(200);
     expect(res.body).toEqual({ status: 'away' });
@@ -162,11 +183,12 @@ describe('PATCH /agent/presence', () => {
 
 describe('presence over the real socket connection', () => {
   it('emits presence_changed online on first connect and offline on last disconnect', async () => {
-    const agentId = randomUUID();
     const workspaceId = await seedWorkspace();
-    const token = await tokenFor(agentId, workspaceId);
+    const agentId = await seedAgent();
+    await seedWorkspaceMember({ workspaceId, agentId, role: 'agent' });
+    const token = await tokenFor(agentId);
 
-    const observerToken = await tokenFor(randomUUID(), workspaceId);
+    const observerToken = await tokenFor(randomUUID());
     const observer = connectClient(realtime.url, { token: observerToken, role: 'agent' });
     await waitFor(observer, 'connect');
     // The connect handler's own presence broadcast (for the observer's own

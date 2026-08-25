@@ -4,9 +4,12 @@ import express from 'express';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { req as request } from './helpers/http.ts';
 import { closeDb } from '../src/shared/db/client.ts';
+import { closeAdminDb } from '../src/shared/db/adminClient.ts';
 import { errorMiddleware } from '../src/errors.ts';
 import { requireAgentSession } from '../src/shared/middleware/requireAgentSession.ts';
+import { resolveConsoleWorkspace } from '../src/shared/middleware/resolveConsoleWorkspace.ts';
 import { signAgentSession } from '../src/shared/auth/agentSession.ts';
+import { closeWsAuthRedis } from '../src/shared/auth/wsAuthCache.ts';
 import { closeSocketServer, createSocketServer } from '../src/shared/realtime/socketServer.ts';
 import { articlesRouter } from '../src/agent/routers/articlesRouter.ts';
 import { closeOwnerPool, ownerPool, seedWorkspace, truncateAll } from './helpers/db.ts';
@@ -20,7 +23,7 @@ vi.mock('../src/shared/weaviate/articlesIndex.ts', () => ({
 
 const app = express();
 app.use(express.json());
-app.use(requireAgentSession, articlesRouter);
+app.use(requireAgentSession, resolveConsoleWorkspace, articlesRouter);
 app.use(errorMiddleware);
 
 beforeAll(() => {
@@ -29,7 +32,9 @@ beforeAll(() => {
 
 afterAll(async () => {
   await closeSocketServer();
+  await closeWsAuthRedis();
   await closeDb();
+  await closeAdminDb();
   await closeOwnerPool();
 });
 
@@ -49,7 +54,7 @@ async function seedAgent(workspaceId: string): Promise<{ agentId: string; token:
     `insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`,
     [workspaceId, agentId],
   );
-  const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId });
+  const token = await signAgentSession({ agent_id: agentId });
   return { agentId, token };
 }
 
@@ -61,6 +66,7 @@ describe('POST /articles', () => {
     const res = await request(app)
       .post('/articles')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ title: 'How to reset your password', body: 'Go to settings...' })
       .expect(201);
 
@@ -83,6 +89,7 @@ describe('POST /articles', () => {
     await request(app)
       .post('/articles')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceA)
       .send({ title: 'X', body: 'Y', intent_id: rows[0]!.id })
       .expect(404);
   });
@@ -94,6 +101,7 @@ describe('POST /articles', () => {
     const created = await request(app)
       .post('/articles')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ title: 'X', body: 'Y', keywords: ['refund', 'billing'] })
       .expect(201);
     expect(created.body.keywords).toEqual(['refund', 'billing']);
@@ -101,6 +109,7 @@ describe('POST /articles', () => {
     const patched = await request(app)
       .patch(`/articles/${created.body.id}`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ keywords: ['refund'] })
       .expect(200);
     expect(patched.body.keywords).toEqual(['refund']);
@@ -113,6 +122,7 @@ describe('POST /articles', () => {
     const created = await request(app)
       .post('/articles')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ title: 'X', body: 'Y' })
       .expect(201);
     expect(created.body.keywords).toEqual([]);
@@ -127,6 +137,7 @@ describe('draft -> publish -> archive', () => {
     const created = await request(app)
       .post('/articles')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ title: 'X', body: 'Y' })
       .expect(201);
     const id = created.body.id as string;
@@ -134,6 +145,7 @@ describe('draft -> publish -> archive', () => {
     const patched = await request(app)
       .patch(`/articles/${id}`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ title: 'Updated title' })
       .expect(200);
     expect(patched.body.title).toBe('Updated title');
@@ -141,6 +153,7 @@ describe('draft -> publish -> archive', () => {
     const published = await request(app)
       .post(`/articles/${id}/publish`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
     expect(published.body.state).toBe('published');
     expect(published.body.published_by).toBeTruthy();
@@ -149,17 +162,20 @@ describe('draft -> publish -> archive', () => {
     await request(app)
       .patch(`/articles/${id}`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ title: 'Should fail' })
       .expect(409);
 
     await request(app)
       .post(`/articles/${id}/publish`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(409);
 
     const archived = await request(app)
       .post(`/articles/${id}/archive`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
     expect(archived.body.state).toBe('archived');
   });
@@ -176,6 +192,7 @@ describe('draft -> publish -> archive', () => {
     await request(app)
       .post(`/articles/${rows[0]!.id}/publish`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(409);
   });
 
@@ -192,6 +209,7 @@ describe('draft -> publish -> archive', () => {
     await request(app)
       .post(`/articles/${rows[0]!.id}/archive`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
   });
 
@@ -202,6 +220,7 @@ describe('draft -> publish -> archive', () => {
     const created = await request(app)
       .post('/articles')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ title: 'X', body: 'Y', keywords: ['k'] })
       .expect(201);
     const id = created.body.id as string;
@@ -209,6 +228,7 @@ describe('draft -> publish -> archive', () => {
     await request(app)
       .post(`/articles/${id}/publish`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
     expect(upsertArticleObject).toHaveBeenCalledWith(
       expect.objectContaining({ id, title: 'X', body: 'Y', keywords: ['k'] }),
@@ -217,6 +237,7 @@ describe('draft -> publish -> archive', () => {
     await request(app)
       .post(`/articles/${id}/archive`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
     expect(deleteArticleObject).toHaveBeenCalledWith(id);
   });
@@ -229,6 +250,7 @@ describe('draft -> publish -> archive', () => {
     const created = await request(app)
       .post('/articles')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ title: 'X', body: 'Y' })
       .expect(201);
     const id = created.body.id as string;
@@ -236,6 +258,7 @@ describe('draft -> publish -> archive', () => {
     await request(app)
       .post(`/articles/${id}/publish`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(500);
 
     const { rows } = await ownerPool.query<{ state: string }>(
@@ -260,6 +283,7 @@ describe('workspace isolation', () => {
     await request(app)
       .get(`/articles/${rows[0]!.id}`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceA)
       .expect(404);
   });
 });
@@ -287,6 +311,7 @@ describe('POST /agent/articles/:id/attachments', () => {
     const created = await request(app)
       .post('/articles')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ title: 'Refund policy', body: 'See below.' })
       .expect(201);
     const key = await uploadFixtureImage(workspaceId, agentId);
@@ -294,6 +319,7 @@ describe('POST /agent/articles/:id/attachments', () => {
     const res = await request(app)
       .post(`/articles/${created.body.id}/attachments`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ key, filename: 'diagram.png', mime_type: 'image/png', byte_size: 14 })
       .expect(200);
 
@@ -318,17 +344,20 @@ describe('POST /agent/articles/:id/attachments', () => {
     const created = await request(app)
       .post('/articles')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ title: 'Refund policy', body: 'See below.' })
       .expect(201);
     await request(app)
       .post(`/articles/${created.body.id}/publish`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
     const key = await uploadFixtureImage(workspaceId, agentId);
 
     const res = await request(app)
       .post(`/articles/${created.body.id}/attachments`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ key, filename: 'diagram.png', mime_type: 'image/png', byte_size: 14 })
       .expect(409);
     expect(res.body.error.code).toBe('invalid_request');
@@ -340,12 +369,14 @@ describe('POST /agent/articles/:id/attachments', () => {
     const created = await request(app)
       .post('/articles')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ title: 'Refund policy', body: 'See below.' })
       .expect(201);
 
     const res = await request(app)
       .post(`/articles/${created.body.id}/attachments`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({
         key: `pending/${workspaceId}/nobody/${randomUUID()}.png`,
         filename: 'ghost.png',
@@ -362,6 +393,7 @@ describe('POST /agent/articles/:id/attachments', () => {
     const created = await request(app)
       .post('/articles')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ title: 'Refund policy', body: 'See below.' })
       .expect(201);
     const key = await uploadFixtureImage(workspaceId, agentId);
@@ -369,6 +401,7 @@ describe('POST /agent/articles/:id/attachments', () => {
     const res = await request(app)
       .post(`/articles/${created.body.id}/attachments`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ key, filename: 'diagram.png', mime_type: 'image/png', byte_size: 999999 })
       .expect(422);
     expect(res.body.error.code).toBe('attachment_mismatch');
@@ -382,18 +415,21 @@ describe('GET /agent/articles/:id with an attachment', () => {
     const created = await request(app)
       .post('/articles')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ title: 'Refund policy', body: 'See below.' })
       .expect(201);
     const key = await uploadFixtureImage(workspaceId, agentId);
     await request(app)
       .post(`/articles/${created.body.id}/attachments`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ key, filename: 'diagram.png', mime_type: 'image/png', byte_size: 14 })
       .expect(200);
 
     const res = await request(app)
       .get(`/articles/${created.body.id}`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
 
     expect(res.body.attachments).toHaveLength(1);
@@ -410,12 +446,14 @@ describe('POST /agent/articles/:id/publish with empty fields', () => {
     const created = await request(app)
       .post('/articles')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ title: 'Refund policy', body: '' })
       .expect(201);
 
     const res = await request(app)
       .post(`/articles/${created.body.id}/publish`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(409);
     expect(res.body.error.message).toMatch(/non-empty/i);
   });
@@ -426,6 +464,7 @@ describe('POST /agent/articles/:id/publish with empty fields', () => {
     const created = await request(app)
       .post('/articles')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ title: '', body: '' })
       .expect(201);
     expect(created.body.title).toBe('');
@@ -433,6 +472,7 @@ describe('POST /agent/articles/:id/publish with empty fields', () => {
     await request(app)
       .patch(`/articles/${created.body.id}`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ title: 'Now has a title' })
       .expect(200);
   });

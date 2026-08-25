@@ -3,16 +3,19 @@ import express from 'express';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { req as request } from './helpers/http.ts';
 import { closeDb } from '../src/shared/db/client.ts';
+import { closeAdminDb } from '../src/shared/db/adminClient.ts';
 import { errorMiddleware } from '../src/errors.ts';
 import { requireAgentSession } from '../src/shared/middleware/requireAgentSession.ts';
+import { resolveConsoleWorkspace } from '../src/shared/middleware/resolveConsoleWorkspace.ts';
 import { signAgentSession } from '../src/shared/auth/agentSession.ts';
+import { closeWsAuthRedis } from '../src/shared/auth/wsAuthCache.ts';
 import { closeSocketServer, createSocketServer } from '../src/shared/realtime/socketServer.ts';
 import { workspaceSettingsRouter } from '../src/agent/routers/workspaceSettingsRouter.ts';
 import { closeOwnerPool, ownerPool, seedWorkspace, truncateAll } from './helpers/db.ts';
 
 const app = express();
 app.use(express.json());
-app.use(requireAgentSession, workspaceSettingsRouter);
+app.use(requireAgentSession, resolveConsoleWorkspace, workspaceSettingsRouter);
 app.use(errorMiddleware);
 
 beforeAll(() => {
@@ -21,7 +24,9 @@ beforeAll(() => {
 
 afterAll(async () => {
   await closeSocketServer();
+  await closeWsAuthRedis();
   await closeDb();
+  await closeAdminDb();
   await closeOwnerPool();
 });
 
@@ -42,7 +47,7 @@ async function seedAgentWithRole(
       [workspaceId, agentId, role],
     );
   }
-  const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId });
+  const token = await signAgentSession({ agent_id: agentId, is_admin: role === 'admin' });
   return { agentId, token };
 }
 
@@ -54,6 +59,7 @@ describe('GET /workspace-settings', () => {
     const res = await request(app)
       .get('/workspace-settings')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
 
     expect(res.body).toEqual({
@@ -71,6 +77,7 @@ describe('GET /workspace-settings', () => {
     await request(app)
       .get('/workspace-settings')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
   });
 
@@ -81,6 +88,7 @@ describe('GET /workspace-settings', () => {
     await request(app)
       .get('/workspace-settings')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(403);
   });
 });
@@ -93,6 +101,7 @@ describe('POST /workspace-settings', () => {
     const res = await request(app)
       .post('/workspace-settings')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({
         max_assigned_tickets: 10,
         auto_close_days: 14,
@@ -116,6 +125,7 @@ describe('POST /workspace-settings', () => {
     await request(app)
       .post('/workspace-settings')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({
         max_assigned_tickets: 10,
         auto_close_days: 7,
@@ -140,6 +150,7 @@ describe('POST /workspace-settings', () => {
     await request(app)
       .post('/workspace-settings')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({
         max_assigned_tickets: 10,
         auto_close_days: 14,
@@ -156,6 +167,7 @@ describe('POST /workspace-settings', () => {
     await request(app)
       .post('/workspace-settings')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({
         max_assigned_tickets: 0,
         auto_close_days: 14,

@@ -4,9 +4,12 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { req as request } from './helpers/http.ts';
 import { presignPutObject } from '../src/shared/storage/presign.ts';
 import { closeDb } from '../src/shared/db/client.ts';
+import { closeAdminDb } from '../src/shared/db/adminClient.ts';
 import { requireAgentSession } from '../src/shared/middleware/requireAgentSession.ts';
+import { resolveConsoleWorkspace } from '../src/shared/middleware/resolveConsoleWorkspace.ts';
 import { errorMiddleware } from '../src/errors.ts';
 import { signAgentSession } from '../src/shared/auth/agentSession.ts';
+import { closeWsAuthRedis } from '../src/shared/auth/wsAuthCache.ts';
 import { closeSocketServer, createSocketServer } from '../src/shared/realtime/socketServer.ts';
 import { messagesRouter } from '../src/agent/routers/messagesRouter.ts';
 import {
@@ -22,7 +25,7 @@ import {
 // this task's test run from racing Task 7's over agent/router.ts.
 const app = express();
 app.use(express.json());
-app.use(requireAgentSession, messagesRouter);
+app.use(requireAgentSession, resolveConsoleWorkspace, messagesRouter);
 app.use(errorMiddleware);
 
 // sendAgentMessage calls getIo() after its transaction commits, so this file's
@@ -34,7 +37,9 @@ beforeAll(() => {
 
 afterAll(async () => {
   await closeSocketServer();
+  await closeWsAuthRedis();
   await closeDb();
+  await closeAdminDb();
   await closeOwnerPool();
 });
 
@@ -53,7 +58,7 @@ async function setupAssignedAgent(workspaceId: string, conversationId: string) {
     conversationId,
     agentId,
   ]);
-  const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId });
+  const token = await signAgentSession({ agent_id: agentId });
   return { agentId, token };
 }
 
@@ -67,6 +72,7 @@ describe('POST /agent/messages', () => {
     const res = await request(app)
       .post('/messages')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ conversation_id: conversationId, body: 'how can I help?' })
       .expect(200);
     expect(res.body.message).toMatchObject({
@@ -87,11 +93,12 @@ describe('POST /agent/messages', () => {
       `insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`,
       [workspaceId, rows[0]!.id],
     );
-    const token = await signAgentSession({ agent_id: rows[0]!.id, workspace_id: workspaceId });
+    const token = await signAgentSession({ agent_id: rows[0]!.id });
 
     await request(app)
       .post('/messages')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ conversation_id: conversationId, body: 'hi' })
       .expect(403);
   });
@@ -108,11 +115,12 @@ describe('POST /agent/messages', () => {
       `insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`,
       [workspaceA, rows[0]!.id],
     );
-    const token = await signAgentSession({ agent_id: rows[0]!.id, workspace_id: workspaceA });
+    const token = await signAgentSession({ agent_id: rows[0]!.id });
 
     await request(app)
       .post('/messages')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceA)
       .send({ conversation_id: conversationB, body: 'hi' })
       .expect(404);
   });
@@ -145,6 +153,7 @@ describe('POST /agent/messages with an attachment', () => {
     const res = await request(app)
       .post('/messages')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({
         conversation_id: conversationId,
         body: '',
@@ -177,6 +186,7 @@ describe('POST /agent/messages with an attachment', () => {
     const res = await request(app)
       .post('/messages')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({
         conversation_id: conversationId,
         body: '',
@@ -197,6 +207,7 @@ describe('POST /agent/messages with an attachment', () => {
     const res = await request(app)
       .post('/messages')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({
         conversation_id: conversationId,
         body: '',
@@ -217,6 +228,7 @@ describe('POST /agent/messages with an attachment', () => {
     const res = await request(app)
       .post('/messages')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({
         conversation_id: conversationId,
         body: '',
@@ -252,6 +264,7 @@ describe('POST /agent/messages with an attachment', () => {
     const res = await request(app)
       .post('/messages')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({
         conversation_id: conversationId,
         body: '',
@@ -276,6 +289,7 @@ describe('POST /agent/messages with an attachment', () => {
     const res = await request(app)
       .post('/messages')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({
         conversation_id: conversationId,
         body: '',
@@ -300,6 +314,7 @@ describe('POST /agent/messages/read', () => {
     await request(app)
       .post('/messages/read')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ conversation_id: conversationId, up_to_seq: 1 })
       .expect(200);
 
@@ -324,6 +339,7 @@ describe('POST /agent/messages — internal notes and status transition', () => 
     const res = await request(app)
       .post('/messages')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ conversation_id: conversationId, body: 'internal note', visibility: 'internal' })
       .expect(200);
     expect(res.body.message).toMatchObject({ visibility: 'internal' });
@@ -347,6 +363,7 @@ describe('POST /agent/messages — internal notes and status transition', () => 
     await request(app)
       .post('/messages')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ conversation_id: conversationId, body: 'here is the fix' })
       .expect(200);
 
@@ -375,6 +392,7 @@ describe('POST /agent/messages — internal notes and status transition', () => 
     await request(app)
       .post('/messages')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ conversation_id: conversationId, body: 'still here' })
       .expect(200);
 
@@ -400,6 +418,7 @@ describe('POST /agent/messages — internal notes and status transition', () => 
     await request(app)
       .post('/messages')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ conversation_id: conversationId, body: 'still working on this with engineering' })
       .expect(200);
 
@@ -419,6 +438,7 @@ describe('POST /agent/messages — internal notes and status transition', () => 
     await request(app)
       .post('/messages')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ conversation_id: conversationId, body: 'note', visibility: 'internal' })
       .expect(200);
 
@@ -445,6 +465,7 @@ describe('POST /messages/read records when the agent saw it', () => {
     await request(app)
       .post('/messages/read')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ conversation_id: conversationId, up_to_seq: 2 })
       .expect(200);
 
@@ -477,6 +498,7 @@ describe('POST /messages/read records when the agent saw it', () => {
       request(app)
         .post('/messages/read')
         .set('Authorization', `Bearer ${token}`)
+        .set('X-Workspace-Id', workspaceId)
         .send({ conversation_id: conversationId, up_to_seq: 1 })
         .expect(200);
     const readAtNow = async () => {

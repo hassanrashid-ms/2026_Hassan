@@ -3,9 +3,12 @@ import express from 'express';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { req as request } from './helpers/http.ts';
 import { closeDb } from '../src/shared/db/client.ts';
+import { closeAdminDb } from '../src/shared/db/adminClient.ts';
 import { requireAgentSession } from '../src/shared/middleware/requireAgentSession.ts';
+import { resolveConsoleWorkspace } from '../src/shared/middleware/resolveConsoleWorkspace.ts';
 import { errorMiddleware } from '../src/errors.ts';
 import { signAgentSession } from '../src/shared/auth/agentSession.ts';
+import { closeWsAuthRedis } from '../src/shared/auth/wsAuthCache.ts';
 import { closeSocketServer, createSocketServer } from '../src/shared/realtime/socketServer.ts';
 import { conversationsRouter } from '../src/agent/routers/conversationsRouter.ts';
 import { messagesRouter } from '../src/agent/routers/messagesRouter.ts';
@@ -30,7 +33,7 @@ import {
 // it keeps this task's test run from racing Task 8's over the same file.
 const app = express();
 app.use(express.json());
-app.use(requireAgentSession, conversationsRouter);
+app.use(requireAgentSession, resolveConsoleWorkspace, conversationsRouter);
 app.use(errorMiddleware);
 
 // A second standalone app carrying messagesRouter, needed only to produce a
@@ -39,7 +42,7 @@ app.use(errorMiddleware);
 // otherwise owns this router's coverage.
 const messagesApp = express();
 messagesApp.use(express.json());
-messagesApp.use(requireAgentSession, messagesRouter);
+messagesApp.use(requireAgentSession, resolveConsoleWorkspace, messagesRouter);
 messagesApp.use(errorMiddleware);
 
 // claimConversationHandler calls getIo() after a successful claim, so this
@@ -53,7 +56,9 @@ beforeAll(() => {
 
 afterAll(async () => {
   await closeSocketServer();
+  await closeWsAuthRedis();
   await closeDb();
+  await closeAdminDb();
   await closeOwnerPool();
 });
 
@@ -72,7 +77,7 @@ async function setupAssignedAgent(workspaceId: string, conversationId: string) {
     conversationId,
     agentId,
   ]);
-  const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId });
+  const token = await signAgentSession({ agent_id: agentId });
   return { agentId, token };
 }
 
@@ -85,7 +90,7 @@ async function setupAgent(workspaceId: string) {
     `insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`,
     [workspaceId, agentId],
   );
-  const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId });
+  const token = await signAgentSession({ agent_id: agentId });
   return { agentId, token };
 }
 
@@ -107,6 +112,7 @@ describe('GET /agent/conversations', () => {
       .get('/conversations')
       .query({ status: 'unassigned' })
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
 
     expect(res.body.conversations).toHaveLength(1);
@@ -130,6 +136,7 @@ describe('GET /agent/conversations', () => {
       .get('/conversations')
       .query({ status: 'mine' })
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
 
     expect(res.body.conversations[0].confirm_phase).toBe('agent_ask');
@@ -149,6 +156,7 @@ describe('GET /agent/conversations', () => {
       .get('/conversations')
       .query({ status: 'unassigned' })
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
 
     expect(res.body.conversations.map((c: { id: string }) => c.id)).toEqual([openId]);
@@ -170,6 +178,7 @@ describe('GET /agent/conversations', () => {
       .get('/conversations')
       .query({ status: 'mine' })
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
 
     expect(res.body.conversations.map((c: { id: string }) => c.id)).toEqual([openId]);
@@ -198,6 +207,7 @@ describe('GET /agent/conversations filters', () => {
       .get('/conversations')
       .query({ status: 'unassigned', priority: 'p1' })
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
 
     expect(res.body.conversations.map((c: any) => c.id)).toEqual([highId]);
@@ -216,6 +226,7 @@ describe('GET /agent/conversations filters', () => {
       .get('/conversations')
       .query({ status: 'unassigned', subintentIds: subintentId })
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
 
     expect(res.body.conversations.map((c: any) => c.id)).toEqual([matchId]);
@@ -243,6 +254,7 @@ describe('GET /agent/conversations filters', () => {
       .get('/conversations')
       .query({ status: 'agentAssigned', assigneeIds: agentId })
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
 
     expect(res.body.conversations.map((c: any) => c.id)).toEqual([matchId]);
@@ -270,6 +282,7 @@ describe('GET /agent/conversations filters', () => {
       .get('/conversations')
       .query({ status: 'unassigned', labelIds: tagId })
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
 
     expect(res.body.conversations.map((c: any) => c.id)).toEqual([matchId]);
@@ -296,6 +309,7 @@ describe('GET /agent/conversations filters', () => {
       .get('/conversations')
       .query({ status: 'unassigned', olderThanHours: 2 })
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
 
     expect(res.body.conversations.map((c: any) => c.id)).toEqual([oldId]);
@@ -343,6 +357,7 @@ describe('GET /agent/conversations filters', () => {
       .get('/conversations')
       .query({ status: 'unassigned', priority: 'p1', labelIds: tagId })
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
 
     expect(res.body.conversations.map((c: any) => c.id)).toEqual([matchId]);
@@ -366,6 +381,7 @@ describe('GET /agent/conversations filters', () => {
       .get('/conversations')
       .query({ status: 'unassigned', q: ticketNum.toString() })
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
 
     expect(res.body.conversations.map((c: any) => c.id)).toEqual([c1]);
@@ -383,6 +399,7 @@ describe('GET /agent/conversations filters', () => {
       .get('/conversations')
       .query({ status: 'unassigned', q: 'abc-12' })
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
 
     expect(res.body.conversations.map((c: any) => c.id)).toEqual([c1]);
@@ -403,6 +420,7 @@ describe('GET /agent/conversations filters', () => {
       .get('/conversations')
       .query({ status: 'unassigned', q: 'billing' })
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
 
     expect(res.body.conversations.map((c: any) => c.id)).toEqual([c1]);
@@ -419,6 +437,7 @@ describe('POST /agent/conversations/:id/claim', () => {
     const res = await request(app)
       .post(`/conversations/${conversationId}/claim`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
     expect(res.body).toEqual({ claimed: true });
   });
@@ -432,6 +451,7 @@ describe('POST /agent/conversations/:id/claim', () => {
     await request(app)
       .post(`/conversations/${conversationId}/claim`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
 
     const { rows } = await ownerPool.query(
@@ -460,17 +480,18 @@ describe('POST /agent/conversations/:id/claim', () => {
       [workspaceId, agentBRows[0]!.id],
     );
     const tokenB = await signAgentSession({
-      agent_id: agentBRows[0]!.id,
-      workspace_id: workspaceId,
+      agent_id: agentBRows[0]!.id
     });
 
     await request(app)
       .post(`/conversations/${conversationId}/claim`)
       .set('Authorization', `Bearer ${agentA.token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
     const resB = await request(app)
       .post(`/conversations/${conversationId}/claim`)
       .set('Authorization', `Bearer ${tokenB}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
     expect(resB.body).toEqual({ claimed: false });
 
@@ -500,15 +521,17 @@ describe('POST /agent/conversations/:id/claim', () => {
       `insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`,
       [workspaceId, rows[0]!.id],
     );
-    const tokenB = await signAgentSession({ agent_id: rows[0]!.id, workspace_id: workspaceId });
+    const tokenB = await signAgentSession({ agent_id: rows[0]!.id });
 
     const [resA, resB] = await Promise.all([
       request(app)
         .post(`/conversations/${conversationId}/claim`)
-        .set('Authorization', `Bearer ${agentA.token}`),
+        .set('Authorization', `Bearer ${agentA.token}`)
+        .set('X-Workspace-Id', workspaceId),
       request(app)
         .post(`/conversations/${conversationId}/claim`)
-        .set('Authorization', `Bearer ${tokenB}`),
+        .set('Authorization', `Bearer ${tokenB}`)
+        .set('X-Workspace-Id', workspaceId),
     ]);
 
     const claimedFlags = [resA.body.claimed, resB.body.claimed].sort();
@@ -527,6 +550,7 @@ describe('POST /agent/conversations/:id/claim', () => {
     const res = await request(app)
       .post(`/conversations/${conversationId}/claim`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
     expect(res.body).toEqual({ claimed: false });
 
@@ -549,6 +573,7 @@ describe('POST /agent/conversations/:id/claim', () => {
     await request(app)
       .post(`/conversations/${conversationId}/claim`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
 
     const { rows } = await ownerPool.query<{ n: number }>(
@@ -568,12 +593,14 @@ describe('POST /agent/conversations/:id/claim', () => {
       .get('/conversations')
       .query({ status: 'unassigned' })
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
     expect(list.body.conversations.map((c: { id: string }) => c.id)).toEqual([conversationId]);
 
     const res = await request(app)
       .post(`/conversations/${conversationId}/claim`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
     expect(res.body).toEqual({ claimed: true });
 
@@ -596,6 +623,7 @@ describe('GET /agent/conversations/:id/messages', () => {
     const res = await request(app)
       .get(`/conversations/${conversationId}/messages`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
     expect(res.body.messages).toHaveLength(1);
     expect(res.body.messages[0]).toMatchObject({ author_type: 'player', body: 'hi' });
@@ -611,6 +639,7 @@ describe('GET /agent/conversations/:id/messages', () => {
     await request(app)
       .get(`/conversations/${conversationB}/messages`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceA)
       .expect(404);
   });
 });
@@ -638,6 +667,7 @@ describe('GET /agent/conversations/:id/messages with an attachment', () => {
     await request(messagesApp)
       .post('/messages')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({
         conversation_id: conversationId,
         body: '',
@@ -648,6 +678,7 @@ describe('GET /agent/conversations/:id/messages with an attachment', () => {
     const res = await request(app)
       .get(`/conversations/${conversationId}/messages`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
 
     const withAttachment = res.body.messages.find((m: { attachment: unknown }) => m.attachment);
@@ -678,6 +709,7 @@ describe('GET /agent/conversations/:id/messages with an attachment', () => {
     await request(messagesApp)
       .post('/messages')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({
         conversation_id: conversationId,
         body: 'here is a screenshot',
@@ -688,6 +720,7 @@ describe('GET /agent/conversations/:id/messages with an attachment', () => {
     const res = await request(app)
       .get(`/conversations/${conversationId}/messages`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
 
     const withAttachment = res.body.messages.find((m: { attachment: unknown }) => m.attachment);

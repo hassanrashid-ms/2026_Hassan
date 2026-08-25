@@ -4,9 +4,12 @@ import express from 'express';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { req as request } from './helpers/http.ts';
 import { closeDb } from '../src/shared/db/client.ts';
+import { closeAdminDb } from '../src/shared/db/adminClient.ts';
 import { errorMiddleware } from '../src/errors.ts';
 import { requireAgentSession } from '../src/shared/middleware/requireAgentSession.ts';
+import { resolveConsoleWorkspace } from '../src/shared/middleware/resolveConsoleWorkspace.ts';
 import { signAgentSession } from '../src/shared/auth/agentSession.ts';
+import { closeWsAuthRedis } from '../src/shared/auth/wsAuthCache.ts';
 import { closeSocketServer, createSocketServer } from '../src/shared/realtime/socketServer.ts';
 import { tagsRouter } from '../src/agent/routers/tagsRouter.ts';
 import {
@@ -22,7 +25,7 @@ import {
 // requireAgentSession middleware — mirrors agent.taxonomy.test.ts's rationale.
 const app = express();
 app.use(express.json());
-app.use(requireAgentSession, tagsRouter);
+app.use(requireAgentSession, resolveConsoleWorkspace, tagsRouter);
 app.use(errorMiddleware);
 
 beforeAll(() => {
@@ -31,7 +34,9 @@ beforeAll(() => {
 
 afterAll(async () => {
   await closeSocketServer();
+  await closeWsAuthRedis();
   await closeDb();
+  await closeAdminDb();
   await closeOwnerPool();
 });
 
@@ -47,7 +52,7 @@ async function seedAgentSession(workspaceId: string): Promise<{ agentId: string;
     `insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`,
     [workspaceId, agentId],
   );
-  const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId });
+  const token = await signAgentSession({ agent_id: agentId });
   return { agentId, token };
 }
 
@@ -59,6 +64,7 @@ describe('POST /tags', () => {
     const res = await request(app)
       .post('/tags')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ name: 'VIP' })
       .expect(201);
 
@@ -76,11 +82,13 @@ describe('POST /tags', () => {
     const first = await request(app)
       .post('/tags')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ name: 'VIP' })
       .expect(201);
     const second = await request(app)
       .post('/tags')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ name: 'VIP' })
       .expect(200);
 
@@ -94,11 +102,13 @@ describe('POST /tags', () => {
     const first = await request(app)
       .post('/tags')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ name: 'VIP' })
       .expect(201);
     const second = await request(app)
       .post('/tags')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ name: '  vip  ' })
       .expect(200);
 
@@ -112,16 +122,19 @@ describe('POST /tags', () => {
     const created = await request(app)
       .post('/tags')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ name: 'VIP' })
       .expect(201);
     await request(app)
       .post(`/tags/${created.body.id}/archive`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
 
     const revived = await request(app)
       .post('/tags')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ name: 'VIP' })
       .expect(200);
 
@@ -143,24 +156,32 @@ describe('GET /tags', () => {
     await request(app)
       .post('/tags')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ name: 'Zebra' })
       .expect(201);
     const archived = await request(app)
       .post('/tags')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ name: 'Archived' })
       .expect(201);
     await request(app)
       .post('/tags')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ name: 'Alpha' })
       .expect(201);
     await request(app)
       .post(`/tags/${archived.body.id}/archive`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
 
-    const res = await request(app).get('/tags').set('Authorization', `Bearer ${token}`).expect(200);
+    const res = await request(app)
+      .get('/tags')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
 
     expect(res.body.map((t: { name: string }) => t.name)).toEqual(['Alpha', 'Zebra']);
   });
@@ -172,17 +193,20 @@ describe('GET /tags', () => {
     await request(app)
       .post('/tags')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ name: 'VIP Whale' })
       .expect(201);
     await request(app)
       .post('/tags')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ name: 'Refund' })
       .expect(201);
 
     const res = await request(app)
       .get('/tags?query=vip')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
 
     expect(res.body).toHaveLength(1);
@@ -197,12 +221,14 @@ describe('PATCH /tags/:id', () => {
     const created = await request(app)
       .post('/tags')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ name: 'VIP' })
       .expect(201);
 
     const res = await request(app)
       .patch(`/tags/${created.body.id}`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ name: 'Whale' })
       .expect(200);
 
@@ -219,17 +245,20 @@ describe('PATCH /tags/:id', () => {
     await request(app)
       .post('/tags')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ name: 'Whale' })
       .expect(201);
     const created = await request(app)
       .post('/tags')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ name: 'VIP' })
       .expect(201);
 
     await request(app)
       .patch(`/tags/${created.body.id}`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ name: 'Whale' })
       .expect(409);
   });
@@ -241,6 +270,7 @@ describe('PATCH /tags/:id', () => {
     await request(app)
       .patch(`/tags/${randomUUID()}`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ name: 'Whale' })
       .expect(404);
   });
@@ -255,18 +285,21 @@ describe('POST /tags/:id/archive', () => {
     const created = await request(app)
       .post('/tags')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ name: 'VIP' })
       .expect(201);
 
     await request(app)
       .post(`/conversations/${conversationId}/tags`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ tagId: created.body.id })
       .expect(200);
 
     await request(app)
       .post(`/tags/${created.body.id}/archive`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
 
     const { rows } = await ownerPool.query<{ removed_at: string | null }>(
@@ -287,17 +320,20 @@ describe('POST /conversations/:id/tags', () => {
     const created = await request(app)
       .post('/tags')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ name: 'VIP' })
       .expect(201);
 
     await request(app)
       .post(`/conversations/${conversationId}/tags`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ tagId: created.body.id })
       .expect(200);
     await request(app)
       .post(`/conversations/${conversationId}/tags`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ tagId: created.body.id })
       .expect(200);
 
@@ -318,12 +354,14 @@ describe('POST /conversations/:id/tags', () => {
     const otherWorkspaceTag = await request(app)
       .post('/tags')
       .set('Authorization', `Bearer ${tokenB}`)
+      .set('X-Workspace-Id', workspaceB)
       .send({ name: 'VIP' })
       .expect(201);
 
     await request(app)
       .post(`/conversations/${conversationId}/tags`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceA)
       .send({ tagId: otherWorkspaceTag.body.id })
       .expect(404);
   });
@@ -338,17 +376,20 @@ describe('DELETE /conversations/:id/tags/:tagId', () => {
     const created = await request(app)
       .post('/tags')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ name: 'VIP' })
       .expect(201);
     await request(app)
       .post(`/conversations/${conversationId}/tags`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ tagId: created.body.id })
       .expect(200);
 
     await request(app)
       .delete(`/conversations/${conversationId}/tags/${created.body.id}`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
 
     const { rows } = await ownerPool.query<{ removed_at: string | null }>(
@@ -361,6 +402,7 @@ describe('DELETE /conversations/:id/tags/:tagId', () => {
     await request(app)
       .delete(`/conversations/${conversationId}/tags/${created.body.id}`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
   });
 
@@ -372,12 +414,14 @@ describe('DELETE /conversations/:id/tags/:tagId', () => {
     const created = await request(app)
       .post('/tags')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ name: 'VIP' })
       .expect(201);
 
     await request(app)
       .delete(`/conversations/${conversationId}/tags/${created.body.id}`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
   });
 });

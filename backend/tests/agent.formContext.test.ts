@@ -4,14 +4,17 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { FormField, FormSubmissionStatus } from '@support/types';
 import { req as request } from './helpers/http.ts';
 import { closeDb } from '../src/shared/db/client.ts';
+import { closeAdminDb } from '../src/shared/db/adminClient.ts';
 import { withWorkspace } from '../src/shared/db/withWorkspace.ts';
 import {
   buildFormFieldViews,
   getFormView,
 } from '../src/agent/services/conversationContextService.ts';
 import { requireAgentSession } from '../src/shared/middleware/requireAgentSession.ts';
+import { resolveConsoleWorkspace } from '../src/shared/middleware/resolveConsoleWorkspace.ts';
 import { errorMiddleware } from '../src/errors.ts';
 import { signAgentSession } from '../src/shared/auth/agentSession.ts';
+import { closeWsAuthRedis } from '../src/shared/auth/wsAuthCache.ts';
 import { closeSocketServer, createSocketServer } from '../src/shared/realtime/socketServer.ts';
 import { conversationsRouter } from '../src/agent/routers/conversationsRouter.ts';
 import {
@@ -169,7 +172,7 @@ describe('buildFormFieldViews', () => {
 
 const app = express();
 app.use(express.json());
-app.use(requireAgentSession, conversationsRouter);
+app.use(requireAgentSession, resolveConsoleWorkspace, conversationsRouter);
 app.use(errorMiddleware);
 
 beforeAll(() => {
@@ -178,7 +181,9 @@ beforeAll(() => {
 
 afterAll(async () => {
   await closeSocketServer();
+  await closeWsAuthRedis();
   await closeDb();
+  await closeAdminDb();
   await closeOwnerPool();
 });
 
@@ -196,7 +201,7 @@ async function setupAgent(workspaceId: string) {
   );
   return {
     agentId,
-    token: await signAgentSession({ agent_id: agentId, workspace_id: workspaceId }),
+    token: await signAgentSession({ agent_id: agentId }),
   };
 }
 
@@ -318,7 +323,8 @@ describe('GET /agent/conversations/:id/context form block', () => {
 
     const res = await request(app)
       .get(`/conversations/${conversationId}/context`)
-      .set('Authorization', `Bearer ${token}`);
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId);
 
     expect(res.status).toBe(200);
     expect(res.body.form).toBeNull();
@@ -349,7 +355,8 @@ describe('GET /agent/conversations/:id/context form block', () => {
 
     const res = await request(app)
       .get(`/conversations/${conversationId}/context`)
-      .set('Authorization', `Bearer ${token}`);
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId);
 
     expect(res.status).toBe(200);
     expect(res.body.form.status).toBe('partial');
@@ -370,7 +377,8 @@ describe('GET /agent/conversations/:id/context form block', () => {
 
     const res = await request(app)
       .get(`/conversations/${conversationId}/context`)
-      .set('Authorization', `Bearer ${token}`);
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', otherWorkspaceId);
 
     expect(res.status).toBe(404);
   });

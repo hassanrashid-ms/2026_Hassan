@@ -257,14 +257,12 @@ describe('workspace A cannot reach workspace B', () => {
       workspaceId: b.workspaceId,
       playerId: b.playerId,
     });
-    const agentToken = await signAgentSession({
-      agent_id: rows[0]!.id,
-      workspace_id: a.workspaceId,
-    });
+    const agentToken = await signAgentSession({ agent_id: rows[0]!.id });
 
     await request(app)
       .get(`/agent/conversations/${bConversation}/messages`)
       .set('Authorization', `Bearer ${agentToken}`)
+      .set('X-Workspace-Id', a.workspaceId)
       .expect(404);
   });
 
@@ -280,14 +278,12 @@ describe('workspace A cannot reach workspace B', () => {
       workspaceId: b.workspaceId,
       playerId: b.playerId,
     });
-    const agentToken = await signAgentSession({
-      agent_id: rows[0]!.id,
-      workspace_id: a.workspaceId,
-    });
+    const agentToken = await signAgentSession({ agent_id: rows[0]!.id });
 
     const res = await request(app)
       .post(`/agent/conversations/${bConversation}/claim`)
       .set('Authorization', `Bearer ${agentToken}`)
+      .set('X-Workspace-Id', a.workspaceId)
       .expect(200);
     expect(res.body).toEqual({ claimed: false });
 
@@ -310,15 +306,13 @@ describe('workspace A cannot reach workspace B', () => {
       workspaceId: b.workspaceId,
       playerId: b.playerId,
     });
-    const agentToken = await signAgentSession({
-      agent_id: rows[0]!.id,
-      workspace_id: a.workspaceId,
-    });
+    const agentToken = await signAgentSession({ agent_id: rows[0]!.id });
 
     const before = await rowCounts();
     await request(app)
       .post('/agent/messages')
       .set('Authorization', `Bearer ${agentToken}`)
+      .set('X-Workspace-Id', a.workspaceId)
       .send({ conversation_id: bConversation, body: 'leak attempt' })
       .expect(404);
     expect((await rowCounts()).message).toBe(before.message);

@@ -6,7 +6,9 @@ import { req as request } from './helpers/http.ts';
 import { closeDb } from '../src/shared/db/client.ts';
 import { errorMiddleware } from '../src/errors.ts';
 import { requireAgentSession } from '../src/shared/middleware/requireAgentSession.ts';
+import { resolveConsoleWorkspace } from '../src/shared/middleware/resolveConsoleWorkspace.ts';
 import { signAgentSession } from '../src/shared/auth/agentSession.ts';
+import { closeWsAuthRedis } from '../src/shared/auth/wsAuthCache.ts';
 import { closeSocketServer, createSocketServer } from '../src/shared/realtime/socketServer.ts';
 import { formsRouter } from '../src/agent/routers/formsRouter.ts';
 import {
@@ -31,7 +33,7 @@ import {
 
 const app = express();
 app.use(express.json());
-app.use(requireAgentSession, formsRouter);
+app.use(requireAgentSession, resolveConsoleWorkspace, formsRouter);
 app.use(errorMiddleware);
 
 beforeAll(() => {
@@ -40,6 +42,7 @@ beforeAll(() => {
 
 afterAll(async () => {
   await closeSocketServer();
+  await closeWsAuthRedis();
   await closeDb();
   await closeOwnerPool();
 });
@@ -61,7 +64,7 @@ async function seedAgentWithRole(
       [workspaceId, agentId, role],
     );
   }
-  const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId });
+  const token = await signAgentSession({ agent_id: agentId, is_admin: role === 'admin' });
   return { agentId, token, ctx: { agentId, workspaceId, isAdmin: role === 'admin' } };
 }
 
@@ -211,7 +214,11 @@ describe('forms RLS/tenancy', () => {
     const formIdB = await seedForm({ workspaceId: workspaceB });
     const { token } = await seedAgentWithRole(workspaceA, 'admin');
 
-    await request(app).get(`/forms/${formIdB}`).set('Authorization', `Bearer ${token}`).expect(404);
+    await request(app)
+      .get(`/forms/${formIdB}`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceA)
+      .expect(404);
   });
 
   it('setFormSubintents rejects a subintent id from another workspace via HTTP', async () => {
@@ -225,6 +232,7 @@ describe('forms RLS/tenancy', () => {
     await request(app)
       .patch(`/forms/${formIdA}/subintents`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceA)
       .send({ subintentIds: [foreignSubintent] })
       .expect(422);
   });
@@ -237,29 +245,42 @@ describe('forms permissions', () => {
     const formId = await seedForm({ workspaceId });
     await seedFormVersion({ workspaceId, formId, version: 1, fields: [] });
 
-    await request(app).get('/forms').set('Authorization', `Bearer ${token}`).expect(403);
+    await request(app)
+      .get('/forms')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(403);
     await request(app)
       .post('/forms')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ name: 'X' })
       .expect(403);
-    await request(app).get(`/forms/${formId}`).set('Authorization', `Bearer ${token}`).expect(403);
+    await request(app)
+      .get(`/forms/${formId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(403);
     await request(app)
       .patch(`/forms/${formId}`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ name: 'Y' })
       .expect(403);
     await request(app)
       .post(`/forms/${formId}/publish`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(403);
     await request(app)
       .post(`/forms/${formId}/archive`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(403);
     await request(app)
       .patch(`/forms/${formId}/subintents`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ subintentIds: [] })
       .expect(403);
   });
@@ -271,30 +292,43 @@ describe('forms permissions', () => {
     const createRes = await request(app)
       .post('/forms')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ name: 'Team Lead Form' })
       .expect(201);
     const formId = createRes.body.id as string;
 
-    await request(app).get('/forms').set('Authorization', `Bearer ${token}`).expect(200);
-    await request(app).get(`/forms/${formId}`).set('Authorization', `Bearer ${token}`).expect(200);
+    await request(app)
+      .get('/forms')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+    await request(app)
+      .get(`/forms/${formId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
     await request(app)
       .patch(`/forms/${formId}`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ fields: FIELDS })
       .expect(200);
     await request(app)
       .patch(`/forms/${formId}/subintents`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ subintentIds: [] })
       .expect(200);
 
     await request(app)
       .post(`/forms/${formId}/publish`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(403);
     await request(app)
       .post(`/forms/${formId}/archive`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(403);
   });
 });

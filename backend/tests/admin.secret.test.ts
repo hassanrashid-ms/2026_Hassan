@@ -35,7 +35,7 @@ beforeEach(truncateAll);
 
 async function adminToken(workspaceId: string): Promise<string> {
   const agentId = await seedAgent(undefined, { isAdmin: true });
-  return signAgentSession({ agent_id: agentId, workspace_id: workspaceId });
+  return signAgentSession({ agent_id: agentId});
 }
 
 describe('POST /admin/workspaces/:id/secret/rotate', () => {

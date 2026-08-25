@@ -4,9 +4,12 @@ import express from 'express';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { req as request } from './helpers/http.ts';
 import { closeDb } from '../src/shared/db/client.ts';
+import { closeAdminDb } from '../src/shared/db/adminClient.ts';
 import { errorMiddleware } from '../src/errors.ts';
 import { requireAgentSession } from '../src/shared/middleware/requireAgentSession.ts';
+import { resolveConsoleWorkspace } from '../src/shared/middleware/resolveConsoleWorkspace.ts';
 import { signAgentSession } from '../src/shared/auth/agentSession.ts';
+import { closeWsAuthRedis } from '../src/shared/auth/wsAuthCache.ts';
 import { closeSocketServer, createSocketServer } from '../src/shared/realtime/socketServer.ts';
 import { taxonomyRouter } from '../src/agent/routers/taxonomyRouter.ts';
 import {
@@ -28,7 +31,7 @@ import {
 // backend/src/agent/router.ts wired before this task's own Step 8 does it.
 const app = express();
 app.use(express.json());
-app.use(requireAgentSession, taxonomyRouter);
+app.use(requireAgentSession, resolveConsoleWorkspace, taxonomyRouter);
 app.use(errorMiddleware);
 
 beforeAll(() => {
@@ -37,7 +40,9 @@ beforeAll(() => {
 
 afterAll(async () => {
   await closeSocketServer();
+  await closeWsAuthRedis();
   await closeDb();
+  await closeAdminDb();
   await closeOwnerPool();
 });
 
@@ -58,7 +63,7 @@ async function seedAgentWithRole(
       [workspaceId, agentId, role],
     );
   }
-  const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId });
+  const token = await signAgentSession({ agent_id: agentId, is_admin: role === 'admin' });
   return { agentId, token };
 }
 
@@ -78,6 +83,7 @@ describe('GET /intents', () => {
     const res = await request(app)
       .get('/intents')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
 
     expect(res.body.intents).toHaveLength(1);
@@ -108,6 +114,7 @@ describe('POST /intents', () => {
     const res = await request(app)
       .post('/intents')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ name: 'Billing' })
       .expect(201);
 
@@ -121,6 +128,7 @@ describe('POST /intents', () => {
     await request(app)
       .post('/intents')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ name: 'Billing' })
       .expect(403);
   });
@@ -138,6 +146,7 @@ describe('POST /intents/:id/subintents', () => {
     const res = await request(app)
       .post(`/intents/${rows[0]!.id}/subintents`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ name: 'Refunds' })
       .expect(201);
 
@@ -156,6 +165,7 @@ describe('POST /intents/:id/subintents', () => {
     await request(app)
       .post(`/intents/${rows[0]!.id}/subintents`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceA)
       .send({ name: 'Refunds' })
       .expect(404);
   });
@@ -170,6 +180,7 @@ describe('PATCH /intents/:id', () => {
     const res = await request(app)
       .patch(`/intents/${intentId}`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ name: 'Payments' })
       .expect(200);
 
@@ -185,6 +196,7 @@ describe('PATCH /intents/:id', () => {
     await request(app)
       .patch(`/intents/${intentId}`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ name: 'Payments' })
       .expect(409);
   });
@@ -197,6 +209,7 @@ describe('PATCH /intents/:id', () => {
     await request(app)
       .patch(`/intents/${intentId}`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ name: 'Payments' })
       .expect(403);
   });
@@ -208,6 +221,7 @@ describe('PATCH /intents/:id', () => {
     await request(app)
       .patch(`/intents/${randomUUID()}`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ name: 'Payments' })
       .expect(404);
   });
@@ -222,6 +236,7 @@ describe('POST /intents/:id/archive', () => {
     const res = await request(app)
       .post(`/intents/${intentId}/archive`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
 
     expect(res.body).toEqual({ id: intentId, name: 'Billing', archivedAt: expect.any(String) });
@@ -235,6 +250,7 @@ describe('POST /intents/:id/archive', () => {
     await request(app)
       .post(`/intents/${intentId}/archive`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(409);
   });
 
@@ -247,6 +263,7 @@ describe('POST /intents/:id/archive', () => {
     await request(app)
       .post(`/intents/${intentId}/archive`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(409);
   });
 
@@ -267,6 +284,7 @@ describe('POST /intents/:id/archive', () => {
     await request(app)
       .post(`/intents/${intentId}/archive`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(409);
   });
 });
@@ -281,6 +299,7 @@ describe('PATCH /subintents/:id', () => {
     const res = await request(app)
       .patch(`/subintents/${subintentId}`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ name: 'Refund Requests', defaultPriority: 'p2' })
       .expect(200);
 
@@ -297,6 +316,7 @@ describe('PATCH /subintents/:id', () => {
     await request(app)
       .patch(`/subintents/${subintentId}`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ name: 'Refunds' })
       .expect(409);
   });
@@ -308,6 +328,7 @@ describe('PATCH /subintents/:id', () => {
     await request(app)
       .patch(`/subintents/${randomUUID()}`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ name: 'Refunds' })
       .expect(404);
   });
@@ -325,6 +346,7 @@ describe('POST /subintents/:id/archive', () => {
     const res = await request(app)
       .post(`/subintents/${subintentId}/archive`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
 
     expect(res.body).toEqual({ id: subintentId, name: 'Refunds', archivedAt: expect.any(String) });
@@ -343,6 +365,7 @@ describe('POST /subintents/:id/archive', () => {
     await request(app)
       .post(`/subintents/${otherSubintentId}/archive`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(409);
   });
 });
@@ -360,6 +383,7 @@ describe('POST /subintents/:id/move', () => {
     const res = await request(app)
       .post(`/subintents/${subintentId}/move`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ intentId: accountId })
       .expect(200);
 
@@ -381,6 +405,7 @@ describe('POST /subintents/:id/move', () => {
     await request(app)
       .post(`/subintents/${subintentId}/move`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ intentId: archivedIntentId })
       .expect(404);
   });
@@ -396,6 +421,7 @@ describe('POST /subintents/:id/move', () => {
     await request(app)
       .post(`/subintents/${subintentId}/move`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ intentId: randomUUID() })
       .expect(404);
   });
@@ -414,6 +440,7 @@ describe('POST /subintents/:id/move', () => {
     await request(app)
       .post(`/subintents/${otherSubintentId}/move`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ intentId: billingId })
       .expect(409);
   });
@@ -438,6 +465,7 @@ describe('POST /subintents/:id/merge', () => {
     const res = await request(app)
       .post(`/subintents/${loserId}/merge`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ intoId: survivorId })
       .expect(200);
 
@@ -466,6 +494,7 @@ describe('POST /subintents/:id/merge', () => {
     await request(app)
       .post(`/subintents/${loserId}/merge`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ intoId: survivorId })
       .expect(409);
   });
@@ -479,6 +508,7 @@ describe('POST /subintents/:id/merge', () => {
     await request(app)
       .post(`/subintents/${subintentId}/merge`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ intoId: subintentId })
       .expect(409);
   });
@@ -503,6 +533,7 @@ describe('POST /subintents/:id/merge', () => {
     await request(app)
       .post(`/subintents/${loserId}/merge`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceA)
       .send({ intoId: otherWorkspaceSubintentId })
       .expect(409);
   });
@@ -526,6 +557,7 @@ describe('POST /subintents/:id/merge', () => {
     await request(app)
       .post(`/subintents/${otherSubintentId}/merge`)
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ intoId: survivorId })
       .expect(409);
   });

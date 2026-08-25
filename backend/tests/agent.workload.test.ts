@@ -3,9 +3,12 @@ import express from 'express';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { req as request } from './helpers/http.ts';
 import { closeDb } from '../src/shared/db/client.ts';
+import { closeAdminDb } from '../src/shared/db/adminClient.ts';
 import { requireAgentSession } from '../src/shared/middleware/requireAgentSession.ts';
+import { resolveConsoleWorkspace } from '../src/shared/middleware/resolveConsoleWorkspace.ts';
 import { errorMiddleware } from '../src/errors.ts';
 import { signAgentSession } from '../src/shared/auth/agentSession.ts';
+import { closeWsAuthRedis } from '../src/shared/auth/wsAuthCache.ts';
 import { closeSocketServer, createSocketServer } from '../src/shared/realtime/socketServer.ts';
 import { conversationsRouter } from '../src/agent/routers/conversationsRouter.ts';
 import { incrementPresence, closePresenceRedis } from '../src/shared/realtime/presence.ts';
@@ -24,7 +27,7 @@ import {
 
 const app = express();
 app.use(express.json());
-app.use(requireAgentSession, conversationsRouter);
+app.use(requireAgentSession, resolveConsoleWorkspace, conversationsRouter);
 app.use(errorMiddleware);
 
 beforeAll(() => {
@@ -34,7 +37,9 @@ beforeAll(() => {
 afterAll(async () => {
   await closeSocketServer();
   await closePresenceRedis();
+  await closeWsAuthRedis();
   await closeDb();
+  await closeAdminDb();
   await closeOwnerPool();
 });
 
@@ -58,7 +63,7 @@ async function seedAgentWithRole(
       [workspaceId, agentId, role],
     );
   }
-  const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId });
+  const token = await signAgentSession({ agent_id: agentId, is_admin: role === 'admin' });
   return { agentId, token };
 }
 
@@ -96,6 +101,7 @@ describe('GET /agent/workload', () => {
     const res = await request(app)
       .get('/workload')
       .set('Authorization', `Bearer ${teamLeadToken}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
 
     const row = res.body.agents.find((a: { agentId: string }) => a.agentId === workerAgentId);
@@ -125,6 +131,7 @@ describe('GET /agent/workload', () => {
     const res = await request(app)
       .get('/workload')
       .set('Authorization', `Bearer ${teamLeadToken}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
 
     const row = res.body.agents.find((a: { agentId: string }) => a.agentId === workerAgentId);
@@ -156,6 +163,7 @@ describe('GET /agent/workload', () => {
     const res = await request(app)
       .get('/workload')
       .set('Authorization', `Bearer ${teamLeadToken}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
 
     const firstRow = res.body.agents.find((a: { agentId: string }) => a.agentId === firstAgentId);
@@ -173,6 +181,7 @@ describe('GET /agent/workload', () => {
     const res = await request(app)
       .get('/workload')
       .set('Authorization', `Bearer ${teamLeadToken}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
 
     const row = res.body.agents.find((a: { agentId: string }) => a.agentId === idleAgentId);
@@ -193,6 +202,7 @@ describe('GET /agent/workload', () => {
     const res = await request(app)
       .get('/workload')
       .set('Authorization', `Bearer ${teamLeadToken}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
 
     const row = res.body.agents.find((a: { agentId: string }) => a.agentId === deactivatedAgentId);
@@ -223,6 +233,7 @@ describe('GET /agent/workload', () => {
     const res = await request(app)
       .get('/workload')
       .set('Authorization', `Bearer ${teamLeadToken}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
 
     const row = res.body.agents.find((a: { agentId: string }) => a.agentId === workerAgentId);
@@ -233,7 +244,11 @@ describe('GET /agent/workload', () => {
     const workspaceId = await seedWorkspace();
     const { token: agentToken } = await seedAgentWithRole(workspaceId, 'agent');
 
-    await request(app).get('/workload').set('Authorization', `Bearer ${agentToken}`).expect(403);
+    await request(app)
+      .get('/workload')
+      .set('Authorization', `Bearer ${agentToken}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(403);
   });
 
   it('reports offline by default, online once connected, and away once set', async () => {
@@ -248,6 +263,7 @@ describe('GET /agent/workload', () => {
     const res = await request(app)
       .get('/workload')
       .set('Authorization', `Bearer ${teamLeadToken}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
 
     const offlineRow = res.body.agents.find(
@@ -271,6 +287,7 @@ describe('GET /agent/workload', () => {
     const res = await request(app)
       .get('/workload')
       .set('Authorization', `Bearer ${teamLeadToken}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
 
     const row = res.body.agents.find((a: { agentId: string }) => a.agentId === onLeaveAgentId);
@@ -289,6 +306,7 @@ describe('GET /agent/workload', () => {
     const res = await request(app)
       .get('/workload')
       .set('Authorization', `Bearer ${teamLeadToken}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200);
 
     const row = res.body.agents.find((a: { agentId: string }) => a.agentId === workerAgentId);

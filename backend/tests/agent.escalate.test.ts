@@ -4,11 +4,14 @@ import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { req as request } from './helpers/http.ts';
 import { closeDb } from '../src/shared/db/client.ts';
+import { closeAdminDb } from '../src/shared/db/adminClient.ts';
 import { withWorkspace } from '../src/shared/db/withWorkspace.ts';
 import { resolutionCycle } from '../src/shared/db/schema/index.ts';
 import { requireAgentSession } from '../src/shared/middleware/requireAgentSession.ts';
+import { resolveConsoleWorkspace } from '../src/shared/middleware/resolveConsoleWorkspace.ts';
 import { errorMiddleware } from '../src/errors.ts';
 import { signAgentSession } from '../src/shared/auth/agentSession.ts';
+import { closeWsAuthRedis } from '../src/shared/auth/wsAuthCache.ts';
 import { closeSocketServer, createSocketServer } from '../src/shared/realtime/socketServer.ts';
 import { conversationsRouter } from '../src/agent/routers/conversationsRouter.ts';
 import {
@@ -28,7 +31,7 @@ import {
 
 const app = express();
 app.use(express.json());
-app.use(requireAgentSession, conversationsRouter);
+app.use(requireAgentSession, resolveConsoleWorkspace, conversationsRouter);
 app.use(errorMiddleware);
 
 beforeAll(() => {
@@ -37,7 +40,9 @@ beforeAll(() => {
 
 afterAll(async () => {
   await closeSocketServer();
+  await closeWsAuthRedis();
   await closeDb();
+  await closeAdminDb();
   await closeOwnerPool();
 });
 
@@ -52,7 +57,7 @@ async function setupAgent(workspaceId: string) {
     `insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`,
     [workspaceId, agentId],
   );
-  const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId });
+  const token = await signAgentSession({ agent_id: agentId });
   return { agentId, token };
 }
 
@@ -104,7 +109,8 @@ describe('POST /agent/conversations/:id/escalate', () => {
 
     const res = await request(app)
       .post(`/conversations/${conversationId}/escalate`)
-      .set('Authorization', `Bearer ${token}`);
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId);
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ escalated: true });
@@ -133,7 +139,8 @@ describe('POST /agent/conversations/:id/escalate', () => {
 
     const res = await request(app)
       .post(`/conversations/${conversationId}/escalate`)
-      .set('Authorization', `Bearer ${token}`);
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId);
 
     expect(res.status).toBe(200);
     expect(await messagesFor(conversationId)).toEqual([
@@ -156,6 +163,7 @@ describe('POST /agent/conversations/:id/escalate', () => {
         await request(app)
           .post(`/conversations/${conversationId}/escalate`)
           .set('Authorization', `Bearer ${token}`)
+          .set('X-Workspace-Id', workspaceId)
       ).status,
     ).toBe(200);
   });
@@ -174,6 +182,7 @@ describe('POST /agent/conversations/:id/escalate', () => {
         await request(app)
           .post(`/conversations/${conversationId}/escalate`)
           .set('Authorization', `Bearer ${token}`)
+          .set('X-Workspace-Id', workspaceId)
       ).status,
     ).toBe(200);
   });
@@ -190,7 +199,8 @@ describe('POST /agent/conversations/:id/escalate', () => {
 
     const res = await request(app)
       .post(`/conversations/${conversationId}/escalate`)
-      .set('Authorization', `Bearer ${token}`);
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId);
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe('wrong_status');
   });
@@ -207,7 +217,8 @@ describe('POST /agent/conversations/:id/escalate', () => {
 
     const res = await request(app)
       .post(`/conversations/${conversationId}/escalate`)
-      .set('Authorization', `Bearer ${token}`);
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId);
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe('wrong_status');
   });
@@ -233,7 +244,8 @@ describe('POST /agent/conversations/:id/escalate', () => {
 
     const res = await request(app)
       .post(`/conversations/${conversationId}/escalate`)
-      .set('Authorization', `Bearer ${token}`);
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId);
     expect(res.status).toBe(403);
     expect(res.body.error.code).toBe('not_owner');
     expect((await conversationRow(conversationId)).status).toBe('open');
@@ -251,7 +263,8 @@ describe('POST /agent/conversations/:id/escalate', () => {
     await ownerPool.query(`update conversation set status = 'open' where id = $1`, [foreignId]);
     const res = await request(app)
       .post(`/conversations/${foreignId}/escalate`)
-      .set('Authorization', `Bearer ${token}`);
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId);
     expect(res.status).toBe(404);
   });
 
@@ -263,6 +276,7 @@ describe('POST /agent/conversations/:id/escalate', () => {
         await request(app)
           .post('/conversations/not-a-uuid/escalate')
           .set('Authorization', `Bearer ${token}`)
+          .set('X-Workspace-Id', workspaceId)
       ).status,
     ).toBe(422);
   });
@@ -281,7 +295,8 @@ describe('POST /agent/conversations/:id/unescalate', () => {
 
     const res = await request(app)
       .post(`/conversations/${conversationId}/unescalate`)
-      .set('Authorization', `Bearer ${token}`);
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId);
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ unescalated: true });
@@ -305,7 +320,8 @@ describe('POST /agent/conversations/:id/unescalate', () => {
 
     const res = await request(app)
       .post(`/conversations/${conversationId}/unescalate`)
-      .set('Authorization', `Bearer ${token}`);
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId);
 
     expect(res.status).toBe(200);
     expect(await messagesFor(conversationId)).toEqual([]);
@@ -323,7 +339,8 @@ describe('POST /agent/conversations/:id/unescalate', () => {
 
     const res = await request(app)
       .post(`/conversations/${conversationId}/unescalate`)
-      .set('Authorization', `Bearer ${token}`);
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId);
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe('wrong_status');
   });
@@ -349,7 +366,8 @@ describe('POST /agent/conversations/:id/unescalate', () => {
 
     const res = await request(app)
       .post(`/conversations/${conversationId}/unescalate`)
-      .set('Authorization', `Bearer ${token}`);
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId);
     expect(res.status).toBe(403);
     expect(res.body.error.code).toBe('not_owner');
   });
@@ -368,7 +386,8 @@ describe('POST /agent/conversations/:id/unescalate', () => {
     ]);
     const res = await request(app)
       .post(`/conversations/${foreignId}/unescalate`)
-      .set('Authorization', `Bearer ${token}`);
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId);
     expect(res.status).toBe(404);
   });
 
@@ -380,6 +399,7 @@ describe('POST /agent/conversations/:id/unescalate', () => {
         await request(app)
           .post('/conversations/not-a-uuid/unescalate')
           .set('Authorization', `Bearer ${token}`)
+          .set('X-Workspace-Id', workspaceId)
       ).status,
     ).toBe(422);
   });
