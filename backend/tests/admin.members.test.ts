@@ -6,6 +6,7 @@ import { closeAdminDb } from '../src/shared/db/adminClient.ts';
 import { errorMiddleware } from '../src/errors.ts';
 import { adminRouter } from '../src/admin/router.ts';
 import { signAgentSession } from '../src/shared/auth/agentSession.ts';
+import { getCachedWsAuth, setCachedWsAuth, closeWsAuthRedis } from '../src/shared/auth/wsAuthCache.ts';
 import {
   closeOwnerPool,
   ownerPool,
@@ -21,6 +22,7 @@ app.use('/admin', adminRouter);
 app.use(errorMiddleware);
 
 afterAll(async () => {
+  await closeWsAuthRedis();
   await closeDb();
   await closeAdminDb();
   await closeOwnerPool();
@@ -28,15 +30,15 @@ afterAll(async () => {
 
 beforeEach(truncateAll);
 
-async function adminToken(workspaceId: string): Promise<string> {
+async function adminToken(): Promise<string> {
   const agentId = await seedAgent(undefined, { isAdmin: true });
-  return signAgentSession({ agent_id: agentId});
+  return signAgentSession({ agent_id: agentId, is_admin: true });
 }
 
 describe('POST /admin/workspaces/:id/members', () => {
   it('invites a brand-new email, creating a pending agent row', async () => {
     const workspaceId = await seedWorkspace();
-    const token = await adminToken(workspaceId);
+    const token = await adminToken();
 
     const res = await request(app)
       .post(`/admin/workspaces/${workspaceId}/members`)
@@ -59,7 +61,7 @@ describe('POST /admin/workspaces/:id/members', () => {
     const workspaceId = await seedWorkspace();
     const existing = await seedAgent('already-here@mindstormstudios.com');
     await seedWorkspaceMember({ workspaceId, agentId: existing, role: 'agent' });
-    const token = await adminToken(workspaceId);
+    const token = await adminToken();
 
     const res = await request(app)
       .post(`/admin/workspaces/${workspaceId}/members`)
@@ -82,7 +84,7 @@ describe('GET /admin/workspaces/:id/members', () => {
     const workspaceId = await seedWorkspace();
     const leadId = await seedAgent('lead@mindstormstudios.com');
     await seedWorkspaceMember({ workspaceId, agentId: leadId, role: 'team_lead' });
-    const token = await adminToken(workspaceId);
+    const token = await adminToken();
 
     const res = await request(app)
       .get(`/admin/workspaces/${workspaceId}/members`)
@@ -104,7 +106,7 @@ describe('PATCH /admin/workspaces/:id/members/:agentId', () => {
     const workspaceId = await seedWorkspace();
     const memberId = await seedAgent();
     await seedWorkspaceMember({ workspaceId, agentId: memberId, role: 'agent' });
-    const token = await adminToken(workspaceId);
+    const token = await adminToken();
 
     const res = await request(app)
       .patch(`/admin/workspaces/${workspaceId}/members/${memberId}`)
@@ -119,7 +121,7 @@ describe('PATCH /admin/workspaces/:id/members/:agentId', () => {
     const workspaceId = await seedWorkspace();
     const memberId = await seedAgent();
     await seedWorkspaceMember({ workspaceId, agentId: memberId, role: 'agent' });
-    const token = await adminToken(workspaceId);
+    const token = await adminToken();
 
     await request(app)
       .patch(`/admin/workspaces/${workspaceId}/members/${memberId}`)
@@ -136,7 +138,7 @@ describe('PATCH /admin/workspaces/:id/members/:agentId', () => {
 
   it('deletes the pending row outright when removing an invited (never-logged-in) member', async () => {
     const workspaceId = await seedWorkspace();
-    const token = await adminToken(workspaceId);
+    const token = await adminToken();
     const created = await request(app)
       .post(`/admin/workspaces/${workspaceId}/members`)
       .set('Authorization', `Bearer ${token}`)
@@ -154,5 +156,40 @@ describe('PATCH /admin/workspaces/:id/members/:agentId', () => {
       [workspaceId, created.body.agent_id],
     );
     expect(rows).toHaveLength(0);
+  });
+
+  it('invalidates a warm wsauth cache entry the instant access is removed', async () => {
+    const workspaceId = await seedWorkspace();
+    const memberId = await seedAgent();
+    await seedWorkspaceMember({ workspaceId, agentId: memberId, role: 'agent' });
+    await setCachedWsAuth(memberId, workspaceId, { active: true, role: 'agent' });
+    const token = await adminToken();
+
+    await request(app)
+      .patch(`/admin/workspaces/${workspaceId}/members/${memberId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ remove: true })
+      .expect(200);
+
+    expect(await getCachedWsAuth(memberId, workspaceId)).toBeNull();
+  });
+
+  it('invalidates the cache when hard-deleting a still-invited member too', async () => {
+    const workspaceId = await seedWorkspace();
+    const token = await adminToken();
+    const created = await request(app)
+      .post(`/admin/workspaces/${workspaceId}/members`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ email: 'pending2@mindstormstudios.com', role: 'agent' })
+      .expect(201);
+    await setCachedWsAuth(created.body.agent_id, workspaceId, { active: true, role: 'agent' });
+
+    await request(app)
+      .patch(`/admin/workspaces/${workspaceId}/members/${created.body.agent_id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ remove: true })
+      .expect(200);
+
+    expect(await getCachedWsAuth(created.body.agent_id, workspaceId)).toBeNull();
   });
 });

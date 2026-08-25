@@ -1,6 +1,7 @@
 import { and, eq, isNull } from 'drizzle-orm';
 import { adminDb } from '../../shared/db/adminClient.ts';
 import { agent, workspaceMember } from '../../shared/db/schema/index.ts';
+import { invalidateCachedWsAuth } from '../../shared/auth/wsAuthCache.ts';
 
 export type MemberSummary = {
   agent_id: string;
@@ -118,6 +119,7 @@ export async function updateMember(args: {
           eq(workspaceMember.agentId, args.agentId),
         ),
       );
+    await invalidateCachedWsAuth(args.agentId, args.workspaceId);
     return null;
   }
 
@@ -135,6 +137,9 @@ export async function updateMember(args: {
     )
     .returning({ role: workspaceMember.role });
   if (!row) return null;
+  if (args.remove) {
+    await invalidateCachedWsAuth(args.agentId, args.workspaceId);
+  }
 
   const [agentRow] = await adminDb
     .select({ email: agent.email, displayName: agent.displayName, status: agent.status })
