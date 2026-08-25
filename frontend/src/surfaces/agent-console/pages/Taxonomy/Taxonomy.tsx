@@ -5,6 +5,7 @@ import { isAdmin, loadAgentSession } from '../../lib/agentSession.ts';
 import { Button } from '../../components/ui/button.tsx';
 import { Input } from '../../components/ui/input.tsx';
 import { ScrollArea } from '../../components/ui/scroll-area.tsx';
+import { EmptyState } from '../../components/ui/empty-state.tsx';
 import { IntentRow } from './components/IntentRow.tsx';
 
 export function Taxonomy() {
@@ -57,18 +58,22 @@ export function Taxonomy() {
         )}
       </div>
       <ScrollArea className="min-h-0 flex-1 p-3">
-        <ul className="flex flex-col gap-4">
-          {intents.map((intent) => (
-            <IntentRow
-              key={intent.id}
-              token={session.token}
-              session={session}
-              intent={intent}
-              allIntents={intents}
-              allSubintents={allSubintents}
-            />
-          ))}
-        </ul>
+        {intentsQuery.data && intents.length === 0 ? (
+          <EmptyState message="Nothing to show" />
+        ) : (
+          <ul className="flex flex-col gap-4">
+            {intents.map((intent) => (
+              <IntentRow
+                key={intent.id}
+                token={session.token}
+                session={session}
+                intent={intent}
+                allIntents={intents}
+                allSubintents={allSubintents}
+              />
+            ))}
+          </ul>
+        )}
       </ScrollArea>
     </div>
   );

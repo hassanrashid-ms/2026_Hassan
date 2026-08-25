@@ -5,6 +5,7 @@ import { closeDb } from '../src/shared/db/client.ts';
 import { withWorkspace } from '../src/shared/db/withWorkspace.ts';
 import { conversation, event, formSubmission } from '../src/shared/db/schema/index.ts';
 import { sweepAbandonedForms } from '../src/shared/jobs/formTimeout.ts';
+import { incrementPresence, closePresenceRedis } from '../src/shared/realtime/presence.ts';
 import {
   closeOwnerPool,
   ownerPool,
@@ -31,6 +32,7 @@ const FIELDS: FormField[] = [
 afterAll(async () => {
   await closeDb();
   await closeOwnerPool();
+  await closePresenceRedis();
 });
 
 beforeEach(truncateAll);
@@ -48,6 +50,7 @@ async function offeredAt(
   const workspaceId = await seedWorkspace(workspaceOverrides);
   const agentId = await seedAgent();
   await seedWorkspaceMember({ workspaceId, agentId });
+  await incrementPresence(agentId);
   const playerId = await seedPlayer(workspaceId);
   const conversationId = await seedConversation({ workspaceId, playerId });
   await ownerPool.query(

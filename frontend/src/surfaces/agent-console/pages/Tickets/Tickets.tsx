@@ -12,6 +12,7 @@ import { loadAgentSession } from '../../lib/agentSession.ts';
 import { createSocket } from '../../../../features/chat/api/socket.ts';
 import { handleSessionExpired } from '../../lib/authErrorHandling.ts';
 import { ConversationDetailPane } from '../../components/ConversationDetailPane.tsx';
+import { EmptyState } from '../../components/ui/empty-state.tsx';
 import { ConversationRow } from '../Inbox/components/ConversationRow.tsx';
 import { TicketsFilterBar } from './TicketsFilterBar.tsx';
 import { useTicketsFilters } from './useTicketsFilters.ts';
@@ -288,6 +289,11 @@ export function Tickets() {
         <p className="text-sm text-muted">All active queues at a glance</p>
       </div>
       <TicketsFilterBar token={session.token} filters={filters} onChange={updateFilters} />
+      {!filtersActive &&
+        queueQueries.every((q) => q.data) &&
+        queueQueries.every((q) => q.data!.conversations.length === 0) && (
+          <EmptyState message="Nothing to show" />
+        )}
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={columnOrder} strategy={rectSortingStrategy}>
           <div className="columns-1 gap-4 md:columns-2">

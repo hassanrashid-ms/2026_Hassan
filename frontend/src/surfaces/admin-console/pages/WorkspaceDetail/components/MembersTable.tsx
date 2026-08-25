@@ -44,6 +44,12 @@ export function MembersTable({ token, workspaceId }: { token: string; workspaceI
   const [removeTarget, setRemoveTarget] = useState<{ agentId: string; displayName: string } | null>(
     null,
   );
+  const [roleChangeTarget, setRoleChangeTarget] = useState<{
+    agentId: string;
+    displayName: string;
+    fromRole: 'agent' | 'team_lead';
+    toRole: 'agent' | 'team_lead';
+  } | null>(null);
 
   const membersQuery = useQuery({
     queryKey: ['adminMembers', workspaceId],
@@ -67,7 +73,10 @@ export function MembersTable({ token, workspaceId }: { token: string; workspaceI
   const roleMutation = useMutation({
     mutationFn: (args: { agentId: string; role: 'agent' | 'team_lead' }) =>
       updateMember(token, workspaceId, args.agentId, { role: args.role }),
-    onSuccess: invalidate,
+    onSuccess: () => {
+      invalidate();
+      setRoleChangeTarget(null);
+    },
     onError: reportError,
   });
 
@@ -124,9 +133,11 @@ export function MembersTable({ token, workspaceId }: { token: string; workspaceI
                 <Select
                   value={member.role}
                   onValueChange={(value) =>
-                    roleMutation.mutate({
+                    setRoleChangeTarget({
                       agentId: member.agent_id,
-                      role: value as 'agent' | 'team_lead',
+                      displayName: member.display_name,
+                      fromRole: member.role,
+                      toRole: value as 'agent' | 'team_lead',
                     })
                   }
                 >
@@ -194,6 +205,44 @@ export function MembersTable({ token, workspaceId }: { token: string; workspaceI
               onClick={() => addMutation.mutate()}
             >
               Add
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={roleChangeTarget !== null}
+        onOpenChange={(open) => !open && setRoleChangeTarget(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {roleChangeTarget &&
+                (roleChangeTarget.toRole === 'team_lead'
+                  ? `Promote ${roleChangeTarget.displayName} to Team lead?`
+                  : `Demote ${roleChangeTarget.displayName} to Agent?`)}
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted">
+            {roleChangeTarget?.toRole === 'team_lead'
+              ? 'They will gain access to Forms, Team workload, and Workspace Settings in this workspace.'
+              : 'They will lose access to Forms, Team workload, and Workspace Settings in this workspace.'}
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRoleChangeTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={roleMutation.isPending}
+              onClick={() =>
+                roleChangeTarget &&
+                roleMutation.mutate({
+                  agentId: roleChangeTarget.agentId,
+                  role: roleChangeTarget.toRole,
+                })
+              }
+            >
+              {roleChangeTarget?.toRole === 'team_lead' ? 'Promote' : 'Demote'}
             </Button>
           </DialogFooter>
         </DialogContent>

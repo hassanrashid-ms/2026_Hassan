@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -30,6 +30,7 @@ import {
 import { fetchMemberships, fetchPresence, updatePresence, type DisplayStatus } from '../api/agentApi.ts';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher.tsx';
 import { createSocket } from '../../../features/chat/api/socket.ts';
+import { handleSessionExpired } from '../lib/authErrorHandling.ts';
 import { Avatar, AvatarFallback } from './ui/avatar.tsx';
 import { Badge } from './ui/badge.tsx';
 import { Button } from './ui/button.tsx';
@@ -41,6 +42,8 @@ import {
   DropdownMenuTrigger,
 } from './ui/dropdown-menu.tsx';
 import { PresenceDot } from './PresenceDot.tsx';
+import { PageSkeleton } from './PageSkeleton.tsx';
+import { agentRoutePreload } from '../lib/routePreload.ts';
 import { cn } from '../lib/cn.ts';
 
 const PRESENCE_OPTIONS: { value: 'online' | 'away'; label: string }[] = [
@@ -150,8 +153,20 @@ export function AgentConsoleShell() {
     if (!session || !membershipsForFallback.data) return;
     const memberships = membershipsForFallback.data.memberships;
     if (memberships.length === 0) return;
-    const stillValid = memberships.some((m) => m.workspace_id === session.workspaceId);
-    if (stillValid) return;
+    const current = memberships.find((m) => m.workspace_id === session.workspaceId);
+    if (current) {
+      // Membership for the current workspace still exists — reconcile its
+      // role in case it changed since login (e.g. promoted to team lead)
+      // rather than only reacting when the membership disappears entirely.
+      // A team lead promoted while their tab stayed open would otherwise
+      // keep showing "Agent" (and the form-builder nav gated on it) until
+      // they logged out or switched workspace away and back.
+      if (current.role !== session.role) {
+        saveAgentSession({ ...session, role: current.role });
+        setSession(loadAgentSession());
+      }
+      return;
+    }
     const fallback = memberships[0]!;
     saveAgentSession({
       ...session,
@@ -165,11 +180,29 @@ export function AgentConsoleShell() {
 
   useEffect(() => {
     if (!session) return;
+    let cancelled = false;
     const socket = createSocket(session.token, 'agent');
+    // The socket's own connect handshake — auth, DB membership lookup, then
+    // incrementPresence — routinely takes longer than the REST snapshot in
+    // the effect above, so that snapshot can land while this connection is
+    // still mid-handshake and show a stale "offline" that nothing then
+    // corrects if the presence_changed broadcast is missed (e.g. a room-join
+    // race). Re-fetching on this socket's own 'connect' reconciles the dot
+    // the moment the connection is actually live, on both first connect and
+    // any later reconnect — no dependency on catching that one broadcast.
+    socket.on('connect', () => {
+      void fetchPresence(session.token).then((res) => {
+        if (!cancelled) setPresence(res.status);
+      });
+    });
+    socket.on('connect_error', (err) => {
+      if (err.message === 'unauthorized') handleSessionExpired();
+    });
     socket.on('presence_changed', (payload: { agentId: string; status: DisplayStatus }) => {
       if (payload.agentId === session.agentId) setPresence(payload.status);
     });
     return () => {
+      cancelled = true;
       socket.close();
     };
   }, [session]);
@@ -230,6 +263,13 @@ export function AgentConsoleShell() {
                 <NavLink
                   key={to}
                   to={to}
+                  // Warms the tab's lazy chunk before the click lands — by the
+                  // time onClick fires, the import is usually already
+                  // in-flight or cached, which is most of what makes the
+                  // click itself feel instant instead of stalling on a
+                  // network+parse round trip.
+                  onMouseEnter={() => void agentRoutePreload[to]?.()}
+                  onFocus={() => void agentRoutePreload[to]?.()}
                   className={({ isActive }) =>
                     cn(
                       'flex items-center gap-2 rounded-md border-l-2 py-2 pr-3 pl-2.5 text-sm font-medium transition-colors',
@@ -261,9 +301,14 @@ export function AgentConsoleShell() {
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  className="flex items-center gap-1 text-sm font-medium text-text"
+                  className="flex items-center gap-1.5 text-sm font-medium text-text"
                 >
                   {session.displayName}
+                  {roleLabel && (
+                    <Badge variant="secondary" className="text-accent-deep">
+                      {roleLabel}
+                    </Badge>
+                  )}
                   <ChevronDown className="size-3.5 text-muted" />
                 </button>
               </DropdownMenuTrigger>
@@ -278,11 +323,6 @@ export function AgentConsoleShell() {
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
-            {roleLabel && (
-              <Badge variant="secondary" className="text-muted">
-                {roleLabel}
-              </Badge>
-            )}
             <WorkspaceSwitcher session={session} />
           </div>
           <Button
@@ -299,7 +339,13 @@ export function AgentConsoleShell() {
         </header>
 
         <main className="min-h-0 flex-1 overflow-hidden">
-          <Outlet />
+          {/* Its own boundary, nested below the shell's — a tab's lazy chunk
+              loading never unmounts the sidebar/header, so the click that
+              opens it feels instant and only the content area shows the
+              skeleton while the chunk arrives. */}
+          <Suspense fallback={<PageSkeleton />}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
     </div>

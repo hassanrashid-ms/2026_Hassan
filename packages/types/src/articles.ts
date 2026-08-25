@@ -99,6 +99,7 @@ export type MergeSubintentResponse = {
 export type AgentArticleSummary = {
   id: string;
   title: string;
+  body: string;
   state: ArticleStateValue;
   intent_id: string | null;
   created_at: string;

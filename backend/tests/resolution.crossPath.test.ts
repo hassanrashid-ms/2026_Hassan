@@ -7,6 +7,7 @@ import { app, mintToken } from './helpers/app.ts';
 import { applyBotTurn } from '../src/domain/bot/applyBotTurn.ts';
 import { withWorkspace } from '../src/shared/db/withWorkspace.ts';
 import { HANDOFF_PLAYER_MESSAGES } from '../src/domain/bot/messages.ts';
+import { incrementPresence, closePresenceRedis } from '../src/shared/realtime/presence.ts';
 import {
   closeOwnerPool,
   ownerPool,
@@ -29,6 +30,7 @@ afterAll(async () => {
   await closeSocketServer();
   await closeDb();
   await closeOwnerPool();
+  await closePresenceRedis();
 });
 
 beforeEach(truncateAll);
@@ -172,6 +174,7 @@ describe('resolution confirmation — cross-path', () => {
     // same assigned_agent_id, not that load-balancing behaves.
     const agentId = await seedAgent();
     await seedWorkspaceMember({ workspaceId, agentId });
+    await incrementPresence(agentId);
 
     const conversationA = await seedConversation({ workspaceId, playerId: playerA });
     await ownerPool.query(`update conversation set status = 'open' where id = $1`, [conversationA]);

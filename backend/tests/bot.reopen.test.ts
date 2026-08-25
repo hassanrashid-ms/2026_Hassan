@@ -7,6 +7,7 @@ import { closeDb } from '../src/shared/db/client.ts';
 import { conversation } from '../src/shared/db/schema/index.ts';
 import { HANDOFF_PLAYER_MESSAGES } from '../src/domain/bot/messages.ts';
 import { closeSocketServer, createSocketServer } from '../src/shared/realtime/socketServer.ts';
+import { incrementPresence, closePresenceRedis } from '../src/shared/realtime/presence.ts';
 import type { PlayerContext } from '../src/shared/middleware/requirePlayerToken.ts';
 import {
   closeOwnerPool,
@@ -27,6 +28,7 @@ afterAll(async () => {
   await closeSocketServer();
   await closeDb();
   await closeOwnerPool();
+  await closePresenceRedis();
 });
 
 beforeEach(truncateAll);
@@ -104,6 +106,7 @@ describe('reopen', () => {
     const playerId = await seedPlayer(workspaceId);
     const activeAgent = await seedAgent();
     await seedWorkspaceMember({ workspaceId, agentId: activeAgent });
+    await incrementPresence(activeAgent);
     const conversationId = await seedConversation({ workspaceId, playerId });
     await setResolved(conversationId, { resolutionSource: 'bot', assignedAgentId: null });
 

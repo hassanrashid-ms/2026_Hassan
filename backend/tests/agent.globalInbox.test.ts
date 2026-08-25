@@ -33,7 +33,7 @@ afterAll(async () => {
 beforeEach(truncateAll);
 
 describe('GET /agent/global-inbox', () => {
-  it('returns active tickets across every workspace the agent belongs to, with no X-Workspace-Id header', async () => {
+  it('returns tickets assigned to this agent across every workspace they belong to, with no X-Workspace-Id header', async () => {
     const workspaceA = await seedWorkspace({ slug: 'ws-a' });
     const workspaceB = await seedWorkspace({ slug: 'ws-b' });
     const agentId = await seedAgent();
@@ -41,8 +41,18 @@ describe('GET /agent/global-inbox', () => {
     await seedWorkspaceMember({ workspaceId: workspaceB, agentId, role: 'agent' });
     const playerA = await seedPlayer(workspaceA);
     const playerB = await seedPlayer(workspaceB);
-    const convA = await seedConversation({ workspaceId: workspaceA, playerId: playerA, status: 'open' });
-    const convB = await seedConversation({ workspaceId: workspaceB, playerId: playerB, status: 'open' });
+    const convA = await seedConversation({
+      workspaceId: workspaceA,
+      playerId: playerA,
+      status: 'open',
+      assignedAgentId: agentId,
+    });
+    const convB = await seedConversation({
+      workspaceId: workspaceB,
+      playerId: playerB,
+      status: 'open',
+      assignedAgentId: agentId,
+    });
     const token = await signAgentSession({ agent_id: agentId });
 
     const res = await request(app)

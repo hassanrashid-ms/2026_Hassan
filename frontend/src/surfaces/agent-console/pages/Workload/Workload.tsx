@@ -21,6 +21,7 @@ import {
 import { Avatar, AvatarFallback } from '../../components/ui/avatar.tsx';
 import { Button } from '../../components/ui/button.tsx';
 import { PresenceDot } from '../../components/PresenceDot.tsx';
+import { EmptyState } from '../../components/ui/empty-state.tsx';
 import { LeaveDialog } from '../../components/LeaveDialog.tsx';
 import { cn } from '../../lib/cn.ts';
 
@@ -150,6 +151,9 @@ export function Workload() {
         <h1 className="text-sm font-semibold">Team</h1>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
+        {workload.data && sortedAgents.length === 0 ? (
+          <EmptyState message="Nothing to show" />
+        ) : (
         <Table>
           <TableHeader>
             <TableRow>
@@ -223,6 +227,7 @@ export function Workload() {
             )}
           </TableBody>
         </Table>
+        )}
       </div>
       {leaveDialog && (
         <LeaveDialog

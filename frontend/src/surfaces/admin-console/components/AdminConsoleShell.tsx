@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { Suspense, useEffect } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { LayoutGrid, LogOut, ShieldCheck } from 'lucide-react';
 // admin-console.css is imported HERE and nowhere else — never from main.tsx or
@@ -10,6 +10,7 @@ import { Avatar, AvatarFallback } from './ui/avatar.tsx';
 import { Badge } from './ui/badge.tsx';
 import { Button } from './ui/button.tsx';
 import { Separator } from './ui/separator.tsx';
+import { PageSkeleton } from './PageSkeleton.tsx';
 import { cn } from '../lib/cn.ts';
 
 const NAV_ITEMS = [
@@ -95,7 +96,9 @@ export function AdminConsoleShell() {
         </header>
 
         <main className="min-h-0 flex-1 overflow-auto">
-          <Outlet />
+          <Suspense fallback={<PageSkeleton />}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
     </div>

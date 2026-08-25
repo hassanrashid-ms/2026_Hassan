@@ -29,7 +29,7 @@ const TICKET = {
   assigned_agent_name: null,
   priority: 'p1' as const,
   tags: [],
-  workspace: { id: 'workspace-b', slug: 'ws-b' },
+  workspace: { id: 'workspace-b', slug: 'ws-b', name: 'Workspace B' },
 };
 
 beforeEach(() => {
@@ -54,7 +54,7 @@ describe('GlobalInbox', () => {
     renderWithProviders();
 
     expect(await screen.findByText('player-9')).toBeInTheDocument();
-    expect(screen.getByText('ws-b')).toBeInTheDocument();
+    expect(screen.getByText('Workspace B')).toBeInTheDocument();
   });
 
   it('shows a subtle indicator when some workspaces failed to load, without hiding the rest', async () => {

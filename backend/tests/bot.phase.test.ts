@@ -126,6 +126,7 @@ describe('applyBotTurn — resolve and article lifecycle', () => {
       'message_sent',
       'bot_article_rejected',
       'bot_handoff',
+      'message_sent',
     ]);
     expect(events[1].payload).toEqual({});
   });
@@ -196,7 +197,12 @@ describe('applyBotTurn — bot_search retrieval telemetry', () => {
     );
 
     const events = await eventsFor(conversationId);
-    expect(events.map((e) => e.type)).toEqual(['bot_search', 'message_sent', 'bot_handoff']);
+    expect(events.map((e) => e.type)).toEqual([
+      'bot_search',
+      'message_sent',
+      'bot_handoff',
+      'message_sent',
+    ]);
     expect(events[0].payload).toEqual({
       query: 'item not received',
       result_count: 0,

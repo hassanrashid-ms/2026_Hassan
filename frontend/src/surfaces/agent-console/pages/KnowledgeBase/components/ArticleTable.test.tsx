@@ -18,6 +18,7 @@ describe('ArticleTable title column', () => {
         {
           id: 'art-1',
           title: longTitle,
+          body: 'irrelevant',
           state: 'draft',
           intent_id: null,
           published_at: null,
@@ -37,5 +38,51 @@ describe('ArticleTable title column', () => {
     expect(cell.className).toContain('truncate');
     expect(cell.className).toContain('max-w-0');
     expect(cell.getAttribute('title')).toBe(longTitle);
+  });
+});
+
+describe('ArticleTable title fallback', () => {
+  it('falls back to the first two words of the body when there is no title', async () => {
+    vi.spyOn(agentApi, 'fetchArticles').mockResolvedValue({
+      articles: [
+        {
+          id: 'art-1',
+          title: '',
+          body: 'Refund policy details',
+          state: 'draft',
+          intent_id: null,
+          published_at: null,
+          created_at: '2026-08-01T00:00:00Z',
+        },
+      ],
+    });
+
+    renderWithClient(
+      <ArticleTable token="tok" selectedId={null} onSelect={() => {}} onNew={() => {}} />,
+    );
+
+    expect(await screen.findByText('Refund policy')).toBeInTheDocument();
+  });
+
+  it('falls back to "Untitled" when there is neither a title nor a body', async () => {
+    vi.spyOn(agentApi, 'fetchArticles').mockResolvedValue({
+      articles: [
+        {
+          id: 'art-1',
+          title: '',
+          body: '',
+          state: 'draft',
+          intent_id: null,
+          published_at: null,
+          created_at: '2026-08-01T00:00:00Z',
+        },
+      ],
+    });
+
+    renderWithClient(
+      <ArticleTable token="tok" selectedId={null} onSelect={() => {}} onNew={() => {}} />,
+    );
+
+    expect(await screen.findByText('Untitled')).toBeInTheDocument();
   });
 });

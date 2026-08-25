@@ -5,6 +5,7 @@ import { fetchInbox } from '../../../api/agentApi.ts';
 import { createSocket } from '../../../../../features/chat/api/socket.ts';
 import { handleSessionExpired } from '../../../lib/authErrorHandling.ts';
 import { ScrollArea } from '../../../components/ui/scroll-area.tsx';
+import { EmptyState } from '../../../components/ui/empty-state.tsx';
 import { ConversationRow } from './ConversationRow.tsx';
 
 export function ConversationList({
@@ -96,33 +97,44 @@ export function ConversationList({
     };
   }, [token, queryClient]);
 
+  const bothLoadedAndEmpty =
+    mine.data && escalated.data &&
+    mine.data.conversations.length === 0 &&
+    escalated.data.conversations.length === 0;
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <ScrollArea className="min-h-0 flex-1">
-        <div className="p-3 text-sm font-semibold">My tickets</div>
-        {mine.data?.conversations.map((c) => (
-          <ConversationRow
-            key={c.id}
-            conversation={c}
-            selected={c.id === selectedId}
-            onSelect={() => onSelect(c.id)}
-          />
-        ))}
-        {mine.data?.conversations.length === 0 && (
-          <div className="px-3 pb-3 text-sm text-muted">No open tickets.</div>
-        )}
+        {bothLoadedAndEmpty ? (
+          <EmptyState message="Nothing to show" />
+        ) : (
+          <>
+            <div className="p-3 text-sm font-semibold">My tickets</div>
+            {mine.data?.conversations.map((c) => (
+              <ConversationRow
+                key={c.id}
+                conversation={c}
+                selected={c.id === selectedId}
+                onSelect={() => onSelect(c.id)}
+              />
+            ))}
+            {mine.data?.conversations.length === 0 && (
+              <div className="px-3 pb-3 text-sm text-muted">No open tickets.</div>
+            )}
 
-        <div className="p-3 text-sm font-semibold">Escalated tickets</div>
-        {escalated.data?.conversations.map((c) => (
-          <ConversationRow
-            key={c.id}
-            conversation={c}
-            selected={c.id === selectedId}
-            onSelect={() => onSelect(c.id)}
-          />
-        ))}
-        {escalated.data?.conversations.length === 0 && (
-          <div className="px-3 pb-3 text-sm text-muted">No escalated tickets.</div>
+            <div className="p-3 text-sm font-semibold">Escalated tickets</div>
+            {escalated.data?.conversations.map((c) => (
+              <ConversationRow
+                key={c.id}
+                conversation={c}
+                selected={c.id === selectedId}
+                onSelect={() => onSelect(c.id)}
+              />
+            ))}
+            {escalated.data?.conversations.length === 0 && (
+              <div className="px-3 pb-3 text-sm text-muted">No escalated tickets.</div>
+            )}
+          </>
         )}
       </ScrollArea>
     </div>

@@ -114,9 +114,10 @@ describe('internal notes never reach the player room', () => {
 
     await new Promise((resolve) => setTimeout(resolve, 150));
 
-    // Two messages were posted (public handoff + internal note); only the
-    // public one may reach the player.
-    expect(playerReceived.length).toBe(1);
+    // Three messages were posted (public handoff line + internal note +
+    // public no-agents-online line, since no agent is online in this test);
+    // only the two public ones may reach the player.
+    expect(playerReceived.length).toBe(2);
     playerSocket.close();
   });
 });

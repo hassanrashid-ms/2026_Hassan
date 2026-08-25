@@ -7,7 +7,7 @@ import * as agentApi from '../../../api/agentApi.ts';
 
 function renderWithClient(ui: React.ReactElement) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+  return { queryClient, ...render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>) };
 }
 
 const EXISTING_ARTICLE = {
@@ -98,6 +98,40 @@ describe('ArticleEditorSheet MDXEditor round-trip', () => {
     // The same markdown emphasis marker round-trips unchanged.
     const [, , patch] = updateSpy.mock.calls[0]!;
     expect(patch.body).toContain('**30 days**');
+  });
+});
+
+describe('ArticleEditorSheet autosave cache write', () => {
+  it('writes the saved article straight into the query cache, so an instant reopen never serves the pre-edit value', async () => {
+    vi.spyOn(agentApi, 'fetchArticle').mockResolvedValue(EXISTING_ARTICLE);
+    vi.spyOn(agentApi, 'fetchIntents').mockResolvedValue({ intents: [] });
+    const SAVED_ARTICLE = { ...EXISTING_ARTICLE, title: 'Refunds!' };
+    vi.spyOn(agentApi, 'updateArticle').mockResolvedValue(SAVED_ARTICLE);
+
+    const { queryClient } = renderWithClient(
+      <ArticleEditorSheet
+        token="tok"
+        articleId="art-1"
+        open
+        onOpenChange={() => {}}
+        onCreated={() => {}}
+      />,
+    );
+
+    await screen.findByDisplayValue('Refunds');
+
+    vi.useFakeTimers();
+    fireEvent.change(screen.getByPlaceholderText('Article title'), {
+      target: { value: 'Refunds!' },
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(800);
+    });
+    vi.useRealTimers();
+
+    await waitFor(() =>
+      expect(queryClient.getQueryData(['admin-article', 'art-1'])).toEqual(SAVED_ARTICLE),
+    );
   });
 });
 

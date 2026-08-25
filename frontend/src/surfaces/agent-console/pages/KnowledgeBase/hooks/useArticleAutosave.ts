@@ -12,13 +12,14 @@ export function useArticleAutosave(params: {
   token: string;
   articleId: string | null;
   onCreated: (id: string) => void;
+  onSaved?: (article: AgentArticleDetail) => void;
   fields: Fields;
 }): {
   status: AutosaveStatus;
   ensureArticleId: () => Promise<string>;
   flush: () => Promise<void>;
 } {
-  const { token, onCreated } = params;
+  const { token, onCreated, onSaved } = params;
   const [status, setStatus] = useState<AutosaveStatus>('saved');
 
   // Refs, not state: this data must be read inside a debounced timeout closure
@@ -50,8 +51,15 @@ export function useArticleAutosave(params: {
       });
       articleIdRef.current = created.id;
       onCreated(created.id);
+      onSaved?.(created);
     } else {
-      await updateArticle(token, articleIdRef.current, body);
+      // Write the server's response straight into the query cache (see
+      // ArticleEditorForm's onSaved) instead of only invalidating — an
+      // invalidated query still serves its stale cached value the instant
+      // the sheet remounts, and only refetches after, which is exactly the
+      // "close, reopen instantly → stale" glitch this replaces.
+      const updated = await updateArticle(token, articleIdRef.current, body);
+      onSaved?.(updated);
     }
     setStatus('saved');
   }

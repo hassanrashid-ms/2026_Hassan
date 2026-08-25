@@ -28,6 +28,45 @@ export async function closePresenceRedis(): Promise<void> {
   }
 }
 
+/**
+ * Called once when the socket server boots. `presence:status:{agentId}` has
+ * no TTL by design (see its own comment) — correctness relies entirely on
+ * the socket `disconnect` event firing to decrement/clear it. That event
+ * never fires for a connection whose process died without a clean shutdown
+ * (a crash, `--watch`'s restart-on-save, `kill -9`): the TCP connection is
+ * gone, but the counter it incremented is not, so the agent reads "online"
+ * forever with no path back to "offline" until they reconnect and later
+ * disconnect cleanly — which may be days.
+ *
+ * A freshly booted process has zero real connections by definition, so any
+ * `presence:conn`/`presence:status` keys already in Redis at boot are
+ * necessarily stale from whatever ran before this process. Every real,
+ * still-open client reconnects within seconds of the server coming back up
+ * (Socket.io's own auto-reconnect) and re-increments correctly, so this
+ * trades a few seconds of "shows offline while everyone reconnects" for
+ * never getting permanently stuck "online".
+ *
+ * Single-instance assumption: this is safe for exactly one API process per
+ * Redis instance (the deployment shape this codebase assumes throughout —
+ * see presence.ts's own module-scoped-client comment). A horizontally scaled
+ * deployment would need each entry tagged with an instance id instead of a
+ * blanket flush, so one instance restarting doesn't wipe presence for agents
+ * connected to its still-live siblings.
+ */
+export async function flushStalePresence(): Promise<number> {
+  const redis = client();
+  let deleted = 0;
+  for (const prefix of [CONN_PREFIX, STATUS_PREFIX]) {
+    let cursor = '0';
+    do {
+      const [next, keys] = await redis.scan(cursor, 'MATCH', `${prefix}*`, 'COUNT', 500);
+      cursor = next;
+      if (keys.length > 0) deleted += await redis.del(...keys);
+    } while (cursor !== '0');
+  }
+  return deleted;
+}
+
 const connKey = (agentId: string): string => `${CONN_PREFIX}${agentId}`;
 const statusKey = (agentId: string): string => `${STATUS_PREFIX}${agentId}`;
 

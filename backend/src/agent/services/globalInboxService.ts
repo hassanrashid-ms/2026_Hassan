@@ -1,4 +1,4 @@
-import { desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import pLimit from 'p-limit';
 import type { AgentConversationSummary } from '@support/types';
 import { agent, conversation, message, player } from '../../shared/db/schema/index.ts';
@@ -8,8 +8,12 @@ import { listActiveMembershipsForAgent, listAllWorkspaces } from '../../shared/d
 import { getConversationTags } from './tagsService.ts';
 import { logger } from '../../shared/logging/logger.ts';
 
+// This is the authenticated agent's own assigned queue merged across
+// workspaces, never every agent's tickets — that's what the per-workspace
+// Tickets tab is for. An admin gets every workspace scattered, but still
+// only the tickets assigned to *them*, same as anyone else.
 export type GlobalInboxTicket = AgentConversationSummary & {
-  workspace: { id: string; slug: string };
+  workspace: { id: string; slug: string; name: string };
 };
 export type GlobalInboxResponse = {
   conversations: GlobalInboxTicket[];
@@ -27,9 +31,12 @@ const OPEN_STATUSES: (typeof conversation.status.enumValues)[number][] = [
   'escalated',
 ];
 
-type WorkspaceTarget = { id: string; slug: string };
+type WorkspaceTarget = { id: string; slug: string; name: string };
 
-async function getWorkspaceInboxSlice(ws: WorkspaceTarget): Promise<GlobalInboxTicket[]> {
+async function getWorkspaceInboxSlice(
+  ws: WorkspaceTarget,
+  agentId: string,
+): Promise<GlobalInboxTicket[]> {
   return withWorkspace(ws.id, async (tx) => {
     const rows = await tx
       .select({
@@ -44,7 +51,12 @@ async function getWorkspaceInboxSlice(ws: WorkspaceTarget): Promise<GlobalInboxT
       .from(conversation)
       .innerJoin(player, eq(player.id, conversation.playerId))
       .leftJoin(agent, eq(agent.id, conversation.assignedAgentId))
-      .where(inArray(conversation.status, OPEN_STATUSES))
+      .where(
+        and(
+          inArray(conversation.status, OPEN_STATUSES),
+          eq(conversation.assignedAgentId, agentId),
+        ),
+      )
       .orderBy(conversation.priority, conversation.createdAt)
       .limit(PER_WORKSPACE_CAP);
 
@@ -85,10 +97,15 @@ function compareTickets(a: GlobalInboxTicket, b: GlobalInboxTicket): number {
 
 export async function getGlobalInbox(ctx: AgentContext): Promise<GlobalInboxResponse> {
   const targets: WorkspaceTarget[] = ctx.isAdmin
-    ? (await listAllWorkspaces()).map((w) => ({ id: w.workspaceId, slug: w.workspaceSlug }))
+    ? (await listAllWorkspaces()).map((w) => ({
+        id: w.workspaceId,
+        slug: w.workspaceSlug,
+        name: w.workspaceName,
+      }))
     : (await listActiveMembershipsForAgent(ctx.agentId)).map((m) => ({
         id: m.workspaceId,
         slug: m.workspaceSlug,
+        name: m.workspaceName,
       }));
 
   const limit = pLimit(SCATTER_CONCURRENCY);
@@ -97,7 +114,7 @@ export async function getGlobalInbox(ctx: AgentContext): Promise<GlobalInboxResp
     targets.map((ws) =>
       limit(async () => {
         try {
-          return await getWorkspaceInboxSlice(ws);
+          return await getWorkspaceInboxSlice(ws, ctx.agentId);
         } catch (error) {
           logger.error(
             'global_inbox',

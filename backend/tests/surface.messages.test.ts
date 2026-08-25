@@ -22,6 +22,7 @@ import {
 } from './helpers/db.ts';
 import { enqueueBotTurn } from '../src/shared/jobs/botTurns.ts';
 import { HANDOFF_PLAYER_MESSAGES } from '../src/domain/bot/messages.ts';
+import { incrementPresence, closePresenceRedis } from '../src/shared/realtime/presence.ts';
 
 vi.mock('../src/shared/jobs/botTurns.ts', () => ({
   enqueueBotTurn: vi.fn().mockResolvedValue(undefined),
@@ -40,6 +41,7 @@ afterAll(async () => {
   await closeSocketServer();
   await closeDb();
   await closeOwnerPool();
+  await closePresenceRedis();
 });
 
 beforeEach(async () => {
@@ -93,6 +95,7 @@ describe('POST /surface/messages', () => {
     const { workspaceId, token } = await setup();
     const availableAgent = await seedAgent();
     await seedWorkspaceMember({ workspaceId, agentId: availableAgent });
+    await incrementPresence(availableAgent);
     await seedBotConfig({ workspaceId, isProvisioned: false });
 
     const res = await request(app)

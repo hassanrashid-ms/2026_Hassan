@@ -201,9 +201,10 @@ describe('workspace A cannot reach workspace B', () => {
     expect(after.conversation).toBe(before.conversation + 1);
     // A's workspace has no bot_config row, so the new conversation's first
     // message resolves as not-provisioned and hands off inline: the player's
-    // own message plus the public system handoff message land in the same
-    // transaction.
-    expect(after.message).toBe(before.message + 2);
+    // own message, the public system handoff message, and (since A's
+    // workspace has no online agent) the no-agents-online message all land
+    // in the same transaction.
+    expect(after.message).toBe(before.message + 3);
   });
 
   it("POST /surface/messages with B's session_id writes no cross-tenant foreign key", async () => {

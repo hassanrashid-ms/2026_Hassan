@@ -49,8 +49,14 @@ describe('resolution cycles on the surface ticket paths', () => {
     const rows = await cyclesFor(workspaceId, conversation_id);
     expect(rows).toHaveLength(1);
     expect(rows[0]!.cycleNo).toBe(1);
-    // bot_active: the clock does not run under the bot.
-    expect(rows[0]!.inactivityDueAt).toBeNull();
+    // No bot_config in this fixture means the bot is not_provisioned, which
+    // hands off synchronously within sendPlayerMessage: the conversation
+    // flips straight to `open` and — with no workspace member seeded, so
+    // nobody's online to assign — the "no agents online" public message
+    // posts while status is already `open`, ticking the clock per
+    // postMessage's own status-gated contract (funnels every public message
+    // through touchInactivityClock once status leaves bot_active).
+    expect(rows[0]!.inactivityDueAt).not.toBeNull();
     expect(rows[0]!.resolvedAt).toBeNull();
   });
 

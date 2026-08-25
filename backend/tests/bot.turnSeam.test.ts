@@ -1,9 +1,14 @@
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { applyBotTurn } from '../src/domain/bot/applyBotTurn.ts';
-import { HANDOFF_PLAYER_MESSAGES, botFailureNote } from '../src/domain/bot/messages.ts';
+import {
+  HANDOFF_PLAYER_MESSAGES,
+  botFailureNote,
+  NO_AGENTS_ONLINE_MESSAGE,
+} from '../src/domain/bot/messages.ts';
 import { withWorkspace } from '../src/shared/db/withWorkspace.ts';
 import { closeDb } from '../src/shared/db/client.ts';
+import { incrementPresence, closePresenceRedis } from '../src/shared/realtime/presence.ts';
 import {
   closeOwnerPool,
   ownerPool,
@@ -22,6 +27,7 @@ beforeEach(truncateAll);
 afterAll(async () => {
   await closeDb();
   await closeOwnerPool();
+  await closePresenceRedis();
 });
 
 async function conversationRow(id: string) {
@@ -156,6 +162,7 @@ describe('applyBotTurn', () => {
     const conversationId = await seedConversation({ workspaceId, playerId });
     const availableAgent = await seedAgent();
     await seedWorkspaceMember({ workspaceId, agentId: availableAgent });
+    await incrementPresence(availableAgent);
 
     await withWorkspace(workspaceId, (tx) =>
       applyBotTurn(
@@ -208,8 +215,15 @@ describe('applyBotTurn', () => {
     expect(row.status).toBe('open');
     expect(row.assigned_agent_id).toBeNull();
 
+    const msgs = await messagesFor(conversationId);
+    expect(msgs[1]).toEqual({
+      author_type: 'system',
+      visibility: 'public',
+      body: NO_AGENTS_ONLINE_MESSAGE,
+    });
+
     const events = await eventsFor(conversationId);
-    expect(events.map((e) => e.type)).toEqual(['message_sent', 'bot_handoff']);
+    expect(events.map((e) => e.type)).toEqual(['message_sent', 'bot_handoff', 'message_sent']);
     expect(events[1].payload).toEqual({ reason: 'unsure', assigned_agent_id: null });
   });
 
@@ -230,6 +244,7 @@ describe('applyBotTurn', () => {
         body: expect.toBeOneOf([...HANDOFF_PLAYER_MESSAGES]),
       },
       { author_type: 'system', visibility: 'internal', body: botFailureNote('error') },
+      { author_type: 'system', visibility: 'public', body: NO_AGENTS_ONLINE_MESSAGE },
     ]);
 
     const row = await conversationRow(conversationId);
@@ -237,9 +252,16 @@ describe('applyBotTurn', () => {
     expect(row.subintent_id).toBeNull();
 
     // Two postMessage calls (public + internal) each append their own
-    // message_sent event, ahead of the bot_unavailable event.
+    // message_sent event, ahead of the bot_unavailable event — the third
+    // (no-agents-online) message_sent lands after it, since it depends on
+    // assignOnHandoff's result.
     const events = await eventsFor(conversationId);
-    expect(events.map((e) => e.type)).toEqual(['message_sent', 'message_sent', 'bot_unavailable']);
+    expect(events.map((e) => e.type)).toEqual([
+      'message_sent',
+      'message_sent',
+      'bot_unavailable',
+      'message_sent',
+    ]);
     expect(events[2].payload).toEqual({ reason: 'error' });
   });
 
@@ -261,10 +283,15 @@ describe('applyBotTurn', () => {
           visibility: 'public',
           body: expect.toBeOneOf([...HANDOFF_PLAYER_MESSAGES]),
         },
+        { author_type: 'system', visibility: 'public', body: NO_AGENTS_ONLINE_MESSAGE },
       ]);
 
       const events = await eventsFor(conversationId);
-      expect(events.map((e) => e.type)).toEqual(['message_sent', 'bot_unavailable']);
+      expect(events.map((e) => e.type)).toEqual([
+        'message_sent',
+        'bot_unavailable',
+        'message_sent',
+      ]);
       expect(events[1].payload).toEqual({ reason });
     },
   );

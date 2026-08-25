@@ -204,7 +204,9 @@ describe('bot-turns queue and worker', () => {
       tx.select().from(message).where(eq(message.conversationId, conversationId)),
     );
     expect(rows.filter((r) => r.visibility === 'internal')).toHaveLength(1);
-    expect(rows.filter((r) => r.visibility === 'public')).toHaveLength(1);
+    // Two public messages: the handoff line, plus the no-agents-online line
+    // (no workspace member is seeded in this test, so nobody's online).
+    expect(rows.filter((r) => r.visibility === 'public')).toHaveLength(2);
   });
 
   it('deduplicates two enqueues of the same conversationId:seq into one job', async () => {

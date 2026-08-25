@@ -12,6 +12,7 @@ import { appendEvent } from '../../shared/events/appendEvent.ts';
 import { assignOnHandoff } from '../bot/assignOnHandoff.ts';
 import { postMessage, type PostedMessageRow } from '../conversations/postMessage.ts';
 import { formSummaryMessage } from './messages.ts';
+import { NO_AGENTS_ONLINE_MESSAGE } from '../bot/messages.ts';
 
 export type FormTerminationReason = 'submit' | 'skip' | 'timeout';
 export type TerminalFormStatus = 'completed' | 'partial' | 'skipped';
@@ -33,6 +34,8 @@ export type CompleteFormResult = {
   fieldCount: number;
   assignedAgentId: string | null;
   posted: PostedMessageRow;
+  /** Set only when assignOnHandoff found nobody online — a second public line. */
+  noAgentsOnlinePosted: PostedMessageRow | null;
 };
 
 /**
@@ -117,6 +120,18 @@ export async function completeFormAndHandoff(
     .set({ status: 'open', confirmPhase: 'none', assignedAgentId })
     .where(eq(conversation.id, ctx.conversationId));
 
+  const noAgentsOnlinePosted =
+    assignedAgentId === null
+      ? await postMessage(tx, {
+          workspaceId: ctx.workspaceId,
+          conversationId: ctx.conversationId,
+          authorType: 'system',
+          actorId: null,
+          body: NO_AGENTS_ONLINE_MESSAGE,
+          visibility: 'public',
+        })
+      : null;
+
   // The reason belongs to the bot turn that offered the form, so it is read back
   // from that turn's own snapshot. Null rather than a guess if the event is
   // missing: a null reason is a visible bug, an invented one is not.
@@ -197,6 +212,7 @@ export async function completeFormAndHandoff(
     fieldCount,
     assignedAgentId,
     posted,
+    noAgentsOnlinePosted,
   };
 }
 

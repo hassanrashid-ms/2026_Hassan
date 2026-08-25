@@ -1,7 +1,7 @@
 import { and, eq, isNull } from 'drizzle-orm';
 import type { BotTurnDecision } from './botTurn.ts';
 import { SILENT_UNAVAILABLE_REASONS } from './botTurn.ts';
-import { botFailureNote, pickHandoffMessage } from './messages.ts';
+import { botFailureNote, pickHandoffMessage, NO_AGENTS_ONLINE_MESSAGE } from './messages.ts';
 import { assignOnHandoff } from './assignOnHandoff.ts';
 import { postMessage, type PostedMessageRow } from '../conversations/postMessage.ts';
 import { closeResolutionCycle } from '../conversations/resolutionCycle.ts';
@@ -205,7 +205,20 @@ export async function applyBotTurn(
         // agent exists, and that is explicitly not an error.
         payload: { reason: decision.reason, assigned_agent_id: assignedAgentId },
       });
-      return { posted: [posted], statusChanged: true, phaseChanged: null };
+      const finalPosted = [posted];
+      if (assignedAgentId === null) {
+        finalPosted.push(
+          await postMessage(tx, {
+            workspaceId: ctx.workspaceId,
+            conversationId: ctx.conversationId,
+            authorType: 'system',
+            actorId: null,
+            body: NO_AGENTS_ONLINE_MESSAGE,
+            visibility: 'public',
+          }),
+        );
+      }
+      return { posted: finalPosted, statusChanged: true, phaseChanged: null };
     }
 
     case 'unavailable': {
@@ -244,6 +257,18 @@ export async function applyBotTurn(
         actorType: 'bot',
         payload: { reason: decision.reason },
       });
+      if (assignedAgentId === null) {
+        posted.push(
+          await postMessage(tx, {
+            workspaceId: ctx.workspaceId,
+            conversationId: ctx.conversationId,
+            authorType: 'system',
+            actorId: null,
+            body: NO_AGENTS_ONLINE_MESSAGE,
+            visibility: 'public',
+          }),
+        );
+      }
       return { posted, statusChanged: true, phaseChanged: null };
     }
   }

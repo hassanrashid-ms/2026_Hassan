@@ -7,6 +7,7 @@ import { sweepAbandonedForms } from './formTimeout.ts';
 import { registerBotTurnWorker } from './botTurns.ts';
 import { INACTIVITY_CLOCK_JOB, runInactivityClock } from './inactivityClock.ts';
 import { AUTO_CLOSE_JOB, runAutoClose } from './autoClose.ts';
+import { LEAVE_EXPIRY_JOB, runLeaveExpiry } from './leaveExpiry.ts';
 
 const QUEUE_NAME = 'support-jobs';
 const SESSION_TIMEOUT_JOB = 'session-timeout';
@@ -57,6 +58,14 @@ export async function registerJobs(): Promise<{ close: () => Promise<void> }> {
     { name: AUTO_CLOSE_JOB, opts: { removeOnComplete: 50, removeOnFail: 100 } },
   );
 
+  // Same cadence and stable-jobId rule as the others. Five minutes is
+  // granular enough for a return date measured in days.
+  await queue.upsertJobScheduler(
+    LEAVE_EXPIRY_JOB,
+    { pattern: '*/5 * * * *' },
+    { name: LEAVE_EXPIRY_JOB, opts: { removeOnComplete: 50, removeOnFail: 100 } },
+  );
+
   const worker = new Worker(
     QUEUE_NAME,
     async (job) => {
@@ -80,6 +89,10 @@ export async function registerJobs(): Promise<{ close: () => Promise<void> }> {
       if (job.name === AUTO_CLOSE_JOB) {
         const closed = await runAutoClose();
         if (closed > 0) logger.info('jobs', `auto-closed ${closed} conversation(s)`);
+        return;
+      }
+      if (job.name === LEAVE_EXPIRY_JOB) {
+        await runLeaveExpiry();
       }
     },
     { connection: workerConnection, concurrency: 1 },

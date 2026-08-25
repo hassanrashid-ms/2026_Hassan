@@ -37,6 +37,14 @@ export function emitFormTerminated(workspaceId: string, result: CompleteFormResu
     toPlayerView(result.posted),
     toAgentView(result.posted),
   );
+  if (result.noAgentsOnlinePosted) {
+    emitMessageToRooms(
+      io,
+      result.conversationId,
+      toPlayerView(result.noAgentsOnlinePosted),
+      toAgentView(result.noAgentsOnlinePosted),
+    );
+  }
   emitPhaseChanged(io, result.conversationId, {
     conversation_id: result.conversationId,
     confirm_phase: 'none',

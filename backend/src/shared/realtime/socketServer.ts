@@ -10,7 +10,7 @@ import { conversation } from '../db/schema/index.ts';
 import { withWorkspace } from '../db/withWorkspace.ts';
 import { listActiveMembershipsForAgent, listAllWorkspaces } from '../db/workspaceMembership.ts';
 import { agentRoom, inboxRoom, playerRoom } from './rooms.ts';
-import { decrementPresence, incrementPresence } from './presence.ts';
+import { decrementPresence, flushStalePresence, incrementPresence } from './presence.ts';
 import { logger } from '../logging/logger.ts';
 
 export type PlayerSocketData = { role: 'player'; workspaceId: string; playerId: string };
@@ -71,6 +71,28 @@ export function createSocketServer(httpServer: HttpServer): Server {
   closing = false;
   const pubClient = redisConnection();
   const subClient = pubClient.duplicate();
+
+  // Fire-and-forget, not awaited: this function's own contract is a
+  // synchronous Server return (every caller, tests included, relies on
+  // getIo() working immediately after this call), and a real client's
+  // WebSocket handshake takes long enough over the network that this always
+  // wins the race. See flushStalePresence's own doc for why this exists.
+  //
+  // Skipped under NODE_ENV=test: this codebase's test suite calls
+  // createSocketServer() dozens of times per run (once or more per test
+  // file) against the same real Redis instance dev uses, deliberately
+  // seeding presence for its own agents moments later — an unawaited global
+  // flush racing that setup would be a self-inflicted flake, and recovering
+  // from a prior *process's* abrupt death is meaningless in a test run that
+  // starts and tears down its own presence data every time regardless.
+  if (getEnv().NODE_ENV !== 'test') {
+    void flushStalePresence().catch((error) => {
+      logger.error(
+        'presence',
+        `startup flush failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    });
+  }
 
   const io = new Server(httpServer, {
     cors: { origin: getEnv().SURFACE_ORIGINS, methods: ['GET', 'POST'] },

@@ -41,3 +41,12 @@ export function pickHandoffMessage(): string {
 export function botFailureNote(reason: UnavailableReason): string {
   return `Bot could not respond (\`${reason}\`). Handed off unclassified.`;
 }
+
+/**
+ * Posted publicly, in addition to the handoff line above, whenever
+ * `assignOnHandoff` finds nobody online — unlike `HANDOFF_PLAYER_MESSAGES`,
+ * this one names the actual state, since "a human is coming" would otherwise
+ * be a promise nobody is there yet to keep.
+ */
+export const NO_AGENTS_ONLINE_MESSAGE =
+  "None of our agents are online right now, sorry for the inconvenience — you'll be contacted by us soon.";

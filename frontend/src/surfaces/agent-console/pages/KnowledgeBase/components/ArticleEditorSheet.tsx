@@ -229,6 +229,9 @@ function ArticleEditorForm({
       invalidateArticles();
       onCreated(id);
     },
+    onSaved: (saved) => {
+      queryClient.setQueryData<AgentArticleDetail>(['admin-article', saved.id], saved);
+    },
     fields: {
       title: draft.title,
       body: draft.body,

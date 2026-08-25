@@ -3,6 +3,7 @@ import type { ArticleStateValue } from '@support/types';
 import { fetchArticles } from '../../../api/agentApi.ts';
 import { Badge } from '../../../components/ui/badge.tsx';
 import { Button } from '../../../components/ui/button.tsx';
+import { EmptyState } from '../../../components/ui/empty-state.tsx';
 import {
   Table,
   TableBody,
@@ -18,6 +19,12 @@ const STATE_BADGE_VARIANT: Record<ArticleStateValue, 'secondary' | 'success' | '
   published: 'success',
   archived: 'outline',
 };
+
+function displayTitle(title: string, body: string): string {
+  if (title.trim()) return title;
+  const bodyStart = body.trim().split(/\s+/).slice(0, 2).join(' ');
+  return bodyStart || 'Untitled';
+}
 
 export function ArticleTable({
   token,
@@ -41,6 +48,9 @@ export function ArticleTable({
         </Button>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
+        {articles.data?.articles.length === 0 ? (
+          <EmptyState message="Nothing to show" />
+        ) : (
         <Table>
           <TableHeader>
             <TableRow>
@@ -61,7 +71,7 @@ export function ArticleTable({
                     bound to clip against, and a long title wraps character-by-character
                     once the sheet next to it eats most of the available width. */}
                 <TableCell className="max-w-0 w-full truncate font-medium" title={a.title}>
-                  {a.title}
+                  {displayTitle(a.title, a.body)}
                 </TableCell>
                 <TableCell>
                   <Badge variant={STATE_BADGE_VARIANT[a.state]}>{a.state}</Badge>
@@ -73,6 +83,7 @@ export function ArticleTable({
             ))}
           </TableBody>
         </Table>
+        )}
       </div>
     </div>
   );

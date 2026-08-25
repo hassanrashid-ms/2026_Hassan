@@ -9,6 +9,7 @@ import { withWorkspace } from '../src/shared/db/withWorkspace.ts';
 import { conversation, event, formSubmission, message } from '../src/shared/db/schema/index.ts';
 import { completeFormAndHandoff } from '../src/domain/forms/completeFormAndHandoff.ts';
 import { closeSocketServer, createSocketServer } from '../src/shared/realtime/socketServer.ts';
+import { incrementPresence, closePresenceRedis } from '../src/shared/realtime/presence.ts';
 import { errorMiddleware } from '../src/errors.ts';
 import { requirePlayerToken } from '../src/shared/middleware/requirePlayerToken.ts';
 import { formRouter } from '../src/surface/routers/formRouter.ts';
@@ -48,6 +49,7 @@ afterAll(async () => {
   await closeSocketServer();
   await closeDb();
   await closeOwnerPool();
+  await closePresenceRedis();
 });
 
 beforeEach(truncateAll);
@@ -56,6 +58,7 @@ async function offered(answers: string[]) {
   const workspaceId = await seedWorkspace();
   const agentId = await seedAgent();
   await seedWorkspaceMember({ workspaceId, agentId });
+  await incrementPresence(agentId);
   const playerId = await seedPlayer(workspaceId);
   const conversationId = await seedConversation({ workspaceId, playerId });
   await ownerPool.query(`update conversation set confirm_phase = 'form' where id = $1`, [

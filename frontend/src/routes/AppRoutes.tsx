@@ -2,6 +2,17 @@ import { Suspense, lazy } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AgentLogin } from '../surfaces/agent-console/pages/AgentLogin.tsx';
 import { AdminLogin } from '../surfaces/admin-console/pages/AdminLogin.tsx';
+import {
+  importBotConfig,
+  importForms,
+  importGlobalInbox,
+  importInbox,
+  importKnowledgeBase,
+  importTaxonomy,
+  importTickets,
+  importWorkload,
+  importWorkspaceSettings,
+} from '../surfaces/agent-console/lib/routePreload.ts';
 
 /*
  * The agent console's router. The player surface is NOT here: it has its own
@@ -17,36 +28,19 @@ const AgentConsoleShell = lazy(async () => ({
   default: (await import('../surfaces/agent-console/components/AgentConsoleShell.tsx'))
     .AgentConsoleShell,
 }));
-const Inbox = lazy(async () => ({
-  default: (await import('../surfaces/agent-console/pages/Inbox/Inbox.tsx')).Inbox,
-}));
-const GlobalInbox = lazy(async () => ({
-  default: (await import('../surfaces/agent-console/pages/GlobalInbox/GlobalInbox.tsx'))
-    .GlobalInbox,
-}));
-const Tickets = lazy(async () => ({
-  default: (await import('../surfaces/agent-console/pages/Tickets/Tickets.tsx')).Tickets,
-}));
+
+const Inbox = lazy(async () => ({ default: (await importInbox()).Inbox }));
+const GlobalInbox = lazy(async () => ({ default: (await importGlobalInbox()).GlobalInbox }));
+const Tickets = lazy(async () => ({ default: (await importTickets()).Tickets }));
 const KnowledgeBase = lazy(async () => ({
-  default: (await import('../surfaces/agent-console/pages/KnowledgeBase/KnowledgeBase.tsx'))
-    .KnowledgeBase,
+  default: (await importKnowledgeBase()).KnowledgeBase,
 }));
-const Forms = lazy(async () => ({
-  default: (await import('../surfaces/agent-console/pages/Forms/Forms.tsx')).Forms,
-}));
-const Taxonomy = lazy(async () => ({
-  default: (await import('../surfaces/agent-console/pages/Taxonomy/Taxonomy.tsx')).Taxonomy,
-}));
-const Workload = lazy(async () => ({
-  default: (await import('../surfaces/agent-console/pages/Workload/Workload.tsx')).Workload,
-}));
-const BotConfigPage = lazy(async () => ({
-  default: (await import('../surfaces/agent-console/pages/BotConfig/BotConfig.tsx')).BotConfig,
-}));
+const Forms = lazy(async () => ({ default: (await importForms()).Forms }));
+const Taxonomy = lazy(async () => ({ default: (await importTaxonomy()).Taxonomy }));
+const Workload = lazy(async () => ({ default: (await importWorkload()).Workload }));
+const BotConfigPage = lazy(async () => ({ default: (await importBotConfig()).BotConfig }));
 const WorkspaceSettingsPage = lazy(async () => ({
-  default: (
-    await import('../surfaces/agent-console/pages/WorkspaceSettings/WorkspaceSettings.tsx')
-  ).WorkspaceSettings,
+  default: (await importWorkspaceSettings()).WorkspaceSettings,
 }));
 const AgentNotFound = lazy(async () => ({
   default: (await import('../surfaces/agent-console/pages/NotFound.tsx')).NotFound,

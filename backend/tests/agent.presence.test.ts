@@ -12,6 +12,7 @@ import { closeWsAuthRedis } from '../src/shared/auth/wsAuthCache.ts';
 import { presenceRouter } from '../src/agent/routers/presenceRouter.ts';
 import {
   decrementPresence,
+  flushStalePresence,
   getPresenceStatus,
   incrementPresence,
   closePresenceRedis,
@@ -97,6 +98,35 @@ describe('presence helper — connect/disconnect counter arithmetic', () => {
     // connection (counter was clamped to 0, not left negative).
     const reconnect = await incrementPresence(agentId);
     expect(reconnect.wasFirstConnection).toBe(true);
+  });
+});
+
+describe('flushStalePresence', () => {
+  it('clears a stuck-online agent left behind by a process that died without a clean disconnect', async () => {
+    const agentId = randomUUID();
+    await incrementPresence(agentId);
+    await incrementPresence(agentId);
+    // No matching decrementPresence — simulates the process dying before the
+    // socket 'disconnect' handler could ever run.
+    expect(await getPresenceStatus(agentId)).toBe('online');
+
+    await flushStalePresence();
+
+    expect(await getPresenceStatus(agentId)).toBe('offline');
+  });
+
+  it('a fresh connect after the flush is treated as the first connection again', async () => {
+    const agentId = randomUUID();
+    await incrementPresence(agentId);
+    await flushStalePresence();
+
+    const reconnect = await incrementPresence(agentId);
+    expect(reconnect.wasFirstConnection).toBe(true);
+    expect(await getPresenceStatus(agentId)).toBe('online');
+  });
+
+  it('is a no-op when nothing is present', async () => {
+    await expect(flushStalePresence()).resolves.not.toThrow();
   });
 });
 

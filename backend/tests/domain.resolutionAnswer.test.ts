@@ -4,6 +4,7 @@ import { applyResolutionAnswer } from '../src/domain/conversations/index.ts';
 import { withWorkspace } from '../src/shared/db/withWorkspace.ts';
 import { closeDb } from '../src/shared/db/client.ts';
 import { HANDOFF_PLAYER_MESSAGES } from '../src/domain/bot/messages.ts';
+import { incrementPresence, closePresenceRedis } from '../src/shared/realtime/presence.ts';
 import { conversation, event, resolutionCycle } from '../src/shared/db/schema/index.ts';
 import {
   closeOwnerPool,
@@ -25,6 +26,7 @@ beforeEach(truncateAll);
 afterAll(async () => {
   await closeDb();
   await closeOwnerPool();
+  await closePresenceRedis();
 });
 
 async function conversationRow(id: string) {
@@ -159,6 +161,7 @@ describe('applyResolutionAnswer', () => {
     const conversationId = await seedConversation({ workspaceId, playerId });
     const agentId = await seedAgent();
     await seedWorkspaceMember({ workspaceId, agentId });
+    await incrementPresence(agentId);
     await setConfirmPhase(conversationId, 'bot_article');
 
     const outcome = await withWorkspace(workspaceId, (tx) =>

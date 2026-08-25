@@ -3,6 +3,11 @@ import { assignOnHandoff } from '../src/domain/bot/assignOnHandoff.ts';
 import { withWorkspace } from '../src/shared/db/withWorkspace.ts';
 import { closeDb } from '../src/shared/db/client.ts';
 import {
+  incrementPresence,
+  setPresenceStatus,
+  closePresenceRedis,
+} from '../src/shared/realtime/presence.ts';
+import {
   closeOwnerPool,
   ownerPool,
   seedAgent,
@@ -17,6 +22,7 @@ beforeEach(truncateAll);
 afterAll(async () => {
   await closeDb();
   await closeOwnerPool();
+  await closePresenceRedis();
 });
 
 async function assignConversationTo(
@@ -31,13 +37,15 @@ async function assignConversationTo(
 }
 
 describe('assignOnHandoff', () => {
-  it('picks the active member with fewest live-status conversations', async () => {
+  it('picks the online member with fewest live-status conversations', async () => {
     const workspaceId = await seedWorkspace();
     const playerId = await seedPlayer(workspaceId);
     const busyAgent = await seedAgent();
     const idleAgent = await seedAgent();
     await seedWorkspaceMember({ workspaceId, agentId: busyAgent });
     await seedWorkspaceMember({ workspaceId, agentId: idleAgent });
+    await incrementPresence(busyAgent);
+    await incrementPresence(idleAgent);
 
     const busyConvo = await seedConversation({ workspaceId, playerId });
     await assignConversationTo(busyConvo, busyAgent, 'open');
@@ -52,6 +60,8 @@ describe('assignOnHandoff', () => {
     const agentHigh = await seedAgent('a-high@example.test');
     await seedWorkspaceMember({ workspaceId, agentId: agentLow });
     await seedWorkspaceMember({ workspaceId, agentId: agentHigh });
+    await incrementPresence(agentLow);
+    await incrementPresence(agentHigh);
 
     const [lo, hi] = [agentLow, agentHigh].sort();
     const result = await withWorkspace(workspaceId, (tx) => assignOnHandoff(tx, workspaceId));
@@ -65,6 +75,8 @@ describe('assignOnHandoff', () => {
     const active = await seedAgent();
     await seedWorkspaceMember({ workspaceId, agentId: deactivated, deactivatedAt: new Date() });
     await seedWorkspaceMember({ workspaceId, agentId: active });
+    await incrementPresence(deactivated);
+    await incrementPresence(active);
 
     const result = await withWorkspace(workspaceId, (tx) => assignOnHandoff(tx, workspaceId));
     expect(result).toBe(active);
@@ -77,6 +89,8 @@ describe('assignOnHandoff', () => {
     await ownerPool.query(`update agent set status = 'on_leave' where id = $1`, [onLeave]);
     await seedWorkspaceMember({ workspaceId, agentId: onLeave });
     await seedWorkspaceMember({ workspaceId, agentId: active });
+    await incrementPresence(onLeave);
+    await incrementPresence(active);
 
     const result = await withWorkspace(workspaceId, (tx) => assignOnHandoff(tx, workspaceId));
     expect(result).toBe(active);
@@ -86,6 +100,7 @@ describe('assignOnHandoff', () => {
     const workspaceId = await seedWorkspace();
     const lead = await seedAgent();
     await seedWorkspaceMember({ workspaceId, agentId: lead, role: 'team_lead' });
+    await incrementPresence(lead);
 
     const result = await withWorkspace(workspaceId, (tx) => assignOnHandoff(tx, workspaceId));
     expect(result).toBe(lead);
@@ -96,6 +111,8 @@ describe('assignOnHandoff', () => {
     const admin = await seedAgent(undefined, { isAdmin: true });
     const active = await seedAgent();
     await seedWorkspaceMember({ workspaceId, agentId: active });
+    await incrementPresence(admin);
+    await incrementPresence(active);
 
     const result = await withWorkspace(workspaceId, (tx) => assignOnHandoff(tx, workspaceId));
     expect(result).toBe(active);
@@ -112,6 +129,7 @@ describe('assignOnHandoff', () => {
     const workspaceB = await seedWorkspace();
     const agentB = await seedAgent();
     await seedWorkspaceMember({ workspaceId: workspaceB, agentId: agentB });
+    await incrementPresence(agentB);
 
     const result = await withWorkspace(workspaceA, (tx) => assignOnHandoff(tx, workspaceA));
     expect(result).toBeNull();
@@ -124,6 +142,8 @@ describe('assignOnHandoff', () => {
     const underCap = await seedAgent();
     await seedWorkspaceMember({ workspaceId, agentId: atCap });
     await seedWorkspaceMember({ workspaceId, agentId: underCap });
+    await incrementPresence(atCap);
+    await incrementPresence(underCap);
     await ownerPool.query(`update workspace set max_assigned_tickets = 1 where id = $1`, [
       workspaceId,
     ]);
@@ -142,6 +162,8 @@ describe('assignOnHandoff', () => {
     const agentB = await seedAgent();
     await seedWorkspaceMember({ workspaceId, agentId: agentA });
     await seedWorkspaceMember({ workspaceId, agentId: agentB });
+    await incrementPresence(agentA);
+    await incrementPresence(agentB);
     await ownerPool.query(`update workspace set max_assigned_tickets = 1 where id = $1`, [
       workspaceId,
     ]);
@@ -162,6 +184,8 @@ describe('assignOnHandoff', () => {
     const agentB = await seedAgent();
     await seedWorkspaceMember({ workspaceId, agentId: agentA });
     await seedWorkspaceMember({ workspaceId, agentId: agentB });
+    await incrementPresence(agentA);
+    await incrementPresence(agentB);
 
     // agentA has two RESOLVED conversations — should not count against them.
     const c1 = await seedConversation({ workspaceId, playerId });
@@ -175,5 +199,45 @@ describe('assignOnHandoff', () => {
 
     const result = await withWorkspace(workspaceId, (tx) => assignOnHandoff(tx, workspaceId));
     expect(result).toBe(agentA);
+  });
+
+  it('excludes an offline agent even if less loaded, picking the online one', async () => {
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const idleOffline = await seedAgent();
+    const busyOnline = await seedAgent();
+    await seedWorkspaceMember({ workspaceId, agentId: idleOffline });
+    await seedWorkspaceMember({ workspaceId, agentId: busyOnline });
+
+    // busyOnline carries a live ticket (so it would lose on load alone) but
+    // has an open socket connection; idleOffline has none.
+    const busyConvo = await seedConversation({ workspaceId, playerId });
+    await assignConversationTo(busyConvo, busyOnline, 'open');
+    await incrementPresence(busyOnline);
+
+    const result = await withWorkspace(workspaceId, (tx) => assignOnHandoff(tx, workspaceId));
+    expect(result).toBe(busyOnline);
+  });
+
+  it('excludes an away agent — only online counts, same as offline', async () => {
+    const workspaceId = await seedWorkspace();
+    const away = await seedAgent();
+    await seedWorkspaceMember({ workspaceId, agentId: away });
+    await incrementPresence(away);
+    await setPresenceStatus(away, 'away');
+
+    const result = await withWorkspace(workspaceId, (tx) => assignOnHandoff(tx, workspaceId));
+    expect(result).toBeNull();
+  });
+
+  it('returns null, not the least-loaded pick, when every eligible agent is offline', async () => {
+    const workspaceId = await seedWorkspace();
+    const agentLow = await seedAgent('a-low@example.test');
+    const agentHigh = await seedAgent('a-high@example.test');
+    await seedWorkspaceMember({ workspaceId, agentId: agentLow });
+    await seedWorkspaceMember({ workspaceId, agentId: agentHigh });
+
+    const result = await withWorkspace(workspaceId, (tx) => assignOnHandoff(tx, workspaceId));
+    expect(result).toBeNull();
   });
 });

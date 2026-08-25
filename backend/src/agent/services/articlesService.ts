@@ -58,6 +58,7 @@ export async function listArticles(ctx: AgentContext): Promise<AgentArticlesResp
       articles: rows.map((r) => ({
         id: r.id,
         title: r.title,
+        body: r.body,
         state: r.state,
         intent_id: r.intentId,
         created_at: r.createdAt.toISOString(),

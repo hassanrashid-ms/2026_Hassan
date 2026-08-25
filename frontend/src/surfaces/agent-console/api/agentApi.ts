@@ -59,7 +59,7 @@ export function fetchMemberships(token: string): Promise<{ memberships: Membersh
 }
 
 export type GlobalInboxTicket = AgentConversationSummary & {
-  workspace: { id: string; slug: string };
+  workspace: { id: string; slug: string; name: string };
 };
 
 export type GlobalInboxResponse = {

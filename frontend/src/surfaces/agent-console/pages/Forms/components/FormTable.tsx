@@ -7,6 +7,7 @@ import { formStatusLabel, formStatusVariant } from '../formForm.ts';
 import { Badge } from '../../../components/ui/badge.tsx';
 import { Button } from '../../../components/ui/button.tsx';
 import { ConfirmDialog } from '../../../components/ConfirmDialog.tsx';
+import { EmptyState } from '../../../components/ui/empty-state.tsx';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -63,6 +64,9 @@ export function FormTable({
         </Button>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
+        {forms.data?.forms.length === 0 ? (
+          <EmptyState message="Nothing to show" />
+        ) : (
         <Table>
           <TableHeader>
             <TableRow>
@@ -120,6 +124,7 @@ export function FormTable({
             ))}
           </TableBody>
         </Table>
+        )}
       </div>
       <ConfirmDialog
         open={archiveTarget !== null}
