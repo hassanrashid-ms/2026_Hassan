@@ -1,6 +1,16 @@
 import '@testing-library/jest-dom/vitest';
-import { afterEach } from 'vitest';
+import { afterEach, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
+
+// @testing-library's waitFor() only knows how to poll under fake timers if it
+// can see a `jest`-shaped global (it checks `typeof jest` directly). Vitest
+// exposes `vi`, not `jest`, so without this shim any test that combines
+// `vi.useFakeTimers()` with `waitFor()` deadlocks: the promise chain resolves
+// via microtasks, but waitFor's re-check is scheduled on the (fake, frozen)
+// interval and never fires.
+(globalThis as { jest?: unknown }).jest ??= {
+  advanceTimersByTime: (ms: number) => vi.advanceTimersByTime(ms),
+};
 
 afterEach(() => {
   cleanup();
