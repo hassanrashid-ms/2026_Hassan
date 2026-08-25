@@ -8,7 +8,7 @@ import type {
 } from '@support/types';
 import type { z } from 'zod';
 import { article, articleAttachment, intent } from '../../shared/db/schema/index.ts';
-import { withWorkspace } from '../../shared/db/withWorkspace.ts';
+import { withWorkspace, type Tx } from '../../shared/db/withWorkspace.ts';
 import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts';
 import {
   ALLOWED_IMAGE_MIME_TYPES,
@@ -19,7 +19,7 @@ import {
 } from '../../shared/storage/presign.ts';
 import { deleteArticleObject, upsertArticleObject } from '../../shared/weaviate/articlesIndex.ts';
 
-function toDetail(row: typeof article.$inferSelect): AgentArticleDetail {
+function toDetail(row: typeof article.$inferSelect): Omit<AgentArticleDetail, 'attachments'> {
   return {
     id: row.id,
     title: row.title,
@@ -32,6 +32,23 @@ function toDetail(row: typeof article.$inferSelect): AgentArticleDetail {
     published_at: row.publishedAt ? row.publishedAt.toISOString() : null,
     created_at: row.createdAt.toISOString(),
   };
+}
+
+async function attachmentsFor(tx: Tx, articleId: string): Promise<ArticleAttachmentView[]> {
+  const attachmentRows = await tx
+    .select()
+    .from(articleAttachment)
+    .where(eq(articleAttachment.articleId, articleId));
+
+  return Promise.all(
+    attachmentRows.map(async (a) => ({
+      id: a.id,
+      filename: a.filename,
+      mime_type: a.mimeType,
+      byte_size: a.byteSize,
+      url: await presignGetObject(a.storageKey).catch(() => null),
+    })),
+  );
 }
 
 export async function listArticles(ctx: AgentContext): Promise<AgentArticlesResponse> {
@@ -58,22 +75,7 @@ export async function getArticle(
     const [row] = await tx.select().from(article).where(eq(article.id, id)).limit(1);
     if (!row) return null;
 
-    const attachmentRows = await tx
-      .select()
-      .from(articleAttachment)
-      .where(eq(articleAttachment.articleId, id));
-
-    const attachments: ArticleAttachmentView[] = await Promise.all(
-      attachmentRows.map(async (a) => ({
-        id: a.id,
-        filename: a.filename,
-        mime_type: a.mimeType,
-        byte_size: a.byteSize,
-        url: await presignGetObject(a.storageKey).catch(() => null),
-      })),
-    );
-
-    return { ...toDetail(row), attachments };
+    return { ...toDetail(row), attachments: await attachmentsFor(tx, id) };
   });
 }
 
@@ -110,7 +112,9 @@ export async function createArticle(
         createdBy: ctx.agentId,
       })
       .returning();
-    return { ok: true, article: toDetail(row!) };
+    // A just-created article can't have attachments yet — nothing to upload
+    // against an id that didn't exist a moment ago.
+    return { ok: true, article: { ...toDetail(row!), attachments: [] } };
   });
 }
 
@@ -151,7 +155,7 @@ export async function updateArticle(
       })
       .where(eq(article.id, id))
       .returning();
-    return { ok: true, article: toDetail(row!) };
+    return { ok: true, article: { ...toDetail(row!), attachments: await attachmentsFor(tx, id) } };
   });
 }
 
@@ -259,7 +263,7 @@ export async function publishArticle(ctx: AgentContext, id: string): Promise<Pub
       intentId: row!.intentId,
       workspaceId: row!.workspaceId,
     });
-    return { ok: true, article: toDetail(row!) };
+    return { ok: true, article: { ...toDetail(row!), attachments: await attachmentsFor(tx, id) } };
   });
 }
 
@@ -275,7 +279,7 @@ export async function archiveArticle(ctx: AgentContext, id: string): Promise<Arc
       .returning();
     if (!row) return { ok: false, reason: 'not_found' };
     await deleteArticleObject(row.id);
-    return { ok: true, article: toDetail(row) };
+    return { ok: true, article: { ...toDetail(row), attachments: await attachmentsFor(tx, row.id) } };
   });
 }
 

@@ -79,7 +79,10 @@ export function useArticleAutosave(params: {
       const run = wait.then(() => persist(fieldsRef.current));
       inFlightRef.current = run.then(() => articleIdRef.current!);
     }, DEBOUNCE_MS);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // No react-hooks/exhaustive-deps plugin is configured in this repo's
+    // eslint config (see frontend/eslint.config.js) — a disable comment for it
+    // is itself a lint error ("Definition for rule ... was not found"), so
+    // there is nothing to suppress here.
   }, [params.fields.title, params.fields.body, params.fields.keywords, params.fields.intentId]);
 
   async function ensureArticleId(): Promise<string> {

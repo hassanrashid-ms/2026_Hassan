@@ -14,7 +14,7 @@ function toSummary(row: typeof article.$inferSelect) {
   return { id: row.id, title: row.title, keywords: row.keywords, intent_id: row.intentId };
 }
 
-function toDetail(row: typeof article.$inferSelect): PublicArticleDetail {
+function toDetail(row: typeof article.$inferSelect): Omit<PublicArticleDetail, 'attachments'> {
   return {
     id: row.id,
     title: row.title,
