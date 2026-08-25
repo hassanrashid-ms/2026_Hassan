@@ -6,17 +6,15 @@ import type { Server as HttpServer } from 'node:http';
 import { getEnv } from '../../env.ts';
 import { InvalidAgentSession, verifyAgentSession } from '../auth/agentSession.ts';
 import { InvalidPlayerToken, verifyPlayerToken } from '../auth/playerToken.ts';
-import { z } from 'zod';
-import { conversation, workspace } from '../db/schema/index.ts';
-import { withoutWorkspace, withWorkspace } from '../db/withWorkspace.ts';
+import { conversation } from '../db/schema/index.ts';
+import { withWorkspace } from '../db/withWorkspace.ts';
+import { listActiveMembershipsForAgent, listAllWorkspaces } from '../db/workspaceMembership.ts';
 import { agentRoom, inboxRoom, playerRoom } from './rooms.ts';
 import { decrementPresence, incrementPresence } from './presence.ts';
 import { logger } from '../logging/logger.ts';
 
-const uuidSchema = z.uuid();
-
 export type PlayerSocketData = { role: 'player'; workspaceId: string; playerId: string };
-export type AgentSocketData = { role: 'agent'; workspaceId: string; agentId: string };
+export type AgentSocketData = { role: 'agent'; workspaceIds: string[]; agentId: string };
 export type SocketData = PlayerSocketData | AgentSocketData;
 
 let ioInstance: Server | undefined;
@@ -37,18 +35,32 @@ function redisConnection(): IORedis {
 }
 
 async function canJoinConversation(data: SocketData, conversationId: string): Promise<boolean> {
-  return withWorkspace(data.workspaceId, async (tx) => {
-    const where =
-      data.role === 'player'
-        ? and(eq(conversation.id, conversationId), eq(conversation.playerId, data.playerId))
-        : eq(conversation.id, conversationId);
-    const [found] = await tx
-      .select({ id: conversation.id })
-      .from(conversation)
-      .where(where)
-      .limit(1);
-    return found !== undefined;
-  });
+  if (data.role === 'player') {
+    return withWorkspace(data.workspaceId, async (tx) => {
+      const [found] = await tx
+        .select({ id: conversation.id })
+        .from(conversation)
+        .where(and(eq(conversation.id, conversationId), eq(conversation.playerId, data.playerId)))
+        .limit(1);
+      return found !== undefined;
+    });
+  }
+  // An agent may belong to dozens of workspaces (same bound the design doc's
+  // p-limit rationale for Global Inbox relies on) — checked sequentially,
+  // short-circuiting on the first match, since which workspace this
+  // conversation actually lives in isn't known ahead of time.
+  for (const workspaceId of data.workspaceIds) {
+    const found = await withWorkspace(workspaceId, async (tx) => {
+      const [row] = await tx
+        .select({ id: conversation.id })
+        .from(conversation)
+        .where(eq(conversation.id, conversationId))
+        .limit(1);
+      return row !== undefined;
+    });
+    if (found) return true;
+  }
+  return false;
 }
 
 /**
@@ -85,37 +97,12 @@ export function createSocketServer(httpServer: HttpServer): Server {
         } satisfies PlayerSocketData;
       } else {
         const claims = await verifyAgentSession(auth.token);
-        // Admin claims carry no workspace_id (see
-        // 2026-08-21-superadmin-workspace-console-access-design.md) — the
-        // client supplies it per connection instead, mirroring
-        // resolveConsoleWorkspace's REST header check. A regular agent's own
-        // claim is authoritative; auth.workspaceId is never consulted for them.
-        let workspaceId: string;
-        if ('is_admin' in claims && claims.is_admin) {
-          const parsed = uuidSchema.safeParse(auth.workspaceId);
-          if (!parsed.success) {
-            next(new Error('unauthorized'));
-            return;
-          }
-          const exists = await withoutWorkspace(async (tx) => {
-            const [row] = await tx
-              .select({ id: workspace.id })
-              .from(workspace)
-              .where(eq(workspace.id, parsed.data))
-              .limit(1);
-            return row !== undefined;
-          });
-          if (!exists) {
-            next(new Error('unauthorized'));
-            return;
-          }
-          workspaceId = parsed.data;
-        } else {
-          workspaceId = claims.workspace_id;
-        }
+        const workspaceIds = claims.is_admin
+          ? (await listAllWorkspaces()).map((w) => w.workspaceId)
+          : (await listActiveMembershipsForAgent(claims.agent_id)).map((m) => m.workspaceId);
         socket.data = {
           role: 'agent',
-          workspaceId,
+          workspaceIds,
           agentId: claims.agent_id,
         } satisfies AgentSocketData;
       }
@@ -132,16 +119,20 @@ export function createSocketServer(httpServer: HttpServer): Server {
   io.on('connection', (socket) => {
     const data = socket.data as SocketData;
     if (data.role === 'agent') {
-      socket.join(inboxRoom(data.workspaceId));
+      for (const workspaceId of data.workspaceIds) {
+        socket.join(inboxRoom(workspaceId));
+      }
       // Reconnecting always lands back on online, never restores a prior
       // away — a fresh session defaults to present.
       void incrementPresence(data.agentId)
         .then(({ wasFirstConnection }) => {
           if (wasFirstConnection && !closing) {
-            io.to(inboxRoom(data.workspaceId)).emit('presence_changed', {
-              agentId: data.agentId,
-              status: 'online',
-            });
+            for (const workspaceId of data.workspaceIds) {
+              io.to(inboxRoom(workspaceId)).emit('presence_changed', {
+                agentId: data.agentId,
+                status: 'online',
+              });
+            }
           }
         })
         // Fire-and-forget: a socket connect must never crash on a Redis blip,
@@ -162,10 +153,12 @@ export function createSocketServer(httpServer: HttpServer): Server {
         void decrementPresence(data.agentId)
           .then(({ wasLastConnection }) => {
             if (wasLastConnection && !closing) {
-              io.to(inboxRoom(data.workspaceId)).emit('presence_changed', {
-                agentId: data.agentId,
-                status: 'offline',
-              });
+              for (const workspaceId of data.workspaceIds) {
+                io.to(inboxRoom(workspaceId)).emit('presence_changed', {
+                  agentId: data.agentId,
+                  status: 'offline',
+                });
+              }
             }
           })
           .catch((error) => {

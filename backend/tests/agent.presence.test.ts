@@ -188,7 +188,9 @@ describe('presence over the real socket connection', () => {
     await seedWorkspaceMember({ workspaceId, agentId, role: 'agent' });
     const token = await tokenFor(agentId);
 
-    const observerToken = await tokenFor(randomUUID());
+    const observerId = await seedAgent();
+    await seedWorkspaceMember({ workspaceId, agentId: observerId, role: 'agent' });
+    const observerToken = await tokenFor(observerId);
     const observer = connectClient(realtime.url, { token: observerToken, role: 'agent' });
     await waitFor(observer, 'connect');
     // The connect handler's own presence broadcast (for the observer's own

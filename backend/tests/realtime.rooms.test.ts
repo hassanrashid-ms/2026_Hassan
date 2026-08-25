@@ -7,9 +7,11 @@ import { emitReadReceipt } from '../src/shared/realtime/emit.ts';
 import { mintToken } from './helpers/app.ts';
 import {
   closeOwnerPool,
+  seedAgent,
   seedConversation,
   seedPlayer,
   seedWorkspace,
+  seedWorkspaceMember,
   truncateAll,
 } from './helpers/db.ts';
 import { connectClient, startRealtimeServer } from './helpers/realtime.ts';
@@ -45,7 +47,9 @@ describe('socket rooms stay separated by audience', () => {
       player_id: playerId,
       external_player_id: 'p1',
     });
-    const agentToken = await signAgentSession({ agent_id: 'agent-1', workspace_id: workspaceId });
+    const agentId = await seedAgent();
+    await seedWorkspaceMember({ workspaceId, agentId, role: 'agent' });
+    const agentToken = await signAgentSession({ agent_id: agentId });
 
     const playerSocket = connectClient(server.url, { token: playerToken, role: 'player' });
     const agentSocket = connectClient(server.url, { token: agentToken, role: 'agent' });
@@ -108,7 +112,9 @@ describe('socket rooms stay separated by audience', () => {
       player_id: playerId,
       external_player_id: 'p1',
     });
-    const agentToken = await signAgentSession({ agent_id: 'agent-1', workspace_id: workspaceId });
+    const agentId = await seedAgent();
+    await seedWorkspaceMember({ workspaceId, agentId, role: 'agent' });
+    const agentToken = await signAgentSession({ agent_id: agentId });
     const playerSocket = connectClient(server.url, { token: playerToken, role: 'player' });
     const agentSocket = connectClient(server.url, { token: agentToken, role: 'agent' });
     await Promise.all([waitFor(playerSocket, 'connect'), waitFor(agentSocket, 'connect')]);

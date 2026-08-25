@@ -21,6 +21,7 @@ export function emitMessageToRooms(
 }
 
 /** id and new status only — never the full conversation row. */
+/** id, new status, and which workspace it happened in — never the full conversation row. */
 export function emitInboxChanged(
   io: Server,
   workspaceId: string,
@@ -30,6 +31,7 @@ export function emitInboxChanged(
   io.to(inboxRoom(workspaceId)).emit('conversation:changed', {
     conversation_id: conversationId,
     status,
+    workspace_id: workspaceId,
   });
 }
 

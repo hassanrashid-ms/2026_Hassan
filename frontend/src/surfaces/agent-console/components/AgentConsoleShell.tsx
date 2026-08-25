@@ -137,7 +137,7 @@ export function AgentConsoleShell() {
 
   useEffect(() => {
     if (!session) return;
-    const socket = createSocket(session.token, 'agent', session.workspaceId);
+    const socket = createSocket(session.token, 'agent');
     socket.on('presence_changed', (payload: { agentId: string; status: DisplayStatus }) => {
       if (payload.agentId === session.agentId) setPresence(payload.status);
     });

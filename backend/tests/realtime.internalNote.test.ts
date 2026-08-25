@@ -51,7 +51,7 @@ describe('internal notes never reach the player room', () => {
       conversationId,
       agentId,
     ]);
-    const agentToken = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId });
+    const agentToken = await signAgentSession({ agent_id: agentId });
 
     const playerToken = await mintToken({
       workspace_id: workspaceId,
@@ -70,6 +70,7 @@ describe('internal notes never reach the player room', () => {
     await request(server.url)
       .post('/agent/messages')
       .set('Authorization', `Bearer ${agentToken}`)
+      .set('X-Workspace-Id', workspaceId)
       .send({ conversation_id: conversationId, body: 'internal only', visibility: 'internal' })
       .expect(200);
 

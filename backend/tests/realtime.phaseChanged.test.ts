@@ -6,9 +6,11 @@ import { getIo } from '../src/shared/realtime/socketServer.ts';
 import { mintToken } from './helpers/app.ts';
 import {
   closeOwnerPool,
+  seedAgent,
   seedConversation,
   seedPlayer,
   seedWorkspace,
+  seedWorkspaceMember,
   truncateAll,
 } from './helpers/db.ts';
 import { connectClient, startRealtimeServer } from './helpers/realtime.ts';
@@ -44,7 +46,9 @@ describe('conversation:phase_changed', () => {
       player_id: playerId,
       external_player_id: 'p1',
     });
-    const agentToken = await signAgentSession({ agent_id: 'agent-1', workspace_id: workspaceId });
+    const agentId = await seedAgent();
+    await seedWorkspaceMember({ workspaceId, agentId, role: 'agent' });
+    const agentToken = await signAgentSession({ agent_id: agentId });
 
     const playerClient = connectClient(server.url, { token: playerToken, role: 'player' });
     const agentClient = connectClient(server.url, { token: agentToken, role: 'agent' });
