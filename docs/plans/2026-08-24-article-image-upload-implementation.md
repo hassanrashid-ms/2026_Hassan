@@ -1,3 +1,7 @@
+> **SUPERSEDED by `docs/plans/2026-08-25-article-image-attachments-implementation.md`.** That plan
+> covers the same feature plus autosave and uses a slightly different schema/handle scheme. Do not
+> execute this file — kept for history only.
+
 # Article Image Upload Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
