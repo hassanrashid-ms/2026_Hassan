@@ -370,3 +370,31 @@ describe('POST /agent/articles/:id/attachments', () => {
     expect(res.body.error.code).toBe('attachment_mismatch');
   });
 });
+
+describe('GET /agent/articles/:id with an attachment', () => {
+  it('returns a fetchable presigned url for a finalized attachment', async () => {
+    const workspaceId = await seedWorkspace();
+    const { agentId, token } = await seedAgent(workspaceId);
+    const created = await request(app)
+      .post('/articles')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: 'Refund policy', body: 'See below.' })
+      .expect(201);
+    const key = await uploadFixtureImage(workspaceId, agentId);
+    await request(app)
+      .post(`/articles/${created.body.id}/attachments`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ key, filename: 'diagram.png', mime_type: 'image/png', byte_size: 14 })
+      .expect(200);
+
+    const res = await request(app)
+      .get(`/articles/${created.body.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
+    expect(res.body.attachments).toHaveLength(1);
+    expect(res.body.attachments[0].url).toBeTruthy();
+    const getRes = await fetch(res.body.attachments[0].url);
+    expect(getRes.status).toBe(200);
+  });
+});

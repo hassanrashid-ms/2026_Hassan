@@ -1085,6 +1085,38 @@ registry.registerPath({
 });
 
 // --- 5. AGENT TAXONOMY & ARTICLE ENDPOINTS ---
+const ArticleAttachmentViewSchema = z.object({
+  id: z.uuid(),
+  filename: z.string(),
+  mime_type: z.string(),
+  byte_size: z.number().int().positive(),
+  url: z.string().nullable(),
+});
+
+const AgentArticleDetailSchema = z.object({
+  id: z.uuid(),
+  title: z.string(),
+  body: z.string(),
+  keywords: z.array(z.string()),
+  state: z.enum(['draft', 'published', 'archived']),
+  intent_id: z.uuid().nullable(),
+  created_by: z.uuid(),
+  published_by: z.uuid().nullable(),
+  published_at: z.string().nullable(),
+  created_at: z.string(),
+  attachments: z.array(ArticleAttachmentViewSchema),
+});
+
+const PublicArticleDetailSchema = z.object({
+  id: z.uuid(),
+  title: z.string(),
+  body: z.string(),
+  keywords: z.array(z.string()),
+  intent_id: z.uuid().nullable(),
+  published_at: z.string().nullable(),
+  attachments: z.array(ArticleAttachmentViewSchema),
+});
+
 registry.registerPath({
   method: 'get',
   path: '/agent/intents',
@@ -1351,7 +1383,13 @@ registry.registerPath({
   description: 'Fetches one article for editing.',
   security: [{ [bearerAgentJwt.name]: [] }],
   request: { params: z.object({ id: z.uuid() }) },
-  responses: { 200: { description: 'Article detail' }, 404: { description: 'Not found' } },
+  responses: {
+    200: {
+      description: 'Article detail',
+      content: { 'application/json': { schema: AgentArticleDetailSchema } },
+    },
+    404: { description: 'Not found' },
+  },
 });
 
 registry.registerPath({
@@ -1782,7 +1820,13 @@ registry.registerPath({
   description: 'Returns a single published article. 404 if draft/archived or wrong workspace.',
   security: [{ [bearerPlayerJwt.name]: [] }],
   request: { params: z.object({ id: z.uuid() }) },
-  responses: { 200: { description: 'Article detail' }, 404: { description: 'Not found' } },
+  responses: {
+    200: {
+      description: 'Article detail',
+      content: { 'application/json': { schema: PublicArticleDetailSchema } },
+    },
+    404: { description: 'Not found' },
+  },
 });
 
 registry.registerPath({

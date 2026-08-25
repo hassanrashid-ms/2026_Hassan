@@ -56,7 +56,24 @@ export async function getArticle(
 ): Promise<AgentArticleDetail | null> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
     const [row] = await tx.select().from(article).where(eq(article.id, id)).limit(1);
-    return row ? toDetail(row) : null;
+    if (!row) return null;
+
+    const attachmentRows = await tx
+      .select()
+      .from(articleAttachment)
+      .where(eq(articleAttachment.articleId, id));
+
+    const attachments: ArticleAttachmentView[] = await Promise.all(
+      attachmentRows.map(async (a) => ({
+        id: a.id,
+        filename: a.filename,
+        mime_type: a.mimeType,
+        byte_size: a.byteSize,
+        url: await presignGetObject(a.storageKey).catch(() => null),
+      })),
+    );
+
+    return { ...toDetail(row), attachments };
   });
 }
 

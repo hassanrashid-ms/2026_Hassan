@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import express from 'express';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { req as request } from './helpers/http.ts';
@@ -8,6 +9,7 @@ import { articlesRouter } from '../src/surface/routers/articlesRouter.ts';
 import { closeOwnerPool, ownerPool, seedPlayer, seedWorkspace, truncateAll } from './helpers/db.ts';
 import { mintToken } from './helpers/app.ts';
 import { searchArticleIds } from '../src/shared/weaviate/articlesIndex.ts';
+import { presignPutObject } from '../src/shared/storage/presign.ts';
 
 vi.mock('../src/shared/weaviate/articlesIndex.ts', () => ({
   searchArticleIds: vi.fn(),
@@ -177,5 +179,38 @@ describe('GET /articles/:id', () => {
     const { token } = await fixture();
 
     await request(app).get(`/articles/${id}`).set('Authorization', `Bearer ${token}`).expect(404);
+  });
+});
+
+describe('GET /surface/articles/:id with an attachment', () => {
+  it('returns a fetchable presigned url for a published article', async () => {
+    const { workspaceId, token } = await fixture();
+    const articleId = await seedArticle(workspaceId, { state: 'published' });
+
+    const key = `ws/${workspaceId}/attachments/${randomUUID()}.png`;
+    const body = Buffer.from('fake-png-bytes');
+    const { url: putUrl } = await presignPutObject({
+      key,
+      contentType: 'image/png',
+      contentLength: body.length,
+    });
+    await fetch(putUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'image/png', 'Content-Length': String(body.length) },
+      body,
+    });
+    await ownerPool.query(
+      `insert into article_attachment (workspace_id, article_id, storage_key, filename, mime_type, byte_size)
+       values ($1, $2, $3, 'diagram.png', 'image/png', $4)`,
+      [workspaceId, articleId, key, body.length],
+    );
+
+    const res = await request(app)
+      .get(`/articles/${articleId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    expect(res.body.attachments).toHaveLength(1);
+    const getRes = await fetch(res.body.attachments[0].url);
+    expect(getRes.status).toBe(200);
   });
 });

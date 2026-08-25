@@ -1,8 +1,13 @@
 import { and, desc, eq, inArray } from 'drizzle-orm';
-import type { PublicArticleDetail, PublicArticlesResponse } from '@support/types';
-import { article } from '../../shared/db/schema/index.ts';
+import type {
+  ArticleAttachmentView,
+  PublicArticleDetail,
+  PublicArticlesResponse,
+} from '@support/types';
+import { article, articleAttachment } from '../../shared/db/schema/index.ts';
 import { withWorkspace } from '../../shared/db/withWorkspace.ts';
 import type { PlayerContext } from '../../shared/middleware/requirePlayerToken.ts';
+import { presignGetObject } from '../../shared/storage/presign.ts';
 import { searchArticleIds } from '../../shared/weaviate/articlesIndex.ts';
 
 function toSummary(row: typeof article.$inferSelect) {
@@ -65,6 +70,23 @@ export async function getPublicArticle(
       .from(article)
       .where(and(eq(article.id, id), eq(article.state, 'published')))
       .limit(1);
-    return row ? toDetail(row) : null;
+    if (!row) return null;
+
+    const attachmentRows = await tx
+      .select()
+      .from(articleAttachment)
+      .where(eq(articleAttachment.articleId, id));
+
+    const attachments: ArticleAttachmentView[] = await Promise.all(
+      attachmentRows.map(async (a) => ({
+        id: a.id,
+        filename: a.filename,
+        mime_type: a.mimeType,
+        byte_size: a.byteSize,
+        url: await presignGetObject(a.storageKey).catch(() => null),
+      })),
+    );
+
+    return { ...toDetail(row), attachments };
   });
 }
