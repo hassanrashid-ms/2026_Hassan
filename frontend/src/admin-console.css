@@ -14,9 +14,9 @@
   --color-bg: #ffffff;
   --color-surface: #fafafa; /* zinc-50, admin-console's neutral card background */
   --color-border: #e4e4e7; /* zinc-200 */
-  --color-accent: #0f766e; /* teal-700 — a real hue, not just a gray shade, so admin reads as a distinct control surface from agent-console's indigo at a glance */
-  --color-accent-deep: #134e4a; /* teal-900 */
-  --color-accent-soft: #f0fdfa; /* teal-50, selected row / active tab background */
+  --color-accent: #ea580c; /* orange-600 — bright orange, not the rust-leaning orange-700 */
+  --color-accent-deep: #9a3412; /* orange-800 */
+  --color-accent-soft: #fff7ed; /* orange-50, selected row / active tab background */
   --color-accent-fg: #ffffff;
   --color-text: #18181b; /* zinc-900 */
   --color-muted: #71717a; /* zinc-500 */

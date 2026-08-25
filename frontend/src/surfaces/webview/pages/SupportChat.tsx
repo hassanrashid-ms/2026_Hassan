@@ -23,7 +23,7 @@ import {
 import { createSocket } from '@/features/chat/api/socket';
 import { reconcilePending, type PendingMessage } from '@/features/chat/hooks/chatReconcile';
 import { showBotTyping } from './showBotTyping.ts';
-import type { ChatMessage } from '@/features/chat/components/types';
+import type { ChatAttachment, ChatMessage } from '@/features/chat/components/types';
 
 function toChatMessage(m: {
   id: string;
@@ -34,6 +34,13 @@ function toChatMessage(m: {
   delivery_state: NonNullable<ChatMessage['deliveryState']>;
   read_at: string | null;
   article_id: string | null;
+  attachment?: {
+    id: string;
+    filename: string;
+    mime_type: string;
+    byte_size: number;
+    url: string | null;
+  } | null;
 }): ChatMessage {
   return {
     id: m.id,
@@ -44,7 +51,18 @@ function toChatMessage(m: {
     deliveryState: m.delivery_state,
     readAt: m.read_at,
     articleId: m.article_id,
+    attachment: m.attachment ? toChatAttachment(m.attachment) : null,
   };
+}
+
+function toChatAttachment(a: {
+  id: string;
+  filename: string;
+  mime_type: string;
+  byte_size: number;
+  url: string | null;
+}): ChatAttachment {
+  return { id: a.id, filename: a.filename, mimeType: a.mime_type, byteSize: a.byte_size, url: a.url };
 }
 
 /**

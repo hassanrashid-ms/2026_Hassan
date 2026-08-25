@@ -161,7 +161,11 @@ function ChatBubble({
               message.deliveryState === 'sending' && 'opacity-70',
             )}
           >
-            <MessageBody authorType={message.authorType} body={message.body} />
+            <MessageBody
+              authorType={message.authorType}
+              body={message.body}
+              attachment={message.attachment}
+            />
 
             {/*
             Inside the same bubble, not a sibling block: a sibling with its own
