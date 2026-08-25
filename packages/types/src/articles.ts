@@ -21,18 +21,33 @@ export const MoveSubintentBody = z.object({ intentId: z.string().regex(uuidShape
 export const MergeSubintentBody = z.object({ intoId: z.string().regex(uuidShape) });
 
 export const CreateArticleBody = z.object({
-  title: z.string().min(1).max(200),
-  body: z.string().min(1),
+  title: z.string().max(200),
+  body: z.string(),
   keywords: z.array(z.string()).optional(),
   intent_id: z.uuid().optional(),
 });
 
 export const UpdateArticleBody = z.object({
-  title: z.string().min(1).max(200).optional(),
-  body: z.string().min(1).optional(),
+  title: z.string().max(200).optional(),
+  body: z.string().optional(),
   keywords: z.array(z.string()).optional(),
   intent_id: z.uuid().nullable().optional(),
 });
+
+export const FinalizeArticleAttachmentBody = z.object({
+  key: z.string().min(1),
+  filename: z.string().min(1).max(255),
+  mime_type: z.string().min(1),
+  byte_size: z.number().int().positive(),
+});
+
+export type ArticleAttachmentView = {
+  id: string;
+  filename: string;
+  mime_type: string;
+  byte_size: number;
+  url: string | null;
+};
 
 export const GenerateKeywordsBody = z.object({
   title: z.string().min(1).max(200),
@@ -102,6 +117,7 @@ export type AgentArticleDetail = {
   published_by: string | null;
   published_at: string | null;
   created_at: string;
+  attachments: ArticleAttachmentView[];
 };
 
 export type PublicArticleSummary = {
@@ -121,4 +137,5 @@ export type PublicArticleDetail = {
   keywords: string[];
   intent_id: string | null;
   published_at: string | null;
+  attachments: ArticleAttachmentView[];
 };
