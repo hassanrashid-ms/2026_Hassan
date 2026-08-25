@@ -100,6 +100,31 @@ function installBridge(): unknown[] {
   return posted;
 }
 
+describe('ArticleBody attachment resolution', () => {
+  it('resolves an attachment: handle to its signed url', () => {
+    render(
+      <ArticleBody
+        markdown="![diagram](attachment:a1)"
+        attachments={[
+          { id: 'a1', filename: 'diagram.png', mime_type: 'image/png', byte_size: 10, url: 'https://minio.local/signed' },
+        ]}
+      />,
+    );
+    expect(screen.getByAltText('diagram')).toHaveAttribute('src', 'https://minio.local/signed');
+  });
+
+  it('falls back to alt text when the handle has no matching attachment', () => {
+    render(<ArticleBody markdown="![diagram](attachment:missing)" attachments={[]} />);
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    expect(screen.getByText('diagram')).toBeInTheDocument();
+  });
+
+  it('still renders an ordinary external image url unchanged', () => {
+    render(<ArticleBody markdown="![x](https://example.test/a.png)" attachments={[]} />);
+    expect(screen.getByAltText('x')).toHaveAttribute('src', 'https://example.test/a.png');
+  });
+});
+
 describe('ArticleBody links', () => {
   beforeEach(() => {
     delete (window as { SupportBridge?: unknown }).SupportBridge;

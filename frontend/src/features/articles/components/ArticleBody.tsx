@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import Markdown, { type Components } from 'react-markdown';
+import Markdown, { defaultUrlTransform, type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import type { ArticleAttachmentView } from '@support/types';
 import { post } from '@/services/bridgeService';
 
 /*
@@ -27,20 +28,32 @@ import { post } from '@/services/bridgeService';
  * hosts rot, so a failed load degrades to the alt text as a caption rather than
  * leaving a broken-image glyph in the middle of a help article.
  */
-function ArticleImage({ src, alt }: { src?: string; alt?: string }) {
+function ArticleImage({
+  src,
+  alt,
+  attachments,
+}: {
+  src?: string;
+  alt?: string;
+  attachments: ArticleAttachmentView[];
+}) {
   const [failed, setFailed] = useState(false);
 
-  if (failed) {
+  const resolvedSrc = src?.startsWith('attachment:')
+    ? (attachments.find((a) => a.id === src.slice('attachment:'.length))?.url ?? undefined)
+    : src;
+
+  if (failed || !resolvedSrc) {
     return alt ? <span className="mb-3 block text-sm text-muted italic">{alt}</span> : null;
   }
 
   return (
     <img
-      src={src}
+      src={resolvedSrc}
       alt={alt ?? ''}
       loading="lazy"
       onError={() => setFailed(true)}
-      className="mb-3 h-auto max-w-full rounded-card"
+      className="mb-3 max-h-96 max-w-full rounded-card object-contain"
     />
   );
 }
@@ -55,7 +68,7 @@ function ArticleImage({ src, alt }: { src?: string; alt?: string }) {
  * message in ChatThread, styled `bg-accent text-accent-fg` — would otherwise
  * get `text-text`'s dark body colour laid directly over that dark bg.
  */
-function getComponents(dark: boolean): Components {
+function getComponents(dark: boolean, attachments: ArticleAttachmentView[]): Components {
   const body = dark ? 'text-accent-fg' : 'text-text';
   const quote = dark ? 'text-accent-fg/80' : 'text-muted';
   const rule = dark ? 'border-accent-fg/30' : 'border-accent-soft';
@@ -109,7 +122,11 @@ function getComponents(dark: boolean): Components {
       <pre className={`mb-3 overflow-x-auto rounded-card ${codeBg} p-3 text-sm`}>{children}</pre>
     ),
     img: ({ src, alt }) => (
-      <ArticleImage src={typeof src === 'string' ? src : undefined} alt={alt} />
+      <ArticleImage
+        src={typeof src === 'string' ? src : undefined}
+        alt={alt}
+        attachments={attachments}
+      />
     ),
     // The wrapper, not the table, is what scrolls.
     table: ({ children }) => (
@@ -150,10 +167,32 @@ function getComponents(dark: boolean): Components {
   };
 }
 
-export function ArticleBody({ markdown, dark = false }: { markdown: string; dark?: boolean }) {
+/*
+ * react-markdown's default URL sanitizer only allows a fixed protocol
+ * allowlist (http/https/mailto/etc.) and blanks anything else — which
+ * includes our `attachment:` handles. Pass those through unchanged; every
+ * other URL still goes through the default sanitizer.
+ */
+function urlTransform(url: string): string {
+  return url.startsWith('attachment:') ? url : defaultUrlTransform(url);
+}
+
+export function ArticleBody({
+  markdown,
+  dark = false,
+  attachments = [],
+}: {
+  markdown: string;
+  dark?: boolean;
+  attachments?: ArticleAttachmentView[];
+}) {
   return (
     <div className={`text-base leading-relaxed ${dark ? 'text-accent-fg' : 'text-text'}`}>
-      <Markdown remarkPlugins={[remarkGfm]} components={getComponents(dark)}>
+      <Markdown
+        remarkPlugins={[remarkGfm]}
+        components={getComponents(dark, attachments)}
+        urlTransform={urlTransform}
+      >
         {markdown}
       </Markdown>
     </div>

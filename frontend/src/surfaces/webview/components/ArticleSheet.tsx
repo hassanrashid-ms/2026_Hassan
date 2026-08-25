@@ -97,7 +97,7 @@ export function ArticleSheet({ articleId, onClose }: ArticleSheetProps) {
           <div className="px-4 pb-10">
             {article.data ? (
               <Suspense fallback={<BodySkeleton />}>
-                <ArticleBody markdown={article.data.body} />
+                <ArticleBody markdown={article.data.body} attachments={article.data.attachments} />
               </Suspense>
             ) : article.isError ? (
               <p className="text-base text-muted">
