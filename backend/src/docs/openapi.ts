@@ -1421,6 +1421,35 @@ registry.registerPath({
 
 registry.registerPath({
   method: 'post',
+  path: '/agent/articles/{id}/attachments',
+  summary: 'Agent Finalize Article Attachment',
+  description: 'Claims a pending upload (from POST /agent/uploads) onto a draft article.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: {
+    params: z.object({ id: z.uuid() }),
+    body: {
+      content: {
+        'application/json': {
+          schema: z.object({
+            key: z.string(),
+            filename: z.string().min(1).max(255),
+            mime_type: z.enum(['image/png', 'image/jpeg', 'image/webp', 'image/gif']),
+            byte_size: z.number().int().positive(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: { description: 'Attachment finalized' },
+    404: { description: 'Article not found' },
+    409: { description: 'Article is not a draft' },
+    422: { description: 'Upload not found, expired, or mismatched' },
+  },
+});
+
+registry.registerPath({
+  method: 'post',
   path: '/agent/articles/{id}/archive',
   summary: 'Agent Archive Article',
   description: 'Any state -> archived. No delete route exists.',

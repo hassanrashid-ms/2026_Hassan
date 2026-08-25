@@ -1,10 +1,12 @@
 import type { RequestHandler } from 'express';
 import { z } from 'zod';
-import { CreateArticleBody, UpdateArticleBody } from '@support/types';
+import { CreateArticleBody, FinalizeArticleAttachmentBody, UpdateArticleBody } from '@support/types';
 import { sendError } from '../../errors.ts';
+import { deleteObject } from '../../shared/storage/presign.ts';
 import {
   archiveArticle,
   createArticle,
+  finalizeArticleAttachment,
   getArticle,
   listArticles,
   publishArticle,
@@ -110,6 +112,42 @@ export const archiveArticleHandler: RequestHandler = async (req, res) => {
     return;
   }
   res.status(200).json(result.article);
+};
+
+export const finalizeArticleAttachmentHandler: RequestHandler = async (req, res) => {
+  const params = ArticleIdParams.safeParse(req.params);
+  const body = FinalizeArticleAttachmentBody.safeParse(req.body);
+  if (!params.success || !body.success) {
+    sendError(res, 422, 'invalid_request', 'key, filename, mime_type and byte_size are required.');
+    return;
+  }
+  const result = await finalizeArticleAttachment(req.agent!, params.data.id, body.data);
+  if (!result.ok) {
+    if (result.reason === 'not_found') {
+      sendError(res, 404, 'not_found', 'Article not found.');
+      return;
+    }
+    if (result.reason === 'not_draft') {
+      sendError(res, 409, 'invalid_request', 'Article is not a draft.');
+      return;
+    }
+    if (result.reason === 'attachment_not_found') {
+      sendError(res, 422, 'attachment_not_found', 'The uploaded file was not found or has expired.');
+      return;
+    }
+    sendError(res, 422, 'attachment_mismatch', 'The uploaded file does not match its declared type or size.');
+    return;
+  }
+  // Best-effort, after the transaction committed — same reasoning as sendAgentMessage:
+  // a transient storage error here must never surface as a failed finalize to the
+  // agent once the row already exists.
+  try {
+    await deleteObject(result.pendingKey);
+  } catch {
+    // Logged inside deleteObject's callers elsewhere; safe to ignore here too —
+    // an orphaned pending object is cheap and harmless.
+  }
+  res.status(200).json(result.attachment);
 };
 
 export const generateKeywordsHandler: RequestHandler = async (req, res) => {

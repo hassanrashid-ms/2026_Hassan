@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+import { randomUUID } from 'node:crypto';
 import express from 'express';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { req as request } from './helpers/http.ts';
@@ -10,6 +11,7 @@ import { closeSocketServer, createSocketServer } from '../src/shared/realtime/so
 import { articlesRouter } from '../src/agent/routers/articlesRouter.ts';
 import { closeOwnerPool, ownerPool, seedWorkspace, truncateAll } from './helpers/db.ts';
 import { deleteArticleObject, upsertArticleObject } from '../src/shared/weaviate/articlesIndex.ts';
+import { presignPutObject } from '../src/shared/storage/presign.ts';
 
 vi.mock('../src/shared/weaviate/articlesIndex.ts', () => ({
   upsertArticleObject: vi.fn().mockResolvedValue(undefined),
@@ -259,5 +261,112 @@ describe('workspace isolation', () => {
       .get(`/articles/${rows[0]!.id}`)
       .set('Authorization', `Bearer ${token}`)
       .expect(404);
+  });
+});
+
+async function uploadFixtureImage(workspaceId: string, agentId: string) {
+  const key = `pending/${workspaceId}/${agentId}/${randomUUID()}.png`;
+  const body = Buffer.from('fake-png-bytes');
+  const { url } = await presignPutObject({
+    key,
+    contentType: 'image/png',
+    contentLength: body.length,
+  });
+  await fetch(url, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'image/png', 'Content-Length': String(body.length) },
+    body,
+  });
+  return key;
+}
+
+describe('POST /agent/articles/:id/attachments', () => {
+  it('claims a pending upload onto a draft article', async () => {
+    const workspaceId = await seedWorkspace();
+    const { agentId, token } = await seedAgent(workspaceId);
+    const created = await request(app)
+      .post('/articles')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: 'Refund policy', body: 'See below.' })
+      .expect(201);
+    const key = await uploadFixtureImage(workspaceId, agentId);
+
+    const res = await request(app)
+      .post(`/articles/${created.body.id}/attachments`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ key, filename: 'diagram.png', mime_type: 'image/png', byte_size: 14 })
+      .expect(200);
+
+    expect(res.body).toMatchObject({ filename: 'diagram.png', mime_type: 'image/png', byte_size: 14 });
+    expect(res.body.url).toBeTruthy();
+
+    const { rows } = await ownerPool.query(
+      `select storage_key from article_attachment where article_id = $1`,
+      [created.body.id],
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].storage_key).toContain(`ws/${workspaceId}/attachments/`);
+  });
+
+  it('409s when the article is not a draft', async () => {
+    const workspaceId = await seedWorkspace();
+    const { agentId, token } = await seedAgent(workspaceId);
+    const created = await request(app)
+      .post('/articles')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: 'Refund policy', body: 'See below.' })
+      .expect(201);
+    await request(app)
+      .post(`/articles/${created.body.id}/publish`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    const key = await uploadFixtureImage(workspaceId, agentId);
+
+    const res = await request(app)
+      .post(`/articles/${created.body.id}/attachments`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ key, filename: 'diagram.png', mime_type: 'image/png', byte_size: 14 })
+      .expect(409);
+    expect(res.body.error.code).toBe('invalid_request');
+  });
+
+  it('422s with attachment_not_found for a bogus key', async () => {
+    const workspaceId = await seedWorkspace();
+    const { token } = await seedAgent(workspaceId);
+    const created = await request(app)
+      .post('/articles')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: 'Refund policy', body: 'See below.' })
+      .expect(201);
+
+    const res = await request(app)
+      .post(`/articles/${created.body.id}/attachments`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        key: `pending/${workspaceId}/nobody/${randomUUID()}.png`,
+        filename: 'ghost.png',
+        mime_type: 'image/png',
+        byte_size: 14,
+      })
+      .expect(422);
+    expect(res.body.error.code).toBe('attachment_not_found');
+  });
+
+  it('422s with attachment_mismatch when declared byte_size disagrees with the real object', async () => {
+    const workspaceId = await seedWorkspace();
+    const { agentId, token } = await seedAgent(workspaceId);
+    const created = await request(app)
+      .post('/articles')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: 'Refund policy', body: 'See below.' })
+      .expect(201);
+    const key = await uploadFixtureImage(workspaceId, agentId);
+
+    const res = await request(app)
+      .post(`/articles/${created.body.id}/attachments`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ key, filename: 'diagram.png', mime_type: 'image/png', byte_size: 999999 })
+      .expect(422);
+    expect(res.body.error.code).toBe('attachment_mismatch');
   });
 });

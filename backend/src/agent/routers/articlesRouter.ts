@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   archiveArticleHandler,
   createArticleHandler,
+  finalizeArticleAttachmentHandler,
   getArticleHandler,
   listArticlesHandler,
   publishArticleHandler,
@@ -16,4 +17,5 @@ articlesRouter.post('/articles', createArticleHandler);
 articlesRouter.patch('/articles/:id', updateArticleHandler);
 articlesRouter.post('/articles/:id/publish', publishArticleHandler);
 articlesRouter.post('/articles/:id/archive', archiveArticleHandler);
+articlesRouter.post('/articles/:id/attachments', finalizeArticleAttachmentHandler);
 articlesRouter.post('/articles/generate-keywords', generateKeywordsHandler);
