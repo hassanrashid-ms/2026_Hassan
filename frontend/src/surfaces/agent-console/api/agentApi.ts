@@ -44,11 +44,18 @@ export type DevAgentOption = { id: string; email: string; display_name: string }
 export type DevLoginResponse = {
   token: string;
   agent: { id: string; display_name: string };
-  // null for a global admin — their token carries no workspace_id (see
-  // 2026-08-21-superadmin-workspace-console-access-design.md); they pick a
-  // workspace per console session from the admin-console Overview page instead.
-  workspace: { id: string; slug: string } | null;
 };
+
+export type MembershipView = {
+  workspace_id: string;
+  workspace_slug: string;
+  workspace_name: string;
+  role: 'agent' | 'team_lead' | 'admin';
+};
+
+export function fetchMemberships(token: string): Promise<{ memberships: MembershipView[] }> {
+  return call('/agent/memberships', token);
+}
 
 /**
  * Every /agent/* call goes through this instead of apiCall directly, so

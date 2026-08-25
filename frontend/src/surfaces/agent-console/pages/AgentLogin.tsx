@@ -1,8 +1,12 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { devLogin, fetchDevAgents } from '../api/agentApi.ts';
-import { saveAgentSession } from '../lib/agentSession.ts';
+import { devLogin, fetchDevAgents, fetchMemberships } from '../api/agentApi.ts';
+import {
+  loadLastActiveWorkspaceId,
+  saveAgentSession,
+  saveLastActiveWorkspaceId,
+} from '../lib/agentSession.ts';
 
 export function AgentLogin() {
   const navigate = useNavigate();
@@ -11,23 +15,25 @@ export function AgentLogin() {
 
   const onPick = async (agentId: string) => {
     const result = await devLogin(agentId);
-    // A global admin has no fixed workspace to log into here — this picker is
-    // for agents working tickets in one workspace. Admins sign in through the
-    // admin console and open a specific workspace's console from there
-    // (see 2026-08-21-superadmin-workspace-console-access-design.md).
-    if (!result.workspace) {
-      setError(
-        `${result.agent.display_name} is an admin — sign in from the admin console instead.`,
-      );
+    const { memberships } = await fetchMemberships(result.token);
+
+    if (memberships.length === 0) {
+      setError(`${result.agent.display_name} has no workspace access yet.`);
       return;
     }
+
+    const lastActiveId = loadLastActiveWorkspaceId();
+    const chosen = memberships.find((m) => m.workspace_id === lastActiveId) ?? memberships[0]!;
+
     saveAgentSession({
       token: result.token,
       agentId: result.agent.id,
       displayName: result.agent.display_name,
-      workspaceSlug: result.workspace.slug,
-      workspaceId: result.workspace.id,
+      workspaceSlug: chosen.workspace_slug,
+      workspaceId: chosen.workspace_id,
+      role: chosen.role,
     });
+    saveLastActiveWorkspaceId(chosen.workspace_id);
     navigate('/inbox');
   };
 

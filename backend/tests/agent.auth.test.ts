@@ -48,14 +48,14 @@ describe('agent dev auth', () => {
       .send({ agent_id: agentId })
       .expect(200);
     expect(res.body.agent).toEqual({ id: agentId, display_name: 'Sam Agent' });
-    expect(res.body.workspace.id).toBe(workspaceId);
+    expect(res.body.workspace).toBeUndefined();
     expect(typeof res.body.token).toBe('string');
   });
 
-  it('POST /agent/auth/dev-login 404s for an agent with no workspace membership', async () => {
+  it('POST /agent/auth/dev-login logs in an agent with no workspace membership — identity only, no longer 404', async () => {
     const { rows } = await ownerPool.query<{ id: string }>(
       `insert into agent (email, display_name) values ('nomember@example.test', 'No Member') returning id`,
     );
-    await request(app).post('/agent/auth/dev-login').send({ agent_id: rows[0]!.id }).expect(404);
+    await request(app).post('/agent/auth/dev-login').send({ agent_id: rows[0]!.id }).expect(200);
   });
 });

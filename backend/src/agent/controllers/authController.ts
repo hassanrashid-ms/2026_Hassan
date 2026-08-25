@@ -20,7 +20,7 @@ export const devLogin: RequestHandler = async (req, res) => {
   }
   const result = await devLoginService(body.data.agent_id);
   if (!result) {
-    sendError(res, 404, 'not_found', 'Agent not found or has no workspace membership.');
+    sendError(res, 404, 'not_found', 'Agent not found.');
     return;
   }
   res.status(200).json(result);

@@ -1,4 +1,4 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { eq, isNull } from 'drizzle-orm';
 import { agent as agentTable, workspace, workspaceMember } from '../../shared/db/schema/index.ts';
 import { withoutWorkspace, withWorkspace } from '../../shared/db/withWorkspace.ts';
 import { signAgentSession } from '../../shared/auth/agentSession.ts';
@@ -52,20 +52,12 @@ export async function listDevAgents(): Promise<DevAgentOption[]> {
   return [...seen.values()];
 }
 
-export type DevLoginResult = {
-  token: string;
-  agent: { id: string; display_name: string };
-  workspace: { id: string; slug: string } | null;
-} | null;
+export type DevLoginResult = { token: string; agent: { id: string; display_name: string } } | null;
 
 export async function devLogin(agentId: string): Promise<DevLoginResult> {
   const agentRow = await withoutWorkspace(async (tx) => {
     const [row] = await tx
-      .select({
-        id: agentTable.id,
-        displayName: agentTable.displayName,
-        isAdmin: agentTable.isAdmin,
-      })
+      .select({ id: agentTable.id, displayName: agentTable.displayName, isAdmin: agentTable.isAdmin })
       .from(agentTable)
       .where(eq(agentTable.id, agentId))
       .limit(1);
@@ -73,43 +65,11 @@ export async function devLogin(agentId: string): Promise<DevLoginResult> {
   });
   if (!agentRow) return null;
 
-  const workspaces = await withoutWorkspace(async (tx) =>
-    tx.select({ id: workspace.id, slug: workspace.slug }).from(workspace),
-  );
-
-  for (const ws of workspaces) {
-    const membership = await withWorkspace(ws.id, async (tx) => {
-      const [row] = await tx
-        .select({ id: workspaceMember.id })
-        .from(workspaceMember)
-        .where(and(eq(workspaceMember.agentId, agentId), isNull(workspaceMember.deactivatedAt)))
-        .limit(1);
-      return row ?? null;
-    });
-    if (membership) {
-      const token = await signAgentSession({ agent_id: agentRow.id });
-      return {
-        token,
-        agent: { id: agentRow.id, display_name: agentRow.displayName },
-        workspace: { id: ws.id, slug: ws.slug },
-      };
-    }
-  }
-
-  // A global admin holds no workspace_member row at all — the loop above never
-  // matches one, and unlike before there is no workspace to borrow: the token
-  // carries no workspace_id claim (see
-  // 2026-08-21-superadmin-workspace-console-access-design.md). Which workspace's
-  // console an admin is looking at is resolved per request instead
-  // (resolveConsoleWorkspace), not fixed at login. Falls through to `return
-  // null` below if the agent isn't an admin either.
-  if (agentRow.isAdmin) {
-    const token = await signAgentSession({ agent_id: agentRow.id, is_admin: true });
-    return {
-      token,
-      agent: { id: agentRow.id, display_name: agentRow.displayName },
-      workspace: null,
-    };
-  }
-  return null;
+  // Identity only — see 2026-08-25-global-inbox-workspace-decoupling-design.md
+  // section 1. Which workspace(s) this agent can act in is discovered via
+  // GET /agent/memberships and chosen client-side, never fixed at login. An
+  // agent with zero memberships still gets a token; the frontend shows an
+  // empty/no-access state rather than refusing to log them in.
+  const token = await signAgentSession({ agent_id: agentRow.id, is_admin: agentRow.isAdmin });
+  return { token, agent: { id: agentRow.id, display_name: agentRow.displayName } };
 }

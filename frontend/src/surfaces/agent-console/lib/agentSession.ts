@@ -1,5 +1,6 @@
 const STORAGE_KEY = 'support_agent_session';
 const CONTEXT_RAIL_KEY = 'support_context_rail_open';
+const LAST_ACTIVE_WORKSPACE_KEY = 'support_last_active_workspace_id';
 
 /**
  * Mirrors `WorkspaceRole` in `backend/src/shared/middleware/requireWorkspaceRole.ts`.
@@ -24,13 +25,9 @@ export type StoredAgentSession = {
    */
   workspaceId?: string;
   /**
-   * Optional because the current dev-login response (`POST /agent/auth/dev-login`)
-   * doesn't return a role yet — real role plumbing through Google OAuth is a
-   * separate backend slice. Every role gate below treats a missing role as
-   * "unknown, not unauthorized": it shows the control rather than hiding it,
-   * since hiding is UX only and the API enforces the real check regardless
-   * (see requireWorkspaceRole/requireAdminRole). Once login starts returning a
-   * role, gates tighten automatically with no UI change needed.
+   * Set from the membership chosen at login (see AgentLogin.tsx) or from the
+   * workspace switcher (see WorkspaceSwitcher.tsx) — always the role for the
+   * *current* workspaceId, not a fixed account-level role.
    */
   role?: AgentRole;
 };
@@ -69,4 +66,12 @@ export function loadContextRailOpen(): boolean {
 
 export function saveContextRailOpen(open: boolean): void {
   localStorage.setItem(CONTEXT_RAIL_KEY, String(open));
+}
+
+export function loadLastActiveWorkspaceId(): string | null {
+  return localStorage.getItem(LAST_ACTIVE_WORKSPACE_KEY);
+}
+
+export function saveLastActiveWorkspaceId(workspaceId: string): void {
+  localStorage.setItem(LAST_ACTIVE_WORKSPACE_KEY, workspaceId);
 }
