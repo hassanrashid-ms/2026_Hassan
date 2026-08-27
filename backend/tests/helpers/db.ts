@@ -164,6 +164,7 @@ export async function seedConversation(args: {
   assignedAgentId?: string | null;
   resolutionSource?: 'bot' | 'agent' | 'player_confirmed' | 'timed_out' | null;
   priority?: 'p1' | 'p2' | 'p3' | 'p4';
+  priorityManuallySet?: boolean;
   subintentId?: string | null;
 }): Promise<string> {
   const id = randomUUID();
@@ -176,8 +177,8 @@ export async function seedConversation(args: {
   const number = rows[0]!.ticket_seq;
   await ownerPool.query(
     `insert into conversation
-       (id, workspace_id, player_id, session_id, number, created_at, status, confirm_phase, assigned_agent_id, resolution_source, priority, subintent_id)
-     values ($1, $2, $3, $4, $5, coalesce($6, now()), coalesce($7::conversation_status, 'bot_active'), coalesce($8::confirm_phase, 'none'), $9, $10::resolution_source, coalesce($11::conversation_priority, 'p3'), $12)`,
+       (id, workspace_id, player_id, session_id, number, created_at, status, confirm_phase, assigned_agent_id, resolution_source, priority, priority_manually_set, subintent_id)
+     values ($1, $2, $3, $4, $5, coalesce($6, now()), coalesce($7::conversation_status, 'bot_active'), coalesce($8::confirm_phase, 'none'), $9, $10::resolution_source, coalesce($11::conversation_priority, 'p3'), coalesce($12, false), $13)`,
     [
       id,
       args.workspaceId,
@@ -190,6 +191,7 @@ export async function seedConversation(args: {
       args.assignedAgentId ?? null,
       args.resolutionSource ?? null,
       args.priority ?? null,
+      args.priorityManuallySet ?? null,
       args.subintentId ?? null,
     ],
   );
@@ -257,12 +259,13 @@ export async function seedSubintent(args: {
   intentId: string;
   name?: string;
   formId?: string | null;
+  defaultPriority?: 'p1' | 'p2' | 'p3' | 'p4';
 }): Promise<string> {
   const id = randomUUID();
   const name = args.name ?? `Subintent ${randomUUID().slice(0, 8)}`;
   await ownerPool.query(
-    `insert into subintent (id, workspace_id, intent_id, name, form_id) values ($1, $2, $3, $4, $5)`,
-    [id, args.workspaceId, args.intentId, name, args.formId ?? null],
+    `insert into subintent (id, workspace_id, intent_id, name, form_id, default_priority) values ($1, $2, $3, $4, $5, $6::conversation_priority)`,
+    [id, args.workspaceId, args.intentId, name, args.formId ?? null, args.defaultPriority ?? null],
   );
   return id;
 }
