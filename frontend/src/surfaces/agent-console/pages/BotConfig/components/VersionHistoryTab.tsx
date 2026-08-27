@@ -23,6 +23,17 @@ const FIELD_LABELS: Record<BotConfigVersionedField, string> = {
   limits_config: 'Limits',
 };
 
+function relativeTime(iso: string | null): string {
+  if (!iso) return '';
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const diffMin = Math.round(diffMs / 60000);
+  if (diffMin < 1) return 'just now';
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.round(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  return `${Math.round(diffHr / 24)}d ago`;
+}
+
 function VersionDiff({ token, version }: { token: string; version: number }) {
   const currentQuery = useQuery({
     queryKey: ['bot-config-version', version],
@@ -119,7 +130,7 @@ export function VersionHistoryTab({ token }: { token: string }) {
                 <span className="flex items-center gap-2">
                   <span className="font-semibold">v{entry.version}</span>
                   <span className="text-muted">{entry.actor.display_name}</span>
-                  <span className="text-muted">{new Date(entry.created_at).toLocaleString()}</span>
+                  <span className="text-muted">{relativeTime(entry.created_at)}</span>
                 </span>
                 <span className="flex gap-1">
                   {entry.changed_fields.map((field) => (
@@ -137,7 +148,7 @@ export function VersionHistoryTab({ token }: { token: string }) {
                 onClick={() => setRestoreTarget(entry.version)}
                 disabled={restore.isPending}
               >
-                Restore
+                Restore this version
               </Button>
               {expanded === entry.version && (
                 <div className="mt-2 border-t border-slate-100 pt-2">
