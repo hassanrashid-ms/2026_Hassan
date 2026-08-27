@@ -23,6 +23,7 @@ import {
 import { enqueueBotTurn } from '../src/shared/jobs/botTurns.ts';
 import { HANDOFF_PLAYER_MESSAGES } from '../src/domain/bot/messages.ts';
 import { incrementPresence, closePresenceRedis } from '../src/shared/realtime/presence.ts';
+import { presignPutObject } from '../src/shared/storage/presign.ts';
 
 vi.mock('../src/shared/jobs/botTurns.ts', () => ({
   enqueueBotTurn: vi.fn().mockResolvedValue(undefined),
@@ -774,6 +775,72 @@ describe('GET /surface/messages', () => {
 
     expect(res.body.confirm_phase).toBe('form');
     expect(res.body.form).toBeNull();
+  });
+});
+
+describe('GET /messages with an attachment', () => {
+  it('returns a fetchable presigned url for a public message with an attachment', async () => {
+    const { workspaceId, playerId, sessionId, token } = await setup();
+    const { rows: convRows } = await ownerPool.query<{ id: string }>(
+      `insert into conversation (workspace_id, player_id, session_id, number) values ($1, $2, $3, 1) returning id`,
+      [workspaceId, playerId, sessionId],
+    );
+    const conversationId = convRows[0]!.id;
+    const { rows: msgRows } = await ownerPool.query<{ id: string }>(
+      `insert into message (workspace_id, conversation_id, seq, author_type, body, visibility)
+       values ($1, $2, 1, 'agent', 'diagram.png', 'public') returning id`,
+      [workspaceId, conversationId],
+    );
+    const messageId = msgRows[0]!.id;
+
+    const key = `ws/${workspaceId}/attachments/${crypto.randomUUID()}.png`;
+    const body = Buffer.from('fake-png-bytes');
+    const { url: putUrl } = await presignPutObject({
+      key,
+      contentType: 'image/png',
+      contentLength: body.length,
+    });
+    await fetch(putUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'image/png', 'Content-Length': String(body.length) },
+      body,
+    });
+    await ownerPool.query(
+      `insert into attachment (workspace_id, message_id, storage_key, filename, mime_type, byte_size)
+       values ($1, $2, $3, 'diagram.png', 'image/png', $4)`,
+      [workspaceId, messageId, key, body.length],
+    );
+
+    const res = await request(app)
+      .get('/surface/messages')
+      .query({ session_id: sessionId })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
+    const withAttachment = res.body.messages.find((m: { attachment: unknown }) => m.attachment);
+    expect(withAttachment.attachment.url).toBeTruthy();
+    const getRes = await fetch(withAttachment.attachment.url);
+    expect(getRes.status).toBe(200);
+  });
+
+  it('never signs an attachment on an internal-visibility message (unreachable via toPlayerView, verified defensively)', async () => {
+    const { workspaceId, playerId, sessionId, token } = await setup();
+    const { rows: convRows } = await ownerPool.query<{ id: string }>(
+      `insert into conversation (workspace_id, player_id, session_id, number) values ($1, $2, $3, 1) returning id`,
+      [workspaceId, playerId, sessionId],
+    );
+    await ownerPool.query(
+      `insert into message (workspace_id, conversation_id, seq, author_type, body, visibility)
+       values ($1, $2, 1, 'agent', 'internal note', 'internal')`,
+      [workspaceId, convRows[0]!.id],
+    );
+
+    const res = await request(app)
+      .get('/surface/messages')
+      .query({ session_id: sessionId })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    expect(res.body.messages).toHaveLength(0);
   });
 });
 

@@ -27,6 +27,7 @@ import {
 import { appendEvent } from '../../shared/events/appendEvent.ts';
 import {
   agent,
+  attachment,
   conversation,
   form,
   formAnswer,
@@ -36,6 +37,7 @@ import {
   player,
   session,
 } from '../../shared/db/schema/index.ts';
+import { presignGetObject } from '../../shared/storage/presign.ts';
 import { withWorkspace, type Tx } from '../../shared/db/withWorkspace.ts';
 import {
   emitInboxChanged,
@@ -356,17 +358,46 @@ export async function getPlayerMessages(
         createdAt: message.createdAt,
         authorAgentName: agent.displayName,
         authorPlayerName: player.externalId,
+        attachmentId: attachment.id,
+        attachmentStorageKey: attachment.storageKey,
+        attachmentFilename: attachment.filename,
+        attachmentMimeType: attachment.mimeType,
+        attachmentByteSize: attachment.byteSize,
       })
       .from(message)
       .innerJoin(conversation, eq(conversation.id, message.conversationId))
       .innerJoin(player, eq(player.id, conversation.playerId))
       .leftJoin(agent, eq(agent.id, message.authorAgentId))
+      .leftJoin(attachment, eq(attachment.messageId, message.id))
       .where(eq(message.conversationId, found.id))
       .orderBy(message.seq);
-    const messages = rows.map(toPlayerView).filter((m): m is PlayerMessageView => m !== null);
+
+    const storageKeyByMessageId = new Map(
+      rows.filter((r) => r.attachmentStorageKey).map((r) => [r.id, r.attachmentStorageKey!]),
+    );
+    const views = await Promise.all(
+      rows
+        .map(toPlayerView)
+        .filter((m): m is PlayerMessageView => m !== null)
+        .map(async (view) => {
+          if (!view.attachment) return view;
+          const storageKey = storageKeyByMessageId.get(view.id);
+          if (!storageKey) return view;
+          try {
+            return {
+              ...view,
+              attachment: { ...view.attachment, url: await presignGetObject(storageKey) },
+            };
+          } catch {
+            // A broken attachment must not break loading the rest of the thread.
+            return view;
+          }
+        }),
+    );
+
     return {
       conversation_id: found.id,
-      messages,
+      messages: views,
       status: found.status,
       confirm_phase: found.confirmPhase,
       form: found.confirmPhase === 'form' ? await loadPlayerForm(tx, found.id) : null,
