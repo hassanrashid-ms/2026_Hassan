@@ -6,7 +6,6 @@ import { Badge } from '../../../components/ui/badge.tsx';
 import { Button } from '../../../components/ui/button.tsx';
 import { Switch } from '../../../components/ui/switch.tsx';
 import { ConfirmDialog } from '../../../components/ConfirmDialog.tsx';
-import { HistoryPanel } from './HistoryPanel.tsx';
 
 // Mirrors backend/src/domain/bot/tools.ts TOOL_CATALOG — kept in sync by hand;
 // this is display copy only, not enforcement (the API is the enforcement point).
@@ -76,69 +75,66 @@ export function ToolsTab({ token, config }: { token: string; config: BotConfigVi
   const limitsDirty = JSON.stringify(limitsConfig) !== JSON.stringify(config.limits_config);
 
   return (
-    <div className="flex h-full min-h-0 gap-4">
-      <div className="flex min-h-0 flex-1 flex-col gap-2">
-        <ul className="flex flex-col gap-2">
-          {toolsConfig.map((t) => (
-            <li key={t.tool} className="flex flex-col gap-1 rounded-md border border-slate-200 p-2">
-              <div className="flex items-center gap-3">
-                <Switch
-                  checked={t.enabled}
-                  disabled={save.isPending}
-                  onCheckedChange={() => toggle(t.tool)}
-                />
-                <span className="text-xs font-medium">{t.tool}</span>
-              </div>
-              {!t.enabled && <p className="pl-11 text-xs text-muted">{CONSEQUENCE_COPY[t.tool]}</p>}
-            </li>
-          ))}
-          <li className="flex items-center gap-3 rounded-md border border-slate-200 p-2 opacity-70">
-            <Badge variant="secondary">Always on</Badge>
-            <span className="text-xs font-medium">handoff</span>
+    <div className="flex h-full min-h-0 flex-col gap-2">
+      <ul className="flex flex-col gap-2">
+        {toolsConfig.map((t) => (
+          <li key={t.tool} className="flex flex-col gap-1 rounded-md border border-slate-200 p-2">
+            <div className="flex items-center gap-3">
+              <Switch
+                checked={t.enabled}
+                disabled={save.isPending}
+                onCheckedChange={() => toggle(t.tool)}
+              />
+              <span className="text-xs font-medium">{t.tool}</span>
+            </div>
+            {!t.enabled && <p className="pl-11 text-xs text-muted">{CONSEQUENCE_COPY[t.tool]}</p>}
           </li>
-        </ul>
+        ))}
+        <li className="flex items-center gap-3 rounded-md border border-slate-200 p-2 opacity-70">
+          <Badge variant="secondary">Always on</Badge>
+          <span className="text-xs font-medium">handoff</span>
+        </li>
+      </ul>
+      <div>
+        <Button
+          type="button"
+          size="sm"
+          onClick={() => setToolsConfirmOpen(true)}
+          disabled={!toolsDirty || save.isPending}
+        >
+          Save changes
+        </Button>
+      </div>
+      {save.isError && <p className="text-xs text-red-600">{save.error?.message}</p>}
+      <div className="flex flex-col gap-2 rounded-md border border-slate-200 p-2">
+        <h3 className="text-xs font-semibold">Conversation limits</h3>
+        {limitsConfig.map((l) => (
+          <label key={l.key} className="flex items-center justify-between gap-3 text-xs">
+            <span>{LIMIT_LABELS[l.key]}</span>
+            <input
+              type="number"
+              aria-label={LIMIT_LABELS[l.key]}
+              value={l.value}
+              disabled={saveLimits.isPending}
+              onChange={(e) => updateLimit(l.key, Number(e.target.value))}
+              className="w-16 rounded border border-slate-200 px-1 py-0.5 text-right"
+            />
+          </label>
+        ))}
         <div>
           <Button
             type="button"
             size="sm"
-            onClick={() => setToolsConfirmOpen(true)}
-            disabled={!toolsDirty || save.isPending}
+            onClick={() => setLimitsConfirmOpen(true)}
+            disabled={!limitsDirty || saveLimits.isPending}
           >
             Save changes
           </Button>
         </div>
-        {save.isError && <p className="text-xs text-red-600">{save.error?.message}</p>}
-        <div className="flex flex-col gap-2 rounded-md border border-slate-200 p-2">
-          <h3 className="text-xs font-semibold">Conversation limits</h3>
-          {limitsConfig.map((l) => (
-            <label key={l.key} className="flex items-center justify-between gap-3 text-xs">
-              <span>{LIMIT_LABELS[l.key]}</span>
-              <input
-                type="number"
-                aria-label={LIMIT_LABELS[l.key]}
-                value={l.value}
-                disabled={saveLimits.isPending}
-                onChange={(e) => updateLimit(l.key, Number(e.target.value))}
-                className="w-16 rounded border border-slate-200 px-1 py-0.5 text-right"
-              />
-            </label>
-          ))}
-          <div>
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => setLimitsConfirmOpen(true)}
-              disabled={!limitsDirty || saveLimits.isPending}
-            >
-              Save changes
-            </Button>
-          </div>
-          {saveLimits.isError && (
-            <p className="text-xs text-red-600">{saveLimits.error?.message}</p>
-          )}
-        </div>
+        {saveLimits.isError && (
+          <p className="text-xs text-red-600">{saveLimits.error?.message}</p>
+        )}
       </div>
-      <HistoryPanel token={token} field="tools_config" onRestored={invalidate} />
       <ConfirmDialog
         open={toolsConfirmOpen}
         onOpenChange={setToolsConfirmOpen}

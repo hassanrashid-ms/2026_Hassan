@@ -5,6 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/ta
 import { PromptTab } from './components/PromptTab.tsx';
 import { RulesTab } from './components/RulesTab.tsx';
 import { ToolsTab } from './components/ToolsTab.tsx';
+import { VersionHistoryTab } from './components/VersionHistoryTab.tsx';
 
 export function BotConfig() {
   const session = loadAgentSession();
@@ -27,6 +28,7 @@ export function BotConfig() {
           <TabsTrigger value="prompt">Prompt</TabsTrigger>
           <TabsTrigger value="rules">Rules</TabsTrigger>
           <TabsTrigger value="tools">Tools</TabsTrigger>
+          <TabsTrigger value="history">History</TabsTrigger>
         </TabsList>
         <TabsContent value="prompt" className="min-h-0 overflow-auto pt-3">
           <PromptTab token={session.token} config={configQuery.data} />
@@ -36,6 +38,9 @@ export function BotConfig() {
         </TabsContent>
         <TabsContent value="tools" className="min-h-0 overflow-auto pt-3">
           <ToolsTab token={session.token} config={configQuery.data} />
+        </TabsContent>
+        <TabsContent value="history" className="min-h-0 overflow-auto pt-3">
+          <VersionHistoryTab token={session.token} />
         </TabsContent>
       </Tabs>
     </div>

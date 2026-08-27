@@ -7,7 +7,6 @@ import { Button } from '../../../components/ui/button.tsx';
 import { Input } from '../../../components/ui/input.tsx';
 import { Switch } from '../../../components/ui/switch.tsx';
 import { ConfirmDialog } from '../../../components/ConfirmDialog.tsx';
-import { HistoryPanel } from './HistoryPanel.tsx';
 
 function stripView(rule: RuleEntryView) {
   const { enforcement, ...rest } = rule;
@@ -67,64 +66,61 @@ export function RulesTab({ token, config }: { token: string; config: BotConfigVi
   const lockedCount = rules.filter((r) => r.locked).length;
 
   return (
-    <div className="flex h-full min-h-0 gap-4">
-      <div className="flex min-h-0 flex-1 flex-col gap-3">
-        <p className="text-xs text-muted">
-          {activeCount} active · {lockedCount} cannot be switched off
-        </p>
-        <ul className="flex flex-col gap-2">
-          {rules.map((rule) => (
-            <li
-              key={rule.key}
-              className="flex items-start gap-3 rounded-md border border-slate-200 p-2"
-            >
-              <Switch
-                checked={rule.enabled}
-                disabled={rule.locked || save.isPending}
-                onCheckedChange={() => toggle(rule.key)}
-              />
-              <div className="flex flex-1 flex-col gap-1">
-                <p className="text-xs">{rule.text}</p>
-                <div className="flex items-center gap-1">
-                  {rule.locked && <Badge variant="secondary">Locked</Badge>}
-                  <Badge variant="outline">
-                    {rule.enforcement === 'code' ? 'Enforced in code' : 'Prompt only'}
-                  </Badge>
-                  {rule.source === 'custom' && <Badge variant="outline">Custom</Badge>}
-                </div>
+    <div className="flex h-full min-h-0 flex-col gap-3">
+      <p className="text-xs text-muted">
+        {activeCount} active · {lockedCount} cannot be switched off
+      </p>
+      <ul className="flex flex-col gap-2">
+        {rules.map((rule) => (
+          <li
+            key={rule.key}
+            className="flex items-start gap-3 rounded-md border border-slate-200 p-2"
+          >
+            <Switch
+              checked={rule.enabled}
+              disabled={rule.locked || save.isPending}
+              onCheckedChange={() => toggle(rule.key)}
+            />
+            <div className="flex flex-1 flex-col gap-1">
+              <p className="text-xs">{rule.text}</p>
+              <div className="flex items-center gap-1">
+                {rule.locked && <Badge variant="secondary">Locked</Badge>}
+                <Badge variant="outline">
+                  {rule.enforcement === 'code' ? 'Enforced in code' : 'Prompt only'}
+                </Badge>
+                {rule.source === 'custom' && <Badge variant="outline">Custom</Badge>}
               </div>
-            </li>
-          ))}
-        </ul>
-        <div className="flex items-center gap-2">
-          <Input
-            placeholder="Add a custom rule…"
-            value={newRuleText}
-            onChange={(e) => setNewRuleText(e.target.value)}
-            className="h-8 flex-1"
-          />
-          <Button
-            type="button"
-            size="sm"
-            onClick={addCustom}
-            disabled={save.isPending || !newRuleText.trim()}
-          >
-            Add
-          </Button>
-        </div>
-        <div>
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => setConfirmOpen(true)}
-            disabled={!dirty || save.isPending}
-          >
-            Save changes
-          </Button>
-        </div>
-        {save.isError && <p className="text-xs text-red-600">{save.error?.message}</p>}
+            </div>
+          </li>
+        ))}
+      </ul>
+      <div className="flex items-center gap-2">
+        <Input
+          placeholder="Add a custom rule…"
+          value={newRuleText}
+          onChange={(e) => setNewRuleText(e.target.value)}
+          className="h-8 flex-1"
+        />
+        <Button
+          type="button"
+          size="sm"
+          onClick={addCustom}
+          disabled={save.isPending || !newRuleText.trim()}
+        >
+          Add
+        </Button>
       </div>
-      <HistoryPanel token={token} field="rules" onRestored={invalidate} />
+      <div>
+        <Button
+          type="button"
+          size="sm"
+          onClick={() => setConfirmOpen(true)}
+          disabled={!dirty || save.isPending}
+        >
+          Save changes
+        </Button>
+      </div>
+      {save.isError && <p className="text-xs text-red-600">{save.error?.message}</p>}
       <ConfirmDialog
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
