@@ -32,7 +32,8 @@ export function PriorityPicker({
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['conversation', conversationId, 'detail'] });
       void queryClient.invalidateQueries({ queryKey: ['tickets'] });
-      void queryClient.invalidateQueries({ queryKey: ['inbox', 'mine'] });
+      void queryClient.invalidateQueries({ queryKey: ['inbox'] });
+      void queryClient.invalidateQueries({ queryKey: ['global-inbox'] });
       setOpen(false);
     },
   });
