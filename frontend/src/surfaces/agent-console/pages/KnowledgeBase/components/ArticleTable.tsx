@@ -51,38 +51,38 @@ export function ArticleTable({
         {articles.data?.articles.length === 0 ? (
           <EmptyState message="Nothing to show" />
         ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Title</TableHead>
-              <TableHead>State</TableHead>
-              <TableHead>Updated</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {articles.data?.articles.map((a) => (
-              <TableRow
-                key={a.id}
-                onClick={() => onSelect(a.id)}
-                className={cn('cursor-pointer', selectedId === a.id && 'bg-accent-soft')}
-              >
-                {/* max-w-0 + w-full lets the cell shrink below its content's natural
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Title</TableHead>
+                <TableHead>State</TableHead>
+                <TableHead>Updated</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {articles.data?.articles.map((a) => (
+                <TableRow
+                  key={a.id}
+                  onClick={() => onSelect(a.id)}
+                  className={cn('cursor-pointer', selectedId === a.id && 'bg-accent-soft')}
+                >
+                  {/* max-w-0 + w-full lets the cell shrink below its content's natural
                     width in an auto-layout table — without it, `truncate` alone has no
                     bound to clip against, and a long title wraps character-by-character
                     once the sheet next to it eats most of the available width. */}
-                <TableCell className="max-w-0 w-full truncate font-medium" title={a.title}>
-                  {displayTitle(a.title, a.body)}
-                </TableCell>
-                <TableCell>
-                  <Badge variant={STATE_BADGE_VARIANT[a.state]}>{a.state}</Badge>
-                </TableCell>
-                <TableCell className="text-muted">
-                  {new Date(a.published_at ?? a.created_at).toLocaleDateString()}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+                  <TableCell className="max-w-0 w-full truncate font-medium" title={a.title}>
+                    {displayTitle(a.title, a.body)}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={STATE_BADGE_VARIANT[a.state]}>{a.state}</Badge>
+                  </TableCell>
+                  <TableCell className="text-muted">
+                    {new Date(a.published_at ?? a.created_at).toLocaleDateString()}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         )}
       </div>
     </div>

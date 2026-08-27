@@ -582,7 +582,9 @@ registry.registerPath({
   responses: {
     200: {
       description: 'Memberships list',
-      content: { 'application/json': { schema: z.object({ memberships: z.array(MembershipViewSchema) }) } },
+      content: {
+        'application/json': { schema: z.object({ memberships: z.array(MembershipViewSchema) }) },
+      },
     },
   },
 });
@@ -590,7 +592,15 @@ registry.registerPath({
 const GlobalInboxTicketSchema = z.object({
   id: z.uuid(),
   player: z.object({ external_player_id: z.string() }),
-  status: z.enum(['new', 'bot_active', 'open', 'awaiting_player', 'escalated', 'resolved', 'closed']),
+  status: z.enum([
+    'new',
+    'bot_active',
+    'open',
+    'awaiting_player',
+    'escalated',
+    'resolved',
+    'closed',
+  ]),
   confirm_phase: z.enum(['none', 'bot_article', 'agent_ask', 'form', 'inactivity_ask']),
   last_message_preview: z.string().nullable(),
   last_message_at: z.iso.datetime().nullable(),
@@ -975,12 +985,14 @@ registry.registerPath({
   path: '/agent/conversations/{id}/priority',
   summary: 'Agent Set Conversation Priority',
   description:
-    'Sets a conversation\'s priority directly. Marks it manually-set, which permanently prevents subintent-classification auto-priority from overwriting it again. No-op (updated: false) when the requested value already matches.',
+    "Sets a conversation's priority directly. Marks it manually-set, which permanently prevents subintent-classification auto-priority from overwriting it again. No-op (updated: false) when the requested value already matches.",
   security: [{ [bearerAgentJwt.name]: [] }],
   request: {
     params: z.object({ id: z.uuid() }),
     body: {
-      content: { 'application/json': { schema: z.object({ priority: z.enum(['p1', 'p2', 'p3', 'p4']) }) } },
+      content: {
+        'application/json': { schema: z.object({ priority: z.enum(['p1', 'p2', 'p3', 'p4']) }) },
+      },
     },
   },
   responses: {

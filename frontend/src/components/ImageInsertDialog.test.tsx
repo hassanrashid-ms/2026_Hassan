@@ -62,10 +62,13 @@ describe('ImageInsertDialog', () => {
   });
 
   it('shows error text when passed', () => {
-    render(<ImageInsertDialog {...baseProps()} error="Only PNG, JPEG, WebP or GIF images are supported." />);
-    expect(
-      screen.getByText('Only PNG, JPEG, WebP or GIF images are supported.'),
-    ).toBeTruthy();
+    render(
+      <ImageInsertDialog
+        {...baseProps()}
+        error="Only PNG, JPEG, WebP or GIF images are supported."
+      />,
+    );
+    expect(screen.getByText('Only PNG, JPEG, WebP or GIF images are supported.')).toBeTruthy();
   });
 
   it('disables the zone while uploading', () => {

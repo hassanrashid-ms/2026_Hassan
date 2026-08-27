@@ -86,6 +86,7 @@ replaces the image.
 ```
 
 **Upload tab:**
+
 - One drop zone (dashed border, `rounded-card`, `border-muted/40` idle → `border-accent` on
   drag-over) handles all three input methods:
   - `onDrop` — reads `e.dataTransfer.files[0]`.
@@ -99,6 +100,7 @@ replaces the image.
   existing `uploadError` text.
 
 **Link tab:**
+
 - URL `Input` + alt-text `Input`, both required-empty-allowed (alt text optional, URL required to
   enable the button).
 - "Insert" `Button`, calls `onLink(url, altText)` and closes the dialog.

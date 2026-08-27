@@ -189,7 +189,9 @@ describe('Workload leave toggle', () => {
     await user.click(within(dialog).getByRole('button', { name: /^set on leave$/i }));
 
     expect(agentApi.setAgentLeave).toHaveBeenCalledWith('t', '1', true, undefined);
-    expect(await within(aliceRow).findByRole('button', { name: /clear leave/i })).toBeInTheDocument();
+    expect(
+      await within(aliceRow).findByRole('button', { name: /clear leave/i }),
+    ).toBeInTheDocument();
     expect(await within(aliceRow).findByText(/on leave/i)).toBeInTheDocument();
     expect(agentApi.fetchWorkload).toHaveBeenCalledTimes(fetchCountAfterLoad);
   });

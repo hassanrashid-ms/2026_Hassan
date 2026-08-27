@@ -54,12 +54,12 @@ that friction for the single-file case.
 
 ## Error handling
 
-| Case | Behavior |
-|---|---|
-| Empty file | Toast: "File is empty." No fields changed. |
-| No frontmatter block | Whole file treated as body. Title still falls back to H1/filename. |
+| Case                                  | Behavior                                                                                          |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Empty file                            | Toast: "File is empty." No fields changed.                                                        |
+| No frontmatter block                  | Whole file treated as body. Title still falls back to H1/filename.                                |
 | Malformed frontmatter (parser throws) | Toast: "Couldn't parse frontmatter." Whole file treated as body, title falls back to H1/filename. |
-| File read error | Toast: generic file-read error. No fields changed. |
+| File read error                       | Toast: generic file-read error. No fields changed.                                                |
 
 In all failure cases, the editor's current content is left untouched —
 a failed import must never blank out what the agent already had open.
@@ -73,6 +73,7 @@ a failed import must never blank out what the agent already had open.
 
 Unit test the parse-and-fill logic as a pure function, decoupled from the
 file-picker DOM plumbing, covering:
+
 - Full frontmatter (title + tags array)
 - Frontmatter with `tags` as a comma-separated string
 - No frontmatter block at all

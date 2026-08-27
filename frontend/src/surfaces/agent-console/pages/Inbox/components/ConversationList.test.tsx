@@ -210,9 +210,7 @@ describe('ConversationList pagination', () => {
       });
 
     renderWithClient(<ConversationList token="tok" selectedId={null} onSelect={() => {}} />);
-    await waitFor(() =>
-      expect(fetchSpy).toHaveBeenCalledWith('tok', 'mine', undefined, undefined),
-    );
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith('tok', 'mine', undefined, undefined));
     await screen.findByText('player-42');
 
     const scrollable = screen.getByTestId('conversation-list-scroll');
@@ -221,9 +219,7 @@ describe('ConversationList pagination', () => {
     Object.defineProperty(scrollable, 'scrollTop', { value: 700, configurable: true });
     fireEvent.scroll(scrollable);
 
-    await waitFor(() =>
-      expect(fetchSpy).toHaveBeenCalledWith('tok', 'mine', undefined, 'page-2'),
-    );
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith('tok', 'mine', undefined, 'page-2'));
     await waitFor(() => expect(screen.getAllByText('player-42')).toHaveLength(2));
   });
 });

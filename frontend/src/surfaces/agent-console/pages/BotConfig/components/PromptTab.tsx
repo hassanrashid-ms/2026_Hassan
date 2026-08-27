@@ -38,7 +38,7 @@ export function PromptTab({ token, config }: { token: string; config: BotConfigV
     const end = textareaRef.current.selectionEnd;
     const newPrompt = prompt.substring(0, start) + placeholder + prompt.substring(end);
     setPrompt(newPrompt);
-    
+
     // Set cursor position after React re-renders
     setTimeout(() => {
       if (textareaRef.current) {
@@ -66,7 +66,7 @@ export function PromptTab({ token, config }: { token: string; config: BotConfigV
         <label htmlFor="bot-config-prompt" className="text-xs font-medium text-muted">
           Prompt
         </label>
-        
+
         <div className="mb-2 text-xs text-muted-foreground">
           <p className="mb-1 font-semibold text-slate-800">Available placeholders</p>
           <ul className="mb-2 space-y-1">
@@ -84,7 +84,9 @@ export function PromptTab({ token, config }: { token: string; config: BotConfigV
             ))}
           </ul>
           <p>
-            Placeholders are filled at run time. The prompt never contains a hard-coded subintent or article. Editing the list of subintents therefore changes the bot&apos;s behaviour without touching the prompt.
+            Placeholders are filled at run time. The prompt never contains a hard-coded subintent or
+            article. Editing the list of subintents therefore changes the bot&apos;s behaviour
+            without touching the prompt.
           </p>
         </div>
 

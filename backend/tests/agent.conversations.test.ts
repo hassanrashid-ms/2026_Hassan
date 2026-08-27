@@ -726,7 +726,7 @@ describe('POST /agent/conversations/:id/claim', () => {
       [workspaceId, agentBRows[0]!.id],
     );
     const tokenB = await signAgentSession({
-      agent_id: agentBRows[0]!.id
+      agent_id: agentBRows[0]!.id,
     });
 
     await request(app)
@@ -917,7 +917,12 @@ describe('GET /agent/conversations/:id/messages with an attachment', () => {
       .send({
         conversation_id: conversationId,
         body: '',
-        attachment: { key, filename: 'shot.png', mime_type: 'image/png', byte_size: fileBody.length },
+        attachment: {
+          key,
+          filename: 'shot.png',
+          mime_type: 'image/png',
+          byte_size: fileBody.length,
+        },
       })
       .expect(200);
 
@@ -959,7 +964,12 @@ describe('GET /agent/conversations/:id/messages with an attachment', () => {
       .send({
         conversation_id: conversationId,
         body: 'here is a screenshot',
-        attachment: { key, filename: 'shot.png', mime_type: 'image/png', byte_size: fileBody.length },
+        attachment: {
+          key,
+          filename: 'shot.png',
+          mime_type: 'image/png',
+          byte_size: fileBody.length,
+        },
       })
       .expect(200);
 

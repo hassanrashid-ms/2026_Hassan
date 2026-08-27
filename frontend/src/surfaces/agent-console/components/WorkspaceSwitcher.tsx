@@ -1,7 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { ChevronDown } from 'lucide-react';
 import { fetchMemberships } from '../api/agentApi.ts';
-import { saveAgentSession, saveLastActiveWorkspaceId, type StoredAgentSession } from '../lib/agentSession.ts';
+import {
+  saveAgentSession,
+  saveLastActiveWorkspaceId,
+  type StoredAgentSession,
+} from '../lib/agentSession.ts';
 import {
   DropdownMenu,
   DropdownMenuContent,

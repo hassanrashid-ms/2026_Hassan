@@ -5,9 +5,8 @@ import { RequireRole } from './RequireRole.tsx';
 import { loadAgentSession, type StoredAgentSession } from '../lib/agentSession.ts';
 
 vi.mock('../lib/agentSession.ts', async () => {
-  const actual = await vi.importActual<typeof import('../lib/agentSession.ts')>(
-    '../lib/agentSession.ts',
-  );
+  const actual =
+    await vi.importActual<typeof import('../lib/agentSession.ts')>('../lib/agentSession.ts');
   return { ...actual, loadAgentSession: vi.fn() };
 });
 

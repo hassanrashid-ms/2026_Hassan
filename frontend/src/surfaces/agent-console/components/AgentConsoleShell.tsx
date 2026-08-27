@@ -26,7 +26,12 @@ import {
   saveAgentSession,
   saveLastActiveWorkspaceId,
 } from '../lib/agentSession.ts';
-import { fetchMemberships, fetchPresence, updatePresence, type DisplayStatus } from '../api/agentApi.ts';
+import {
+  fetchMemberships,
+  fetchPresence,
+  updatePresence,
+  type DisplayStatus,
+} from '../api/agentApi.ts';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher.tsx';
 import { createSocket } from '../../../features/chat/api/socket.ts';
 import { handleSessionExpired } from '../lib/authErrorHandling.ts';

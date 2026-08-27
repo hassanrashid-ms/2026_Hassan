@@ -22,6 +22,7 @@
 ## Task 1: Cursor pagination for the five existing queue filters
 
 **Files:**
+
 - Modify: `backend/src/agent/services/conversationsService.ts`
 - Modify: `backend/src/agent/controllers/conversationsController.ts`
 - Modify: `backend/src/docs/openapi.ts`
@@ -29,6 +30,7 @@
 - Test: `backend/tests/agent.conversations.test.ts`
 
 **Interfaces:**
+
 - Produces: `listConversations(ctx, filter, extra): Promise<{ conversations: AgentConversationSummary[]; nextCursor: string | null }>` — return type changes from a bare array to this object. `ConversationsListFilters` gains `cursor?: string`.
 - Produces: `GET /agent/conversations` response body becomes `{ conversations: [...], nextCursor: string | null }` (was `{ conversations: [...] }`). New optional `cursor` query param.
 - Produces: `AgentConversationsResponse` (in `@support/types`) gains `nextCursor: string | null`.
@@ -315,6 +317,7 @@ export async function listConversations(
 ```
 
 Note what changed and why:
+
 - `id`/`createdAt` were already selected or easy to add — `createdAt` is new in the select list, needed to build the cursor.
 - `.limit(PAGE_SIZE + 1)` fetches one lookahead row; `hasMore` is true iff that 26th row came back, which is how `nextCursor` is decided without a separate `COUNT(*)` query.
 - The per-row N+1 lookup (last message + tags) now runs over at most `PAGE_SIZE` rows instead of the full queue — a real reduction in query volume for the existing large queues, not just new behavior.
@@ -424,11 +427,13 @@ Expected: PASS. If anything outside this file destructures `listConversations`'s
 `AgentConversationsResponse` (Step 6) now requires `nextCursor: string | null`. Two frontend test files construct `fetchInbox` mock results as object literals typed against that response and will fail `pnpm typecheck` until each literal gains `nextCursor: null`. Grep confirms exactly these two files and eight occurrences — fix all of them now in one pass:
 
 In `frontend/src/surfaces/agent-console/pages/Tickets/Tickets.test.tsx`:
+
 - Line 47: `const fetchInboxSpy = vi.mocked(agentApi.fetchInbox).mockResolvedValue({ conversations: [] });` → `const fetchInboxSpy = vi.mocked(agentApi.fetchInbox).mockResolvedValue({ conversations: [], nextCursor: null });`
 - Line 76: `Promise.resolve({ conversations: status === 'unassigned' ? [] : [] }),` → `Promise.resolve({ conversations: status === 'unassigned' ? [] : [], nextCursor: null }),`
 - Line 84: `vi.mocked(agentApi.fetchInbox).mockResolvedValue({ conversations: [] });` → `vi.mocked(agentApi.fetchInbox).mockResolvedValue({ conversations: [], nextCursor: null });`
 
 In `frontend/src/surfaces/agent-console/pages/Inbox/components/ConversationList.test.tsx`:
+
 - Line 60: `Promise.resolve({ conversations: status === 'unassigned' ? [UNASSIGNED_CONVERSATION] : [] }),` → `Promise.resolve({ conversations: status === 'unassigned' ? [UNASSIGNED_CONVERSATION] : [], nextCursor: null }),`
 - Line 74: same replacement as line 60.
 - Line 95: `Promise.resolve({ conversations: status === 'mine' ? [mine] : [] }),` → `Promise.resolve({ conversations: status === 'mine' ? [mine] : [], nextCursor: null }),`
@@ -487,12 +492,14 @@ git commit -m "feat: add cursor pagination to agent conversation queues"
 ## Task 2: Resolved & Closed queues
 
 **Files:**
+
 - Modify: `backend/src/agent/services/conversationsService.ts`
 - Modify: `backend/src/agent/controllers/conversationsController.ts`
 - Modify: `backend/src/docs/openapi.ts`
 - Test: `backend/tests/agent.conversations.test.ts`
 
 **Interfaces:**
+
 - Consumes: `PAGE_SIZE`, `ConversationsPage` type, `extraFilterConditions()` from Task 1.
 - Produces: `ConversationsFilter` gains `'resolved' | 'closed'`. `listConversations(ctx, 'resolved' | 'closed', extra)` returns conversations whose current `resolution_cycle` row has `resolvedAt`/`closedAt` within the last 7 days, newest first, same `ConversationsPage` shape and same cursor pagination contract as Task 1's filters (opaque `nextCursor` string, round-tripped via `extra.cursor`).
 - Consumed by: Task 3 (frontend passes `'resolved'`/`'closed'` as a `ConversationListFilter` value).
@@ -694,13 +701,7 @@ Extend `ConversationsFilter`:
 
 ```ts
 export type ConversationsFilter =
-  | 'unassigned'
-  | 'mine'
-  | 'agentAssigned'
-  | 'botHandling'
-  | 'escalated'
-  | 'resolved'
-  | 'closed';
+  'unassigned' | 'mine' | 'agentAssigned' | 'botHandling' | 'escalated' | 'resolved' | 'closed';
 ```
 
 Add a second cursor type and its encode/decode helpers, next to `StatusCursor`'s (added in Task 1):
@@ -846,7 +847,7 @@ async function listResolvedOrClosedConversations(
 }
 ```
 
-Why the `NOT EXISTS` self-join instead of a plain `innerJoin(resolutionCycle, eq(resolutionCycle.conversationId, conversation.id))`: a conversation can carry more than one `resolution_cycle` row (each reopen starts a new cycle). A plain join would fan out one conversation into multiple result rows — visibly duplicating a ticket in the column — for anything reopened and resolved/closed more than once. The `NOT EXISTS` clause keeps only the row with the highest `cycle_no` per conversation, i.e. the one that actually explains the conversation's *current* status.
+Why the `NOT EXISTS` self-join instead of a plain `innerJoin(resolutionCycle, eq(resolutionCycle.conversationId, conversation.id))`: a conversation can carry more than one `resolution_cycle` row (each reopen starts a new cycle). A plain join would fan out one conversation into multiple result rows — visibly duplicating a ticket in the column — for anything reopened and resolved/closed more than once. The `NOT EXISTS` clause keeps only the row with the highest `cycle_no` per conversation, i.e. the one that actually explains the conversation's _current_ status.
 
 - [ ] **Step 4: Update the controller**
 
@@ -907,11 +908,13 @@ git commit -m "feat: add resolved and closed ticket queues"
 ## Task 3: Tickets board — new columns + infinite scroll
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/agent-console/api/agentApi.ts`
 - Modify: `frontend/src/surfaces/agent-console/pages/Tickets/Tickets.tsx`
 - Test: `frontend/src/surfaces/agent-console/pages/Tickets/Tickets.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `AgentConversationsResponse` with `nextCursor` (Task 1), `'resolved' | 'closed'` as valid queue filters (Task 2).
 - Produces: `ConversationListFilter` gains `'resolved' | 'closed'`. `fetchInbox(token, status, filters?, cursor?)` — new optional 4th param.
 - `Tickets.tsx`'s `COLUMNS` gains two entries; each column fetches via `useInfiniteQuery` instead of `useQuery` and appends a page when scrolled near the bottom.
@@ -937,12 +940,7 @@ describe('Tickets pagination', () => {
     renderTickets('/tickets');
 
     await waitFor(() =>
-      expect(fetchInboxSpy).toHaveBeenCalledWith(
-        'tok',
-        'resolved',
-        expect.anything(),
-        undefined,
-      ),
+      expect(fetchInboxSpy).toHaveBeenCalledWith('tok', 'resolved', expect.anything(), undefined),
     );
     expect(fetchInboxSpy).toHaveBeenCalledWith('tok', 'closed', expect.anything(), undefined);
   });
@@ -961,13 +959,16 @@ describe('Tickets pagination', () => {
       tags: [],
     });
 
-    const fetchInboxSpy = vi.mocked(agentApi.fetchInbox).mockImplementation((_t, status, _f, cursor) => {
-      if (status !== 'unassigned') return Promise.resolve({ conversations: [], nextCursor: null });
-      if (!cursor) {
-        return Promise.resolve({ conversations: [conversation('c1')], nextCursor: 'page-2' });
-      }
-      return Promise.resolve({ conversations: [conversation('c2')], nextCursor: null });
-    });
+    const fetchInboxSpy = vi
+      .mocked(agentApi.fetchInbox)
+      .mockImplementation((_t, status, _f, cursor) => {
+        if (status !== 'unassigned')
+          return Promise.resolve({ conversations: [], nextCursor: null });
+        if (!cursor) {
+          return Promise.resolve({ conversations: [conversation('c1')], nextCursor: 'page-2' });
+        }
+        return Promise.resolve({ conversations: [conversation('c2')], nextCursor: null });
+      });
 
     renderTickets('/tickets');
     await screen.findByText(/1/); // column count badge for the Unassigned column
@@ -979,12 +980,7 @@ describe('Tickets pagination', () => {
     scrollable.dispatchEvent(new Event('scroll', { bubbles: true }));
 
     await waitFor(() =>
-      expect(fetchInboxSpy).toHaveBeenCalledWith(
-        'tok',
-        'unassigned',
-        expect.anything(),
-        'page-2',
-      ),
+      expect(fetchInboxSpy).toHaveBeenCalledWith('tok', 'unassigned', expect.anything(), 'page-2'),
     );
   });
 });
@@ -1001,13 +997,7 @@ Extend `ConversationListFilter` (currently lines 106-107):
 
 ```ts
 export type ConversationListFilter =
-  | 'unassigned'
-  | 'mine'
-  | 'agentAssigned'
-  | 'botHandling'
-  | 'escalated'
-  | 'resolved'
-  | 'closed';
+  'unassigned' | 'mine' | 'agentAssigned' | 'botHandling' | 'escalated' | 'resolved' | 'closed';
 ```
 
 Update `buildTicketsQuery` and `fetchInbox` (currently lines 118-137) to accept and forward a cursor:
@@ -1278,11 +1268,13 @@ git commit -m "feat: add Resolved/Closed columns and infinite scroll to the Tick
 **Why this task exists:** `Inbox.tsx`'s `ConversationList` (`frontend/src/surfaces/agent-console/pages/Inbox/components/ConversationList.tsx`) calls the same `fetchInbox(token, 'mine')` / `fetchInbox(token, 'escalated')` that Task 1 just made the backend cap at 25 rows with no way to request more. Without this task, an agent with more than 25 active "mine" conversations would silently stop seeing the rest in their Inbox — a regression introduced by Task 1, not a pre-existing limitation. This applies the same `useInfiniteQuery` treatment used in Task 3. Both "My tickets" and "Escalated tickets" render inside one shared scrollable container (confirmed by reading the current file in full), so one scroll handler drives both — scrolling to the bottom loads another page of whichever of the two still has more.
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/agent-console/pages/Inbox/components/ConversationList.tsx`
 - Modify: `frontend/src/surfaces/agent-console/components/ui/scroll-area.tsx` (the shared `ScrollArea` wraps Radix's `Root`/`Viewport`; the actual scrollable element is `Viewport`, and today's `ScrollArea` only spreads extra props onto `Root`, so `onScroll` needs a dedicated pass-through to reach the element that actually scrolls)
 - Test: `frontend/src/surfaces/agent-console/pages/Inbox/components/ConversationList.test.tsx` (already exists — confirmed by listing the directory during design; extend it, don't create a new file)
 
 **Interfaces:**
+
 - Consumes: `fetchInbox(token, status, filters?, cursor?)` from Task 3.
 - Produces: `ScrollArea` gains two new optional props, `onScroll?: React.UIEventHandler<HTMLDivElement>` and `viewportTestId?: string`, both forwarded to the Radix `Viewport` element instead of `Root`. Existing callers that pass neither are unaffected.
 
@@ -1420,8 +1412,7 @@ export function ConversationList({
   });
 
   const mineConversations = mine.data?.pages.flatMap((page) => page.conversations) ?? [];
-  const escalatedConversations =
-    escalated.data?.pages.flatMap((page) => page.conversations) ?? [];
+  const escalatedConversations = escalated.data?.pages.flatMap((page) => page.conversations) ?? [];
 
   useEffect(() => {
     const socket = createSocket(token, 'agent');

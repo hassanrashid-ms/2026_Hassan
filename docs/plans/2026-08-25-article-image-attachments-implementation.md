@@ -36,7 +36,7 @@ at read time. The frontend resolves handles against that array — this is exact
 canvas (which renders `<img src>` literally) and the `attachment:` handle scheme. MDXEditor's
 `imagePlugin()` ships a purpose-built hook for exactly this — `imagePreviewHandler?: (imageSource:
 string) => Promise<string>` (verified in `@mdxeditor/editor`'s type declarations) — called by the
-editor whenever it needs to *display* an image, on load and after insert. It only affects what's
+editor whenever it needs to _display_ an image, on load and after insert. It only affects what's
 rendered in the canvas; `getMarkdown()`/`onChange` still return the raw `attachment:{id}` text
 untouched. That removes the need for both custom functions and the "encode" step entirely: the
 stored markdown always contains handles, and `imagePreviewHandler` is the only place resolution
@@ -75,6 +75,7 @@ choke point), React, `@mdxeditor/editor`, TanStack Query.
 ### Task 1: Note the old plan as superseded
 
 **Files:**
+
 - Modify: `docs/plans/2026-08-24-article-image-upload-implementation.md`
 
 - [ ] **Step 1: Add a superseded banner**
@@ -85,7 +86,6 @@ Insert this as the new first line of the file (before the `# Article Image Uploa
 > **SUPERSEDED by `docs/plans/2026-08-25-article-image-attachments-implementation.md`.** That plan
 > covers the same feature plus autosave and uses a slightly different schema/handle scheme. Do not
 > execute this file — kept for history only.
-
 ```
 
 - [ ] **Step 2: Commit**
@@ -100,11 +100,13 @@ git commit -m "Mark superseded article-image-upload plan"
 ### Task 2: Simplify the `article_attachment` schema
 
 **Files:**
+
 - Modify: `backend/src/shared/db/schema/articles.ts`
 - Modify: `backend/tests/helpers/db.ts`
 - Test: `backend/tests/domain.articleAttachment.test.ts` (new)
 
 **Interfaces:**
+
 - Produces: `articleAttachment` Drizzle table (re-exported via `backend/src/shared/db/schema/index.ts`'s existing `export * from './articles.ts'`), columns `id, workspaceId, articleId, storageKey, filename, mimeType, byteSize, createdAt`. No `status` column.
 
 - [ ] **Step 1: Rewrite the table**
@@ -247,9 +249,11 @@ git commit -m "Simplify article_attachment to mirror chat's attachment table"
 ### Task 3: Wire types — finalize body, attachment view, relaxed create/update
 
 **Files:**
+
 - Modify: `packages/types/src/articles.ts`
 
 **Interfaces:**
+
 - Produces:
   - `FinalizeArticleAttachmentBody = z.object({ key: z.string().min(1), filename: z.string().min(1).max(255), mime_type: z.string().min(1), byte_size: z.number().int().positive() })`
   - `ArticleAttachmentView = { id: string; filename: string; mime_type: string; byte_size: number; url: string | null }`
@@ -369,6 +373,7 @@ git commit -m "Add article attachment types, relax create/update validation"
 ### Task 4: Finalize endpoint — `POST /agent/articles/:id/attachments`
 
 **Files:**
+
 - Modify: `backend/src/agent/services/articlesService.ts`
 - Modify: `backend/src/agent/controllers/articlesController.ts`
 - Modify: `backend/src/agent/routers/articlesRouter.ts`
@@ -376,6 +381,7 @@ git commit -m "Add article attachment types, relax create/update validation"
 - Test: `backend/tests/agent.articles.test.ts` (extend)
 
 **Interfaces:**
+
 - Consumes: `headObject`, `copyObject`, `deleteObject`, `ALLOWED_IMAGE_MIME_TYPES`,
   `MAX_ATTACHMENT_BYTES` from `backend/src/shared/storage/presign.ts`; `articleAttachment` table
   (Task 2); `FinalizeArticleAttachmentBody` (Task 3).
@@ -422,7 +428,11 @@ describe('POST /agent/articles/:id/attachments', () => {
       .send({ key, filename: 'diagram.png', mime_type: 'image/png', byte_size: 14 })
       .expect(200);
 
-    expect(res.body).toMatchObject({ filename: 'diagram.png', mime_type: 'image/png', byte_size: 14 });
+    expect(res.body).toMatchObject({
+      filename: 'diagram.png',
+      mime_type: 'image/png',
+      byte_size: 14,
+    });
     expect(res.body.url).toBeTruthy();
 
     const { rows } = await ownerPool.query(
@@ -524,7 +534,10 @@ import {
 ```ts
 export type FinalizeArticleAttachmentResult =
   | { ok: true; attachment: ArticleAttachmentView; pendingKey: string }
-  | { ok: false; reason: 'not_found' | 'not_draft' | 'attachment_not_found' | 'attachment_mismatch' };
+  | {
+      ok: false;
+      reason: 'not_found' | 'not_draft' | 'attachment_not_found' | 'attachment_mismatch';
+    };
 
 function extensionFor(mimeType: string): string {
   switch (mimeType) {
@@ -567,7 +580,9 @@ export async function finalizeArticleAttachment(
     // Defense-in-depth: re-check the allowlist/size cap against the
     // HEAD-verified values, not only the client-declared ones.
     if (
-      !ALLOWED_IMAGE_MIME_TYPES.includes(real.contentType as (typeof ALLOWED_IMAGE_MIME_TYPES)[number]) ||
+      !ALLOWED_IMAGE_MIME_TYPES.includes(
+        real.contentType as (typeof ALLOWED_IMAGE_MIME_TYPES)[number],
+      ) ||
       real.contentLength > MAX_ATTACHMENT_BYTES
     ) {
       return { ok: false, reason: 'attachment_mismatch' };
@@ -635,10 +650,20 @@ export const finalizeArticleAttachmentHandler: RequestHandler = async (req, res)
       return;
     }
     if (result.reason === 'attachment_not_found') {
-      sendError(res, 422, 'attachment_not_found', 'The uploaded file was not found or has expired.');
+      sendError(
+        res,
+        422,
+        'attachment_not_found',
+        'The uploaded file was not found or has expired.',
+      );
       return;
     }
-    sendError(res, 422, 'attachment_mismatch', 'The uploaded file does not match its declared type or size.');
+    sendError(
+      res,
+      422,
+      'attachment_mismatch',
+      'The uploaded file does not match its declared type or size.',
+    );
     return;
   }
   // Best-effort, after the transaction committed — same reasoning as sendAgentMessage:
@@ -714,11 +739,13 @@ git commit -m "Add article attachment finalize endpoint"
 ### Task 5: Sign attachment URLs on article read (agent and player)
 
 **Files:**
+
 - Modify: `backend/src/agent/services/articlesService.ts`
 - Modify: `backend/src/surface/services/articlesService.ts`
 - Test: `backend/tests/agent.articles.test.ts` (extend), `backend/tests/surface.articles.test.ts` (extend)
 
 **Interfaces:**
+
 - Consumes: `presignGetObject` (Task 4's import already added agent-side); `articleAttachment` table.
 - Produces: `getArticle` (agent) and the equivalent public detail function both return
   `attachments: ArticleAttachmentView[]`, satisfying the types added in Task 3.
@@ -903,9 +930,11 @@ git commit -m "Sign article attachment URLs on read, agent and player"
 ### Task 6: Confirm publish's empty-field rejection (test only)
 
 **Files:**
+
 - Test: `backend/tests/agent.articles.test.ts` (extend)
 
 **Interfaces:**
+
 - Consumes: `publishArticle`'s existing `empty_fields` reason (`backend/src/agent/services/articlesService.ts:136`) and `publishArticleHandler`'s existing mapping of it to a 409 (`backend/src/agent/controllers/articlesController.ts`) — both pre-existing, unmodified by this plan.
 
 This is the one place Task 3's relaxed Zod validation could silently create a gap: with `title`/
@@ -972,11 +1001,13 @@ git commit -m "Test: relaxed draft validation still blocks publish with empty fi
 ### Task 7: Frontend — `attachment:` handle resolution in `ArticleBody`
 
 **Files:**
+
 - Modify: `frontend/src/features/articles/components/ArticleBody.tsx`
 - Modify: `frontend/src/surfaces/webview/components/ArticleSheet.tsx`
 - Test: `frontend/src/features/articles/components/ArticleBody.test.tsx` (new, unless one already exists — check first)
 
 **Interfaces:**
+
 - Consumes: `ArticleAttachmentView[]` from `@support/types` (Task 3).
 - Produces: `ArticleBody` gains an `attachments?: ArticleAttachmentView[]` prop, default `[]`. No other prop changes — `MessageBody.tsx`'s existing call (chat markdown, never carries an `attachment:` handle) keeps working unchanged.
 
@@ -999,7 +1030,13 @@ describe('ArticleBody attachment resolution', () => {
       <ArticleBody
         markdown="![diagram](attachment:a1)"
         attachments={[
-          { id: 'a1', filename: 'diagram.png', mime_type: 'image/png', byte_size: 10, url: 'https://minio.local/signed' },
+          {
+            id: 'a1',
+            filename: 'diagram.png',
+            mime_type: 'image/png',
+            byte_size: 10,
+            url: 'https://minio.local/signed',
+          },
         ]}
       />,
     );
@@ -1076,7 +1113,11 @@ function getComponents(dark: boolean, attachments: ArticleAttachmentView[]): Com
   return {
     // ...unchanged entries (h1/h2/h3/p/ul/ol/li/blockquote/hr/code/pre)...
     img: ({ src, alt }) => (
-      <ArticleImage src={typeof src === 'string' ? src : undefined} alt={alt} attachments={attachments} />
+      <ArticleImage
+        src={typeof src === 'string' ? src : undefined}
+        alt={alt}
+        attachments={attachments}
+      />
     ),
     // ...unchanged entries (table/th/td/a)...
   };
@@ -1139,12 +1180,15 @@ git commit -m "Resolve attachment: image handles in ArticleBody"
 ### Task 8: Frontend — autosave hook
 
 **Files:**
+
 - Create: `frontend/src/surfaces/agent-console/pages/KnowledgeBase/hooks/useArticleAutosave.ts`
 - Test: `frontend/src/surfaces/agent-console/pages/KnowledgeBase/hooks/useArticleAutosave.test.ts` (new)
 
 **Interfaces:**
+
 - Consumes: `createArticle`, `updateArticle` from `frontend/src/surfaces/agent-console/api/agentApi.ts` (both already exist, unmodified).
 - Produces (used by Task 9):
+
   ```ts
   type AutosaveStatus = 'unsaved' | 'saving' | 'saved';
 
@@ -1159,7 +1203,7 @@ git commit -m "Resolve attachment: image handles in ArticleBody"
     ensureArticleId: () => Promise<string>;
     /** Flushes any pending debounced save immediately — call on sheet close. */
     flush: () => Promise<void>;
-  }
+  };
   ```
 
 - [ ] **Step 1: Write the failing test**
@@ -1195,8 +1239,7 @@ describe('useArticleAutosave', () => {
     const onCreated = vi.fn();
 
     const { result, rerender } = renderHook(
-      (fields) =>
-        useArticleAutosave({ token: 't', articleId: null, onCreated, fields }),
+      (fields) => useArticleAutosave({ token: 't', articleId: null, onCreated, fields }),
       { initialProps: { title: '', body: '', keywords: [], intentId: undefined } },
     );
 
@@ -1229,8 +1272,7 @@ describe('useArticleAutosave', () => {
     });
 
     const { result, rerender } = renderHook(
-      (fields) =>
-        useArticleAutosave({ token: 't', articleId: 'a1', onCreated: vi.fn(), fields }),
+      (fields) => useArticleAutosave({ token: 't', articleId: 'a1', onCreated: vi.fn(), fields }),
       { initialProps: { title: 'T', body: 'B', keywords: [], intentId: undefined } },
     );
     expect(result.current.status).toBe('saved');
@@ -1413,9 +1455,11 @@ git commit -m "Add Google-Docs-style autosave hook for the article editor"
 ### Task 9: Frontend — image upload API + preview resolution wiring
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/agent-console/api/agentApi.ts`
 
 **Interfaces:**
+
 - Consumes: `requestUpload`, `putFileToUploadUrl` (both already exist, unmodified).
 - Produces: `finalizeArticleAttachment(token, articleId, input): Promise<ArticleAttachmentView>` — used by Task 10.
 
@@ -1460,10 +1504,12 @@ git commit -m "Add finalizeArticleAttachment API client function"
 ### Task 10: Frontend — wire autosave and image upload into `ArticleEditorSheet`
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/agent-console/pages/KnowledgeBase/components/ArticleEditorSheet.tsx`
 - Test: `frontend/src/surfaces/agent-console/pages/KnowledgeBase/components/ArticleEditorSheet.test.tsx` (extend if it exists, else check `KnowledgeBase.test.tsx` for the existing coverage pattern first — do not invent a new test-rendering convention)
 
 **Interfaces:**
+
 - Consumes: `useArticleAutosave` (Task 8), `finalizeArticleAttachment` (Task 9), `requestUpload`/`putFileToUploadUrl` (pre-existing), MDXEditor's `imagePlugin({ imageUploadHandler, imagePreviewHandler })`.
 - Produces: none consumed elsewhere — terminal UI task.
 
@@ -1473,13 +1519,15 @@ Check the existing test file's render/mock setup, then add (adjust boilerplate t
 
 ```tsx
 it('shows Unsaved then Saved as the agent types, with no Save button', async () => {
-  vi.mocked(agentApi.updateArticle).mockResolvedValue({ /* ...existing draft article shape... */ });
+  vi.mocked(agentApi.updateArticle).mockResolvedValue({/* ...existing draft article shape... */});
   // ...render the sheet with an existing draft article, matching this file's existing setup...
 
   expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Create Draft' })).not.toBeInTheDocument();
 
-  fireEvent.change(screen.getByPlaceholderText('Article title'), { target: { value: 'New title' } });
+  fireEvent.change(screen.getByPlaceholderText('Article title'), {
+    target: { value: 'New title' },
+  });
   expect(screen.getByText('Unsaved')).toBeInTheDocument();
 
   vi.advanceTimersByTime(800);
@@ -1511,7 +1559,12 @@ it('uploads an image and inserts an attachment: reference into the body', async 
   expect(agentApi.finalizeArticleAttachment).toHaveBeenCalledWith(
     expect.any(String),
     expect.any(String),
-    { key: 'pending/ws/agent/uuid.png', filename: 'diagram.png', mimeType: 'image/png', byteSize: 3 },
+    {
+      key: 'pending/ws/agent/uuid.png',
+      filename: 'diagram.png',
+      mimeType: 'image/png',
+      byteSize: 3,
+    },
   );
 });
 ```
@@ -1629,7 +1682,11 @@ imagePlugin({
 Add the imports:
 
 ```tsx
-import { finalizeArticleAttachment, putFileToUploadUrl, requestUpload } from '../../../api/agentApi.ts';
+import {
+  finalizeArticleAttachment,
+  putFileToUploadUrl,
+  requestUpload,
+} from '../../../api/agentApi.ts';
 ```
 
 Remove the stale "No imageUploadHandler — there's no upload endpoint..." comment block above the
@@ -1648,6 +1705,7 @@ Expected: 0 errors.
 - [ ] **Step 7: Manual browser check**
 
 Use the `run` skill to start the app (`pnpm dev`). In the agent console:
+
 1. Open a brand-new article (no existing draft) and type a single character into the title field.
    Confirm the status indicator shows "Unsaved" then "Saving…" then "Saved" within ~1s, with no
    Create Draft button anywhere.

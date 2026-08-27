@@ -40,13 +40,7 @@ import { getPresenceStatusBatch } from '../../shared/realtime/presence.ts';
 import { logger } from '../../shared/logging/logger.ts';
 
 export type ConversationsFilter =
-  | 'unassigned'
-  | 'mine'
-  | 'agentAssigned'
-  | 'botHandling'
-  | 'escalated'
-  | 'resolved'
-  | 'closed';
+  'unassigned' | 'mine' | 'agentAssigned' | 'botHandling' | 'escalated' | 'resolved' | 'closed';
 
 export type ConversationsListFilters = {
   priority?: (typeof conversation.priority.enumValues)[number][];
@@ -611,8 +605,7 @@ export async function reclassifyConversation(
 }
 
 export type SetPriorityResult =
-  | { ok: true; updated: boolean; status: string }
-  | { ok: false; reason: 'not_found' };
+  { ok: true; updated: boolean; status: string } | { ok: false; reason: 'not_found' };
 
 export async function setConversationPriority(
   ctx: AgentContext,

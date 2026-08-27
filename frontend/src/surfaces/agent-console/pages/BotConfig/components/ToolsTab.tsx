@@ -63,7 +63,9 @@ export function ToolsTab({ token, config }: { token: string; config: BotConfigVi
   if (!config) return null;
 
   const toggle = (tool: string) => {
-    setToolsConfig((prev) => prev.map((t) => (t.tool === tool ? { ...t, enabled: !t.enabled } : t)));
+    setToolsConfig((prev) =>
+      prev.map((t) => (t.tool === tool ? { ...t, enabled: !t.enabled } : t)),
+    );
   };
 
   const updateLimit = (key: string, value: number) => {

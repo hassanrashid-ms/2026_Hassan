@@ -46,6 +46,10 @@ export async function applySubintentDefaultPriority(
     conversationId: params.conversationId,
     actorId: params.actorId,
     actorType: params.actorType,
-    payload: { from: params.currentPriority, to: target.defaultPriority, reason: 'subintent_default' },
+    payload: {
+      from: params.currentPriority,
+      to: target.defaultPriority,
+      reason: 'subintent_default',
+    },
   });
 }

@@ -23,10 +23,12 @@
 ### Task 1: Schema — add `priority_manually_set` column
 
 **Files:**
+
 - Modify: `backend/src/shared/db/schema/conversations.ts:50` (right after the `priority` field)
 - Generate: a new migration file under `backend/src/shared/db/migrations/` (via `pnpm db:generate`)
 
 **Interfaces:**
+
 - Produces: `conversation.priorityManuallySet: boolean`, not null, default `false` — consumed by Tasks 3, 5, 6, and the `seedConversation` test helper (Task 2).
 
 - [ ] **Step 1: Add the column to the schema**
@@ -62,10 +64,12 @@ git commit -m "schema: add conversation.priority_manually_set"
 ### Task 2: Test helpers — support seeding priority state
 
 **Files:**
+
 - Modify: `backend/tests/helpers/db.ts:157-197` (`seedConversation`)
 - Modify: `backend/tests/helpers/db.ts:255-268` (`seedSubintent`)
 
 **Interfaces:**
+
 - Consumes: `conversation.priorityManuallySet` (Task 1).
 - Produces: `seedConversation(args)` accepts an optional `priorityManuallySet?: boolean`; `seedSubintent(args)` accepts an optional `defaultPriority?: 'p1'|'p2'|'p3'|'p4'`. Both are consumed by every test written in Tasks 3, 4, 5, 6.
 
@@ -158,11 +162,13 @@ git commit -m "test: seedConversation/seedSubintent accept priority fields"
 ### Task 3: `applySubintentDefaultPriority` helper + unit tests
 
 **Files:**
+
 - Create: `backend/src/domain/conversations/applySubintentDefaultPriority.ts`
 - Modify: `backend/src/domain/conversations/index.ts` (add export)
 - Test: `backend/tests/domain.applySubintentDefaultPriority.test.ts`
 
 **Interfaces:**
+
 - Consumes: `appendEvent` (`backend/src/shared/events/appendEvent.ts:30`), `conversation`/`subintent` tables (`backend/src/shared/db/schema/index.ts`), `Tx` (`backend/src/shared/db/withWorkspace.ts`).
 - Produces: `applySubintentDefaultPriority(tx: Tx, params: { workspaceId: string; conversationId: string; subintentId: string; currentPriority: 'p1'|'p2'|'p3'|'p4'; priorityManuallySet: boolean; actorId: string | null; actorType: 'bot' | 'agent' }): Promise<void>` — called by Task 4 (bot path) and Task 5 (agent reclassify path).
 
@@ -378,7 +384,11 @@ export async function applySubintentDefaultPriority(
     conversationId: params.conversationId,
     actorId: params.actorId,
     actorType: params.actorType,
-    payload: { from: params.currentPriority, to: target.defaultPriority, reason: 'subintent_default' },
+    payload: {
+      from: params.currentPriority,
+      to: target.defaultPriority,
+      reason: 'subintent_default',
+    },
   });
 }
 ```
@@ -406,10 +416,12 @@ git commit -m "feat: add applySubintentDefaultPriority helper"
 ### Task 4: Wire auto-priority into the bot's `classifyIfUnset`
 
 **Files:**
+
 - Modify: `backend/src/domain/bot/applyBotTurn.ts:323-355` (`classifyIfUnset`)
 - Test: `backend/tests/bot.turnSeam.test.ts` (extend)
 
 **Interfaces:**
+
 - Consumes: `applySubintentDefaultPriority` (Task 3).
 - Produces: nothing new — this task only wires an existing call site.
 
@@ -430,56 +442,56 @@ async function priorityOf(conversationId: string) {
 Then add this test inside the `describe('applyBotTurn', ...)` block, after the existing `'a second answer does not reclassify...'` test (after line 157):
 
 ```ts
-  it('classifying to a subintent with a default priority applies it, once', async () => {
-    const workspaceId = await seedWorkspace();
-    const playerId = await seedPlayer(workspaceId);
-    const conversationId = await seedConversation({ workspaceId, playerId, priority: 'p3' });
-    const intentId = await seedIntent(workspaceId);
-    const subintentId = await seedSubintent({ workspaceId, intentId, defaultPriority: 'p1' });
+it('classifying to a subintent with a default priority applies it, once', async () => {
+  const workspaceId = await seedWorkspace();
+  const playerId = await seedPlayer(workspaceId);
+  const conversationId = await seedConversation({ workspaceId, playerId, priority: 'p3' });
+  const intentId = await seedIntent(workspaceId);
+  const subintentId = await seedSubintent({ workspaceId, intentId, defaultPriority: 'p1' });
 
-    await withWorkspace(workspaceId, (tx) =>
-      applyBotTurn(
-        tx,
-        { workspaceId, conversationId },
-        { kind: 'answer', reply: 'first', subintentId },
-      ),
-    );
+  await withWorkspace(workspaceId, (tx) =>
+    applyBotTurn(
+      tx,
+      { workspaceId, conversationId },
+      { kind: 'answer', reply: 'first', subintentId },
+    ),
+  );
 
-    const row = await priorityOf(conversationId);
-    expect(row.priority).toBe('p1');
-    expect(row.priority_manually_set).toBe(false);
+  const row = await priorityOf(conversationId);
+  expect(row.priority).toBe('p1');
+  expect(row.priority_manually_set).toBe(false);
 
-    const events = await eventsFor(conversationId);
-    expect(events.map((e) => e.type)).toEqual([
-      'message_sent',
-      'intent_set',
-      'conversation_priority_changed',
-    ]);
+  const events = await eventsFor(conversationId);
+  expect(events.map((e) => e.type)).toEqual([
+    'message_sent',
+    'intent_set',
+    'conversation_priority_changed',
+  ]);
+});
+
+it('does not touch priority when already manually set', async () => {
+  const workspaceId = await seedWorkspace();
+  const playerId = await seedPlayer(workspaceId);
+  const conversationId = await seedConversation({
+    workspaceId,
+    playerId,
+    priority: 'p4',
+    priorityManuallySet: true,
   });
+  const intentId = await seedIntent(workspaceId);
+  const subintentId = await seedSubintent({ workspaceId, intentId, defaultPriority: 'p1' });
 
-  it('does not touch priority when already manually set', async () => {
-    const workspaceId = await seedWorkspace();
-    const playerId = await seedPlayer(workspaceId);
-    const conversationId = await seedConversation({
-      workspaceId,
-      playerId,
-      priority: 'p4',
-      priorityManuallySet: true,
-    });
-    const intentId = await seedIntent(workspaceId);
-    const subintentId = await seedSubintent({ workspaceId, intentId, defaultPriority: 'p1' });
+  await withWorkspace(workspaceId, (tx) =>
+    applyBotTurn(
+      tx,
+      { workspaceId, conversationId },
+      { kind: 'answer', reply: 'first', subintentId },
+    ),
+  );
 
-    await withWorkspace(workspaceId, (tx) =>
-      applyBotTurn(
-        tx,
-        { workspaceId, conversationId },
-        { kind: 'answer', reply: 'first', subintentId },
-      ),
-    );
-
-    const row = await priorityOf(conversationId);
-    expect(row.priority).toBe('p4');
-  });
+  const row = await priorityOf(conversationId);
+  expect(row.priority).toBe('p4');
+});
 ```
 
 - [ ] **Step 2: Run the tests to verify they fail**
@@ -492,18 +504,18 @@ Expected: FAIL on the first new test — priority stays `p3`, no `conversation_p
 In `backend/src/domain/bot/applyBotTurn.ts`, import `applySubintentDefaultPriority` (add to the existing import from `'../conversations/index.ts'` or add a new import line near the top — check the existing imports around line 1-20 for where `postMessage`/similar helpers are imported from and follow that pattern) and, inside `classifyIfUnset` (lines 323-355), after the `if (updated.length === 0) return;` guard and before (or after) the `intent_set` `appendEvent` call, add:
 
 ```ts
-  await applySubintentDefaultPriority(tx, {
-    workspaceId: ctx.workspaceId,
-    conversationId: ctx.conversationId,
-    subintentId,
-    currentPriority: 'p3',
-    priorityManuallySet: false,
-    actorId: null,
-    actorType: 'bot',
-  });
+await applySubintentDefaultPriority(tx, {
+  workspaceId: ctx.workspaceId,
+  conversationId: ctx.conversationId,
+  subintentId,
+  currentPriority: 'p3',
+  priorityManuallySet: false,
+  actorId: null,
+  actorType: 'bot',
+});
 ```
 
-Note: `classifyIfUnset`'s `UPDATE ... WHERE subintent_id IS NULL` guard means this only ever runs on a conversation's *first* classification — at that point `priority_manually_set` is always `false` and `priority` is always the schema default `p3` (nothing else writes `priority` before first classification per this codebase). Hardcoding `currentPriority: 'p3'` and `priorityManuallySet: false` here — rather than an extra `SELECT` — is correct precisely because `classifyIfUnset` is write-once; if `classifyIfUnset`'s write-once guard is ever loosened, this call must be revisited to read the live values instead.
+Note: `classifyIfUnset`'s `UPDATE ... WHERE subintent_id IS NULL` guard means this only ever runs on a conversation's _first_ classification — at that point `priority_manually_set` is always `false` and `priority` is always the schema default `p3` (nothing else writes `priority` before first classification per this codebase). Hardcoding `currentPriority: 'p3'` and `priorityManuallySet: false` here — rather than an extra `SELECT` — is correct precisely because `classifyIfUnset` is write-once; if `classifyIfUnset`'s write-once guard is ever loosened, this call must be revisited to read the live values instead.
 
 - [ ] **Step 4: Run the tests to verify they pass**
 
@@ -522,10 +534,12 @@ git commit -m "feat: apply subintent default priority on bot classification"
 ### Task 5: Wire auto-priority into `reclassifyConversation`
 
 **Files:**
+
 - Modify: `backend/src/agent/services/conversationsService.ts:542-598` (`reclassifyConversation`)
 - Test: `backend/tests/agent.reclassify.test.ts` (extend)
 
 **Interfaces:**
+
 - Consumes: `applySubintentDefaultPriority` (Task 3).
 - Produces: nothing new — wiring only.
 
@@ -534,74 +548,74 @@ git commit -m "feat: apply subintent default priority on bot classification"
 In `backend/tests/agent.reclassify.test.ts`, add two tests at the end of the `describe('PATCH /agent/conversations/:id/subintent', ...)` block (after the existing `'does not insert a message row...'` test, before the closing `});` at line 332):
 
 ```ts
-  it('applies the target subintent default priority when not manually set', async () => {
-    const workspaceId = await seedWorkspace();
-    const intentId = await seedIntent(workspaceId);
-    const fromSubintentId = await seedSubintent({ workspaceId, intentId });
-    const toSubintentId = await seedSubintent({ workspaceId, intentId, defaultPriority: 'p1' });
-    const playerId = await seedPlayer(workspaceId);
-    const conversationId = await seedConversation({
-      workspaceId,
-      playerId,
-      status: 'open',
-      subintentId: fromSubintentId,
-      priority: 'p3',
-    });
-    const { agentId, token } = await setupAgent(workspaceId);
-
-    await request(app)
-      .patch(`/conversations/${conversationId}/subintent`)
-      .set('Authorization', `Bearer ${token}`)
-      .set('X-Workspace-Id', workspaceId)
-      .send({ subintentId: toSubintentId })
-      .expect(200);
-
-    const { rows } = await ownerPool.query<{ priority: string }>(
-      `select priority from conversation where id = $1`,
-      [conversationId],
-    );
-    expect(rows[0]!.priority).toBe('p1');
-
-    const events = await ownerPool.query(
-      `select type, actor_id, payload from event where conversation_id = $1 and type = 'conversation_priority_changed'`,
-      [conversationId],
-    );
-    expect(events.rows).toHaveLength(1);
-    expect(events.rows[0]).toMatchObject({
-      actor_id: agentId,
-      payload: { from: 'p3', to: 'p1', reason: 'subintent_default' },
-    });
+it('applies the target subintent default priority when not manually set', async () => {
+  const workspaceId = await seedWorkspace();
+  const intentId = await seedIntent(workspaceId);
+  const fromSubintentId = await seedSubintent({ workspaceId, intentId });
+  const toSubintentId = await seedSubintent({ workspaceId, intentId, defaultPriority: 'p1' });
+  const playerId = await seedPlayer(workspaceId);
+  const conversationId = await seedConversation({
+    workspaceId,
+    playerId,
+    status: 'open',
+    subintentId: fromSubintentId,
+    priority: 'p3',
   });
+  const { agentId, token } = await setupAgent(workspaceId);
 
-  it('does not override a manually-set priority on reclassify', async () => {
-    const workspaceId = await seedWorkspace();
-    const intentId = await seedIntent(workspaceId);
-    const fromSubintentId = await seedSubintent({ workspaceId, intentId });
-    const toSubintentId = await seedSubintent({ workspaceId, intentId, defaultPriority: 'p1' });
-    const playerId = await seedPlayer(workspaceId);
-    const conversationId = await seedConversation({
-      workspaceId,
-      playerId,
-      status: 'open',
-      subintentId: fromSubintentId,
-      priority: 'p4',
-      priorityManuallySet: true,
-    });
-    const { token } = await setupAgent(workspaceId);
+  await request(app)
+    .patch(`/conversations/${conversationId}/subintent`)
+    .set('Authorization', `Bearer ${token}`)
+    .set('X-Workspace-Id', workspaceId)
+    .send({ subintentId: toSubintentId })
+    .expect(200);
 
-    await request(app)
-      .patch(`/conversations/${conversationId}/subintent`)
-      .set('Authorization', `Bearer ${token}`)
-      .set('X-Workspace-Id', workspaceId)
-      .send({ subintentId: toSubintentId })
-      .expect(200);
+  const { rows } = await ownerPool.query<{ priority: string }>(
+    `select priority from conversation where id = $1`,
+    [conversationId],
+  );
+  expect(rows[0]!.priority).toBe('p1');
 
-    const { rows } = await ownerPool.query<{ priority: string }>(
-      `select priority from conversation where id = $1`,
-      [conversationId],
-    );
-    expect(rows[0]!.priority).toBe('p4');
+  const events = await ownerPool.query(
+    `select type, actor_id, payload from event where conversation_id = $1 and type = 'conversation_priority_changed'`,
+    [conversationId],
+  );
+  expect(events.rows).toHaveLength(1);
+  expect(events.rows[0]).toMatchObject({
+    actor_id: agentId,
+    payload: { from: 'p3', to: 'p1', reason: 'subintent_default' },
   });
+});
+
+it('does not override a manually-set priority on reclassify', async () => {
+  const workspaceId = await seedWorkspace();
+  const intentId = await seedIntent(workspaceId);
+  const fromSubintentId = await seedSubintent({ workspaceId, intentId });
+  const toSubintentId = await seedSubintent({ workspaceId, intentId, defaultPriority: 'p1' });
+  const playerId = await seedPlayer(workspaceId);
+  const conversationId = await seedConversation({
+    workspaceId,
+    playerId,
+    status: 'open',
+    subintentId: fromSubintentId,
+    priority: 'p4',
+    priorityManuallySet: true,
+  });
+  const { token } = await setupAgent(workspaceId);
+
+  await request(app)
+    .patch(`/conversations/${conversationId}/subintent`)
+    .set('Authorization', `Bearer ${token}`)
+    .set('X-Workspace-Id', workspaceId)
+    .send({ subintentId: toSubintentId })
+    .expect(200);
+
+  const { rows } = await ownerPool.query<{ priority: string }>(
+    `select priority from conversation where id = $1`,
+    [conversationId],
+  );
+  expect(rows[0]!.priority).toBe('p4');
+});
 ```
 
 - [ ] **Step 2: Run the tests to verify they fail**
@@ -614,31 +628,31 @@ Expected: FAIL on the first new test — priority stays `p3`, no `conversation_p
 In `backend/src/agent/services/conversationsService.ts`, add `applySubintentDefaultPriority` to the import from `'../../domain/conversations/index.ts'` (line 16-20, alongside `postMessage`/`toAgentView`), and select `priority`/`priorityManuallySet` in `reclassifyConversation`'s existing lookup (lines 548-556):
 
 ```ts
-    const [conv] = await tx
-      .select({
-        id: conversation.id,
-        subintentId: conversation.subintentId,
-        status: conversation.status,
-        priority: conversation.priority,
-        priorityManuallySet: conversation.priorityManuallySet,
-      })
-      .from(conversation)
-      .where(eq(conversation.id, conversationId))
-      .limit(1);
+const [conv] = await tx
+  .select({
+    id: conversation.id,
+    subintentId: conversation.subintentId,
+    status: conversation.status,
+    priority: conversation.priority,
+    priorityManuallySet: conversation.priorityManuallySet,
+  })
+  .from(conversation)
+  .where(eq(conversation.id, conversationId))
+  .limit(1);
 ```
 
 Then, after the existing `UPDATE conversation SET subintentId, classificationSource` (lines 572-575) and before the `appendEvent` call for `conversation_reclassified` (line 577), add:
 
 ```ts
-    await applySubintentDefaultPriority(tx, {
-      workspaceId: ctx.workspaceId,
-      conversationId,
-      subintentId,
-      currentPriority: conv.priority,
-      priorityManuallySet: conv.priorityManuallySet,
-      actorId: ctx.agentId,
-      actorType: 'agent',
-    });
+await applySubintentDefaultPriority(tx, {
+  workspaceId: ctx.workspaceId,
+  conversationId,
+  subintentId,
+  currentPriority: conv.priority,
+  priorityManuallySet: conv.priorityManuallySet,
+  actorId: ctx.agentId,
+  actorType: 'agent',
+});
 ```
 
 - [ ] **Step 4: Run the tests to verify they pass**
@@ -658,6 +672,7 @@ git commit -m "feat: apply subintent default priority on agent reclassify"
 ### Task 6: Manual priority edit — service, route, controller, openapi
 
 **Files:**
+
 - Modify: `backend/src/agent/services/conversationsService.ts` (new `setConversationPriority`, after `reclassifyConversation`)
 - Modify: `backend/src/agent/controllers/conversationsController.ts` (new handler, after `reclassifyConversationHandler`)
 - Modify: `backend/src/agent/routers/conversationsRouter.ts` (new route)
@@ -665,6 +680,7 @@ git commit -m "feat: apply subintent default priority on agent reclassify"
 - Test: `backend/tests/agent.priority.test.ts` (new, modeled on `agent.reclassify.test.ts`)
 
 **Interfaces:**
+
 - Consumes: `withWorkspace`, `appendEvent`, `appendChangeLog` (same imports already in `conversationsService.ts`).
 - Produces: `setConversationPriority(ctx: AgentContext, conversationId: string, priority: 'p1'|'p2'|'p3'|'p4'): Promise<SetPriorityResult>` where `SetPriorityResult = { ok: true; updated: boolean } | { ok: false; reason: 'not_found' }`. Consumed by the controller in this task and, later, nothing else in this plan (frontend calls the HTTP route, not this function directly).
 
@@ -886,8 +902,7 @@ In `backend/src/agent/services/conversationsService.ts`, add after `reclassifyCo
 
 ```ts
 export type SetPriorityResult =
-  | { ok: true; updated: boolean; status: string }
-  | { ok: false; reason: 'not_found' };
+  { ok: true; updated: boolean; status: string } | { ok: false; reason: 'not_found' };
 
 export async function setConversationPriority(
   ctx: AgentContext,
@@ -987,12 +1002,14 @@ registry.registerPath({
   path: '/agent/conversations/{id}/priority',
   summary: 'Agent Set Conversation Priority',
   description:
-    'Sets a conversation\'s priority directly. Marks it manually-set, which permanently prevents subintent-classification auto-priority from overwriting it again. No-op (updated: false) when the requested value already matches.',
+    "Sets a conversation's priority directly. Marks it manually-set, which permanently prevents subintent-classification auto-priority from overwriting it again. No-op (updated: false) when the requested value already matches.",
   security: [{ [bearerAgentJwt.name]: [] }],
   request: {
     params: z.object({ id: z.uuid() }),
     body: {
-      content: { 'application/json': { schema: z.object({ priority: z.enum(['p1', 'p2', 'p3', 'p4']) }) } },
+      content: {
+        'application/json': { schema: z.object({ priority: z.enum(['p1', 'p2', 'p3', 'p4']) }) },
+      },
     },
   },
   responses: {
@@ -1032,10 +1049,12 @@ git commit -m "feat: add PATCH /agent/conversations/:id/priority"
 ### Task 7: Thread `priority` through the conversation-detail read path
 
 **Files:**
+
 - Modify: `packages/types/src/agent-context.ts:17-32` (`AgentConversationDetail`)
 - Modify: `backend/src/agent/services/conversationContextService.ts:38-90` (`getConversationDetail`)
 
 **Interfaces:**
+
 - Consumes: `conversation.priority` (existing column).
 - Produces: `AgentConversationDetail.priority: ConversationPriorityValue`, consumed by Task 10 (`ConversationDetailPane.tsx`).
 
@@ -1085,9 +1104,11 @@ git commit -m "feat: include priority in conversation detail response"
 ### Task 8: Frontend API client — `setConversationPriority`
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/agent-console/api/agentApi.ts`
 
 **Interfaces:**
+
 - Produces: `setConversationPriority(token: string, conversationId: string, priority: string): Promise<{ updated: boolean }>` — consumed by Task 9 (`PriorityPicker.tsx`).
 
 - [ ] **Step 1: Add the function**
@@ -1124,9 +1145,11 @@ git commit -m "feat: add setConversationPriority API client function"
 ### Task 9: `PriorityPicker` component
 
 **Files:**
+
 - Create: `frontend/src/surfaces/agent-console/pages/Inbox/components/PriorityPicker.tsx`
 
 **Interfaces:**
+
 - Consumes: `setConversationPriority` (Task 8), `PRIORITY_BADGE_VARIANT` (exported from `ConversationRow.tsx:24-32`), `ConversationPriorityValue` (`@support/types`).
 - Produces: `<PriorityPicker token conversationId currentPriority />` — consumed by Task 10 (`ThreadPanel.tsx`).
 
@@ -1216,11 +1239,13 @@ git commit -m "feat: add PriorityPicker component"
 ### Task 10: Wire `PriorityPicker` into the thread header
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/agent-console/pages/Inbox/components/ThreadPanel.tsx`
 - Modify: `frontend/src/surfaces/agent-console/components/ConversationDetailPane.tsx`
 - Test: `frontend/src/surfaces/agent-console/pages/Inbox/components/ThreadPanel.test.tsx` (extend, if it already covers `SubintentPicker`/`AssignPicker` rendering — check the file first; add an equivalent case)
 
 **Interfaces:**
+
 - Consumes: `PriorityPicker` (Task 9), `AgentConversationDetail.priority` / `AgentConversationSummary.priority` (Task 7 / existing).
 
 - [ ] **Step 1: Check the existing ThreadPanel test for the pattern to mirror**
@@ -1250,10 +1275,14 @@ Add `priority` to the function's destructured props and its type (after `status`
 Render it in the header, right after the status badge (after line 371, before the `SubintentPicker` block at line 372-383):
 
 ```tsx
-        {status && <Badge variant={STATUS_BADGE_VARIANT[status]}>{formatStatus(status)}</Badge>}
-        {conversationId && priority && (
-          <PriorityPicker token={token} conversationId={conversationId} currentPriority={priority} />
-        )}
+{
+  status && <Badge variant={STATUS_BADGE_VARIANT[status]}>{formatStatus(status)}</Badge>;
+}
+{
+  conversationId && priority && (
+    <PriorityPicker token={token} conversationId={conversationId} currentPriority={priority} />
+  );
+}
 ```
 
 - [ ] **Step 3: Pass `priority` from `ConversationDetailPane`**
@@ -1261,13 +1290,13 @@ Render it in the header, right after the status badge (after line 371, before th
 In `frontend/src/surfaces/agent-console/components/ConversationDetailPane.tsx`, add a `priority` derivation alongside the existing `status`/`assignedAgentId` derivations (after line 53):
 
 ```ts
-  const priority = summary?.priority ?? detail.data?.priority;
+const priority = summary?.priority ?? detail.data?.priority;
 ```
 
 And pass it to `<ThreadPanel>` (alongside the existing `status={status}` prop, around line 72):
 
 ```tsx
-        priority={priority}
+priority = { priority };
 ```
 
 - [ ] **Step 4: Typecheck**

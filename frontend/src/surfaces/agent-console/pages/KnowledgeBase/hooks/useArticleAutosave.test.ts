@@ -28,8 +28,7 @@ describe('useArticleAutosave', () => {
     const onCreated = vi.fn();
 
     const { result, rerender } = renderHook(
-      (fields) =>
-        useArticleAutosave({ token: 't', articleId: null, onCreated, fields }),
+      (fields) => useArticleAutosave({ token: 't', articleId: null, onCreated, fields }),
       { initialProps: { title: '', body: '', keywords: [], intentId: undefined } },
     );
 
@@ -62,8 +61,7 @@ describe('useArticleAutosave', () => {
     });
 
     const { result, rerender } = renderHook(
-      (fields) =>
-        useArticleAutosave({ token: 't', articleId: 'a1', onCreated: vi.fn(), fields }),
+      (fields) => useArticleAutosave({ token: 't', articleId: 'a1', onCreated: vi.fn(), fields }),
       { initialProps: { title: 'T', body: 'B', keywords: [], intentId: undefined } },
     );
     expect(result.current.status).toBe('saved');

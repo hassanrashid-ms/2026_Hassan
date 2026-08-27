@@ -4,14 +4,17 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AgentConsoleShell } from './AgentConsoleShell.tsx';
-import { loadAgentSession, saveAgentSession, type StoredAgentSession } from '../lib/agentSession.ts';
+import {
+  loadAgentSession,
+  saveAgentSession,
+  type StoredAgentSession,
+} from '../lib/agentSession.ts';
 import { fetchMemberships, fetchPresence, updatePresence } from '../api/agentApi.ts';
 import { createSocket } from '../../../features/chat/api/socket.ts';
 
 vi.mock('../lib/agentSession.ts', async () => {
-  const actual = await vi.importActual<typeof import('../lib/agentSession.ts')>(
-    '../lib/agentSession.ts',
-  );
+  const actual =
+    await vi.importActual<typeof import('../lib/agentSession.ts')>('../lib/agentSession.ts');
   return { ...actual, loadAgentSession: vi.fn(actual.loadAgentSession) };
 });
 

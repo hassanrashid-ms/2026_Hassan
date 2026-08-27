@@ -26,6 +26,7 @@
 ### Task 1: MinIO infrastructure, env vars, and the storage choke point
 
 **Files:**
+
 - Modify: `docker-compose.yml`
 - Modify: `backend/src/env.ts`
 - Modify: `.env.example`, `.env.test.example`, `.env`, `.env.test` (local, untracked — see step 6)
@@ -36,6 +37,7 @@
 - Test: `backend/tests/storage.presign.test.ts`
 
 **Interfaces:**
+
 - Produces (used by every later task):
   - `getS3Client(): S3Client` — `backend/src/shared/storage/s3Client.ts`
   - `presignPutObject(input: { key: string; contentType: string; contentLength: number }): Promise<{ url: string; expiresAt: string }>` — `backend/src/shared/storage/presign.ts`
@@ -56,20 +58,20 @@ cd backend && pnpm add @aws-sdk/client-s3@^3 @aws-sdk/s3-request-presigner@^3
 Add this service to the existing `services:` block (alongside `postgres` and `redis`), and the volume to the existing `volumes:` block:
 
 ```yaml
-  minio:
-    image: minio/minio
-    container_name: support-minio
-    environment:
-      MINIO_ROOT_USER: support_minio
-      MINIO_ROOT_PASSWORD: support_minio_password
-    ports: ['9000:9000', '9001:9001']
-    command: ['server', '/data', '--console-address', ':9001']
-    volumes: ['support-miniodata:/data']
-    healthcheck:
-      test: ['CMD', 'curl', '-f', 'http://localhost:9000/minio/health/live']
-      interval: 5s
-      timeout: 3s
-      retries: 20
+minio:
+  image: minio/minio
+  container_name: support-minio
+  environment:
+    MINIO_ROOT_USER: support_minio
+    MINIO_ROOT_PASSWORD: support_minio_password
+  ports: ['9000:9000', '9001:9001']
+  command: ['server', '/data', '--console-address', ':9001']
+  volumes: ['support-miniodata:/data']
+  healthcheck:
+    test: ['CMD', 'curl', '-f', 'http://localhost:9000/minio/health/live']
+    interval: 5s
+    timeout: 3s
+    retries: 20
 ```
 
 ```yaml
@@ -259,7 +261,12 @@ export {};
 const { loadRootEnv } = await import('../src/env/loadRootEnv.ts');
 loadRootEnv(import.meta.url);
 
-import { CreateBucketCommand, HeadBucketCommand, NotFound, PutBucketCorsCommand } from '@aws-sdk/client-s3';
+import {
+  CreateBucketCommand,
+  HeadBucketCommand,
+  NotFound,
+  PutBucketCorsCommand,
+} from '@aws-sdk/client-s3';
 import { getEnv } from '../src/env.ts';
 import { getS3Client } from '../src/shared/storage/s3Client.ts';
 
@@ -297,7 +304,9 @@ async function main() {
       },
     }),
   );
-  console.log('CORS applied. Bucket has no public-read policy by default — nothing further needed.');
+  console.log(
+    'CORS applied. Bucket has no public-read policy by default — nothing further needed.',
+  );
 }
 
 await main();
@@ -404,11 +413,13 @@ git commit -m "Add MinIO service and S3 storage choke point"
 ### Task 2: `attachment` table
 
 **Files:**
+
 - Modify: `backend/src/shared/db/schema/conversations.ts`
 - Modify: `backend/tests/helpers/db.ts`
 - Test: `backend/tests/domain.postMessage.test.ts` (extend, not replace)
 
 **Interfaces:**
+
 - Consumes: nothing new.
 - Produces: `attachment` Drizzle table export from `backend/src/shared/db/schema/conversations.ts` (also re-exported from `backend/src/shared/db/schema/index.ts` via its existing `export * from './conversations.ts'`), columns `id, workspaceId, messageId, storageKey, mimeType, byteSize, createdAt`.
 
@@ -509,6 +520,7 @@ git commit -m "Add attachment table, parented to message"
 ### Task 3: `POST /agent/uploads` and `DELETE /agent/uploads/:key`
 
 **Files:**
+
 - Create: `backend/src/agent/routers/uploadsRouter.ts`
 - Create: `backend/src/agent/controllers/uploadsController.ts`
 - Create: `backend/src/agent/services/uploadsService.ts`
@@ -518,6 +530,7 @@ git commit -m "Add attachment table, parented to message"
 - Test: `backend/tests/agent.uploads.test.ts`
 
 **Interfaces:**
+
 - Consumes: `AgentContext` type from `backend/src/shared/middleware/requireAgentSession.ts` (`{ agentId, workspaceId, isAdmin }`); `sendError` from `backend/src/errors.ts`.
 - Produces (used by Task 4 and the frontend Task 7):
   - `RequestUploadBody = z.object({ filename: z.string().min(1).max(255), content_type: z.string(), byte_size: z.number().int().positive() })` — `packages/types/src/chat.ts`
@@ -591,7 +604,10 @@ async function seedAgentToken(workspaceId: string) {
     `insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`,
     [workspaceId, agentId],
   );
-  return { agentId, token: await signAgentSession({ agent_id: agentId, workspace_id: workspaceId }) };
+  return {
+    agentId,
+    token: await signAgentSession({ agent_id: agentId, workspace_id: workspaceId }),
+  };
 }
 
 describe('POST /agent/uploads', () => {
@@ -710,7 +726,11 @@ export async function requestUpload(
   ctx: AgentContext,
   body: z.infer<typeof RequestUploadBody>,
 ): Promise<RequestUploadResult> {
-  if (!ALLOWED_IMAGE_MIME_TYPES.includes(body.content_type as (typeof ALLOWED_IMAGE_MIME_TYPES)[number])) {
+  if (
+    !ALLOWED_IMAGE_MIME_TYPES.includes(
+      body.content_type as (typeof ALLOWED_IMAGE_MIME_TYPES)[number],
+    )
+  ) {
     return { outcome: 'invalid_media_type' };
   }
   if (body.byte_size > MAX_ATTACHMENT_BYTES) {
@@ -770,7 +790,9 @@ export const postUploadRequestHandler: RequestHandler = async (req, res) => {
     sendError(res, 422, 'invalid_request', 'byte_size exceeds the 10 MB limit.');
     return;
   }
-  res.status(200).json({ key: result.key, upload_url: result.upload_url, expires_at: result.expires_at });
+  res
+    .status(200)
+    .json({ key: result.key, upload_url: result.upload_url, expires_at: result.expires_at });
 };
 
 export const deleteUploadHandler: RequestHandler = async (req, res) => {
@@ -799,10 +821,14 @@ export const uploadsRouter = Router();
 uploadsRouter.post('/uploads', postUploadRequestHandler);
 // :key contains slashes (pending/{ws}/{agent}/{uuid}.ext) — Express 5 needs the
 // wildcard form to capture the rest of the path in one param.
-uploadsRouter.delete('/uploads/{*key}', (req, res, next) => {
-  req.params.key = Array.isArray(req.params.key) ? req.params.key.join('/') : req.params.key;
-  next();
-}, deleteUploadHandler);
+uploadsRouter.delete(
+  '/uploads/{*key}',
+  (req, res, next) => {
+    req.params.key = Array.isArray(req.params.key) ? req.params.key.join('/') : req.params.key;
+    next();
+  },
+  deleteUploadHandler,
+);
 ```
 
 In `backend/src/agent/router.ts`, add the import and mount it alongside the other routers (after `messagesRouter`):
@@ -881,12 +907,14 @@ git commit -m "Add presigned upload request and cancel endpoints"
 ### Task 4: Claim the attachment on `POST /agent/messages`
 
 **Files:**
+
 - Modify: `packages/types/src/chat.ts` (`SendAgentMessageBody`, `AgentMessageView`)
 - Modify: `backend/src/agent/services/messagesService.ts`
 - Modify: `backend/src/agent/controllers/messagesController.ts`
 - Test: `backend/tests/agent.messages.test.ts` (extend)
 
 **Interfaces:**
+
 - Consumes: `headObject`, `copyObject`, `deleteObject`, `ALLOWED_IMAGE_MIME_TYPES`, `MAX_ATTACHMENT_BYTES` from Task 1; `attachment` table from Task 2.
 - Produces: `AgentMessageView.attachment?: { id: string; filename: string; mime_type: string; byte_size: number } | null` (URL is added later, in Task 5's read path — this task only inserts the row and returns its non-URL fields on the send response).
 
@@ -910,7 +938,7 @@ export const SendAgentMessageBody = z.object({
 });
 ```
 
-Change `body: z.string().min(1).max(4000)` to accept an attachment-only send with no typed text — the min-length-1 stays on the wire schema, but the *filename* becomes the body server-side when the caller sends an attachment with an empty/whitespace body. Loosen the schema's `body` to allow empty when `attachment` is present:
+Change `body: z.string().min(1).max(4000)` to accept an attachment-only send with no typed text — the min-length-1 stays on the wire schema, but the _filename_ becomes the body server-side when the caller sends an attachment with an empty/whitespace body. Loosen the schema's `body` to allow empty when `attachment` is present:
 
 ```ts
 export const SendAgentMessageBody = z
@@ -939,7 +967,13 @@ And extend `AgentMessageView`:
 export type AgentMessageView = PlayerMessageView & {
   author_agent_id: string | null;
   visibility: 'public' | 'internal';
-  attachment: { id: string; filename: string; mime_type: string; byte_size: number; url: string | null } | null;
+  attachment: {
+    id: string;
+    filename: string;
+    mime_type: string;
+    byte_size: number;
+    url: string | null;
+  } | null;
 };
 ```
 
@@ -958,7 +992,11 @@ describe('POST /agent/messages with an attachment', () => {
   async function uploadFixtureImage(workspaceId: string, agentId: string) {
     const key = `pending/${workspaceId}/${agentId}/${crypto.randomUUID()}.png`;
     const body = Buffer.from('fake-png-bytes');
-    const { url } = await presignPutObject({ key, contentType: 'image/png', contentLength: body.length });
+    const { url } = await presignPutObject({
+      key,
+      contentType: 'image/png',
+      contentLength: body.length,
+    });
     await fetch(url, {
       method: 'PUT',
       headers: { 'Content-Type': 'image/png', 'Content-Length': String(body.length) },
@@ -1074,7 +1112,10 @@ export async function sendAgentMessage(
   if (body.attachment) {
     const real = await headObject(body.attachment.key);
     if (!real) return { outcome: 'attachment_not_found' };
-    if (real.contentType !== body.attachment.mime_type || real.contentLength !== body.attachment.byte_size) {
+    if (
+      real.contentType !== body.attachment.mime_type ||
+      real.contentLength !== body.attachment.byte_size
+    ) {
       return { outcome: 'attachment_mismatch' };
     }
     const extension = body.attachment.key.slice(body.attachment.key.lastIndexOf('.'));
@@ -1109,7 +1150,8 @@ export async function sendAgentMessage(
       visibility: body.visibility,
     });
 
-    let attachmentRow: { id: string; filename: string; mimeType: string; byteSize: number } | null = null;
+    let attachmentRow: { id: string; filename: string; mimeType: string; byteSize: number } | null =
+      null;
     if (body.attachment && claimedDestKey) {
       const [insertedAttachment] = await tx
         .insert(attachment)
@@ -1184,19 +1226,19 @@ export async function sendAgentMessage(
 In `backend/src/agent/controllers/messagesController.ts`, in `postAgentMessageHandler`, add before the existing `outcome === 'forbidden'` check:
 
 ```ts
-  if (result.outcome === 'attachment_not_found') {
-    sendError(res, 422, 'attachment_not_found', 'The uploaded file was not found or has expired.');
-    return;
-  }
-  if (result.outcome === 'attachment_mismatch') {
-    sendError(
-      res,
-      422,
-      'attachment_mismatch',
-      'The uploaded file does not match its declared type or size.',
-    );
-    return;
-  }
+if (result.outcome === 'attachment_not_found') {
+  sendError(res, 422, 'attachment_not_found', 'The uploaded file was not found or has expired.');
+  return;
+}
+if (result.outcome === 'attachment_mismatch') {
+  sendError(
+    res,
+    422,
+    'attachment_mismatch',
+    'The uploaded file does not match its declared type or size.',
+  );
+  return;
+}
 ```
 
 - [ ] **Step 6: Run the test to verify it passes**
@@ -1234,12 +1276,14 @@ git commit -m "Claim uploaded attachments when an agent message sends"
 ### Task 5: Sign attachment URLs on the message-list read path
 
 **Files:**
+
 - Modify: `backend/src/agent/services/conversationsService.ts`
 - Modify: `backend/src/domain/conversations/serializers.ts`
 - Modify: `backend/src/domain/conversations/postMessage.ts` (`PostedMessageRow` type only)
 - Test: `backend/tests/agent.conversations.test.ts` (find/extend the existing test file covering `GET /conversations/:id/messages` — if none exists under that exact name, add the test into whichever file currently covers `getConversationMessagesHandler`; check with `grep -rl getConversationMessagesHandler backend/tests` before creating a new file)
 
 **Interfaces:**
+
 - Consumes: `presignGetObject` from Task 1; `attachment` table from Task 2.
 - Produces: `getAgentConversationMessages` now returns `AgentMessageView[]` with `attachment.url` populated (or `null` if signing/HEAD failed), completing the read side Task 4 left as `url: null`.
 
@@ -1311,7 +1355,12 @@ describe('GET /agent/conversations/:id/messages with an attachment', () => {
       .send({
         conversation_id: conversationId,
         body: '',
-        attachment: { key, filename: 'shot.png', mime_type: 'image/png', byte_size: fileBody.length },
+        attachment: {
+          key,
+          filename: 'shot.png',
+          mime_type: 'image/png',
+          byte_size: fileBody.length,
+        },
       })
       .expect(200);
 
@@ -1446,6 +1495,7 @@ git commit -m "Sign attachment URLs on the conversation message-list read path"
 ### Task 6: Frontend — Composer, MessageBody, and ThreadPanel wiring
 
 **Files:**
+
 - Modify: `frontend/src/features/chat/components/types.ts`
 - Modify: `frontend/src/features/chat/components/Composer.tsx`
 - Modify: `frontend/src/features/chat/components/MessageBody.tsx`
@@ -1457,6 +1507,7 @@ git commit -m "Sign attachment URLs on the conversation message-list read path"
 - Test: `frontend/src/surfaces/agent-console/pages/Inbox/components/ThreadPanel.test.tsx` (extend)
 
 **Interfaces:**
+
 - Consumes: `POST /agent/uploads`, `DELETE /agent/uploads/:key`, `POST /agent/messages` (with `attachment`), `GET /agent/conversations/:id/messages` (with `attachment.url`) from Tasks 3-5.
 - Produces: `Composer`'s `onSend` signature gains a third argument; `ChatMessage` gains an `attachment` field — both consumed only within this task, since this phase wires the agent console exclusively.
 
@@ -1595,7 +1646,12 @@ describe('Composer attachments', () => {
     });
     const onCancelUpload = vi.fn();
     render(
-      <Composer onSend={() => {}} allowAttachments onUpload={onUpload} onCancelUpload={onCancelUpload} />,
+      <Composer
+        onSend={() => {}}
+        allowAttachments
+        onUpload={onUpload}
+        onCancelUpload={onCancelUpload}
+      />,
     );
 
     fireEvent.change(screen.getByLabelText('Attach image'), {
@@ -1631,7 +1687,11 @@ export type UploadedAttachment = {
 };
 
 type ComposerProps = {
-  onSend: (body: string, visibility?: 'public' | 'internal', attachment?: UploadedAttachment) => void;
+  onSend: (
+    body: string,
+    visibility?: 'public' | 'internal',
+    attachment?: UploadedAttachment,
+  ) => void;
   disabled?: boolean;
   allowVisibilityToggle?: boolean;
   placeholder?: string;
@@ -1690,7 +1750,11 @@ export function Composer({
     <div className="flex shrink-0 flex-col gap-2 border-t border-muted/20 bg-bg p-2">
       {pendingAttachment && previewUrl && (
         <div className="flex items-center gap-2">
-          <img src={previewUrl} alt={pendingAttachment.filename} className="h-14 w-14 rounded-md object-cover" />
+          <img
+            src={previewUrl}
+            alt={pendingAttachment.filename}
+            className="h-14 w-14 rounded-md object-cover"
+          />
           <button
             type="button"
             aria-label="Remove attachment"
@@ -1815,7 +1879,11 @@ export function MessageBody({
   attachment?: ChatAttachment | null;
   dark?: boolean;
 }) {
-  const text = !MARKDOWN_AUTHORS.has(authorType) ? <>{body}</> : <ArticleBody markdown={body} dark={dark} />;
+  const text = !MARKDOWN_AUTHORS.has(authorType) ? (
+    <>{body}</>
+  ) : (
+    <ArticleBody markdown={body} dark={dark} />
+  );
 
   if (!attachment) return text;
 
@@ -1831,7 +1899,9 @@ export function MessageBody({
           }}
         />
       ) : (
-        <span className="text-xs italic opacity-75">Attachment unavailable — {attachment.filename}</span>
+        <span className="text-xs italic opacity-75">
+          Attachment unavailable — {attachment.filename}
+        </span>
       )}
     </div>
   );
@@ -1848,7 +1918,13 @@ it('renders an image for a message with an attachment', () => {
     <MessageBody
       authorType="agent"
       body="screenshot.png"
-      attachment={{ id: 'a1', filename: 'screenshot.png', mimeType: 'image/png', byteSize: 3, url: 'https://example.test/x' }}
+      attachment={{
+        id: 'a1',
+        filename: 'screenshot.png',
+        mimeType: 'image/png',
+        byteSize: 3,
+        url: 'https://example.test/x',
+      }}
     />,
   );
   expect(screen.getByAltText('screenshot.png')).toHaveAttribute('src', 'https://example.test/x');
@@ -1859,7 +1935,13 @@ it('renders a fallback label when the attachment has no url', () => {
     <MessageBody
       authorType="agent"
       body="screenshot.png"
-      attachment={{ id: 'a1', filename: 'screenshot.png', mimeType: 'image/png', byteSize: 3, url: null }}
+      attachment={{
+        id: 'a1',
+        filename: 'screenshot.png',
+        mimeType: 'image/png',
+        byteSize: 3,
+        url: null,
+      }}
     />,
   );
   expect(screen.getByText(/Attachment unavailable/)).toBeInTheDocument();
@@ -1930,7 +2012,12 @@ const send = useMutation({
       body,
       visibility,
       attachment
-        ? { key: attachment.key, filename: attachment.filename, mimeType: attachment.mimeType, byteSize: attachment.byteSize }
+        ? {
+            key: attachment.key,
+            filename: attachment.filename,
+            mimeType: attachment.mimeType,
+            byteSize: attachment.byteSize,
+          }
         : undefined,
     ),
   onMutate: ({ body, visibility }) => {
@@ -2031,7 +2118,13 @@ it('sends an attachment through the composer', async () => {
       read_at: null,
       created_at: new Date().toISOString(),
       article_id: null,
-      attachment: { id: 'att1', filename: 'shot.png', mime_type: 'image/png', byte_size: 3, url: null },
+      attachment: {
+        id: 'att1',
+        filename: 'shot.png',
+        mime_type: 'image/png',
+        byte_size: 3,
+        url: null,
+      },
     },
   });
 
@@ -2042,13 +2135,20 @@ it('sends an attachment through the composer', async () => {
   await screen.findByAltText('shot.png');
   fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
-  await waitFor(() => expect(sendAgentMessage).toHaveBeenCalledWith(
-    expect.any(String),
-    expect.any(String),
-    '',
-    undefined,
-    { key: 'pending/ws/agent/uuid.png', filename: 'shot.png', mimeType: 'image/png', byteSize: 3 },
-  ));
+  await waitFor(() =>
+    expect(sendAgentMessage).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(String),
+      '',
+      undefined,
+      {
+        key: 'pending/ws/agent/uuid.png',
+        filename: 'shot.png',
+        mimeType: 'image/png',
+        byteSize: 3,
+      },
+    ),
+  );
 });
 ```
 

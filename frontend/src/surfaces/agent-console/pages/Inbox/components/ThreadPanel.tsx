@@ -374,7 +374,11 @@ export function ThreadPanel({
         <span className="text-sm font-medium">{playerExternalId}</span>
         {status && <Badge variant={STATUS_BADGE_VARIANT[status]}>{formatStatus(status)}</Badge>}
         {conversationId && priority && (
-          <PriorityPicker token={token} conversationId={conversationId} currentPriority={priority} />
+          <PriorityPicker
+            token={token}
+            conversationId={conversationId}
+            currentPriority={priority}
+          />
         )}
         {conversationId && (
           <SubintentPicker

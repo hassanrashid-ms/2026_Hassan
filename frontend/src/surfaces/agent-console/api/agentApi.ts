@@ -104,13 +104,7 @@ export async function devLogin(agentId: string): Promise<DevLoginResponse> {
 }
 
 export type ConversationListFilter =
-  | 'unassigned'
-  | 'mine'
-  | 'agentAssigned'
-  | 'botHandling'
-  | 'escalated'
-  | 'resolved'
-  | 'closed';
+  'unassigned' | 'mine' | 'agentAssigned' | 'botHandling' | 'escalated' | 'resolved' | 'closed';
 
 export type TicketsQueryFilters = {
   q?: string;
@@ -312,10 +306,7 @@ export function fetchPresence(token: string): Promise<{ status: PresenceStatus }
   return call('/agent/presence', token);
 }
 
-export function updatePresence(
-  token: string,
-  status: 'online' | 'away',
-): Promise<void> {
+export function updatePresence(token: string, status: 'online' | 'away'): Promise<void> {
   return call('/agent/presence', token, {
     method: 'PATCH',
     body: JSON.stringify({ status }),

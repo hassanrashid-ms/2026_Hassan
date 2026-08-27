@@ -67,63 +67,63 @@ export function FormTable({
         {forms.data?.forms.length === 0 ? (
           <EmptyState message="Nothing to show" />
         ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Shown for</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="w-10" />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {forms.data?.forms.map((form) => (
-              <TableRow
-                key={form.id}
-                onClick={() => onSelect(form.id)}
-                className={cn('cursor-pointer', selectedId === form.id && 'bg-accent-soft')}
-              >
-                <TableCell className="font-medium">{form.name}</TableCell>
-                <TableCell>
-                  {form.mappedSubintentCount > 0 ? (
-                    <Badge variant="secondary">
-                      {form.mappedSubintentCount} subintent
-                      {form.mappedSubintentCount === 1 ? '' : 's'}
-                    </Badge>
-                  ) : (
-                    <span className="text-xs text-muted">Not shown</span>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <Badge variant={formStatusVariant(form)}>{formStatusLabel(form)}</Badge>
-                </TableCell>
-                <TableCell onClick={(e) => e.stopPropagation()}>
-                  {canArchive && form.archivedAt === null && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          aria-label={`Actions for ${form.name}`}
-                        >
-                          <EllipsisVertical className="size-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          onClick={() => setArchiveTarget({ id: form.id, name: form.name })}
-                        >
-                          Archive
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
-                </TableCell>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Shown for</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="w-10" />
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {forms.data?.forms.map((form) => (
+                <TableRow
+                  key={form.id}
+                  onClick={() => onSelect(form.id)}
+                  className={cn('cursor-pointer', selectedId === form.id && 'bg-accent-soft')}
+                >
+                  <TableCell className="font-medium">{form.name}</TableCell>
+                  <TableCell>
+                    {form.mappedSubintentCount > 0 ? (
+                      <Badge variant="secondary">
+                        {form.mappedSubintentCount} subintent
+                        {form.mappedSubintentCount === 1 ? '' : 's'}
+                      </Badge>
+                    ) : (
+                      <span className="text-xs text-muted">Not shown</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={formStatusVariant(form)}>{formStatusLabel(form)}</Badge>
+                  </TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    {canArchive && form.archivedAt === null && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            aria-label={`Actions for ${form.name}`}
+                          >
+                            <EllipsisVertical className="size-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={() => setArchiveTarget({ id: form.id, name: form.name })}
+                          >
+                            Archive
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         )}
       </div>
       <ConfirmDialog

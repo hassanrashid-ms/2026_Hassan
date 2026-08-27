@@ -104,7 +104,7 @@ describe('getGlobalInbox', () => {
     expect(result.conversations.map((c) => c.id)).toEqual([open]);
   });
 
-  it('gives an admin every workspace, but still only their own assigned tickets, never every agent\'s', async () => {
+  it("gives an admin every workspace, but still only their own assigned tickets, never every agent's", async () => {
     const workspaceA = await seedWorkspace();
     const workspaceB = await seedWorkspace();
     const adminId = await seedAgent(undefined, { isAdmin: true });

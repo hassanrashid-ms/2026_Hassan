@@ -8,7 +8,10 @@ import type { StoredAgentSession } from '../../../lib/agentSession.ts';
 
 function renderWithClient(ui: React.ReactElement) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return { queryClient, ...render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>) };
+  return {
+    queryClient,
+    ...render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>),
+  };
 }
 
 // Team lead: can see Publish/Archive, same as admin — these tests exercise
@@ -462,9 +465,7 @@ describe('ArticleEditorSheet image upload', () => {
     // inserted image renders as its lexical decorator/placeholder node rather
     // than a real <img>. That the node landed at all, with the upload having
     // gone through finalizeArticleAttachment, is what proves the wiring works.
-    await waitFor(() =>
-      expect(document.querySelector('[data-lexical-decorator]')).toBeTruthy(),
-    );
+    await waitFor(() => expect(document.querySelector('[data-lexical-decorator]')).toBeTruthy());
     expect(finalizeSpy).toHaveBeenCalledWith('tok', 'art-1', {
       key: 'pending/ws/agent/uuid.png',
       filename: 'diagram.png',
@@ -502,9 +503,7 @@ describe('ArticleEditorSheet image upload', () => {
     );
     await userEvent.click(screen.getByRole('button', { name: 'Insert' }));
 
-    await waitFor(() =>
-      expect(document.querySelector('[data-lexical-decorator]')).toBeTruthy(),
-    );
+    await waitFor(() => expect(document.querySelector('[data-lexical-decorator]')).toBeTruthy());
     expect(finalizeSpy).not.toHaveBeenCalled();
   });
 });

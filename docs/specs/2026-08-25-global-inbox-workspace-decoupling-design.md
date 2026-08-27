@@ -5,6 +5,7 @@
 Currently, a regular agent's session JWT permanently binds them to a single `workspace_id`. If an agent supports multiple games (workspaces), they must completely log out and log back in to switch context. Furthermore, they cannot see a unified view of all tickets across all their assigned workspaces.
 
 This spec details the architectural changes required to:
+
 1. Decouple authentication from authorization so an agent can switch workspaces instantly without requiring a new JWT.
 2. Build a "Global Inbox" that aggregates active tickets across all workspaces an agent belongs to.
 3. Update the realtime socket architecture to stream updates from multiple workspaces into a single agent connection.
@@ -14,9 +15,11 @@ This generalizes a pattern that already exists for global admins (`2026-08-21-su
 ## 1. Session Model Change (Decoupling)
 
 **Agent JWT modification:**
+
 - Remove `workspace_id` from the regular agent's JWT. The JWT becomes `{ agent_id, is_admin: false }` — the same shape admin JWTs already use. Signing (`agentSession.ts`, HS256, `AGENT_SESSION_JWT_SECRET`, issuer `support-crm`, audience `support-agent-dev`) and TTL (12h) are unchanged. The JWT is strictly proof of identity (Authentication); it carries no authorization context.
 
 **Per-request authorization:**
+
 - The frontend passes the target workspace on every API request via the `X-Workspace-Id` header.
 - `resolveConsoleWorkspace` — currently admin-only — is generalized to run for all agents, replacing the branch in `requireAgentSession.ts` that trusted a JWT-embedded `workspace_id`. This merges the admin and regular-agent authorization paths into a single code path.
 - Before `withWorkspace()` opens the RLS transaction, the middleware authorizes the request:
@@ -24,6 +27,7 @@ This generalizes a pattern that already exists for global admins (`2026-08-21-su
 - If the agent is not an active member (row missing or `deactivated_at IS NOT NULL`), the request yields `404 Not Found` (RLS convention: "not yours" and "not there" are indistinguishable).
 
 **Authorization cache (Redis):**
+
 - The membership check above is cached in Redis, keyed `wsauth:{agent_id}:{workspace_id}`, value `{ role, deactivated }`, TTL 60s.
 - Cache hit → skip the Postgres query entirely; steady-state per-request cost is a Redis GET.
 - Cache miss → query Postgres, populate the cache.
@@ -31,12 +35,15 @@ This generalizes a pattern that already exists for global admins (`2026-08-21-su
 - This also means workspace-level deactivation now takes effect near-instantly, an improvement over today where a regular agent's JWT-embedded `workspace_id` is trusted for the life of the token.
 
 **Rollout / mixed-token window:**
+
 - JWT TTL is 12h, so old tokens (embedded `workspace_id`) and new tokens (identity-only) coexist during rollout. The middleware ignores a JWT's `workspace_id` claim if present — it authenticates identity as before but authorization always comes from the header + membership check. No forced logout is required; old tokens age out naturally.
 
 **Google OAuth integration:**
+
 - Unchanged from `2026-08-04-agent-auth-google-oauth.md`. Google provides the initial identity (ID token) at `/login`, verified and discarded in favor of our custom JWT. The custom JWT manages session identity; `X-Workspace-Id` + the membership check manage authorization context.
 
 **Explicitly out of scope (follow-up):**
+
 - Agent-level JWT revocation (a Redis denylist for full account deactivation/offboarding) is referenced as planned-but-unbuilt in the OAuth decision doc. The cache above only handles workspace-membership changes, not "this agent's account no longer exists." Not addressed in this spec — flagged so it isn't forgotten.
 
 ## 2. Workspace Switcher & Default Workspace
@@ -60,7 +67,7 @@ Because RLS is enforced via `app.workspace_id` per transaction, a single SQL que
 
 ## 4. Realtime Sockets
 
-An agent viewing Global Inbox must receive realtime updates whenever a new chat arrives in *any* of their active workspaces.
+An agent viewing Global Inbox must receive realtime updates whenever a new chat arrives in _any_ of their active workspaces.
 
 - **Single socket, multiple rooms:** the frontend establishes one socket connection with its JWT. The backend queries the agent's active workspace memberships during handshake and joins the socket to `workspace:{id}:inbox` for each — the same room-join pattern already used for admins.
 - **Switching the active workspace in the UI does not require rejoining rooms** — the socket is already subscribed to all of them at connect time; only which room's events the UI foregrounds changes. Room membership is cheap in Socket.io even across dozens of rooms, unlike the DB fan-out in section 3.

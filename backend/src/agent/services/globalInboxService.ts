@@ -4,7 +4,10 @@ import type { AgentConversationSummary } from '@support/types';
 import { agent, conversation, message, player } from '../../shared/db/schema/index.ts';
 import { withWorkspace } from '../../shared/db/withWorkspace.ts';
 import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts';
-import { listActiveMembershipsForAgent, listAllWorkspaces } from '../../shared/db/workspaceMembership.ts';
+import {
+  listActiveMembershipsForAgent,
+  listAllWorkspaces,
+} from '../../shared/db/workspaceMembership.ts';
 import { getConversationTags } from './tagsService.ts';
 import { logger } from '../../shared/logging/logger.ts';
 
@@ -52,10 +55,7 @@ async function getWorkspaceInboxSlice(
       .innerJoin(player, eq(player.id, conversation.playerId))
       .leftJoin(agent, eq(agent.id, conversation.assignedAgentId))
       .where(
-        and(
-          inArray(conversation.status, OPEN_STATUSES),
-          eq(conversation.assignedAgentId, agentId),
-        ),
+        and(inArray(conversation.status, OPEN_STATUSES), eq(conversation.assignedAgentId, agentId)),
       )
       .orderBy(conversation.priority, conversation.createdAt)
       .limit(PER_WORKSPACE_CAP);

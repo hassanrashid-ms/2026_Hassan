@@ -33,7 +33,12 @@ describe('WorkspaceSwitcher', () => {
   it('renders nothing when the agent has zero or one membership', async () => {
     vi.spyOn(agentApi, 'fetchMemberships').mockResolvedValue({
       memberships: [
-        { workspace_id: 'workspace-a', workspace_slug: 'ws-a', workspace_name: 'Workspace A', role: 'agent' },
+        {
+          workspace_id: 'workspace-a',
+          workspace_slug: 'ws-a',
+          workspace_name: 'Workspace A',
+          role: 'agent',
+        },
       ],
     });
 
@@ -46,8 +51,18 @@ describe('WorkspaceSwitcher', () => {
   it('lists every membership and switches on selection', async () => {
     vi.spyOn(agentApi, 'fetchMemberships').mockResolvedValue({
       memberships: [
-        { workspace_id: 'workspace-a', workspace_slug: 'ws-a', workspace_name: 'Workspace A', role: 'agent' },
-        { workspace_id: 'workspace-b', workspace_slug: 'ws-b', workspace_name: 'Workspace B', role: 'team_lead' },
+        {
+          workspace_id: 'workspace-a',
+          workspace_slug: 'ws-a',
+          workspace_name: 'Workspace A',
+          role: 'agent',
+        },
+        {
+          workspace_id: 'workspace-b',
+          workspace_slug: 'ws-b',
+          workspace_name: 'Workspace B',
+          role: 'team_lead',
+        },
       ],
     });
     const saveSpy = vi.spyOn(agentSession, 'saveAgentSession').mockImplementation(() => {});
@@ -67,7 +82,11 @@ describe('WorkspaceSwitcher', () => {
     await userEvent.click(otherOption);
 
     expect(saveSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ workspaceId: 'workspace-b', workspaceSlug: 'ws-b', role: 'team_lead' }),
+      expect.objectContaining({
+        workspaceId: 'workspace-b',
+        workspaceSlug: 'ws-b',
+        role: 'team_lead',
+      }),
     );
     expect(saveLastActiveSpy).toHaveBeenCalledWith('workspace-b');
     expect(assignSpy).toHaveBeenCalledWith('/inbox');

@@ -44,7 +44,9 @@ describe('MembersTable role change confirmation', () => {
   });
 
   it('calls updateMember only after the admin confirms the promotion', async () => {
-    const updateSpy = vi.spyOn(adminApi, 'updateMember').mockResolvedValue({ ...MEMBER, role: 'team_lead' });
+    const updateSpy = vi
+      .spyOn(adminApi, 'updateMember')
+      .mockResolvedValue({ ...MEMBER, role: 'team_lead' });
     renderWithProviders();
     const user = userEvent.setup();
 

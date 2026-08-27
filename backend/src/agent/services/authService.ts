@@ -57,7 +57,11 @@ export type DevLoginResult = { token: string; agent: { id: string; display_name:
 export async function devLogin(agentId: string): Promise<DevLoginResult> {
   const agentRow = await withoutWorkspace(async (tx) => {
     const [row] = await tx
-      .select({ id: agentTable.id, displayName: agentTable.displayName, isAdmin: agentTable.isAdmin })
+      .select({
+        id: agentTable.id,
+        displayName: agentTable.displayName,
+        isAdmin: agentTable.isAdmin,
+      })
       .from(agentTable)
       .where(eq(agentTable.id, agentId))
       .limit(1);

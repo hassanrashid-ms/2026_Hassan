@@ -325,8 +325,8 @@ export function Tickets() {
               const summaryQuery = summaryQueries[queryIndex];
               const isHidden = Boolean(
                 summaryQuery?.data &&
-                  summaryQuery.data.conversations.length === 0 &&
-                  !filtersActive,
+                summaryQuery.data.conversations.length === 0 &&
+                !filtersActive,
               );
 
               if (isHidden) return null;

@@ -5,11 +5,11 @@
 Several ticket-handling knobs are currently hardcoded module constants, tunable only by
 editing code and redeploying:
 
-| Constant | File | Current value |
-| --- | --- | --- |
-| (new) max tickets assigned to an agent at once | `domain/bot/assignOnHandoff.ts` | none — unbounded |
-| `INACTIVITY_WINDOW_HOURS` | `domain/conversations/resolutionCycle.ts` | 24 |
-| `FORM_TIMEOUT_MINUTES` | `shared/jobs/formTimeout.ts` | 30 |
+| Constant                                       | File                                      | Current value    |
+| ---------------------------------------------- | ----------------------------------------- | ---------------- |
+| (new) max tickets assigned to an agent at once | `domain/bot/assignOnHandoff.ts`           | none — unbounded |
+| `INACTIVITY_WINDOW_HOURS`                      | `domain/conversations/resolutionCycle.ts` | 24               |
+| `FORM_TIMEOUT_MINUTES`                         | `shared/jobs/formTimeout.ts`              | 30               |
 
 A fourth knob, `workspace.autoCloseDays`, already exists as a per-workspace schema column
 (`shared/db/schema/identity.ts`) and is read correctly by `shared/jobs/autoClose.ts`, but has
@@ -57,7 +57,7 @@ Generate and commit the migration with `pnpm db:generate` per repo convention.
 
 - **`assignOnHandoff.ts`**: join `workspace` in the existing least-loaded query and add
   `HAVING liveCount < workspace.maxAssignedTickets` before the `ORDER BY liveCount, agent.id
-  LIMIT 1`. If every active agent is at or over the cap, the query returns no rows and the
+LIMIT 1`. If every active agent is at or over the cap, the query returns no rows and the
   function keeps its existing `null` return — "no assignable agent," the same fallback already
   used for an empty active-agent pool. The ticket stays unassigned in the queue; no new error
   path.
@@ -82,12 +82,12 @@ used by `botConfigRouter.ts`:
   values.
 - `POST /workspace-settings` — gated by `requireAdminRole` — Zod-validates and updates. Bounds:
 
-  | Field | Bounds |
-  | --- | --- |
-  | `maxAssignedTickets` | integer, 1–100 |
-  | `autoCloseDays` | integer, 1–365 |
-  | `inactivityWindowHours` | integer, 1–720 |
-  | `formTimeoutMinutes` | integer, 1–1440 |
+  | Field                   | Bounds          |
+  | ----------------------- | --------------- |
+  | `maxAssignedTickets`    | integer, 1–100  |
+  | `autoCloseDays`         | integer, 1–365  |
+  | `inactivityWindowHours` | integer, 1–720  |
+  | `formTimeoutMinutes`    | integer, 1–1440 |
 
 Service function lives in `agent/services/workspaceSettingsService.ts`, controller in
 `agent/controllers/workspaceSettingsController.ts`, mirroring the bot-config file layout.

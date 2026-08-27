@@ -42,7 +42,12 @@ describe('listActiveMembershipsForAgent', () => {
 
     expect(rows).toEqual(
       expect.arrayContaining([
-        { workspaceId: workspaceA, workspaceSlug: 'ws-a', workspaceName: 'Workspace A', role: 'agent' },
+        {
+          workspaceId: workspaceA,
+          workspaceSlug: 'ws-a',
+          workspaceName: 'Workspace A',
+          role: 'agent',
+        },
         {
           workspaceId: workspaceB,
           workspaceSlug: 'ws-b',

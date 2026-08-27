@@ -76,9 +76,10 @@ export function Workload() {
     enabled: session !== null,
   });
 
-  const [leaveDialog, setLeaveDialog] = useState<{ agent: AgentWorkloadEntry; mode: 'set' | 'clear' } | null>(
-    null,
-  );
+  const [leaveDialog, setLeaveDialog] = useState<{
+    agent: AgentWorkloadEntry;
+    mode: 'set' | 'clear';
+  } | null>(null);
 
   useEffect(() => {
     if (!session) return;
@@ -99,8 +100,14 @@ export function Workload() {
                 ? {
                     ...agent,
                     status: payload.status,
-                    onLeaveSince: payload.status === 'on_leave' ? payload.onLeaveSince ?? agent.onLeaveSince : null,
-                    onLeaveUntil: payload.status === 'on_leave' ? payload.onLeaveUntil ?? agent.onLeaveUntil : null,
+                    onLeaveSince:
+                      payload.status === 'on_leave'
+                        ? (payload.onLeaveSince ?? agent.onLeaveSince)
+                        : null,
+                    onLeaveUntil:
+                      payload.status === 'on_leave'
+                        ? (payload.onLeaveUntil ?? agent.onLeaveUntil)
+                        : null,
                   }
                 : agent,
             ),
@@ -154,79 +161,82 @@ export function Workload() {
         {workload.data && sortedAgents.length === 0 ? (
           <EmptyState message="Nothing to show" />
         ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              {COLUMNS.map((col) => (
-                <TableHead key={col.key}>
-                  <button
-                    type="button"
-                    onClick={() => handleSort(col.key)}
-                    className={cn(
-                      'flex items-center gap-1 text-xs font-medium text-muted hover:text-text',
-                    )}
-                  >
-                    {col.label}
-                    {sortColumn === col.key &&
-                      (sortDirection === 'asc' ? (
-                        <ArrowUp className="size-3" />
-                      ) : (
-                        <ArrowDown className="size-3" />
-                      ))}
-                  </button>
-                </TableHead>
-              ))}
-              <TableHead className="text-xs font-medium text-muted">Leave</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {sortedAgents.map((agent) => (
-              <TableRow key={agent.agentId}>
-                <TableCell className="font-medium">
-                  <div className="flex items-center gap-2">
-                    <div className="relative">
-                      <Avatar className="size-6">
-                        <AvatarFallback className="text-xs">
-                          {initialsFor(agent.agentName)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <PresenceDot
-                        status={agent.status}
-                        className="absolute -right-0.5 -bottom-0.5 size-2"
-                      />
-                    </div>
-                    <span data-testid="agent-name">{agent.agentName}</span>
-                    {agent.status === 'on_leave' && agent.onLeaveSince && (
-                      <span data-testid="leave-duration" className="text-xs text-muted">
-                        on leave {daysSince(agent.onLeaveSince)}d
-                      </span>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell>{agent.openCount}</TableCell>
-                <TableCell>{agent.resolved7d}</TableCell>
-                <TableCell>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      setLeaveDialog({ agent, mode: agent.status === 'on_leave' ? 'clear' : 'set' })
-                    }
-                  >
-                    {agent.status === 'on_leave' ? 'Clear leave' : 'Set on leave'}
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
-            {workload.isError && (
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={4} className="text-xs text-muted">
-                  Could not load workload.
-                </TableCell>
+                {COLUMNS.map((col) => (
+                  <TableHead key={col.key}>
+                    <button
+                      type="button"
+                      onClick={() => handleSort(col.key)}
+                      className={cn(
+                        'flex items-center gap-1 text-xs font-medium text-muted hover:text-text',
+                      )}
+                    >
+                      {col.label}
+                      {sortColumn === col.key &&
+                        (sortDirection === 'asc' ? (
+                          <ArrowUp className="size-3" />
+                        ) : (
+                          <ArrowDown className="size-3" />
+                        ))}
+                    </button>
+                  </TableHead>
+                ))}
+                <TableHead className="text-xs font-medium text-muted">Leave</TableHead>
               </TableRow>
-            )}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {sortedAgents.map((agent) => (
+                <TableRow key={agent.agentId}>
+                  <TableCell className="font-medium">
+                    <div className="flex items-center gap-2">
+                      <div className="relative">
+                        <Avatar className="size-6">
+                          <AvatarFallback className="text-xs">
+                            {initialsFor(agent.agentName)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <PresenceDot
+                          status={agent.status}
+                          className="absolute -right-0.5 -bottom-0.5 size-2"
+                        />
+                      </div>
+                      <span data-testid="agent-name">{agent.agentName}</span>
+                      {agent.status === 'on_leave' && agent.onLeaveSince && (
+                        <span data-testid="leave-duration" className="text-xs text-muted">
+                          on leave {daysSince(agent.onLeaveSince)}d
+                        </span>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell>{agent.openCount}</TableCell>
+                  <TableCell>{agent.resolved7d}</TableCell>
+                  <TableCell>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        setLeaveDialog({
+                          agent,
+                          mode: agent.status === 'on_leave' ? 'clear' : 'set',
+                        })
+                      }
+                    >
+                      {agent.status === 'on_leave' ? 'Clear leave' : 'Set on leave'}
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {workload.isError && (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-xs text-muted">
+                    Could not load workload.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
         )}
       </div>
       {leaveDialog && (

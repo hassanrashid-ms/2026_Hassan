@@ -1,5 +1,8 @@
 import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts';
-import { listActiveMembershipsForAgent, listAllWorkspaces } from '../../shared/db/workspaceMembership.ts';
+import {
+  listActiveMembershipsForAgent,
+  listAllWorkspaces,
+} from '../../shared/db/workspaceMembership.ts';
 
 export type MembershipView = {
   workspace_id: string;

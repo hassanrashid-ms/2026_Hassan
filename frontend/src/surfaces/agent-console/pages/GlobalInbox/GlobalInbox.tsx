@@ -1,7 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { fetchGlobalInbox, type GlobalInboxTicket } from '../../api/agentApi.ts';
-import { loadAgentSession, saveAgentSession, saveLastActiveWorkspaceId } from '../../lib/agentSession.ts';
+import {
+  loadAgentSession,
+  saveAgentSession,
+  saveLastActiveWorkspaceId,
+} from '../../lib/agentSession.ts';
 import { ScrollArea } from '../../components/ui/scroll-area.tsx';
 import { EmptyState } from '../../components/ui/empty-state.tsx';
 import { ConversationRow } from '../Inbox/components/ConversationRow.tsx';

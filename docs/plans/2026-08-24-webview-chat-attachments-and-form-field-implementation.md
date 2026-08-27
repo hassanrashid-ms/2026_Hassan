@@ -5,9 +5,10 @@
 **Goal:** Close the known limitation shipped in Phase 1 — a public image attachment is invisible to the player — by wiring the webview's read path to join `attachment` and sign URLs, giving the player's own composer the same send-an-image capability the agent console already has, and using that same send path to answer a form's `attachment` field type (currently hard-rejected).
 
 **Architecture:** Three independent slices, in dependency order:
+
 1. **Read path.** `getPlayerMessages` (`backend/src/surface/services/messagesService.ts`) gains the same `attachment` join + `presignGetObject` signing pass `getAgentConversationMessages` already has. `toPlayerView`/`toAgentView` already emit the non-URL `attachment` fields (Phase 1) — nothing there changes. `ChatBubbles.tsx` (webview) gains the one prop the agent console's `ThreadPanel` already passes to the same shared `MessageBody` component.
 2. **Send path.** `sendPlayerMessage` gains the identical claim block Phase 1's `sendAgentMessage` has (HEAD-verify → CopyObject → insert `attachment` row, in the same transaction as the message insert), reachable through the same generic `/agent/uploads`-style presign/cancel endpoints — mirrored under `/surface/uploads` for the player token. The webview's `ChatComposer` passes the `allowAttachments`/`onUpload`/`onCancelUpload` props the shared `Composer` component already defines but the player surface currently omits (see the "Only the agent console passes these three" comment in `Composer.tsx`).
-3. **Form attachment field.** This is a **design decision made in this plan, not previously specified beyond intent** (`docs/specs/2026-08-04-database-and-schema-design.md`:495-498 and `docs/decisions/spec-contradictions.md` §23 establish *that* an attachment answer arrives as an ordinary image message, not *how* the send is tied back to the form). The decision here: `SendMessageBody` gains an optional `form_field_key`; when present and it names the form's current pending `attachment` field, `sendPlayerMessage` — in the same transaction as the message+attachment insert — also inserts the `form_answer` row (`value: { attachmentId }`) and the `form_field_answered` event, exactly mirroring what `answerForm` already does for every other field type. `answerForm` itself keeps rejecting `attachment` outright; it is not the code path attachment answers use. **Review this design before executing Task 3** — it is the one part of this plan not already dictated by an approved spec.
+3. **Form attachment field.** This is a **design decision made in this plan, not previously specified beyond intent** (`docs/specs/2026-08-04-database-and-schema-design.md`:495-498 and `docs/decisions/spec-contradictions.md` §23 establish _that_ an attachment answer arrives as an ordinary image message, not _how_ the send is tied back to the form). The decision here: `SendMessageBody` gains an optional `form_field_key`; when present and it names the form's current pending `attachment` field, `sendPlayerMessage` — in the same transaction as the message+attachment insert — also inserts the `form_answer` row (`value: { attachmentId }`) and the `form_field_answered` event, exactly mirroring what `answerForm` already does for every other field type. `answerForm` itself keeps rejecting `attachment` outright; it is not the code path attachment answers use. **Review this design before executing Task 3** — it is the one part of this plan not already dictated by an approved spec.
 
 **Tech Stack:** Drizzle ORM, Express 5, Zod, `@aws-sdk/client-s3` (via the existing storage choke point), React, TanStack Query, Socket.io.
 
@@ -27,10 +28,12 @@
 ### Task 1: Read path — join and sign attachments for the player
 
 **Files:**
+
 - Modify: `backend/src/surface/services/messagesService.ts`
 - Test: `backend/tests/surface.messages.test.ts` (extend)
 
 **Interfaces:**
+
 - Consumes: `presignGetObject` from `backend/src/shared/storage/presign.ts`; `attachment` table (already imported wherever `conversationsService.ts` imports it from — `backend/src/shared/db/schema/index.ts`).
 - Produces: `getPlayerMessages` now returns `PlayerMessageView[]` with `attachment.url` populated.
 
@@ -58,7 +61,11 @@ describe('GET /messages with an attachment', () => {
 
     const key = `ws/${workspaceId}/attachments/${crypto.randomUUID()}.png`;
     const body = Buffer.from('fake-png-bytes');
-    const { url: putUrl } = await presignPutObject({ key, contentType: 'image/png', contentLength: body.length });
+    const { url: putUrl } = await presignPutObject({
+      key,
+      contentType: 'image/png',
+      contentLength: body.length,
+    });
     await fetch(putUrl, {
       method: 'PUT',
       headers: { 'Content-Type': 'image/png', 'Content-Length': String(body.length) },
@@ -119,62 +126,65 @@ import { attachment } from '../../shared/db/schema/index.ts'; // add to the exis
 Replace the message query and the return in `getPlayerMessages`:
 
 ```ts
-    const rows = await tx
-      .select({
-        id: message.id,
-        conversationId: message.conversationId,
-        seq: message.seq,
-        authorType: message.authorType,
-        authorAgentId: message.authorAgentId,
-        body: message.body,
-        articleId: message.articleId,
-        visibility: message.visibility,
-        deliveryState: message.deliveryState,
-        readAt: message.readAt,
-        createdAt: message.createdAt,
-        authorAgentName: agent.displayName,
-        authorPlayerName: player.externalId,
-        attachmentId: attachment.id,
-        attachmentStorageKey: attachment.storageKey,
-        attachmentFilename: attachment.filename,
-        attachmentMimeType: attachment.mimeType,
-        attachmentByteSize: attachment.byteSize,
-      })
-      .from(message)
-      .innerJoin(conversation, eq(conversation.id, message.conversationId))
-      .innerJoin(player, eq(player.id, conversation.playerId))
-      .leftJoin(agent, eq(agent.id, message.authorAgentId))
-      .leftJoin(attachment, eq(attachment.messageId, message.id))
-      .where(eq(message.conversationId, found.id))
-      .orderBy(message.seq);
+const rows = await tx
+  .select({
+    id: message.id,
+    conversationId: message.conversationId,
+    seq: message.seq,
+    authorType: message.authorType,
+    authorAgentId: message.authorAgentId,
+    body: message.body,
+    articleId: message.articleId,
+    visibility: message.visibility,
+    deliveryState: message.deliveryState,
+    readAt: message.readAt,
+    createdAt: message.createdAt,
+    authorAgentName: agent.displayName,
+    authorPlayerName: player.externalId,
+    attachmentId: attachment.id,
+    attachmentStorageKey: attachment.storageKey,
+    attachmentFilename: attachment.filename,
+    attachmentMimeType: attachment.mimeType,
+    attachmentByteSize: attachment.byteSize,
+  })
+  .from(message)
+  .innerJoin(conversation, eq(conversation.id, message.conversationId))
+  .innerJoin(player, eq(player.id, conversation.playerId))
+  .leftJoin(agent, eq(agent.id, message.authorAgentId))
+  .leftJoin(attachment, eq(attachment.messageId, message.id))
+  .where(eq(message.conversationId, found.id))
+  .orderBy(message.seq);
 
-    const storageKeyByMessageId = new Map(
-      rows.filter((r) => r.attachmentStorageKey).map((r) => [r.id, r.attachmentStorageKey!]),
-    );
-    const views = await Promise.all(
-      rows
-        .map(toPlayerView)
-        .filter((m): m is PlayerMessageView => m !== null)
-        .map(async (view) => {
-          if (!view.attachment) return view;
-          const storageKey = storageKeyByMessageId.get(view.id);
-          if (!storageKey) return view;
-          try {
-            return { ...view, attachment: { ...view.attachment, url: await presignGetObject(storageKey) } };
-          } catch {
-            // A broken attachment must not break loading the rest of the thread.
-            return view;
-          }
-        }),
-    );
+const storageKeyByMessageId = new Map(
+  rows.filter((r) => r.attachmentStorageKey).map((r) => [r.id, r.attachmentStorageKey!]),
+);
+const views = await Promise.all(
+  rows
+    .map(toPlayerView)
+    .filter((m): m is PlayerMessageView => m !== null)
+    .map(async (view) => {
+      if (!view.attachment) return view;
+      const storageKey = storageKeyByMessageId.get(view.id);
+      if (!storageKey) return view;
+      try {
+        return {
+          ...view,
+          attachment: { ...view.attachment, url: await presignGetObject(storageKey) },
+        };
+      } catch {
+        // A broken attachment must not break loading the rest of the thread.
+        return view;
+      }
+    }),
+);
 
-    return {
-      conversation_id: found.id,
-      messages: views,
-      status: found.status,
-      confirm_phase: found.confirmPhase,
-      form: found.confirmPhase === 'form' ? await loadPlayerForm(tx, found.id) : null,
-    };
+return {
+  conversation_id: found.id,
+  messages: views,
+  status: found.status,
+  confirm_phase: found.confirmPhase,
+  form: found.confirmPhase === 'form' ? await loadPlayerForm(tx, found.id) : null,
+};
 ```
 
 (No visibility check is needed inside the signer: `toPlayerView` already returns `null` for any non-`public` row, and the `.filter()` above drops those before signing ever runs — an `internal` message's attachment is never fetched, matching the design doc's "visibility-gated reads" requirement structurally rather than by an explicit check in `presignGetObject`.)
@@ -201,10 +211,12 @@ git commit -m "Sign attachment URLs on the player message-list read path"
 ### Task 2: Frontend — render attachments in the webview thread
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/webview/components/chat/ChatBubbles.tsx`
 - Test: `frontend/src/surfaces/webview/components/chat/ChatBubbles.test.tsx` (extend if it exists — check with `grep -rln "ChatBubbles" frontend/src/surfaces/webview` first; else add inline coverage in whatever file currently tests message rendering for this component)
 
 **Interfaces:**
+
 - Consumes: `ChatAttachment`/`attachment` field already on `ChatMessage` (Phase 1, `frontend/src/features/chat/components/types.ts`) and already rendered by `MessageBody` (Phase 1).
 - Produces: nothing consumed elsewhere — purely wires an existing prop through.
 
@@ -216,7 +228,13 @@ it('renders an attachment image when the message carries one', () => {
     id: 'm1',
     authorType: 'agent' as const,
     body: 'diagram.png',
-    attachment: { id: 'a1', filename: 'diagram.png', mimeType: 'image/png', byteSize: 10, url: 'https://minio.local/signed' },
+    attachment: {
+      id: 'a1',
+      filename: 'diagram.png',
+      mimeType: 'image/png',
+      byteSize: 10,
+      url: 'https://minio.local/signed',
+    },
     // ...whatever other fields this component's ChatMessage fixture already needs...
   };
   render(<ChatBubbles messages={[message]} /* ...other existing required props... */ />);
@@ -262,6 +280,7 @@ git commit -m "Render chat attachment images in the webview thread"
 ### Task 3: Player-side upload endpoints
 
 **Files:**
+
 - Create: `backend/src/surface/routers/uploadsRouter.ts`
 - Create: `backend/src/surface/controllers/uploadsController.ts`
 - Create: `backend/src/surface/services/uploadsService.ts`
@@ -270,6 +289,7 @@ git commit -m "Render chat attachment images in the webview thread"
 - Test: `backend/tests/surface.uploads.test.ts` (new)
 
 **Interfaces:**
+
 - Consumes: `AgentContext`-equivalent `PlayerContext` from `backend/src/shared/middleware/requirePlayerToken.ts`; `presignPutObject`, `deleteObject`, `ALLOWED_IMAGE_MIME_TYPES`, `MAX_ATTACHMENT_BYTES` from `backend/src/shared/storage/presign.ts`.
 - Produces (used by Task 4): `buildPendingPlayerKey(workspaceId, playerId, contentType): string` (format `pending/{workspaceId}/{playerId}/{uuid}.{ext}`), `requestPlayerUpload`, `cancelPlayerUpload` — same shape as `backend/src/agent/services/uploadsService.ts`'s `requestUpload`/`cancelUpload`.
 
@@ -307,7 +327,11 @@ describe('POST /uploads (player)', () => {
   it('returns a presigned PUT url for an allowed image type', async () => {
     const workspaceId = await seedWorkspace();
     const playerId = await seedPlayer(workspaceId);
-    const token = await mintToken({ workspace_id: workspaceId, player_id: playerId, external_player_id: 'p1' });
+    const token = await mintToken({
+      workspace_id: workspaceId,
+      player_id: playerId,
+      external_player_id: 'p1',
+    });
 
     const res = await request(app)
       .post('/uploads')
@@ -321,7 +345,11 @@ describe('POST /uploads (player)', () => {
   it('422s for a disallowed content type', async () => {
     const workspaceId = await seedWorkspace();
     const playerId = await seedPlayer(workspaceId);
-    const token = await mintToken({ workspace_id: workspaceId, player_id: playerId, external_player_id: 'p1' });
+    const token = await mintToken({
+      workspace_id: workspaceId,
+      player_id: playerId,
+      external_player_id: 'p1',
+    });
 
     const res = await request(app)
       .post('/uploads')
@@ -336,20 +364,34 @@ describe('DELETE /uploads/:key (player)', () => {
   it('deletes an object the caller owns', async () => {
     const workspaceId = await seedWorkspace();
     const playerId = await seedPlayer(workspaceId);
-    const token = await mintToken({ workspace_id: workspaceId, player_id: playerId, external_player_id: 'p1' });
+    const token = await mintToken({
+      workspace_id: workspaceId,
+      player_id: playerId,
+      external_player_id: 'p1',
+    });
     const key = `pending/${workspaceId}/${playerId}/${crypto.randomUUID()}.png`;
 
-    await request(app).delete(`/uploads/${encodeURIComponent(key)}`).set('Authorization', `Bearer ${token}`).expect(204);
+    await request(app)
+      .delete(`/uploads/${encodeURIComponent(key)}`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(204);
     expect(await headObject(key)).toBeNull();
   });
 
   it("404s for a key under a different player's path", async () => {
     const workspaceId = await seedWorkspace();
     const playerId = await seedPlayer(workspaceId);
-    const token = await mintToken({ workspace_id: workspaceId, player_id: playerId, external_player_id: 'p1' });
+    const token = await mintToken({
+      workspace_id: workspaceId,
+      player_id: playerId,
+      external_player_id: 'p1',
+    });
     const otherKey = `pending/${workspaceId}/${crypto.randomUUID()}/${crypto.randomUUID()}.png`;
 
-    await request(app).delete(`/uploads/${encodeURIComponent(otherKey)}`).set('Authorization', `Bearer ${token}`).expect(404);
+    await request(app)
+      .delete(`/uploads/${encodeURIComponent(otherKey)}`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(404);
   });
 });
 ```
@@ -392,7 +434,11 @@ function extensionFor(contentType: string): string {
   }
 }
 
-export function buildPendingPlayerKey(workspaceId: string, playerId: string, contentType: string): string {
+export function buildPendingPlayerKey(
+  workspaceId: string,
+  playerId: string,
+  contentType: string,
+): string {
   return `pending/${workspaceId}/${playerId}/${randomUUID()}.${extensionFor(contentType)}`;
 }
 
@@ -405,18 +451,29 @@ export async function requestPlayerUpload(
   ctx: PlayerContext,
   body: z.infer<typeof RequestUploadBody>,
 ): Promise<RequestUploadResult> {
-  if (!ALLOWED_IMAGE_MIME_TYPES.includes(body.content_type as (typeof ALLOWED_IMAGE_MIME_TYPES)[number])) {
+  if (
+    !ALLOWED_IMAGE_MIME_TYPES.includes(
+      body.content_type as (typeof ALLOWED_IMAGE_MIME_TYPES)[number],
+    )
+  ) {
     return { outcome: 'invalid_media_type' };
   }
   if (body.byte_size > MAX_ATTACHMENT_BYTES) {
     return { outcome: 'too_large' };
   }
   const key = buildPendingPlayerKey(ctx.workspaceId, ctx.playerId, body.content_type);
-  const { url, expiresAt } = await presignPutObject({ key, contentType: body.content_type, contentLength: body.byte_size });
+  const { url, expiresAt } = await presignPutObject({
+    key,
+    contentType: body.content_type,
+    contentLength: body.byte_size,
+  });
   return { outcome: 'ok', key, upload_url: url, expires_at: expiresAt };
 }
 
-export async function cancelPlayerUpload(ctx: PlayerContext, key: string): Promise<'ok' | 'not_owner'> {
+export async function cancelPlayerUpload(
+  ctx: PlayerContext,
+  key: string,
+): Promise<'ok' | 'not_owner'> {
   const expectedPrefix = `pending/${ctx.workspaceId}/${ctx.playerId}/`;
   if (!key.startsWith(expectedPrefix)) return 'not_owner';
   await deleteObject(key);
@@ -454,7 +511,9 @@ export const postUploadRequestHandler: RequestHandler = async (req, res) => {
     sendError(res, 422, 'invalid_request', 'byte_size exceeds the 10 MB limit.');
     return;
   }
-  res.status(200).json({ key: result.key, upload_url: result.upload_url, expires_at: result.expires_at });
+  res
+    .status(200)
+    .json({ key: result.key, upload_url: result.upload_url, expires_at: result.expires_at });
 };
 
 export const deleteUploadHandler: RequestHandler = async (req, res) => {
@@ -519,6 +578,7 @@ git commit -m "Add player-side presigned upload request and cancel endpoints"
 ### Task 4: Claim on `POST /messages`, plus the form-attachment-field linkage
 
 **Files:**
+
 - Modify: `packages/types/src/chat.ts` (`SendMessageBody`)
 - Modify: `backend/src/surface/services/messagesService.ts`
 - Modify: `backend/src/surface/controllers/messagesController.ts`
@@ -526,6 +586,7 @@ git commit -m "Add player-side presigned upload request and cancel endpoints"
 - Test: `backend/tests/surface.messages.test.ts` (extend)
 
 **Interfaces:**
+
 - Consumes: `headObject`, `copyObject`, `deleteObject` from Task 3's storage module (already shared); `attachment` table; `formAnswer`, `formSubmission`, `formVersion` tables (already imported in this file).
 - Produces: `sendPlayerMessage`'s result carries `message.attachment` populated the same way `sendAgentMessage`'s does.
 
@@ -578,7 +639,11 @@ import { presignPutObject } from '../src/shared/storage/presign.ts';
 async function uploadFixtureImage(workspaceId: string, playerId: string) {
   const key = `pending/${workspaceId}/${playerId}/${crypto.randomUUID()}.png`;
   const body = Buffer.from('fake-png-bytes');
-  const { url } = await presignPutObject({ key, contentType: 'image/png', contentLength: body.length });
+  const { url } = await presignPutObject({
+    key,
+    contentType: 'image/png',
+    contentLength: body.length,
+  });
   await fetch(url, {
     method: 'PUT',
     headers: { 'Content-Type': 'image/png', 'Content-Length': String(body.length) },
@@ -595,11 +660,18 @@ describe('POST /messages with an attachment', () => {
     const res = await request(app)
       .post('/messages')
       .set('Authorization', `Bearer ${token}`)
-      .send({ body: '', attachment: { key, filename: 'shot.png', mime_type: 'image/png', byte_size: 14 } })
+      .send({
+        body: '',
+        attachment: { key, filename: 'shot.png', mime_type: 'image/png', byte_size: 14 },
+      })
       .expect(200);
 
     expect(res.body.message.body).toBe('shot.png');
-    expect(res.body.message.attachment).toMatchObject({ filename: 'shot.png', mime_type: 'image/png', byte_size: 14 });
+    expect(res.body.message.attachment).toMatchObject({
+      filename: 'shot.png',
+      mime_type: 'image/png',
+      byte_size: 14,
+    });
   });
 
   it('422s with attachment_not_found for a bogus key', async () => {
@@ -609,7 +681,10 @@ describe('POST /messages with an attachment', () => {
     const res = await request(app)
       .post('/messages')
       .set('Authorization', `Bearer ${token}`)
-      .send({ body: '', attachment: { key: bogusKey, filename: 'ghost.png', mime_type: 'image/png', byte_size: 14 } })
+      .send({
+        body: '',
+        attachment: { key: bogusKey, filename: 'ghost.png', mime_type: 'image/png', byte_size: 14 },
+      })
       .expect(422);
     expect(res.body.error.code).toBe('attachment_not_found');
   });
@@ -679,7 +754,10 @@ export async function sendPlayerMessage(
   if (body.attachment) {
     const real = await headObject(body.attachment.key);
     if (!real) return { outcome: 'attachment_not_found' };
-    if (real.contentType !== body.attachment.mime_type || real.contentLength !== body.attachment.byte_size) {
+    if (
+      real.contentType !== body.attachment.mime_type ||
+      real.contentLength !== body.attachment.byte_size
+    ) {
       return { outcome: 'attachment_mismatch' };
     }
     const extension = body.attachment.key.slice(body.attachment.key.lastIndexOf('.'));
@@ -724,15 +802,29 @@ export async function sendPlayerMessage(
     // sent outside of a form must never accidentally answer one.
     if (body.form_field_key && attachmentRow) {
       const [liveSub] = await tx
-        .select({ id: formSubmission.id, formId: formSubmission.formId, formVersion: formSubmission.formVersion })
+        .select({
+          id: formSubmission.id,
+          formId: formSubmission.formId,
+          formVersion: formSubmission.formVersion,
+        })
         .from(formSubmission)
-        .where(and(eq(formSubmission.conversationId, conversationId), eq(formSubmission.status, 'in_progress')))
+        .where(
+          and(
+            eq(formSubmission.conversationId, conversationId),
+            eq(formSubmission.status, 'in_progress'),
+          ),
+        )
         .limit(1);
       if (liveSub) {
         const [version] = await tx
           .select({ fields: formVersion.fields })
           .from(formVersion)
-          .where(and(eq(formVersion.formId, liveSub.formId), eq(formVersion.version, liveSub.formVersion)))
+          .where(
+            and(
+              eq(formVersion.formId, liveSub.formId),
+              eq(formVersion.version, liveSub.formVersion),
+            ),
+          )
           .limit(1);
         const field = version?.fields.find((f) => f.key === body.form_field_key);
         if (field?.type === 'attachment') {
@@ -750,7 +842,13 @@ export async function sendPlayerMessage(
             sessionId,
             actorId: ctx.playerId,
             actorType: 'player',
-            payload: { form_id: liveSub.formId, field_key: field.key, field_type: 'attachment', position: field.position, is_correction: false },
+            payload: {
+              form_id: liveSub.formId,
+              field_key: field.key,
+              field_type: 'attachment',
+              position: field.position,
+              is_correction: false,
+            },
           });
         }
       }
@@ -758,7 +856,14 @@ export async function sendPlayerMessage(
 
     // ...unchanged reopenPosted / shouldEnqueue block...
 
-    return { outcome: 'ok', conversationId, posted, reopenPosted, inboxStatus, shouldEnqueue } as const;
+    return {
+      outcome: 'ok',
+      conversationId,
+      posted,
+      reopenPosted,
+      inboxStatus,
+      shouldEnqueue,
+    } as const;
   });
 
   if (result.outcome === 'ok' && pendingKeyToDelete) {
@@ -767,7 +872,11 @@ export async function sendPlayerMessage(
 
   // ...unchanged emit / enqueue block, using `result.posted` as before...
 
-  return { outcome: 'ok', conversation_id: result.conversationId, message: toPlayerView(result.posted) };
+  return {
+    outcome: 'ok',
+    conversation_id: result.conversationId,
+    message: toPlayerView(result.posted),
+  };
 }
 ```
 
@@ -782,7 +891,12 @@ export const postMessageHandler: RequestHandler = async (req, res) => {
   const ctx = req.player!;
   const body = SendMessageBody.safeParse(req.body);
   if (!body.success) {
-    sendError(res, 422, 'invalid_request', 'body must be a non-empty string, or an attachment must be provided.');
+    sendError(
+      res,
+      422,
+      'invalid_request',
+      'body must be a non-empty string, or an attachment must be provided.',
+    );
     return;
   }
   const result = await sendPlayerMessage(ctx, body.data);
@@ -791,7 +905,12 @@ export const postMessageHandler: RequestHandler = async (req, res) => {
     return;
   }
   if (result.outcome === 'attachment_mismatch') {
-    sendError(res, 422, 'attachment_mismatch', 'The uploaded file does not match its declared type or size.');
+    sendError(
+      res,
+      422,
+      'attachment_mismatch',
+      'The uploaded file does not match its declared type or size.',
+    );
     return;
   }
   res.status(200).json({ conversation_id: result.conversation_id, message: result.message });
@@ -824,6 +943,7 @@ git commit -m "Claim uploaded attachments on player message send; link to form a
 ### Task 5: Frontend — webview composer send-attachment + the form attachment field UI
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/webview/components/chat/ChatComposer.tsx`
 - Modify: `frontend/src/surfaces/webview/pages/SupportChat.tsx`
 - Modify: `frontend/src/surfaces/webview/api/surfaceApi.ts` (or wherever the webview's fetch wrappers live — confirm the exact filename with `grep -rl "sendMessage\|SendMessageBody" frontend/src/surfaces/webview` before editing)
@@ -831,6 +951,7 @@ git commit -m "Claim uploaded attachments on player message send; link to form a
 - Test: `frontend/src/surfaces/webview/components/chat/ChatComposer.test.tsx`, `frontend/src/surfaces/webview/components/chat/FormCard.test.tsx` (extend both)
 
 **Interfaces:**
+
 - Consumes: `Composer`'s existing `allowAttachments`/`onUpload`/`onCancelUpload` props (Phase 1); `POST /surface/uploads`, `DELETE /surface/uploads/:key` (Task 3); `POST /messages` with `attachment`/`form_field_key` (Task 4).
 - Produces: none consumed elsewhere.
 
@@ -847,7 +968,11 @@ export function requestUpload(
 ): Promise<RequestUploadResult> {
   return call(`/uploads`, token, {
     method: 'POST',
-    body: JSON.stringify({ filename: file.filename, content_type: file.contentType, byte_size: file.byteSize }),
+    body: JSON.stringify({
+      filename: file.filename,
+      content_type: file.contentType,
+      byte_size: file.byteSize,
+    }),
   });
 }
 
@@ -881,7 +1006,12 @@ export function sendMessage(
       body,
       session_id: sessionId,
       attachment: attachment
-        ? { key: attachment.key, filename: attachment.filename, mime_type: attachment.mimeType, byte_size: attachment.byteSize }
+        ? {
+            key: attachment.key,
+            filename: attachment.filename,
+            mime_type: attachment.mimeType,
+            byte_size: attachment.byteSize,
+          }
         : undefined,
       form_field_key: formFieldKey,
     }),
@@ -895,7 +1025,14 @@ Check `ChatComposer.tsx`'s current props (it wraps the shared `Composer` and, pe
 
 ```tsx
 it('passes allowAttachments and upload handlers through to the shared Composer', () => {
-  const onUpload = vi.fn().mockResolvedValue({ key: 'pending/ws/player/uuid.png', filename: 'shot.png', mimeType: 'image/png', byteSize: 3 });
+  const onUpload = vi
+    .fn()
+    .mockResolvedValue({
+      key: 'pending/ws/player/uuid.png',
+      filename: 'shot.png',
+      mimeType: 'image/png',
+      byteSize: 3,
+    });
   render(<ChatComposer onSend={() => {}} onUpload={onUpload} onCancelUpload={() => {}} />);
   expect(screen.getByLabelText('Attach image')).toBeInTheDocument();
 });
@@ -930,8 +1067,19 @@ Update the existing `onSend` handler passed to `ChatComposer` to forward the att
 
 ```tsx
 it('renders an attach-image control for the attachment field type instead of the inert message', () => {
-  const form = { /* ...seed with one field: { key: 'proof', type: 'attachment', position: 0, label: 'Upload a photo' }... */ };
-  render(<FormCard form={form} onAnswer={vi.fn()} onSubmit={vi.fn()} onSkip={vi.fn()} busy={false} onSendAttachment={vi.fn()} />);
+  const form = {
+    /* ...seed with one field: { key: 'proof', type: 'attachment', position: 0, label: 'Upload a photo' }... */
+  };
+  render(
+    <FormCard
+      form={form}
+      onAnswer={vi.fn()}
+      onSubmit={vi.fn()}
+      onSkip={vi.fn()}
+      busy={false}
+      onSendAttachment={vi.fn()}
+    />,
+  );
   expect(screen.getByLabelText('Attach image')).toBeInTheDocument();
   expect(screen.queryByText('This question cannot be answered here yet.')).not.toBeInTheDocument();
 });

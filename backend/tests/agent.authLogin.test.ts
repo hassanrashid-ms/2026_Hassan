@@ -6,7 +6,13 @@ import { closeAdminDb } from '../src/shared/db/adminClient.ts';
 import { errorMiddleware } from '../src/errors.ts';
 import { authRouter } from '../src/agent/routers/authRouter.ts';
 import { verifyAgentSession } from '../src/shared/auth/agentSession.ts';
-import { closeOwnerPool, seedAgent, seedWorkspace, seedWorkspaceMember, truncateAll } from './helpers/db.ts';
+import {
+  closeOwnerPool,
+  seedAgent,
+  seedWorkspace,
+  seedWorkspaceMember,
+  truncateAll,
+} from './helpers/db.ts';
 
 const app = express();
 app.use(express.json());
@@ -25,10 +31,7 @@ describe('POST /auth/dev-login', () => {
   it('logs in a regular agent with zero memberships — no more "not found" for an unassigned agent', async () => {
     const agentId = await seedAgent();
 
-    const res = await request(app)
-      .post('/auth/dev-login')
-      .send({ agent_id: agentId })
-      .expect(200);
+    const res = await request(app).post('/auth/dev-login').send({ agent_id: agentId }).expect(200);
 
     expect(res.body.agent.id).toBe(agentId);
     expect(res.body.workspace).toBeUndefined();
@@ -41,10 +44,7 @@ describe('POST /auth/dev-login', () => {
     const agentId = await seedAgent();
     await seedWorkspaceMember({ workspaceId, agentId, role: 'agent' });
 
-    const res = await request(app)
-      .post('/auth/dev-login')
-      .send({ agent_id: agentId })
-      .expect(200);
+    const res = await request(app).post('/auth/dev-login').send({ agent_id: agentId }).expect(200);
 
     const claims = await verifyAgentSession(res.body.token);
     expect(claims).toEqual({ agent_id: agentId, is_admin: false });
@@ -53,10 +53,7 @@ describe('POST /auth/dev-login', () => {
   it('logs in a global admin with is_admin true on the token', async () => {
     const adminId = await seedAgent(undefined, { isAdmin: true });
 
-    const res = await request(app)
-      .post('/auth/dev-login')
-      .send({ agent_id: adminId })
-      .expect(200);
+    const res = await request(app).post('/auth/dev-login').send({ agent_id: adminId }).expect(200);
 
     const claims = await verifyAgentSession(res.body.token);
     expect(claims).toEqual({ agent_id: adminId, is_admin: true });

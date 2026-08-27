@@ -6,7 +6,11 @@ import { closeAdminDb } from '../src/shared/db/adminClient.ts';
 import { errorMiddleware } from '../src/errors.ts';
 import { adminRouter } from '../src/admin/router.ts';
 import { signAgentSession } from '../src/shared/auth/agentSession.ts';
-import { getCachedWsAuth, setCachedWsAuth, closeWsAuthRedis } from '../src/shared/auth/wsAuthCache.ts';
+import {
+  getCachedWsAuth,
+  setCachedWsAuth,
+  closeWsAuthRedis,
+} from '../src/shared/auth/wsAuthCache.ts';
 import {
   closeOwnerPool,
   ownerPool,

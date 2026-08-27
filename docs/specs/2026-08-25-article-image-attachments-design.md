@@ -13,7 +13,7 @@ the existing generic `POST /agent/uploads` presign endpoint is reused as-is.
 
 ## Non-goals
 
-- Player-side article image *upload* — players never author articles.
+- Player-side article image _upload_ — players never author articles.
 - Reference counting or a cleanup job for orphaned attachments — see "Accepted tradeoffs" below.
 - Non-image attachments (PDFs, etc.) — same `ALLOWED_IMAGE_MIME_TYPES` as chat.
 - Collaborative/multi-agent concurrent editing of the same article (out of scope; single-editor
@@ -49,12 +49,12 @@ policy needed).
    presigned PUT + `pending/{workspaceId}/{agentId}/{uuid}.{ext}` key, PUTs the file directly to
    MinIO/S3.
 3. Handler calls new `POST /agent/articles/:id/attachments` with `{ key, filename, mime_type,
-   byte_size }`. This HEAD-verifies the pending object (rejecting on mismatch/missing, same
+byte_size }`. This HEAD-verifies the pending object (rejecting on mismatch/missing, same
    `attachment_not_found` / `attachment_mismatch` error codes as chat), `CopyObject`s it to
    `ws/{workspaceId}/attachments/{uuid}.{ext}`, inserts the `articleAttachment` row, and deletes the
    pending original after the transaction commits. Unlike the general article-detail read path,
    this response includes a freshly-signed `url` inline — `{ id, filename, mime_type, byte_size,
-   url }` — since the editor needs one immediately for WYSIWYG display and it would be wasteful to
+url }` — since the editor needs one immediately for WYSIWYG display and it would be wasteful to
    make a second round-trip just to sign the image it already knows about.
 4. `imageUploadHandler` returns that `url` to MDXEditor for immediate WYSIWYG display. Before the
    next autosave fires, the editor boundary (§4) rewrites this back to a stable handle.
@@ -69,7 +69,7 @@ Presigned GET URLs expire (10 min TTL) and article bodies are permanent, storabl
 — so the markdown never stores a real URL. Instead the upload flow embeds
 `![alt](attachment:{attachmentId})` — a handle, not a fetchable link.
 
-**Resolving handles to real images:** article *detail* reads only —
+**Resolving handles to real images:** article _detail_ reads only —
 `GET /agent/articles/:id` and the player-facing `GET /articles/:id` — are extended to return
 `attachments: [{ id, filename, mime_type, byte_size, url }]`, with `url` freshly presigned at read
 time (same pattern chat already uses for message attachments). List endpoints are unchanged; only
@@ -99,7 +99,7 @@ editor's load/save boundary — nothing else in the app is aware of the substitu
   MDXEditor's canvas renders existing images live.
 - `encodeArticleBodyForSaving(markdown, uploadedUrlToHandle)` — before each autosave PATCH, replaces
   any image src matching a URL returned from an upload this session back to its `attachment:{id}`
-  handle, using a lookup built as uploads happen. (A signed URL from a *previous* session's
+  handle, using a lookup built as uploads happen. (A signed URL from a _previous_ session's
   resolve pass is never re-encoded — it's already been decoded from a handle we know, so the
   encode step tracks handles keyed by their last-known resolved URL for this editing session only.)
 
@@ -134,15 +134,15 @@ Replaces the current explicit Create Draft / Save buttons entirely, modeled on G
 
 ## 7. API surface summary
 
-| Method | Path | Change |
-|---|---|---|
-| POST | `/agent/uploads` | Reused unchanged from chat feature |
-| POST | `/agent/articles/:id/attachments` | New — finalize/claim, mirrors chat's claim-on-send |
-| POST | `/agent/articles` | Relaxed `title`/`body` validation (empty allowed) |
-| PATCH | `/agent/articles/:id` | Relaxed `title`/`body` validation; new autosave caller |
-| POST | `/agent/articles/:id/publish` | Existing route; gains validation rejecting empty title/body |
-| GET | `/agent/articles/:id` | Adds `attachments: [...]` to response |
-| GET | `/articles/:id` (player, `surface` router) | Adds `attachments: [...]` to response |
+| Method | Path                                       | Change                                                      |
+| ------ | ------------------------------------------ | ----------------------------------------------------------- |
+| POST   | `/agent/uploads`                           | Reused unchanged from chat feature                          |
+| POST   | `/agent/articles/:id/attachments`          | New — finalize/claim, mirrors chat's claim-on-send          |
+| POST   | `/agent/articles`                          | Relaxed `title`/`body` validation (empty allowed)           |
+| PATCH  | `/agent/articles/:id`                      | Relaxed `title`/`body` validation; new autosave caller      |
+| POST   | `/agent/articles/:id/publish`              | Existing route; gains validation rejecting empty title/body |
+| GET    | `/agent/articles/:id`                      | Adds `attachments: [...]` to response                       |
+| GET    | `/articles/:id` (player, `surface` router) | Adds `attachments: [...]` to response                       |
 
 All new/changed routes registered in `backend/src/docs/openapi.ts` per repo convention.
 

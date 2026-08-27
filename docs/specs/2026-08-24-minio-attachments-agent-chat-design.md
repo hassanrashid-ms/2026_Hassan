@@ -6,6 +6,7 @@ foundation, the generic `attachment` table parented to `message`, and wiring ima
 attachments into the agent-console chat composer only.
 
 **Out of scope (future phases, tracked separately, each gets its own spec/plan):**
+
 - Article image upload (`article_attachment` — schema exists, stays a separate table,
   see "Relationship to `article_attachment`" below; needs `mime_type`/`byte_size` columns
   added when that phase starts)
@@ -49,14 +50,14 @@ Nothing in the presigned-PUT design changes; only the endpoint the SDK points at
 
 ### New env vars (`backend/src/env.ts`)
 
-| Var | Purpose | Default |
-|---|---|---|
-| `S3_ENDPOINT` | MinIO API URL | `http://localhost:9000` |
-| `S3_REGION` | required by the SDK; MinIO ignores the value | `us-east-1` |
-| `S3_ACCESS_KEY_ID` | credential, backend-only, never sent to the client | — |
-| `S3_SECRET_ACCESS_KEY` | credential, backend-only, never sent to the client | — |
-| `S3_BUCKET` | bucket name | `support-attachments` |
-| `S3_FORCE_PATH_STYLE` | MinIO requires path-style addressing | `true` (fixed, not env-configurable) |
+| Var                    | Purpose                                            | Default                              |
+| ---------------------- | -------------------------------------------------- | ------------------------------------ |
+| `S3_ENDPOINT`          | MinIO API URL                                      | `http://localhost:9000`              |
+| `S3_REGION`            | required by the SDK; MinIO ignores the value       | `us-east-1`                          |
+| `S3_ACCESS_KEY_ID`     | credential, backend-only, never sent to the client | —                                    |
+| `S3_SECRET_ACCESS_KEY` | credential, backend-only, never sent to the client | —                                    |
+| `S3_BUCKET`            | bucket name                                        | `support-attachments`                |
+| `S3_FORCE_PATH_STYLE`  | MinIO requires path-style addressing               | `true` (fixed, not env-configurable) |
 
 ### Storage choke point
 
@@ -71,7 +72,7 @@ Nothing in the presigned-PUT design changes; only the endpoint the SDK points at
   on every message-list read — never cached or stored.
 - **Trust nothing client-declared past signing time.** The PUT is signed with
   `content-length-range` and `content-type` conditions, but the claim step re-verifies
-  the *actual* object via `HEAD` before it's trusted — a presigned PUT's conditions can
+  the _actual_ object via `HEAD` before it's trusted — a presigned PUT's conditions can
   in principle be worked around by a non-browser client, so the server checks again.
 - **Server-generated keys only.** Object keys are UUIDs the server mints, never a
   client-supplied filename — no path traversal, no collision, no enumeration via
@@ -134,18 +135,22 @@ article-image phase starts, not here.
 All four routes registered in `backend/src/docs/openapi.ts`.
 
 ### `POST /agent/uploads`
+
 Body: `{ filename, contentType, byteSize }` (Zod: `contentType` in
 `['image/png','image/jpeg','image/webp','image/gif']`, `byteSize` ≤ 10 MB).
 Mints a UUID, builds the pending key, returns
 `{ key, uploadUrl, expiresAt }`.
 
 ### `DELETE /agent/uploads/:key`
+
 Cancels an in-flight upload. `404` (not `403` — matches the repo's existing
 "expect 404 not 403" RLS convention) if the key's `{agentId}` segment doesn't match the
 caller. `204` on success, including if the object is already gone (idempotent).
 
 ### `POST /agent/messages` (extends existing `postAgentMessageHandler` / `messagesService`)
+
 Request gains optional `attachment: { key, filename, mimeType, byteSize }`. On send:
+
 1. `HEAD` the pending object. `422 attachment_not_found` if missing/expired.
 2. `422 attachment_mismatch` if the real `Content-Type`/`Content-Length` disagrees with
    the declared values or fails the allowlist/size cap.
@@ -156,6 +161,7 @@ Request gains optional `attachment: { key, filename, mimeType, byteSize }`. On s
    special-casing) + `attachment` row, **in one transaction**.
 
 ### `GET /agent/messages` (existing, extended)
+
 Each message carrying an attachment gets a freshly presigned GET URL computed at
 serialization time (10 min TTL, never persisted). Signing failure (e.g. object
 unexpectedly missing) omits the URL rather than throwing — a broken attachment must not
@@ -181,14 +187,14 @@ break loading the rest of the thread.
 
 ## 7. Error handling summary
 
-| Case | Response |
-|---|---|
-| Bad content-type/size at presign | `422 invalid_request` / `422 unsupported_media_type` |
-| Pending object missing/expired at claim | `422 attachment_not_found` |
-| Real object disagrees with declared metadata | `422 attachment_mismatch` |
-| Cancel-delete, key not owned by caller | `404` |
-| Cancel-delete, object already gone | `204` (idempotent) |
-| GET-signing fails for an existing attachment row | Omit URL, don't throw |
+| Case                                             | Response                                             |
+| ------------------------------------------------ | ---------------------------------------------------- |
+| Bad content-type/size at presign                 | `422 invalid_request` / `422 unsupported_media_type` |
+| Pending object missing/expired at claim          | `422 attachment_not_found`                           |
+| Real object disagrees with declared metadata     | `422 attachment_mismatch`                            |
+| Cancel-delete, key not owned by caller           | `404`                                                |
+| Cancel-delete, object already gone               | `204` (idempotent)                                   |
+| GET-signing fails for an existing attachment row | Omit URL, don't throw                                |
 
 ## 8. Testing
 

@@ -56,7 +56,8 @@ export function RulesTab({ token, config }: { token: string; config: BotConfigVi
     setNewRuleText('');
   };
 
-  const dirty = JSON.stringify(rules.map(stripView)) !== JSON.stringify(config.rules.map(stripView));
+  const dirty =
+    JSON.stringify(rules.map(stripView)) !== JSON.stringify(config.rules.map(stripView));
   const changedCount = rules.filter((r, i) => {
     const orig = config.rules.find((o) => o.key === r.key);
     return !orig || JSON.stringify(stripView(orig)) !== JSON.stringify(stripView(r));

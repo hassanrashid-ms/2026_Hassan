@@ -107,12 +107,7 @@ describe('Tickets pagination', () => {
     renderTickets('/tickets');
 
     await waitFor(() =>
-      expect(fetchInboxSpy).toHaveBeenCalledWith(
-        'tok',
-        'resolved',
-        expect.anything(),
-        undefined,
-      ),
+      expect(fetchInboxSpy).toHaveBeenCalledWith('tok', 'resolved', expect.anything(), undefined),
     );
     expect(fetchInboxSpy).toHaveBeenCalledWith('tok', 'closed', expect.anything(), undefined);
   });
@@ -134,7 +129,8 @@ describe('Tickets pagination', () => {
     const fetchInboxSpy = vi
       .mocked(agentApi.fetchInbox)
       .mockImplementation((_t, status, _f, cursor) => {
-        if (status !== 'unassigned') return Promise.resolve({ conversations: [], nextCursor: null });
+        if (status !== 'unassigned')
+          return Promise.resolve({ conversations: [], nextCursor: null });
         if (!cursor) {
           return Promise.resolve({ conversations: [conversation('c1')], nextCursor: 'page-2' });
         }
@@ -143,12 +139,7 @@ describe('Tickets pagination', () => {
 
     renderTickets('/tickets');
     await waitFor(() =>
-      expect(fetchInboxSpy).toHaveBeenCalledWith(
-        'tok',
-        'unassigned',
-        expect.anything(),
-        undefined,
-      ),
+      expect(fetchInboxSpy).toHaveBeenCalledWith('tok', 'unassigned', expect.anything(), undefined),
     );
     await screen.findByText('p1');
 
@@ -159,12 +150,7 @@ describe('Tickets pagination', () => {
     scrollable.dispatchEvent(new Event('scroll', { bubbles: true }));
 
     await waitFor(() =>
-      expect(fetchInboxSpy).toHaveBeenCalledWith(
-        'tok',
-        'unassigned',
-        expect.anything(),
-        'page-2',
-      ),
+      expect(fetchInboxSpy).toHaveBeenCalledWith('tok', 'unassigned', expect.anything(), 'page-2'),
     );
   });
 });

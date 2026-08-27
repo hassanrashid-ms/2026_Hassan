@@ -6,7 +6,7 @@ The Tickets board (`frontend/src/surfaces/agent-console/pages/Tickets/Tickets.ts
 columns — Unassigned, Bot Handling, Agent Assigned, Escalated — all "active work" queues. There is
 no way for an agent to see what was recently resolved or closed without leaving the board.
 
-Separately, no column on the board paginates today — every column's query fetches its *entire*
+Separately, no column on the board paginates today — every column's query fetches its _entire_
 result set in one round trip. That was tolerable while every queue was implicitly bounded to
 "currently active" tickets, but it doesn't hold once Resolved/Closed queues exist (unbounded,
 ever-growing history) and isn't great practice for the existing four either. This design adds
@@ -82,21 +82,25 @@ Two independent changes to `listConversations` and the Tickets board:
   existing queues, not just the new ones.
 
 `conversationsController.ts`:
+
 - Extend the `status` zod enum with `'resolved' | 'closed'`.
 - Add an optional `cursor` query-string param, passed through to the service. Response body adds
   `nextCursor`.
 
 `openapi.ts`:
+
 - Register the updated enum and the `cursor`/`nextCursor` fields per the existing "new
   endpoint/param → openapi.ts" rule.
 
 ### Frontend
 
 `agentApi.ts`:
+
 - Extend `ConversationListFilter` with `'resolved' | 'closed'`.
 - `fetchInbox` takes an optional `cursor` param and the response type gains `nextCursor`.
 
 `Tickets.tsx`:
+
 - Add two entries to `COLUMNS`:
   - `{ title: 'Resolved', filter: 'resolved' }`
   - `{ title: 'Closed', filter: 'closed' }`

@@ -62,7 +62,13 @@ function toChatAttachment(a: {
   byte_size: number;
   url: string | null;
 }): ChatAttachment {
-  return { id: a.id, filename: a.filename, mimeType: a.mime_type, byteSize: a.byte_size, url: a.url };
+  return {
+    id: a.id,
+    filename: a.filename,
+    mimeType: a.mime_type,
+    byteSize: a.byte_size,
+    url: a.url,
+  };
 }
 
 /**

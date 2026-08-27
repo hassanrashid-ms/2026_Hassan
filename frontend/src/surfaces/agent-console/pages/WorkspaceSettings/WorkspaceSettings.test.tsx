@@ -38,9 +38,7 @@ describe('WorkspaceSettings page', () => {
 
     renderWithQuery();
 
-    await waitFor(() =>
-      expect(screen.getByLabelText('Max assigned tickets')).toHaveValue(5),
-    );
+    await waitFor(() => expect(screen.getByLabelText('Max assigned tickets')).toHaveValue(5));
     expect(screen.getByLabelText('Auto-close days')).toHaveValue(7);
     expect(screen.getByLabelText('Inactivity window (hours)')).toHaveValue(24);
     expect(screen.getByLabelText('Form timeout (minutes)')).toHaveValue(30);

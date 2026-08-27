@@ -168,9 +168,7 @@ describe('ThreadPanel take over', () => {
     renderPanel({ claimAvailable: true, assignedAgentId: 'someone-else' });
     await userEvent.click(await screen.findByRole('button', { name: 'Take over' }));
 
-    await waitFor(() =>
-      expect(reassignConversation).toHaveBeenCalledWith('t', 'c1', 'me-1'),
-    );
+    await waitFor(() => expect(reassignConversation).toHaveBeenCalledWith('t', 'c1', 'me-1'));
     expect(claimConversation).not.toHaveBeenCalled();
   });
 });
@@ -281,7 +279,13 @@ describe('ThreadPanel optimistic sends', () => {
         read_at: null,
         created_at: new Date().toISOString(),
         article_id: null,
-        attachment: { id: 'att1', filename: 'shot.png', mime_type: 'image/png', byte_size: 3, url: null },
+        attachment: {
+          id: 'att1',
+          filename: 'shot.png',
+          mime_type: 'image/png',
+          byte_size: 3,
+          url: null,
+        },
       },
     } as never);
 
@@ -304,7 +308,12 @@ describe('ThreadPanel optimistic sends', () => {
         expect.any(String),
         '',
         'public',
-        { key: 'pending/ws/agent/uuid.png', filename: 'shot.png', mimeType: 'image/png', byteSize: 3 },
+        {
+          key: 'pending/ws/agent/uuid.png',
+          filename: 'shot.png',
+          mimeType: 'image/png',
+          byteSize: 3,
+        },
       ),
     );
   });

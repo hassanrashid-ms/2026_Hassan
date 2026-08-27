@@ -10,7 +10,7 @@
 
 **Architecture:** Reuses Phase 1's MinIO storage choke point (`backend/src/shared/storage/presign.ts`) and its generic pending-upload endpoints (`POST /agent/uploads`, `DELETE /agent/uploads/:key`) unchanged — no article-specific presign route is added. A new `POST /agent/articles/:id/attachments` claims a pending upload the same way Phase 1's `sendAgentMessage` claims one for chat: HEAD-verify → CopyObject to a permanent key → insert an `article_attachment` row, all in one transaction. Like the `message` attachment table, **no `article_attachment` row exists until claim** — this diverges from the original schema-only doc's implied "row exists with a null `storage_key` pre-upload" and instead follows the convention Phase 1 established as the repo's actual attachment pattern. The `status` column stays (still defaults `'pending'` at the schema level for any other caller), but every row this plan inserts is written already `'claimed'`.
 
-Image *placement* in a body uses a custom URI scheme, `attachment://{attachmentId}`, inserted into the markdown by the editor's own upload handler — never a resolved URL, so the body text stays valid forever even as signed URLs rotate. Both `AgentArticleDetail` and `PublicArticleDetail` gain an `attachments: ArticleAttachmentView[]` array (id, filename, mime_type, byte_size, and a fresh-signed `url`, signed at the same place and time the article row itself is serialized — matching Phase 1's "signed fresh per read" rule). The frontend resolves `attachment://{id}` handles against that array at render time: this is exactly the seam `ArticleBody.tsx`'s existing `ArticleImage` component and code comment already describe ("this component learns to recognise an attachment handle and resolve it to a signed URL, and nothing else in the app changes").
+Image _placement_ in a body uses a custom URI scheme, `attachment://{attachmentId}`, inserted into the markdown by the editor's own upload handler — never a resolved URL, so the body text stays valid forever even as signed URLs rotate. Both `AgentArticleDetail` and `PublicArticleDetail` gain an `attachments: ArticleAttachmentView[]` array (id, filename, mime_type, byte_size, and a fresh-signed `url`, signed at the same place and time the article row itself is serialized — matching Phase 1's "signed fresh per read" rule). The frontend resolves `attachment://{id}` handles against that array at render time: this is exactly the seam `ArticleBody.tsx`'s existing `ArticleImage` component and code comment already describe ("this component learns to recognise an attachment handle and resolve it to a signed URL, and nothing else in the app changes").
 
 **Tech Stack:** Drizzle ORM, Express 5, Zod, `@aws-sdk/client-s3` (via the existing storage choke point), React, `@mdxeditor/editor`, TanStack Query.
 
@@ -30,11 +30,13 @@ Image *placement* in a body uses a custom URI scheme, `attachment://{attachmentI
 ### Task 1: Add `mime_type`/`byte_size` to `article_attachment` and drop the pre-claim row shape
 
 **Files:**
+
 - Modify: `backend/src/shared/db/schema/articles.ts`
 - Modify: `backend/tests/helpers/db.ts`
 - Test: `backend/tests/domain.articleAttachment.test.ts` (new)
 
 **Interfaces:**
+
 - Produces: `articleAttachment` Drizzle table (re-exported from `backend/src/shared/db/schema/index.ts` via its existing `export * from './articles.ts'`), columns `id, workspaceId, articleId, filename, storageKey, mimeType, byteSize, status, createdAt`.
 
 - [ ] **Step 1: Add the columns**
@@ -154,6 +156,7 @@ git commit -m "Complete article_attachment schema: mime_type, byte_size, require
 ### Task 2: Claim endpoint — `POST /agent/articles/:id/attachments`
 
 **Files:**
+
 - Modify: `backend/src/agent/services/articlesService.ts`
 - Modify: `backend/src/agent/controllers/articlesController.ts`
 - Modify: `backend/src/agent/routers/articlesRouter.ts`
@@ -161,6 +164,7 @@ git commit -m "Complete article_attachment schema: mime_type, byte_size, require
 - Test: `backend/tests/agent.articles.test.ts` (extend)
 
 **Interfaces:**
+
 - Consumes: `headObject`, `copyObject`, `ALLOWED_IMAGE_MIME_TYPES`, `MAX_ATTACHMENT_BYTES` from `backend/src/shared/storage/presign.ts`; `deleteObject` from the same module; `articleAttachment` table from Task 1.
 - Produces (used by Task 3 and the frontend Task 5):
   - `ClaimArticleAttachmentBody = z.object({ key: z.string().min(1), filename: z.string().min(1).max(255), content_type: z.string().min(1), byte_size: z.number().int().positive() })` — `packages/types/src/articles.ts`
@@ -204,7 +208,11 @@ import { presignPutObject } from '../src/shared/storage/presign.ts';
 async function uploadFixtureImage(workspaceId: string, agentId: string) {
   const key = `pending/${workspaceId}/${agentId}/${randomUUID()}.png`;
   const body = Buffer.from('fake-png-bytes');
-  const { url } = await presignPutObject({ key, contentType: 'image/png', contentLength: body.length });
+  const { url } = await presignPutObject({
+    key,
+    contentType: 'image/png',
+    contentLength: body.length,
+  });
   await fetch(url, {
     method: 'PUT',
     headers: { 'Content-Type': 'image/png', 'Content-Length': String(body.length) },
@@ -230,7 +238,11 @@ describe('POST /agent/articles/:id/attachments', () => {
       .send({ key, filename: 'diagram.png', content_type: 'image/png', byte_size: 14 })
       .expect(200);
 
-    expect(res.body.attachment).toMatchObject({ filename: 'diagram.png', mime_type: 'image/png', byte_size: 14 });
+    expect(res.body.attachment).toMatchObject({
+      filename: 'diagram.png',
+      mime_type: 'image/png',
+      byte_size: 14,
+    });
 
     const { rows } = await ownerPool.query(
       `select storage_key from article_attachment where article_id = $1`,
@@ -307,7 +319,10 @@ import { copyObject, headObject } from '../../shared/storage/presign.ts';
 ```ts
 export type ClaimArticleAttachmentResult =
   | { ok: true; attachment: ArticleAttachmentView }
-  | { ok: false; reason: 'not_found' | 'not_draft' | 'attachment_not_found' | 'attachment_mismatch' };
+  | {
+      ok: false;
+      reason: 'not_found' | 'not_draft' | 'attachment_not_found' | 'attachment_mismatch';
+    };
 
 export async function claimArticleAttachment(
   ctx: AgentContext,
@@ -371,7 +386,12 @@ export const claimArticleAttachmentHandler: RequestHandler = async (req, res) =>
   const params = ArticleIdParams.safeParse(req.params);
   const body = ClaimArticleAttachmentBody.safeParse(req.body);
   if (!params.success || !body.success) {
-    sendError(res, 422, 'invalid_request', 'key, filename, content_type and byte_size are required.');
+    sendError(
+      res,
+      422,
+      'invalid_request',
+      'key, filename, content_type and byte_size are required.',
+    );
     return;
   }
   const result = await claimArticleAttachment(req.agent!, params.data.id, body.data);
@@ -385,10 +405,20 @@ export const claimArticleAttachmentHandler: RequestHandler = async (req, res) =>
       return;
     }
     if (result.reason === 'attachment_not_found') {
-      sendError(res, 422, 'attachment_not_found', 'The uploaded file was not found or has expired.');
+      sendError(
+        res,
+        422,
+        'attachment_not_found',
+        'The uploaded file was not found or has expired.',
+      );
       return;
     }
-    sendError(res, 422, 'attachment_mismatch', 'The uploaded file does not match its declared type or size.');
+    sendError(
+      res,
+      422,
+      'attachment_mismatch',
+      'The uploaded file does not match its declared type or size.',
+    );
     return;
   }
   await deleteObject(body.data.key);
@@ -456,11 +486,13 @@ git commit -m "Add article attachment claim endpoint"
 ### Task 3: Sign attachment URLs on article read (agent and public)
 
 **Files:**
+
 - Modify: `backend/src/agent/services/articlesService.ts`
 - Modify: `backend/src/surface/services/articlesService.ts`
 - Test: `backend/tests/agent.articles.test.ts` (extend), `backend/tests/surface.articles.test.ts` (extend)
 
 **Interfaces:**
+
 - Consumes: `presignGetObject` from `backend/src/shared/storage/presign.ts`; `articleAttachment` table.
 - Produces: `getArticle` (agent) and the public article-detail service both return `attachments: ArticleAttachmentView[]` with a fresh-signed `url`.
 
@@ -535,7 +567,13 @@ export async function getArticle(
           };
         } catch {
           // A broken attachment must not break loading the rest of the article.
-          return { id: a.id, filename: a.filename, mime_type: a.mimeType, byte_size: a.byteSize, url: null };
+          return {
+            id: a.id,
+            filename: a.filename,
+            mime_type: a.mimeType,
+            byte_size: a.byteSize,
+            url: null,
+          };
         }
       }),
     );
@@ -554,7 +592,7 @@ Expected: PASS.
 
 - [ ] **Step 5: Write the failing public-surface test**
 
-First inspect `backend/src/surface/services/articlesService.ts`'s `toDetail`/`getArticle`-equivalent (the function powering `GET /surface/articles/:id`) to match its existing shape before editing. Add to `backend/tests/surface.articles.test.ts`, reusing that file's `fixture()`/`seedArticle()` helpers plus a claim call through the *agent* router (import `agent.articles.test.ts`'s app is not reusable across files — instead seed the `article_attachment` row directly via `ownerPool.query`, uploading the real object first):
+First inspect `backend/src/surface/services/articlesService.ts`'s `toDetail`/`getArticle`-equivalent (the function powering `GET /surface/articles/:id`) to match its existing shape before editing. Add to `backend/tests/surface.articles.test.ts`, reusing that file's `fixture()`/`seedArticle()` helpers plus a claim call through the _agent_ router (import `agent.articles.test.ts`'s app is not reusable across files — instead seed the `article_attachment` row directly via `ownerPool.query`, uploading the real object first):
 
 ```ts
 import { presignPutObject } from '../src/shared/storage/presign.ts';
@@ -566,7 +604,11 @@ describe('GET /surface/articles/:id with an attachment', () => {
 
     const key = `ws/${workspaceId}/attachments/${crypto.randomUUID()}.png`;
     const body = Buffer.from('fake-png-bytes');
-    const { url: putUrl } = await presignPutObject({ key, contentType: 'image/png', contentLength: body.length });
+    const { url: putUrl } = await presignPutObject({
+      key,
+      contentType: 'image/png',
+      contentLength: body.length,
+    });
     await fetch(putUrl, {
       method: 'PUT',
       headers: { 'Content-Type': 'image/png', 'Content-Length': String(body.length) },
@@ -578,7 +620,10 @@ describe('GET /surface/articles/:id with an attachment', () => {
       [workspaceId, articleId, key, body.length],
     );
 
-    const res = await request(app).get(`/articles/${articleId}`).set('Authorization', `Bearer ${token}`).expect(200);
+    const res = await request(app)
+      .get(`/articles/${articleId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
     expect(res.body.attachments).toHaveLength(1);
     const getRes = await fetch(res.body.attachments[0].url);
     expect(getRes.status).toBe(200);
@@ -628,11 +673,13 @@ git commit -m "Sign article attachment URLs on read, agent and public"
 ### Task 4: Frontend — `attachment://` resolution in `ArticleBody`
 
 **Files:**
+
 - Modify: `frontend/src/features/articles/components/ArticleBody.tsx`
 - Modify: `frontend/src/surfaces/webview/pages/ArticleSheet.tsx` (or wherever `<ArticleBody markdown=.../>` is called — confirm with `grep -rn "<ArticleBody" frontend/src` before editing)
 - Test: `frontend/src/features/articles/components/ArticleBody.test.tsx` (extend if it exists, else create alongside the component)
 
 **Interfaces:**
+
 - Consumes: `ArticleAttachmentView[]` from `@support/types` (Task 2).
 - Produces: `ArticleBody` gains an `attachments?: ArticleAttachmentView[]` prop, default `[]`. No other prop changes.
 
@@ -648,7 +695,15 @@ describe('ArticleBody attachment resolution', () => {
     render(
       <ArticleBody
         markdown="![diagram](attachment://a1)"
-        attachments={[{ id: 'a1', filename: 'diagram.png', mime_type: 'image/png', byte_size: 10, url: 'https://minio.local/signed' }]}
+        attachments={[
+          {
+            id: 'a1',
+            filename: 'diagram.png',
+            mime_type: 'image/png',
+            byte_size: 10,
+            url: 'https://minio.local/signed',
+          },
+        ]}
       />,
     );
     expect(screen.getByAltText('diagram')).toHaveAttribute('src', 'https://minio.local/signed');
@@ -720,7 +775,11 @@ function getComponents(dark: boolean, attachments: ArticleAttachmentView[]): Com
   return {
     // ...unchanged entries...
     img: ({ src, alt }) => (
-      <ArticleImage src={typeof src === 'string' ? src : undefined} alt={alt} attachments={attachments} />
+      <ArticleImage
+        src={typeof src === 'string' ? src : undefined}
+        alt={alt}
+        attachments={attachments}
+      />
     ),
     // ...unchanged rest...
   };
@@ -774,11 +833,13 @@ git commit -m "Resolve attachment:// image handles in ArticleBody"
 ### Task 5: Frontend — admin console "Attachments" upload panel
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/agent-console/pages/KnowledgeBase/components/ArticleEditorSheet.tsx`
 - Modify: `frontend/src/surfaces/agent-console/api/agentApi.ts`
 - Test: `frontend/src/surfaces/agent-console/pages/KnowledgeBase/components/ArticleEditorSheet.test.tsx` (extend; if none exists, check `KnowledgeBase.test.tsx` for the existing coverage pattern first)
 
 **Interfaces:**
+
 - Consumes: `requestUpload`, `putFileToUploadUrl`, `cancelUpload` from `agentApi.ts` (already added by Phase 1's Task 6 for chat); `POST /agent/articles/:id/attachments` (Task 2).
 - Produces: none consumed elsewhere — this is the UI's terminal task.
 
@@ -819,7 +880,13 @@ it('uploads an image and inserts an attachment:// reference into the body', asyn
   });
   vi.mocked(agentApi.putFileToUploadUrl).mockResolvedValue(undefined);
   vi.mocked(agentApi.claimArticleAttachment).mockResolvedValue({
-    attachment: { id: 'a1', filename: 'diagram.png', mime_type: 'image/png', byte_size: 3, url: null },
+    attachment: {
+      id: 'a1',
+      filename: 'diagram.png',
+      mime_type: 'image/png',
+      byte_size: 3,
+      url: null,
+    },
   });
 
   // ...render the sheet with a draft article, matching this file's existing setup...
@@ -832,7 +899,12 @@ it('uploads an image and inserts an attachment:// reference into the body', asyn
   expect(agentApi.claimArticleAttachment).toHaveBeenCalledWith(
     expect.any(String),
     expect.any(String),
-    { key: 'pending/ws/agent/uuid.png', filename: 'diagram.png', contentType: 'image/png', byteSize: 3 },
+    {
+      key: 'pending/ws/agent/uuid.png',
+      filename: 'diagram.png',
+      contentType: 'image/png',
+      byteSize: 3,
+    },
   );
 });
 ```

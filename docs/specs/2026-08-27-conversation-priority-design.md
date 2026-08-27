@@ -63,9 +63,9 @@ withWorkspace block — no new failure modes, no new checks.
 New function `setConversationPriority(ctx, conversationId, priority)` in
 `agent/services/conversationsService.ts`, alongside `claimConversation`/`reassignConversation`/`reclassifyConversation`.
 
-| Check                                   | Failure |
-| ---------------------------------------- | ------- |
-| Conversation exists in this workspace    | 404     |
+| Check                                 | Failure |
+| ------------------------------------- | ------- |
+| Conversation exists in this workspace | 404     |
 
 No status restriction, same reasoning as `reclassifyConversation` — priority is metadata, not a
 workflow action, so it's correctable on `resolved`/`closed` conversations too. No-op (skip update
@@ -96,7 +96,7 @@ need to interrupt the transcript.
 ## Frontend
 
 - `agentApi.ts`: new `setConversationPriority(token, id, priority)` calling `PATCH
-  /agent/conversations/:id/priority`.
+/agent/conversations/:id/priority`.
 - Extract `PRIORITY_BADGE_VARIANT` out of `ConversationRow.tsx` into a shared constant (e.g.
   `pages/Inbox/priorityBadge.ts`) so both the list row and the new picker use the same map.
 - New `PriorityPicker.tsx` (`pages/Inbox/components/`), modeled on `SubintentPicker.tsx`'s

@@ -30,10 +30,12 @@ Every regular-agent JWT currently embeds `workspace_id`, and **`resolveConsoleWo
 ### Task 1: Unify the agent JWT claims shape
 
 **Files:**
+
 - Modify: `backend/src/shared/auth/agentSession.ts`
 - Test: `backend/tests/auth.agentSession.test.ts`
 
 **Interfaces:**
+
 - Produces: `AgentSessionClaims = { agent_id: string; is_admin: boolean }`, `signAgentSession(claims: { agent_id: string; is_admin?: boolean }, ttlSeconds?: number): Promise<string>`, `verifyAgentSession(token: string): Promise<AgentSessionClaims>`, `class InvalidAgentSession extends Error`. Every later task's middleware/service code reads `claims.is_admin` as a plain `boolean`, never `'is_admin' in claims`.
 
 - [ ] **Step 1: Write the failing tests**
@@ -219,7 +221,7 @@ Expected: PASS
 `backend/src/agent/services/authService.ts` — the `devLogin` membership loop and its `signAgentSession({ agent_id: agentRow.id, workspace_id: ws.id })` call are handled fully in Task 6 (they need to change behaviorally, not just typecheck). For now, so the package typechecks after this task, change only that one line's call:
 
 ```ts
-      const token = await signAgentSession({ agent_id: agentRow.id });
+const token = await signAgentSession({ agent_id: agentRow.id });
 ```
 
 (`workspace: { id: ws.id, slug: ws.slug }` in the returned object is untouched here — Task 6 removes the whole membership loop and this return shape properly.)
@@ -227,7 +229,7 @@ Expected: PASS
 - [ ] **Step 6: Typecheck the backend package**
 
 Run: `pnpm --filter @support/api typecheck`
-Expected: Still fails on every other test file that calls `signAgentSession({ agent_id, workspace_id })` for a regular agent — expected and addressed in Task 2. Confirm the *only* new failures are excess-property errors on `signAgentSession(...)` calls (i.e., nothing in `src/` besides the two files just touched).
+Expected: Still fails on every other test file that calls `signAgentSession({ agent_id, workspace_id })` for a regular agent — expected and addressed in Task 2. Confirm the _only_ new failures are excess-property errors on `signAgentSession(...)` calls (i.e., nothing in `src/` besides the two files just touched).
 
 - [ ] **Step 7: Commit**
 
@@ -241,6 +243,7 @@ git commit -m "feat: unify agent JWT claims to identity-only {agent_id, is_admin
 ### Task 2: Generalize `resolveConsoleWorkspace` to every agent, with a Redis membership cache
 
 **Files:**
+
 - Create: `backend/src/shared/auth/wsAuthCache.ts`
 - Create: `backend/tests/wsAuthCache.test.ts`
 - Modify: `backend/src/shared/middleware/resolveConsoleWorkspace.ts`
@@ -248,6 +251,7 @@ git commit -m "feat: unify agent JWT claims to identity-only {agent_id, is_admin
 - Modify: every other `backend/tests/*.test.ts` file that signs a regular-agent token (mechanical fix, procedure given in Step 7)
 
 **Interfaces:**
+
 - Consumes: `AgentContext` from Task 1's `requireAgentSession.ts` (`{ agentId, workspaceId, isAdmin }`), `signAgentSession`/`verifyAgentSession` from Task 1.
 - Produces: `getCachedWsAuth`, `setCachedWsAuth`, `invalidateCachedWsAuth`, `closeWsAuthRedis` from `wsAuthCache.ts`, each `(agentId: string, workspaceId: string) => Promise<...>`, plus `WsAuthCacheEntry = { active: boolean; role: 'agent' | 'team_lead' | null }`. Task 3 imports `invalidateCachedWsAuth`.
 
@@ -681,10 +685,12 @@ git commit -m "feat: generalize resolveConsoleWorkspace to every agent, cached v
 ### Task 3: Invalidate the membership cache the instant an admin deactivates access
 
 **Files:**
+
 - Modify: `backend/src/admin/services/membersService.ts`
 - Modify: `backend/tests/admin.members.test.ts`
 
 **Interfaces:**
+
 - Consumes: `invalidateCachedWsAuth(agentId, workspaceId)` from Task 2's `wsAuthCache.ts`.
 
 - [ ] **Step 1: Write the failing test**
@@ -692,7 +698,11 @@ git commit -m "feat: generalize resolveConsoleWorkspace to every agent, cached v
 Add to `backend/tests/admin.members.test.ts` (needs `getCachedWsAuth`/`setCachedWsAuth`/`closeWsAuthRedis` imports and an `afterAll` addition):
 
 ```ts
-import { getCachedWsAuth, setCachedWsAuth, closeWsAuthRedis } from '../src/shared/auth/wsAuthCache.ts';
+import {
+  getCachedWsAuth,
+  setCachedWsAuth,
+  closeWsAuthRedis,
+} from '../src/shared/auth/wsAuthCache.ts';
 ```
 
 Add to the existing `afterAll`:
@@ -709,40 +719,40 @@ afterAll(async () => {
 New test inside `describe('PATCH /admin/workspaces/:id/members/:agentId', ...)`:
 
 ```ts
-  it('invalidates a warm wsauth cache entry the instant access is removed', async () => {
-    const workspaceId = await seedWorkspace();
-    const memberId = await seedAgent();
-    await seedWorkspaceMember({ workspaceId, agentId: memberId, role: 'agent' });
-    await setCachedWsAuth(memberId, workspaceId, { active: true, role: 'agent' });
-    const token = await adminToken(workspaceId);
+it('invalidates a warm wsauth cache entry the instant access is removed', async () => {
+  const workspaceId = await seedWorkspace();
+  const memberId = await seedAgent();
+  await seedWorkspaceMember({ workspaceId, agentId: memberId, role: 'agent' });
+  await setCachedWsAuth(memberId, workspaceId, { active: true, role: 'agent' });
+  const token = await adminToken(workspaceId);
 
-    await request(app)
-      .patch(`/admin/workspaces/${workspaceId}/members/${memberId}`)
-      .set('Authorization', `Bearer ${token}`)
-      .send({ remove: true })
-      .expect(200);
+  await request(app)
+    .patch(`/admin/workspaces/${workspaceId}/members/${memberId}`)
+    .set('Authorization', `Bearer ${token}`)
+    .send({ remove: true })
+    .expect(200);
 
-    expect(await getCachedWsAuth(memberId, workspaceId)).toBeNull();
-  });
+  expect(await getCachedWsAuth(memberId, workspaceId)).toBeNull();
+});
 
-  it('invalidates the cache when hard-deleting a still-invited member too', async () => {
-    const workspaceId = await seedWorkspace();
-    const token = await adminToken(workspaceId);
-    const created = await request(app)
-      .post(`/admin/workspaces/${workspaceId}/members`)
-      .set('Authorization', `Bearer ${token}`)
-      .send({ email: 'pending2@mindstormstudios.com', role: 'agent' })
-      .expect(201);
-    await setCachedWsAuth(created.body.agent_id, workspaceId, { active: true, role: 'agent' });
+it('invalidates the cache when hard-deleting a still-invited member too', async () => {
+  const workspaceId = await seedWorkspace();
+  const token = await adminToken(workspaceId);
+  const created = await request(app)
+    .post(`/admin/workspaces/${workspaceId}/members`)
+    .set('Authorization', `Bearer ${token}`)
+    .send({ email: 'pending2@mindstormstudios.com', role: 'agent' })
+    .expect(201);
+  await setCachedWsAuth(created.body.agent_id, workspaceId, { active: true, role: 'agent' });
 
-    await request(app)
-      .patch(`/admin/workspaces/${workspaceId}/members/${created.body.agent_id}`)
-      .set('Authorization', `Bearer ${token}`)
-      .send({ remove: true })
-      .expect(200);
+  await request(app)
+    .patch(`/admin/workspaces/${workspaceId}/members/${created.body.agent_id}`)
+    .set('Authorization', `Bearer ${token}`)
+    .send({ remove: true })
+    .expect(200);
 
-    expect(await getCachedWsAuth(created.body.agent_id, workspaceId)).toBeNull();
-  });
+  expect(await getCachedWsAuth(created.body.agent_id, workspaceId)).toBeNull();
+});
 ```
 
 Also update `adminToken` (it currently signs `{ agent_id: agentId, workspace_id: workspaceId }`, which no longer typechecks after Task 1):
@@ -783,27 +793,27 @@ import { invalidateCachedWsAuth } from '../../shared/auth/wsAuthCache.ts';
 In `updateMember`, after the hard-delete branch's `await adminDb.delete(...)`:
 
 ```ts
-  if (args.remove && existing.status === 'invited') {
-    await adminDb
-      .delete(workspaceMember)
-      .where(
-        and(
-          eq(workspaceMember.workspaceId, args.workspaceId),
-          eq(workspaceMember.agentId, args.agentId),
-        ),
-      );
-    await invalidateCachedWsAuth(args.agentId, args.workspaceId);
-    return null;
-  }
+if (args.remove && existing.status === 'invited') {
+  await adminDb
+    .delete(workspaceMember)
+    .where(
+      and(
+        eq(workspaceMember.workspaceId, args.workspaceId),
+        eq(workspaceMember.agentId, args.agentId),
+      ),
+    );
+  await invalidateCachedWsAuth(args.agentId, args.workspaceId);
+  return null;
+}
 ```
 
 And after the update-branch's `.returning(...)` result is confirmed non-null:
 
 ```ts
-  if (!row) return null;
-  if (args.remove) {
-    await invalidateCachedWsAuth(args.agentId, args.workspaceId);
-  }
+if (!row) return null;
+if (args.remove) {
+  await invalidateCachedWsAuth(args.agentId, args.workspaceId);
+}
 ```
 
 - [ ] **Step 4: Run tests to verify they pass**
@@ -823,10 +833,12 @@ git commit -m "feat: invalidate the wsauth cache immediately on membership deact
 ### Task 4: Shared "which workspaces is this agent in" helper
 
 **Files:**
+
 - Create: `backend/src/shared/db/workspaceMembership.ts`
 - Test: `backend/tests/workspaceMembership.test.ts`
 
 **Interfaces:**
+
 - Produces: `listActiveMembershipsForAgent(agentId: string): Promise<MembershipRow[]>` where `MembershipRow = { workspaceId: string; workspaceSlug: string; workspaceName: string; role: 'agent' | 'team_lead' }`, and `listAllWorkspaces(): Promise<WorkspaceRow[]>` where `WorkspaceRow = { workspaceId: string; workspaceSlug: string; workspaceName: string }`. Tasks 5 (memberships endpoint), 7 (global inbox scatter), and 9 (socket handshake) all import both.
 
 - [ ] **Step 1: Write the failing test**
@@ -876,7 +888,12 @@ describe('listActiveMembershipsForAgent', () => {
 
     expect(rows).toEqual(
       expect.arrayContaining([
-        { workspaceId: workspaceA, workspaceSlug: 'ws-a', workspaceName: 'Workspace A', role: 'agent' },
+        {
+          workspaceId: workspaceA,
+          workspaceSlug: 'ws-a',
+          workspaceName: 'Workspace A',
+          role: 'agent',
+        },
         {
           workspaceId: workspaceB,
           workspaceSlug: 'ws-b',
@@ -980,6 +997,7 @@ git commit -m "feat: add listActiveMembershipsForAgent/listAllWorkspaces helper"
 ### Task 5: `GET /agent/memberships`
 
 **Files:**
+
 - Create: `backend/src/agent/services/membershipsService.ts`
 - Create: `backend/src/agent/controllers/membershipsController.ts`
 - Create: `backend/src/agent/routers/membershipsRouter.ts`
@@ -988,6 +1006,7 @@ git commit -m "feat: add listActiveMembershipsForAgent/listAllWorkspaces helper"
 - Test: `backend/tests/agent.memberships.test.ts`
 
 **Interfaces:**
+
 - Consumes: `AgentContext` (Task 1), `listActiveMembershipsForAgent`/`listAllWorkspaces` (Task 4).
 - Produces: `GET /agent/memberships → { memberships: MembershipView[] }` where `MembershipView = { workspace_id: string; workspace_slug: string; workspace_name: string; role: 'agent' | 'team_lead' | 'admin' }`. Task 10 (frontend switcher) consumes this response shape exactly.
 
@@ -1106,7 +1125,10 @@ Expected: FAIL with "Cannot find module '../src/agent/routers/membershipsRouter.
 
 ```ts
 import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts';
-import { listActiveMembershipsForAgent, listAllWorkspaces } from '../../shared/db/workspaceMembership.ts';
+import {
+  listActiveMembershipsForAgent,
+  listAllWorkspaces,
+} from '../../shared/db/workspaceMembership.ts';
 
 export type MembershipView = {
   workspace_id: string;
@@ -1195,7 +1217,9 @@ registry.registerPath({
   responses: {
     200: {
       description: 'Memberships list',
-      content: { 'application/json': { schema: z.object({ memberships: z.array(MembershipViewSchema) }) } },
+      content: {
+        'application/json': { schema: z.object({ memberships: z.array(MembershipViewSchema) }) },
+      },
     },
   },
 });
@@ -1213,6 +1237,7 @@ git commit -m "feat: add GET /agent/memberships"
 ### Task 6: Simplify login — identity only, no workspace binding
 
 **Files:**
+
 - Modify: `backend/src/agent/services/authService.ts`
 - Modify: `backend/src/agent/controllers/authController.ts`
 - Test: `backend/tests/agent.authLogin.test.ts` (new)
@@ -1221,6 +1246,7 @@ git commit -m "feat: add GET /agent/memberships"
 - Modify: `frontend/src/surfaces/agent-console/pages/AgentLogin.tsx`
 
 **Interfaces:**
+
 - Produces: `devLogin(agentId: string): Promise<{ token: string; agent: { id: string; display_name: string } } | null>` (workspace binding removed). Frontend `saveLastActiveWorkspaceId`/`loadLastActiveWorkspaceId` from `agentSession.ts` are consumed by Task 10's `WorkspaceSwitcher`.
 
 - [ ] **Step 1: Write the failing backend test**
@@ -1236,7 +1262,13 @@ import { closeAdminDb } from '../src/shared/db/adminClient.ts';
 import { errorMiddleware } from '../src/errors.ts';
 import { authRouter } from '../src/agent/routers/authRouter.ts';
 import { verifyAgentSession } from '../src/shared/auth/agentSession.ts';
-import { closeOwnerPool, seedAgent, seedWorkspace, seedWorkspaceMember, truncateAll } from './helpers/db.ts';
+import {
+  closeOwnerPool,
+  seedAgent,
+  seedWorkspace,
+  seedWorkspaceMember,
+  truncateAll,
+} from './helpers/db.ts';
 
 const app = express();
 app.use(express.json());
@@ -1255,10 +1287,7 @@ describe('POST /auth/dev-login', () => {
   it('logs in a regular agent with zero memberships — no more "not found" for an unassigned agent', async () => {
     const agentId = await seedAgent();
 
-    const res = await request(app)
-      .post('/auth/dev-login')
-      .send({ agent_id: agentId })
-      .expect(200);
+    const res = await request(app).post('/auth/dev-login').send({ agent_id: agentId }).expect(200);
 
     expect(res.body.agent.id).toBe(agentId);
     expect(res.body.workspace).toBeUndefined();
@@ -1271,10 +1300,7 @@ describe('POST /auth/dev-login', () => {
     const agentId = await seedAgent();
     await seedWorkspaceMember({ workspaceId, agentId, role: 'agent' });
 
-    const res = await request(app)
-      .post('/auth/dev-login')
-      .send({ agent_id: agentId })
-      .expect(200);
+    const res = await request(app).post('/auth/dev-login').send({ agent_id: agentId }).expect(200);
 
     const claims = await verifyAgentSession(res.body.token);
     expect(claims).toEqual({ agent_id: agentId, is_admin: false });
@@ -1283,10 +1309,7 @@ describe('POST /auth/dev-login', () => {
   it('logs in a global admin with is_admin true on the token', async () => {
     const adminId = await seedAgent(undefined, { isAdmin: true });
 
-    const res = await request(app)
-      .post('/auth/dev-login')
-      .send({ agent_id: adminId })
-      .expect(200);
+    const res = await request(app).post('/auth/dev-login').send({ agent_id: adminId }).expect(200);
 
     const claims = await verifyAgentSession(res.body.token);
     expect(claims).toEqual({ agent_id: adminId, is_admin: true });
@@ -1316,7 +1339,11 @@ export type DevLoginResult = { token: string; agent: { id: string; display_name:
 export async function devLogin(agentId: string): Promise<DevLoginResult> {
   const agentRow = await withoutWorkspace(async (tx) => {
     const [row] = await tx
-      .select({ id: agentTable.id, displayName: agentTable.displayName, isAdmin: agentTable.isAdmin })
+      .select({
+        id: agentTable.id,
+        displayName: agentTable.displayName,
+        isAdmin: agentTable.isAdmin,
+      })
       .from(agentTable)
       .where(eq(agentTable.id, agentId))
       .limit(1);
@@ -1494,11 +1521,13 @@ git commit -m "feat: identity-only login, pick starting workspace from membershi
 ### Task 7: Global Inbox scatter-gather service
 
 **Files:**
+
 - Create: `backend/src/agent/services/globalInboxService.ts`
 - Test: `backend/tests/agent.globalInboxService.test.ts`
 - Modify: `backend/package.json` (add `p-limit`)
 
 **Interfaces:**
+
 - Consumes: `AgentContext` (Task 1), `listActiveMembershipsForAgent`/`listAllWorkspaces` (Task 4), `getConversationTags` (existing, `backend/src/agent/services/tagsService.ts`).
 - Produces: `getGlobalInbox(ctx: AgentContext): Promise<GlobalInboxResponse>` where `GlobalInboxResponse = { conversations: GlobalInboxTicket[]; failed_workspaces: string[] }` and `GlobalInboxTicket = AgentConversationSummary & { workspace: { id: string; slug: string } }`. Task 8's controller calls this directly.
 
@@ -1542,7 +1571,11 @@ describe('getGlobalInbox', () => {
     await seedWorkspaceMember({ workspaceId: workspaceB, agentId, role: 'agent' });
     const playerA = await seedPlayer(workspaceA);
     const playerB = await seedPlayer(workspaceB);
-    const convA = await seedConversation({ workspaceId: workspaceA, playerId: playerA, status: 'open' });
+    const convA = await seedConversation({
+      workspaceId: workspaceA,
+      playerId: playerA,
+      status: 'open',
+    });
     const convB = await seedConversation({
       workspaceId: workspaceB,
       playerId: playerB,
@@ -1579,8 +1612,16 @@ describe('getGlobalInbox', () => {
     const adminId = await seedAgent(undefined, { isAdmin: true });
     const playerA = await seedPlayer(workspaceA);
     const playerB = await seedPlayer(workspaceB);
-    const convA = await seedConversation({ workspaceId: workspaceA, playerId: playerA, status: 'open' });
-    const convB = await seedConversation({ workspaceId: workspaceB, playerId: playerB, status: 'open' });
+    const convA = await seedConversation({
+      workspaceId: workspaceA,
+      playerId: playerA,
+      status: 'open',
+    });
+    const convB = await seedConversation({
+      workspaceId: workspaceB,
+      playerId: playerB,
+      status: 'open',
+    });
 
     const ctx: AgentContext = { agentId: adminId, workspaceId: '', isAdmin: true };
     const result = await getGlobalInbox(ctx);
@@ -1624,7 +1665,10 @@ import type { AgentConversationSummary } from '@support/types';
 import { agent, conversation, message, player } from '../../shared/db/schema/index.ts';
 import { withWorkspace } from '../../shared/db/withWorkspace.ts';
 import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts';
-import { listActiveMembershipsForAgent, listAllWorkspaces } from '../../shared/db/workspaceMembership.ts';
+import {
+  listActiveMembershipsForAgent,
+  listAllWorkspaces,
+} from '../../shared/db/workspaceMembership.ts';
 import { getConversationTags } from './tagsService.ts';
 import { logger } from '../../shared/logging/logger.ts';
 
@@ -1754,6 +1798,7 @@ git commit -m "feat: add Global Inbox scatter-gather service"
 ### Task 8: `GET /agent/global-inbox`
 
 **Files:**
+
 - Create: `backend/src/agent/controllers/globalInboxController.ts`
 - Create: `backend/src/agent/routers/globalInboxRouter.ts`
 - Modify: `backend/src/agent/router.ts`
@@ -1761,6 +1806,7 @@ git commit -m "feat: add Global Inbox scatter-gather service"
 - Test: `backend/tests/agent.globalInbox.test.ts`
 
 **Interfaces:**
+
 - Consumes: `getGlobalInbox` (Task 7).
 - Produces: `GET /agent/global-inbox → GlobalInboxResponse`. Task 11 (frontend Global Inbox page) consumes this response shape.
 
@@ -1810,8 +1856,16 @@ describe('GET /agent/global-inbox', () => {
     await seedWorkspaceMember({ workspaceId: workspaceB, agentId, role: 'agent' });
     const playerA = await seedPlayer(workspaceA);
     const playerB = await seedPlayer(workspaceB);
-    const convA = await seedConversation({ workspaceId: workspaceA, playerId: playerA, status: 'open' });
-    const convB = await seedConversation({ workspaceId: workspaceB, playerId: playerB, status: 'open' });
+    const convA = await seedConversation({
+      workspaceId: workspaceA,
+      playerId: playerA,
+      status: 'open',
+    });
+    const convB = await seedConversation({
+      workspaceId: workspaceB,
+      playerId: playerB,
+      status: 'open',
+    });
     const token = await signAgentSession({ agent_id: agentId });
 
     const res = await request(app)
@@ -1879,7 +1933,15 @@ Expected: PASS
 const GlobalInboxTicketSchema = z.object({
   id: z.uuid(),
   player: z.object({ external_player_id: z.string() }),
-  status: z.enum(['new', 'bot_active', 'open', 'awaiting_player', 'escalated', 'resolved', 'closed']),
+  status: z.enum([
+    'new',
+    'bot_active',
+    'open',
+    'awaiting_player',
+    'escalated',
+    'resolved',
+    'closed',
+  ]),
   confirm_phase: z.enum(['none', 'bot_article', 'agent_ask', 'form', 'inactivity_ask']),
   last_message_preview: z.string().nullable(),
   last_message_at: z.iso.datetime().nullable(),
@@ -1924,6 +1986,7 @@ git commit -m "feat: add GET /agent/global-inbox"
 ### Task 9: Realtime — one socket, one room per active workspace
 
 **Files:**
+
 - Modify: `backend/src/shared/realtime/socketServer.ts`
 - Modify: `backend/src/shared/realtime/emit.ts`
 - Test: `backend/tests/realtime.agentMultiWorkspace.test.ts` (new)
@@ -1933,6 +1996,7 @@ git commit -m "feat: add GET /agent/global-inbox"
 - Modify: `frontend/src/surfaces/agent-console/pages/Inbox/components/ConversationList.tsx` (same)
 
 **Interfaces:**
+
 - Consumes: `listActiveMembershipsForAgent`/`listAllWorkspaces` (Task 4).
 - Produces: `AgentSocketData = { role: 'agent'; workspaceIds: string[]; agentId: string }` (was `workspaceId: string`). `emitInboxChanged`'s emitted payload gains `workspace_id: string` — no signature change, existing callers are unaffected.
 
@@ -2203,7 +2267,7 @@ Expected: PASS
 
 - [ ] **Step 6: Fix the now-broken `realtime.adminWorkspace.test.ts`**
 
-This file exercises the old admin `auth.workspaceId`-picks-one-room behavior, which no longer exists (an admin socket now joins every workspace's room automatically). Read it, then update any case that connects with `auth: { token, role: 'agent', workspaceId }` and asserts the admin *only* receives events for that one workspace — that assertion is no longer true. Replace such cases with the equivalent of this plan's Step 1 "admin socket receives conversation:changed for any workspace" test, and remove any case whose entire premise was "the admin does not receive an event for a workspace it didn't pass as `auth.workspaceId`" (there is no such restriction any more). Run the file standalone until it passes:
+This file exercises the old admin `auth.workspaceId`-picks-one-room behavior, which no longer exists (an admin socket now joins every workspace's room automatically). Read it, then update any case that connects with `auth: { token, role: 'agent', workspaceId }` and asserts the admin _only_ receives events for that one workspace — that assertion is no longer true. Replace such cases with the equivalent of this plan's Step 1 "admin socket receives conversation:changed for any workspace" test, and remove any case whose entire premise was "the admin does not receive an event for a workspace it didn't pass as `auth.workspaceId`" (there is no such restriction any more). Run the file standalone until it passes:
 
 Run: `pnpm --filter @support/api vitest run tests/realtime.adminWorkspace.test.ts`
 Expected: PASS after the rewrite
@@ -2223,13 +2287,13 @@ Expected: PASS
 `frontend/src/surfaces/agent-console/components/AgentConsoleShell.tsx`:
 
 ```ts
-    const socket = createSocket(session.token, 'agent');
+const socket = createSocket(session.token, 'agent');
 ```
 
 `frontend/src/surfaces/agent-console/pages/Inbox/components/ConversationList.tsx`:
 
 ```ts
-    const socket = createSocket(token, 'agent');
+const socket = createSocket(token, 'agent');
 ```
 
 (Also drop the now-unused `loadAgentSession` import from `ConversationList.tsx` if nothing else in the file uses it — check before removing.)
@@ -2251,11 +2315,13 @@ git commit -m "feat: join one inbox room per active workspace membership over a 
 ### Task 10: Frontend — Workspace Switcher
 
 **Files:**
+
 - Create: `frontend/src/surfaces/agent-console/components/WorkspaceSwitcher.tsx`
 - Create: `frontend/src/surfaces/agent-console/components/WorkspaceSwitcher.test.tsx`
 - Modify: `frontend/src/surfaces/agent-console/components/AgentConsoleShell.tsx`
 
 **Interfaces:**
+
 - Consumes: `fetchMemberships` (Task 6), `saveAgentSession`/`saveLastActiveWorkspaceId` (Task 6), `StoredAgentSession` (existing).
 - Produces: `WorkspaceSwitcher({ session: StoredAgentSession }): JSX.Element | null`, rendered inside `AgentConsoleShell`'s header.
 
@@ -2297,7 +2363,12 @@ describe('WorkspaceSwitcher', () => {
   it('renders nothing when the agent has zero or one membership', async () => {
     vi.spyOn(agentApi, 'fetchMemberships').mockResolvedValue({
       memberships: [
-        { workspace_id: 'workspace-a', workspace_slug: 'ws-a', workspace_name: 'Workspace A', role: 'agent' },
+        {
+          workspace_id: 'workspace-a',
+          workspace_slug: 'ws-a',
+          workspace_name: 'Workspace A',
+          role: 'agent',
+        },
       ],
     });
 
@@ -2310,8 +2381,18 @@ describe('WorkspaceSwitcher', () => {
   it('lists every membership and switches on selection', async () => {
     vi.spyOn(agentApi, 'fetchMemberships').mockResolvedValue({
       memberships: [
-        { workspace_id: 'workspace-a', workspace_slug: 'ws-a', workspace_name: 'Workspace A', role: 'agent' },
-        { workspace_id: 'workspace-b', workspace_slug: 'ws-b', workspace_name: 'Workspace B', role: 'team_lead' },
+        {
+          workspace_id: 'workspace-a',
+          workspace_slug: 'ws-a',
+          workspace_name: 'Workspace A',
+          role: 'agent',
+        },
+        {
+          workspace_id: 'workspace-b',
+          workspace_slug: 'ws-b',
+          workspace_name: 'Workspace B',
+          role: 'team_lead',
+        },
       ],
     });
     const saveSpy = vi.spyOn(agentSession, 'saveAgentSession').mockImplementation(() => {});
@@ -2331,7 +2412,11 @@ describe('WorkspaceSwitcher', () => {
     await userEvent.click(otherOption);
 
     expect(saveSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ workspaceId: 'workspace-b', workspaceSlug: 'ws-b', role: 'team_lead' }),
+      expect.objectContaining({
+        workspaceId: 'workspace-b',
+        workspaceSlug: 'ws-b',
+        role: 'team_lead',
+      }),
     );
     expect(saveLastActiveSpy).toHaveBeenCalledWith('workspace-b');
     expect(assignSpy).toHaveBeenCalledWith('/inbox');
@@ -2350,7 +2435,11 @@ Expected: FAIL with "Cannot find module './WorkspaceSwitcher.tsx'"
 import { useQuery } from '@tanstack/react-query';
 import { ChevronDown } from 'lucide-react';
 import { fetchMemberships } from '../api/agentApi.ts';
-import { saveAgentSession, saveLastActiveWorkspaceId, type StoredAgentSession } from '../lib/agentSession.ts';
+import {
+  saveAgentSession,
+  saveLastActiveWorkspaceId,
+  type StoredAgentSession,
+} from '../lib/agentSession.ts';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -2433,28 +2522,28 @@ Insert it in the header, between the role `Badge` and the `Log out` button:
 Section 2 of the design doc also requires falling back to the first membership if the persisted `workspaceId` is no longer valid (removed or deactivated) — add this as a small effect in `AgentConsoleShell.tsx`, right after the existing presence-fetch effect:
 
 ```tsx
-  const membershipsForFallback = useQuery({
-    queryKey: ['memberships'],
-    queryFn: () => fetchMemberships(session!.token),
-    enabled: session !== null,
-  });
+const membershipsForFallback = useQuery({
+  queryKey: ['memberships'],
+  queryFn: () => fetchMemberships(session!.token),
+  enabled: session !== null,
+});
 
-  useEffect(() => {
-    if (!session || !membershipsForFallback.data) return;
-    const memberships = membershipsForFallback.data.memberships;
-    if (memberships.length === 0) return;
-    const stillValid = memberships.some((m) => m.workspace_id === session.workspaceId);
-    if (stillValid) return;
-    const fallback = memberships[0]!;
-    saveAgentSession({
-      ...session,
-      workspaceId: fallback.workspace_id,
-      workspaceSlug: fallback.workspace_slug,
-      role: fallback.role,
-    });
-    saveLastActiveWorkspaceId(fallback.workspace_id);
-    setSession(loadAgentSession());
-  }, [session, membershipsForFallback.data]);
+useEffect(() => {
+  if (!session || !membershipsForFallback.data) return;
+  const memberships = membershipsForFallback.data.memberships;
+  if (memberships.length === 0) return;
+  const stillValid = memberships.some((m) => m.workspace_id === session.workspaceId);
+  if (stillValid) return;
+  const fallback = memberships[0]!;
+  saveAgentSession({
+    ...session,
+    workspaceId: fallback.workspace_id,
+    workspaceSlug: fallback.workspace_slug,
+    role: fallback.role,
+  });
+  saveLastActiveWorkspaceId(fallback.workspace_id);
+  setSession(loadAgentSession());
+}, [session, membershipsForFallback.data]);
 ```
 
 Add the two new imports this needs at the top of the file:
@@ -2482,6 +2571,7 @@ git commit -m "feat: add workspace switcher with fallback when the active worksp
 ### Task 11: Frontend — Global Inbox page
 
 **Files:**
+
 - Create: `frontend/src/surfaces/agent-console/pages/GlobalInbox/GlobalInbox.tsx`
 - Create: `frontend/src/surfaces/agent-console/pages/GlobalInbox/GlobalInbox.test.tsx`
 - Modify: `frontend/src/surfaces/agent-console/api/agentApi.ts`
@@ -2489,6 +2579,7 @@ git commit -m "feat: add workspace switcher with fallback when the active worksp
 - Modify: `frontend/src/routes/AppRoutes.tsx`
 
 **Interfaces:**
+
 - Consumes: `GET /agent/global-inbox` (Task 8), `AgentConversationSummary` fields (existing `@support/types`), `saveAgentSession`/`saveLastActiveWorkspaceId` (Task 6).
 - Produces: a `Global Inbox` nav item and route at `/global-inbox`.
 
@@ -2625,7 +2716,11 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { MessageSquare } from 'lucide-react';
 import { fetchGlobalInbox, type GlobalInboxTicket } from '../../api/agentApi.ts';
-import { loadAgentSession, saveAgentSession, saveLastActiveWorkspaceId } from '../../lib/agentSession.ts';
+import {
+  loadAgentSession,
+  saveAgentSession,
+  saveLastActiveWorkspaceId,
+} from '../../lib/agentSession.ts';
 import { ScrollArea } from '../../components/ui/scroll-area.tsx';
 import { ConversationRow } from '../Inbox/components/ConversationRow.tsx';
 
@@ -2754,6 +2849,7 @@ git commit -m "feat: add Global Inbox page, merging active tickets across worksp
 ## Self-Review
 
 **Spec coverage:**
+
 1. Session model change (JWT decoupling, per-request auth, Redis cache, rollout, admin generalization) → Tasks 1, 2, 3.
 2. Workspace switcher & default workspace → Task 10 (switcher + fallback logic), Task 6 (default-on-login).
 3. Global Inbox scatter-gather (`/agent/global-inbox`, bounded concurrency, per-workspace cap, partial failure + `failed_workspaces`) → Tasks 4, 7, 8.

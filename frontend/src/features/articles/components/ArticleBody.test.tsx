@@ -106,7 +106,13 @@ describe('ArticleBody attachment resolution', () => {
       <ArticleBody
         markdown="![diagram](attachment:a1)"
         attachments={[
-          { id: 'a1', filename: 'diagram.png', mime_type: 'image/png', byte_size: 10, url: 'https://minio.local/signed' },
+          {
+            id: 'a1',
+            filename: 'diagram.png',
+            mime_type: 'image/png',
+            byte_size: 10,
+            url: 'https://minio.local/signed',
+          },
         ]}
       />,
     );

@@ -36,8 +36,7 @@ export function ConversationList({
   });
 
   const mineConversations = mine.data?.pages.flatMap((page) => page.conversations) ?? [];
-  const escalatedConversations =
-    escalated.data?.pages.flatMap((page) => page.conversations) ?? [];
+  const escalatedConversations = escalated.data?.pages.flatMap((page) => page.conversations) ?? [];
 
   useEffect(() => {
     const socket = createSocket(token, 'agent');
