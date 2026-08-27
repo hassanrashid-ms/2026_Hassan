@@ -484,19 +484,35 @@ registry.registerPath({
   path: '/surface/messages',
   summary: 'Send Player Message',
   description:
-    'Sends a player chat message. `session_id` is optional and best-effort: it is verified against the caller and used to attribute the resulting events, and is ignored when it cannot be verified.',
+    'Sends a player chat message. `session_id` is optional and best-effort: it is verified against the caller and used to attribute the resulting events, and is ignored when it cannot be verified. `form_field_key` is present only when this send answers a live form submission\'s pending `attachment` field.',
   security: [{ [bearerPlayerJwt.name]: [] }],
   request: {
     body: {
       content: {
         'application/json': {
-          schema: z.object({ body: z.string().min(1).max(4000), session_id: z.uuid().optional() }),
+          schema: z.object({
+            body: z.string().max(4000),
+            session_id: z.uuid().optional(),
+            attachment: z
+              .object({
+                key: z.string().min(1),
+                filename: z.string().min(1).max(255),
+                mime_type: z.string().min(1),
+                byte_size: z.number().int().positive(),
+              })
+              .optional(),
+            form_field_key: z.string().min(1).optional(),
+          }),
         },
       },
     },
   },
   responses: {
     200: { description: 'Message sent' },
+    422: {
+      description:
+        'attachment_not_found (key missing, or not owned by this player/workspace) or attachment_mismatch (declared mime_type/byte_size disagrees with the real object, or fails the allowlist/size cap)',
+    },
   },
 });
 

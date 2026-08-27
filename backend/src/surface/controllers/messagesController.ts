@@ -11,11 +11,29 @@ export const postMessageHandler: RequestHandler = async (req, res) => {
   const ctx = req.player!;
   const body = SendMessageBody.safeParse(req.body);
   if (!body.success) {
-    sendError(res, 422, 'invalid_request', 'body must be a non-empty string.');
+    sendError(
+      res,
+      422,
+      'invalid_request',
+      'body must be a non-empty string, or an attachment must be provided.',
+    );
     return;
   }
   const result = await sendPlayerMessage(ctx, body.data);
-  res.status(200).json(result);
+  if (result.outcome === 'attachment_not_found') {
+    sendError(res, 422, 'attachment_not_found', 'The uploaded file was not found or has expired.');
+    return;
+  }
+  if (result.outcome === 'attachment_mismatch') {
+    sendError(
+      res,
+      422,
+      'attachment_mismatch',
+      'The uploaded file does not match its declared type or size.',
+    );
+    return;
+  }
+  res.status(200).json({ conversation_id: result.conversation_id, message: result.message });
 };
 
 export const getMessagesHandler: RequestHandler = async (req, res) => {

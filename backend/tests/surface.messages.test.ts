@@ -62,6 +62,122 @@ async function setup() {
   return { workspaceId, playerId, sessionId, token };
 }
 
+async function uploadFixtureImage(workspaceId: string, playerId: string) {
+  const key = `pending/${workspaceId}/${playerId}/${crypto.randomUUID()}.png`;
+  const body = Buffer.from('fake-png-bytes');
+  const { url } = await presignPutObject({
+    key,
+    contentType: 'image/png',
+    contentLength: body.length,
+  });
+  await fetch(url, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'image/png', 'Content-Length': String(body.length) },
+    body,
+  });
+  return key;
+}
+
+describe('POST /surface/messages with an attachment', () => {
+  it('claims the pending object and inserts an attachment row', async () => {
+    const { workspaceId, playerId, token } = await setup();
+    const key = await uploadFixtureImage(workspaceId, playerId);
+
+    const res = await request(app)
+      .post('/surface/messages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        body: '',
+        attachment: { key, filename: 'shot.png', mime_type: 'image/png', byte_size: 14 },
+      })
+      .expect(200);
+
+    expect(res.body.message.body).toBe('shot.png');
+    expect(res.body.message.attachment).toMatchObject({
+      filename: 'shot.png',
+      mime_type: 'image/png',
+      byte_size: 14,
+    });
+  });
+
+  it('422s with attachment_not_found for a bogus key', async () => {
+    const { workspaceId, playerId, token } = await setup();
+    const bogusKey = `pending/${workspaceId}/${playerId}/${crypto.randomUUID()}.png`;
+
+    const res = await request(app)
+      .post('/surface/messages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        body: '',
+        attachment: { key: bogusKey, filename: 'ghost.png', mime_type: 'image/png', byte_size: 14 },
+      })
+      .expect(422);
+    expect(res.body.error.code).toBe('attachment_not_found');
+  });
+});
+
+describe('POST /surface/messages answering a form attachment field', () => {
+  it('creates a form_answer with the attachment id and does not error', async () => {
+    const { workspaceId, playerId, token } = await setup();
+    const conversationId = await seedConversation({ workspaceId, playerId });
+    const formId = await seedForm({ workspaceId, name: 'Missing Purchase' });
+    await seedFormVersion({
+      workspaceId,
+      formId,
+      version: 1,
+      fields: [
+        {
+          key: 'store',
+          label: 'Which store?',
+          type: 'choice',
+          isRequired: true,
+          position: 0,
+          options: ['Google Play', 'Apple App Store'],
+        },
+        {
+          key: 'proof_of_purchase',
+          label: 'Proof of purchase',
+          type: 'attachment',
+          isRequired: false,
+          position: 1,
+        },
+      ],
+      publishedAt: new Date(),
+    });
+    const submissionId = await seedFormSubmission({
+      workspaceId,
+      conversationId,
+      formId,
+      formVersion: 1,
+    });
+    await seedFormAnswer({
+      workspaceId,
+      formSubmissionId: submissionId,
+      fieldKey: 'store',
+      fieldType: 'choice',
+      value: 'Google Play',
+    });
+
+    const key = await uploadFixtureImage(workspaceId, playerId);
+    const res = await request(app)
+      .post('/surface/messages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        body: '',
+        attachment: { key, filename: 'receipt.png', mime_type: 'image/png', byte_size: 14 },
+        form_field_key: 'proof_of_purchase',
+      })
+      .expect(200);
+
+    expect(res.body.message.attachment).toBeTruthy();
+    const { rows } = await ownerPool.query(
+      `select value from form_answer where field_key = 'proof_of_purchase'`,
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].value).toMatchObject({ attachmentId: expect.any(String) });
+  });
+});
+
 describe('POST /surface/messages', () => {
   it('creates the conversation on the first message', async () => {
     const { token } = await setup();

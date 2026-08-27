@@ -7,6 +7,17 @@ import { withWorkspace } from '../src/shared/db/withWorkspace.ts';
 import { conversation, resolutionCycle } from '../src/shared/db/schema/index.ts';
 import { applyResolutionAnswer } from '../src/domain/conversations/index.ts';
 import { sendPlayerMessage } from '../src/surface/services/messagesService.ts';
+import type { PlayerContext } from '../src/shared/middleware/requirePlayerToken.ts';
+
+// This suite always sends a plain body with no attachment, so the send
+// always succeeds — narrowing the outcome union here keeps every call site
+// below a plain `{ conversation_id }` destructure, as it was before the
+// attachment-claim outcome was added.
+async function sendPlayerMessageOk(ctx: PlayerContext, body: { body: string }) {
+  const result = await sendPlayerMessage(ctx, body);
+  if (result.outcome !== 'ok') throw new Error(`unexpected outcome: ${result.outcome}`);
+  return result;
+}
 import { runInactivityClock } from '../src/shared/jobs/inactivityClock.ts';
 import { runAutoClose } from '../src/shared/jobs/autoClose.ts';
 import { closeOwnerPool, seedPlayer, seedWorkspace, truncateAll } from './helpers/db.ts';
@@ -44,7 +55,7 @@ describe('inactivity clock end to end', () => {
     const playerId = await seedPlayer(workspaceId);
     const ctx = { workspaceId, playerId } as never;
 
-    const { conversation_id } = await sendPlayerMessage(ctx, { body: 'my gems vanished' });
+    const { conversation_id } = await sendPlayerMessageOk(ctx, { body: 'my gems vanished' });
     await withWorkspace(workspaceId, (tx) =>
       tx.update(conversation).set({ status: 'open' }).where(eq(conversation.id, conversation_id)),
     );
@@ -75,7 +86,7 @@ describe('inactivity clock end to end', () => {
     expect(closed.cycles[0]!.closedAt).not.toBeNull();
 
     // Reopen opens cycle 2 and leaves cycle 1's record intact.
-    await sendPlayerMessage(ctx, { body: 'it happened again' });
+    await sendPlayerMessageOk(ctx, { body: 'it happened again' });
     const reopened = await state(workspaceId, conversation_id);
     expect(reopened.conv.status).toBe('open');
     expect(reopened.cycles.map((c) => c.cycleNo)).toEqual([2, 1]);
@@ -88,7 +99,7 @@ describe('inactivity clock end to end', () => {
     const playerId = await seedPlayer(workspaceId);
     const ctx = { workspaceId, playerId } as never;
 
-    const { conversation_id } = await sendPlayerMessage(ctx, { body: 'help' });
+    const { conversation_id } = await sendPlayerMessageOk(ctx, { body: 'help' });
     await withWorkspace(workspaceId, async (tx) => {
       await tx
         .update(conversation)
@@ -123,7 +134,7 @@ describe('inactivity clock end to end', () => {
     const playerId = await seedPlayer(workspaceId);
     const ctx = { workspaceId, playerId } as never;
 
-    const { conversation_id } = await sendPlayerMessage(ctx, { body: 'help' });
+    const { conversation_id } = await sendPlayerMessageOk(ctx, { body: 'help' });
     await withWorkspace(workspaceId, async (tx) => {
       await tx
         .update(conversation)
@@ -156,7 +167,7 @@ describe('inactivity clock end to end', () => {
     const playerId = await seedPlayer(workspaceId);
     const ctx = { workspaceId, playerId } as never;
 
-    const { conversation_id } = await sendPlayerMessage(ctx, { body: 'help' });
+    const { conversation_id } = await sendPlayerMessageOk(ctx, { body: 'help' });
     await withWorkspace(workspaceId, async (tx) => {
       await tx
         .update(conversation)

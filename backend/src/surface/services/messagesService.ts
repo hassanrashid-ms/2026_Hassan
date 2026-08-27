@@ -1,8 +1,10 @@
+import { randomUUID } from 'node:crypto';
 import { and, desc, eq, lte, ne } from 'drizzle-orm';
 import type { z } from 'zod';
 import {
   MarkPlayerReadBody,
   SendMessageBody,
+  type AgentMessageView,
   type PlayerFormView,
   type PlayerMessageView,
   type PlayerMessagesResponse,
@@ -37,7 +39,14 @@ import {
   player,
   session,
 } from '../../shared/db/schema/index.ts';
-import { presignGetObject } from '../../shared/storage/presign.ts';
+import {
+  ALLOWED_IMAGE_MIME_TYPES,
+  MAX_ATTACHMENT_BYTES,
+  copyObject,
+  deleteObject,
+  headObject,
+  presignGetObject,
+} from '../../shared/storage/presign.ts';
 import { withWorkspace, type Tx } from '../../shared/db/withWorkspace.ts';
 import {
   emitInboxChanged,
@@ -47,6 +56,7 @@ import {
 import { getIo } from '../../shared/realtime/socketServer.ts';
 import type { PlayerContext } from '../../shared/middleware/requirePlayerToken.ts';
 import { enqueueBotTurn } from '../../shared/jobs/botTurns.ts';
+import { logger } from '../../shared/logging/logger.ts';
 
 const REOPENABLE_STATUSES = new Set(['resolved', 'closed']);
 
@@ -60,10 +70,56 @@ const REOPENABLE_STATUSES = new Set(['resolved', 'closed']);
  */
 const AGENT_OWNED_RESOLUTIONS = new Set(['agent', 'player_confirmed', 'timed_out']);
 
+export type SendPlayerMessageResult =
+  | { outcome: 'ok'; conversation_id: string; message: PlayerMessageView | null }
+  | { outcome: 'attachment_not_found' }
+  | { outcome: 'attachment_mismatch' };
+
 export async function sendPlayerMessage(
   ctx: PlayerContext,
   body: SendMessageBodyType,
-): Promise<{ conversation_id: string; message: PlayerMessageView | null }> {
+): Promise<SendPlayerMessageResult> {
+  let claimedDestKey: string | null = null;
+  let pendingKeyToDelete: string | null = null;
+
+  if (body.attachment) {
+    // Ownership check on a fully client-supplied key: only this player's own
+    // pending prefix may be claimed. Wrong-tenant/wrong-player keys collapse
+    // into the same outcome as "missing" — same "404 not 403" convention as
+    // cancelPlayerUpload — so a claim attempt never reveals whether some other
+    // player's object exists at all.
+    const expectedPrefix = `pending/${ctx.workspaceId}/${ctx.playerId}/`;
+    if (!body.attachment.key.startsWith(expectedPrefix)) {
+      return { outcome: 'attachment_not_found' };
+    }
+
+    const real = await headObject(body.attachment.key);
+    if (!real) return { outcome: 'attachment_not_found' };
+    if (
+      real.contentType !== body.attachment.mime_type ||
+      real.contentLength !== body.attachment.byte_size
+    ) {
+      return { outcome: 'attachment_mismatch' };
+    }
+    // Defense-in-depth: re-check the allowlist/size cap against the real,
+    // HEAD-verified values at claim time too, not only at presign time.
+    if (
+      !ALLOWED_IMAGE_MIME_TYPES.includes(
+        real.contentType as (typeof ALLOWED_IMAGE_MIME_TYPES)[number],
+      ) ||
+      real.contentLength > MAX_ATTACHMENT_BYTES
+    ) {
+      return { outcome: 'attachment_mismatch' };
+    }
+
+    const extension = body.attachment.key.slice(body.attachment.key.lastIndexOf('.'));
+    claimedDestKey = `ws/${ctx.workspaceId}/attachments/${randomUUID()}${extension}`;
+    await copyObject({ sourceKey: body.attachment.key, destKey: claimedDestKey });
+    pendingKeyToDelete = body.attachment.key;
+  }
+
+  const messageBody = body.body.trim().length > 0 ? body.body : body.attachment!.filename;
+
   const result = await withWorkspace(ctx.workspaceId, async (tx) => {
     // Mandatory for tenant safety, not an optimisation: FK checks bypass RLS,
     // so a client-supplied session id must be confirmed visible before it can
@@ -246,8 +302,93 @@ export async function sendPlayerMessage(
       authorType: 'player',
       actorId: ctx.playerId,
       sessionId,
-      body: body.body,
+      body: messageBody,
     });
+
+    let attachmentRow: {
+      id: string;
+      filename: string;
+      mimeType: string;
+      byteSize: number;
+    } | null = null;
+    if (body.attachment && claimedDestKey) {
+      const [inserted] = await tx
+        .insert(attachment)
+        .values({
+          workspaceId: ctx.workspaceId,
+          messageId: posted.id,
+          storageKey: claimedDestKey,
+          filename: body.attachment.filename,
+          mimeType: body.attachment.mime_type,
+          byteSize: body.attachment.byte_size,
+        })
+        .returning();
+      attachmentRow = {
+        id: inserted!.id,
+        filename: body.attachment.filename,
+        mimeType: body.attachment.mime_type,
+        byteSize: body.attachment.byte_size,
+      };
+    }
+
+    // Form-attachment-field linkage: only runs when the client says this send
+    // is answering a specific field, and only writes anything if that field
+    // really is the workspace's pending `attachment` field for this player's
+    // live submission. Silently no-ops otherwise — an ordinary image message
+    // sent outside of a form must never accidentally answer one.
+    if (body.form_field_key && attachmentRow) {
+      const [liveSub] = await tx
+        .select({
+          id: formSubmission.id,
+          formId: formSubmission.formId,
+          formVersion: formSubmission.formVersion,
+        })
+        .from(formSubmission)
+        .where(
+          and(
+            eq(formSubmission.conversationId, conversationId),
+            eq(formSubmission.status, 'in_progress'),
+          ),
+        )
+        .limit(1);
+      if (liveSub) {
+        const [version] = await tx
+          .select({ fields: formVersion.fields })
+          .from(formVersion)
+          .where(
+            and(
+              eq(formVersion.formId, liveSub.formId),
+              eq(formVersion.version, liveSub.formVersion),
+            ),
+          )
+          .limit(1);
+        const field = version?.fields.find((f) => f.key === body.form_field_key);
+        if (field?.type === 'attachment') {
+          await tx.insert(formAnswer).values({
+            workspaceId: ctx.workspaceId,
+            formSubmissionId: liveSub.id,
+            fieldKey: field.key,
+            fieldType: 'attachment',
+            value: { attachmentId: attachmentRow.id },
+          });
+          await appendEvent(tx, {
+            workspaceId: ctx.workspaceId,
+            type: 'form_field_answered',
+            conversationId,
+            sessionId,
+            actorId: ctx.playerId,
+            actorType: 'player',
+            payload: {
+              form_id: liveSub.formId,
+              field_key: field.key,
+              field_type: 'attachment',
+              position: field.position,
+              is_correction: false,
+            },
+          });
+        }
+      }
+    }
 
     // Deliberately after the player's message, not before it: the handoff line
     // is a response to what the player just said, and a lower `seq` rendered it
@@ -286,11 +427,44 @@ export async function sendPlayerMessage(
       }
     }
 
-    return { conversationId, posted, reopenPosted, inboxStatus, shouldEnqueue };
+    return { conversationId, posted, attachmentRow, reopenPosted, inboxStatus, shouldEnqueue };
   });
 
-  const playerView = toPlayerView(result.posted);
-  const agentView = toAgentView(result.posted);
+  // Best-effort cleanup of the pending original — only after the transaction
+  // committed, so a failed transaction leaves the pending object in place
+  // (still cancellable/reusable) rather than deleting it out from under a
+  // send that didn't actually happen.
+  if (pendingKeyToDelete) {
+    try {
+      await deleteObject(pendingKeyToDelete);
+    } catch (error) {
+      // Genuinely best-effort: the message already committed, so a transient
+      // storage error here must never surface as a failed send to the player
+      // (that invites an accidental duplicate resend of a message that went
+      // through). Log and move on.
+      logger.warn(
+        'attachments',
+        `failed to delete pending object ${pendingKeyToDelete} after claim: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+  }
+
+  const attachmentView = result.attachmentRow
+    ? {
+        id: result.attachmentRow.id,
+        filename: result.attachmentRow.filename,
+        mime_type: result.attachmentRow.mimeType,
+        byte_size: result.attachmentRow.byteSize,
+        url: null as string | null,
+      }
+    : null;
+  const rawPlayerView = toPlayerView(result.posted);
+  const playerView: PlayerMessageView | null = rawPlayerView
+    ? { ...rawPlayerView, attachment: attachmentView }
+    : null;
+  const agentView: AgentMessageView = { ...toAgentView(result.posted), attachment: attachmentView };
   emitMessageToRooms(getIo(), result.conversationId, playerView, agentView);
   if (result.reopenPosted) {
     emitMessageToRooms(
@@ -311,7 +485,7 @@ export async function sendPlayerMessage(
     });
   }
 
-  return { conversation_id: result.conversationId, message: playerView };
+  return { outcome: 'ok', conversation_id: result.conversationId, message: playerView };
 }
 
 /**

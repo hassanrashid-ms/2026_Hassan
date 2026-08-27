@@ -12,10 +12,29 @@ import type { TagView } from './tags.ts';
  * the caller and degrades to a `null` event stamp when it cannot (the session
  * row may not have been uploaded yet). It never gates the send.
  */
-export const SendMessageBody = z.object({
-  body: z.string().min(1).max(4000),
-  session_id: z.uuid().optional(),
-});
+export const SendMessageBody = z
+  .object({
+    body: z.string().max(4000),
+    session_id: z.uuid().optional(),
+    attachment: z
+      .object({
+        key: z.string().min(1),
+        filename: z.string().min(1).max(255),
+        mime_type: z.string().min(1),
+        byte_size: z.number().int().positive(),
+      })
+      .optional(),
+    /**
+     * Present only when this send is answering a form's `attachment` field —
+     * the client-local form progress (see FormCard.tsx) names which field it
+     * is answering, since form state is never server-refetched mid-form.
+     */
+    form_field_key: z.string().min(1).optional(),
+  })
+  .refine((v) => v.body.trim().length > 0 || v.attachment !== undefined, {
+    message: 'body must be non-empty, or an attachment must be provided',
+    path: ['body'],
+  });
 
 export const SendAgentMessageBody = z
   .object({

@@ -5,7 +5,18 @@ import { closeDb } from '../src/shared/db/client.ts';
 import { withWorkspace } from '../src/shared/db/withWorkspace.ts';
 import { conversation, resolutionCycle } from '../src/shared/db/schema/index.ts';
 import { sendPlayerMessage } from '../src/surface/services/messagesService.ts';
+import type { PlayerContext } from '../src/shared/middleware/requirePlayerToken.ts';
 import { openNewTicket } from '../src/surface/services/newTicketService.ts';
+
+// This suite always sends a plain body with no attachment, so the send
+// always succeeds — narrowing the outcome union here keeps every call site
+// below a plain `{ conversation_id }` destructure, as it was before the
+// attachment-claim outcome was added.
+async function sendPlayerMessageOk(ctx: PlayerContext, body: { body: string }) {
+  const result = await sendPlayerMessage(ctx, body);
+  if (result.outcome !== 'ok') throw new Error(`unexpected outcome: ${result.outcome}`);
+  return result;
+}
 import { closeSocketServer, createSocketServer } from '../src/shared/realtime/socketServer.ts';
 import {
   closeOwnerPool,
@@ -42,7 +53,7 @@ describe('resolution cycles on the surface ticket paths', () => {
     const workspaceId = await seedWorkspace({ slug: 'demo-game' });
     const playerId = await seedPlayer(workspaceId);
 
-    const { conversation_id } = await sendPlayerMessage({ workspaceId, playerId } as never, {
+    const { conversation_id } = await sendPlayerMessageOk({ workspaceId, playerId } as never, {
       body: 'my gems vanished',
     });
 
@@ -63,7 +74,7 @@ describe('resolution cycles on the surface ticket paths', () => {
   it('opens cycle 2 on reopen, with the clock already running', async () => {
     const workspaceId = await seedWorkspace({ slug: 'demo-game' });
     const playerId = await seedPlayer(workspaceId);
-    const { conversation_id } = await sendPlayerMessage({ workspaceId, playerId } as never, {
+    const { conversation_id } = await sendPlayerMessageOk({ workspaceId, playerId } as never, {
       body: 'first',
     });
 
@@ -78,7 +89,7 @@ describe('resolution cycles on the surface ticket paths', () => {
         .where(eq(resolutionCycle.conversationId, conversation_id));
     });
 
-    await sendPlayerMessage({ workspaceId, playerId } as never, { body: 'it came back' });
+    await sendPlayerMessageOk({ workspaceId, playerId } as never, { body: 'it came back' });
 
     const rows = await cyclesFor(workspaceId, conversation_id);
     expect(rows.map((r) => r.cycleNo)).toEqual([2, 1]);
@@ -93,7 +104,7 @@ describe('resolution cycles on the surface ticket paths', () => {
       const agentId = await seedAgent();
       await seedWorkspaceMember({ workspaceId, agentId });
       const playerId = await seedPlayer(workspaceId);
-      const { conversation_id } = await sendPlayerMessage({ workspaceId, playerId } as never, {
+      const { conversation_id } = await sendPlayerMessageOk({ workspaceId, playerId } as never, {
         body: 'first',
       });
 
@@ -108,7 +119,7 @@ describe('resolution cycles on the surface ticket paths', () => {
           .where(eq(resolutionCycle.conversationId, conversation_id));
       });
 
-      await sendPlayerMessage({ workspaceId, playerId } as never, { body: 'again' });
+      await sendPlayerMessageOk({ workspaceId, playerId } as never, { body: 'again' });
 
       const [row] = await withWorkspace(workspaceId, (tx) =>
         tx.select().from(conversation).where(eq(conversation.id, conversation_id)),
@@ -120,7 +131,7 @@ describe('resolution cycles on the surface ticket paths', () => {
   it('stamps closed_at on the old cycle and opens cycle 1 on the replacement ticket', async () => {
     const workspaceId = await seedWorkspace({ slug: 'demo-game' });
     const playerId = await seedPlayer(workspaceId);
-    const { conversation_id: oldId } = await sendPlayerMessage({ workspaceId, playerId } as never, {
+    const { conversation_id: oldId } = await sendPlayerMessageOk({ workspaceId, playerId } as never, {
       body: 'first',
     });
     await withWorkspace(workspaceId, (tx) =>
