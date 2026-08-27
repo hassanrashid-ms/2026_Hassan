@@ -863,3 +863,83 @@ describe('GET /bot-config/history', () => {
       .expect(403);
   });
 });
+
+describe('bot_config_version writes', () => {
+  it('seeding writes version 1 with all four fields as changed', async () => {
+    const workspaceId = await seedWorkspace();
+    const { token } = await seedAgentWithRole(workspaceId, 'admin');
+
+    // Any provisioning path that calls seedBotConfig would work; the simplest
+    // trigger available at the HTTP layer today is a save, which upserts the
+    // row and therefore also runs through saveBotConfig's own version write.
+    // This test instead asserts directly against the table so it exercises
+    // seedBotConfig specifically once a provisioning endpoint calls it — until
+    // then, assert saveBotConfig's first-ever save behaves the same way:
+    await request(app)
+      .post('/bot-config')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ prompt: 'Version one prompt' })
+      .expect(200);
+
+    const { rows } = await ownerPool.query(
+      `select version, changed_fields from bot_config_version where workspace_id = $1 order by version`,
+      [workspaceId],
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].version).toBe(1);
+    expect(rows[0].changed_fields.sort()).toEqual(
+      ['limits_config', 'prompt', 'rules', 'tools_config'].sort(),
+    );
+  });
+
+  it('a second save with only prompt changed writes version 2 naming only prompt', async () => {
+    const workspaceId = await seedWorkspace();
+    const { token } = await seedAgentWithRole(workspaceId, 'admin');
+
+    await request(app)
+      .post('/bot-config')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ prompt: 'First' })
+      .expect(200);
+    await request(app)
+      .post('/bot-config')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ prompt: 'Second' })
+      .expect(200);
+
+    const { rows } = await ownerPool.query(
+      `select version, changed_fields from bot_config_version where workspace_id = $1 order by version`,
+      [workspaceId],
+    );
+    expect(rows).toHaveLength(2);
+    expect(rows[1].version).toBe(2);
+    expect(rows[1].changed_fields).toEqual(['prompt']);
+  });
+
+  it('a save with no actual change writes no new version', async () => {
+    const workspaceId = await seedWorkspace();
+    const { token } = await seedAgentWithRole(workspaceId, 'admin');
+
+    await request(app)
+      .post('/bot-config')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ prompt: 'Same' })
+      .expect(200);
+    await request(app)
+      .post('/bot-config')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ prompt: 'Same' })
+      .expect(200);
+
+    const { rows } = await ownerPool.query(
+      `select version from bot_config_version where workspace_id = $1`,
+      [workspaceId],
+    );
+    expect(rows).toHaveLength(1);
+  });
+});

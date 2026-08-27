@@ -13,6 +13,7 @@ import { LIMIT_CATALOG, buildBaselineLimits, clampLimitBounds } from './limitsCa
 import type { LimitKey, LimitToggleValue as LimitToggle } from '@support/types';
 import { getOrCreateSystemActor } from './systemActor.ts';
 import { appendChangeLog } from '../../shared/changeLog/appendChangeLog.ts';
+import { appendBotConfigVersion } from './botConfigVersion.ts';
 
 export type ResolvedBotConfig = {
   isProvisioned: boolean;
@@ -256,6 +257,15 @@ export async function saveBotConfig(tx: Tx, input: BotConfigSave): Promise<Resol
     ],
   });
 
+  await appendBotConfigVersion(tx, {
+    workspaceId: input.workspaceId,
+    actorId: input.actorId,
+    prompt: afterPrompt,
+    rules: afterRules,
+    toolsConfig: afterTools,
+    limitsConfig: afterLimits,
+  });
+
   return resolved(afterProvisioned, afterPrompt, afterRules, afterTools, afterLimits);
 }
 
@@ -266,7 +276,9 @@ export async function saveBotConfig(tx: Tx, input: BotConfigSave): Promise<Resol
  * before-values collapse to the baseline (nothing observably changed), which
  * would make appendChangeLog drop every field as a no-op — but the seed's
  * before_value must be `null` (genuinely never set), not "collapsed to
- * baseline", so the History panel shows a real "version 1" row.
+ * baseline", so the History panel shows a real "version 1" row. Also writes
+ * the first bot_config_version row directly, since no prior version row
+ * exists for appendBotConfigVersion's no-op guard to collapse against.
  */
 export async function seedBotConfig(tx: Tx, workspaceId: string): Promise<ResolvedBotConfig> {
   const [existing] = await tx
@@ -298,6 +310,15 @@ export async function seedBotConfig(tx: Tx, workspaceId: string): Promise<Resolv
       { field: 'tools_config', before: null, after: toolsConfig },
       { field: 'limits_config', before: null, after: limitsConfig },
     ],
+  });
+
+  await appendBotConfigVersion(tx, {
+    workspaceId,
+    actorId,
+    prompt,
+    rules,
+    toolsConfig,
+    limitsConfig,
   });
 
   return resolved(false, prompt, rules, toolsConfig, limitsConfig);
