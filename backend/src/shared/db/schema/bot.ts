@@ -1,5 +1,18 @@
-import { boolean, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
-import { workspace } from './identity.ts';
+import { sql } from 'drizzle-orm';
+import {
+  bigserial,
+  boolean,
+  check,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  unique,
+  uuid,
+} from 'drizzle-orm/pg-core';
+import { agent, workspace } from './identity.ts';
 
 const tz = { withTimezone: true, mode: 'date' } as const;
 
@@ -29,3 +42,47 @@ export const botConfig = pgTable('bot_config', {
   createdAt: timestamp('created_at', tz).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', tz).notNull().defaultNow(),
 });
+
+/**
+ * A full snapshot of bot_config, one row per save. Unlike change_log (field-level,
+ * generic across entity types), this is bot_config-specific and always carries all
+ * four fields together, so "what did the whole bot look like at v3" is one row, not
+ * a join across four change_log entries that may not even share a changed_at.
+ *
+ * Append-only, same enforcement as change_log: REVOKE UPDATE, DELETE in 002_rls.sql.
+ *
+ * `version` is 1-based per workspace, assigned as MAX(version)+1 inside the same
+ * transaction as the bot_config write in saveBotConfig — never computed from row
+ * count, which would be wrong the moment a version is ever skipped for any reason.
+ *
+ * `changed_fields` is computed at write time (which of prompt/rules/tools_config/
+ * limits_config actually differ from the immediately prior version) so the version
+ * list can show "v4 — Prompt, Rules" without loading two full snapshots per row.
+ */
+export const botConfigVersion = pgTable(
+  'bot_config_version',
+  {
+    id: bigserial('id', { mode: 'bigint' }).primaryKey(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspace.id, { onDelete: 'restrict' }),
+    version: integer('version').notNull(),
+    prompt: text('prompt').notNull(),
+    rules: jsonb('rules').notNull(),
+    toolsConfig: jsonb('tools_config').notNull(),
+    limitsConfig: jsonb('limits_config').notNull(),
+    actorId: uuid('actor_id')
+      .notNull()
+      .references(() => agent.id, { onDelete: 'restrict' }),
+    /** Subset of 'prompt' | 'rules' | 'tools_config' | 'limits_config'. */
+    changedFields: text('changed_fields').array().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    unique('bot_config_version_workspace_version_unique').on(t.workspaceId, t.version),
+    index('bot_config_version_workspace_created_idx').on(t.workspaceId, t.createdAt),
+    check('bot_config_version_has_changes', sql`array_length(${t.changedFields}, 1) > 0`),
+  ],
+);

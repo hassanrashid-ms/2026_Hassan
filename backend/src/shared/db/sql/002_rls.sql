@@ -68,6 +68,12 @@ REVOKE UPDATE, DELETE ON change_log FROM support_app;
 REVOKE UPDATE, DELETE ON change_log FROM PUBLIC;
 REVOKE UPDATE, DELETE ON change_log FROM crm_admin;
 
+-- 2b - bot_config_version is a full-snapshot audit trail, same append-only
+-- reasoning as change_log directly above.
+REVOKE UPDATE, DELETE ON bot_config_version FROM support_app;
+REVOKE UPDATE, DELETE ON bot_config_version FROM PUBLIC;
+REVOKE UPDATE, DELETE ON bot_config_version FROM crm_admin;
+
 -- 2c - form_answer is append-only: a correction is a NEW row for the same
 -- field_key and the newest created_at wins on read.
 -- DELETE is already granted nowhere, but revoked here too.
@@ -75,7 +81,7 @@ REVOKE UPDATE, DELETE ON form_answer FROM support_app;
 REVOKE UPDATE, DELETE ON form_answer FROM PUBLIC;
 REVOKE UPDATE, DELETE ON form_answer FROM crm_admin;
 
--- 2b - workspace and agent are the two unscoped tables, but they are NOT
+-- 2d - workspace and agent are the two unscoped tables, but they are NOT
 -- treated identically, and that asymmetry is intentional — do not "tidy" it
 -- into symmetry.
 --
