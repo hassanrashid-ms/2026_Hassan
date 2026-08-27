@@ -8,6 +8,7 @@ import { intentsRouter } from './routers/intentsRouter.ts';
 import { messagesRouter } from './routers/messagesRouter.ts';
 import { newTicketRouter } from './routers/newTicketRouter.ts';
 import { resolutionRouter } from './routers/resolutionRouter.ts';
+import { uploadsRouter } from './routers/uploadsRouter.ts';
 
 export const surfaceRouter = Router();
 
@@ -23,3 +24,4 @@ surfaceRouter.use(intentsRouter);
 surfaceRouter.use(messagesRouter);
 surfaceRouter.use(newTicketRouter);
 surfaceRouter.use(resolutionRouter);
+surfaceRouter.use(uploadsRouter);

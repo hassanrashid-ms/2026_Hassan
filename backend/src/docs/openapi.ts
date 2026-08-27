@@ -520,6 +520,51 @@ registry.registerPath({
   },
 });
 
+registry.registerPath({
+  method: 'post',
+  path: '/surface/uploads',
+  summary: 'Player Request Upload URL',
+  description: 'Returns a presigned PUT URL for an image attachment, valid for 5 minutes.',
+  security: [{ [bearerPlayerJwt.name]: [] }],
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: z.object({
+            filename: z.string().min(1).max(255),
+            content_type: z.enum(['image/png', 'image/jpeg', 'image/webp', 'image/gif']),
+            byte_size: z.number().int().positive(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Presigned upload URL',
+      content: {
+        'application/json': {
+          schema: z.object({ key: z.string(), upload_url: z.string(), expires_at: z.string() }),
+        },
+      },
+    },
+    422: { description: 'Unsupported media type or byte_size over the limit' },
+  },
+});
+
+registry.registerPath({
+  method: 'delete',
+  path: '/surface/uploads/{key}',
+  summary: 'Player Cancel Upload',
+  description: 'Deletes a pending (not-yet-claimed) uploaded object.',
+  security: [{ [bearerPlayerJwt.name]: [] }],
+  request: { params: z.object({ key: z.string() }) },
+  responses: {
+    204: { description: 'Deleted (idempotent)' },
+    404: { description: 'Key not owned by the caller' },
+  },
+});
+
 // --- 4. AGENT ENDPOINTS ---
 registry.registerPath({
   method: 'get',
