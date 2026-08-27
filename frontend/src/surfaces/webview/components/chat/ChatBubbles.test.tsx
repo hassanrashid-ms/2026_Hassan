@@ -98,3 +98,25 @@ describe('ChatBubbles read-more', () => {
     expect(screen.queryByRole('link', { name: 'Read more' })).not.toBeInTheDocument();
   });
 });
+
+describe('ChatBubbles attachments', () => {
+  it('renders an attachment image when the message carries one', async () => {
+    renderBubbles([
+      message({
+        id: 'm1',
+        authorType: 'agent',
+        body: 'diagram.png',
+        attachment: {
+          id: 'a1',
+          filename: 'diagram.png',
+          mimeType: 'image/png',
+          byteSize: 10,
+          url: 'https://minio.local/signed',
+        },
+      }),
+    ]);
+
+    const img = await screen.findByAltText('diagram.png');
+    expect(img).toHaveAttribute('src', 'https://minio.local/signed');
+  });
+});
