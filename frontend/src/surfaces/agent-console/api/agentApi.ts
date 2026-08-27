@@ -7,6 +7,7 @@ import type {
   AgentArticlesResponse,
   AgentConversationContextResponse,
   AgentConversationDetail,
+  ArchiveDeclaredFieldResponse,
   ArchiveIntentResponse,
   ArchiveSubintentResponse,
   ArticleAttachmentView,
@@ -17,16 +18,21 @@ import type {
   ClaimResponse,
   TakeOverResponse,
   ConversationPriority,
+  CreateDeclaredFieldResponse,
   CreateFormResponse,
   CreateIntentResponse,
   CreateSubintentResponse,
   CreateTagResponse,
+  DeactivateDeclaredFieldResponse,
+  DeclaredFieldsResponse,
+  DeclaredFieldType,
   DetachTagResponse,
   EscalateResponse,
   FormDetail,
   FormField,
   FormsListResponse,
   IntentsResponse,
+  ReactivateDeclaredFieldResponse,
   MergeSubintentResponse,
   MoveSubintentResponse,
   RenameIntentResponse,
@@ -35,6 +41,7 @@ import type {
   SaveBotConfigBodyValue,
   TagView,
   UnescalateResponse,
+  UpdateDeclaredFieldResponse,
 } from '@support/types';
 import { apiCall } from '../../../lib/httpClient.ts';
 import { loadAgentSession } from '../lib/agentSession.ts';
@@ -388,6 +395,52 @@ export function renameIntent(
 
 export function archiveIntent(token: string, id: string): Promise<ArchiveIntentResponse> {
   return call(`/agent/intents/${id}/archive`, token, { method: 'POST' });
+}
+
+export function fetchDeclaredFields(token: string): Promise<DeclaredFieldsResponse> {
+  return call('/agent/declared-fields', token);
+}
+
+export function createDeclaredField(
+  token: string,
+  input: { key: string; label: string; type: DeclaredFieldType },
+): Promise<CreateDeclaredFieldResponse> {
+  return call('/agent/declared-fields', token, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateDeclaredField(
+  token: string,
+  id: string,
+  patch: { label?: string; type?: DeclaredFieldType },
+): Promise<UpdateDeclaredFieldResponse> {
+  return call(`/agent/declared-fields/${id}`, token, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
+}
+
+export function deactivateDeclaredField(
+  token: string,
+  id: string,
+): Promise<DeactivateDeclaredFieldResponse> {
+  return call(`/agent/declared-fields/${id}/deactivate`, token, { method: 'POST' });
+}
+
+export function reactivateDeclaredField(
+  token: string,
+  id: string,
+): Promise<ReactivateDeclaredFieldResponse> {
+  return call(`/agent/declared-fields/${id}/reactivate`, token, { method: 'POST' });
+}
+
+export function archiveDeclaredField(
+  token: string,
+  id: string,
+): Promise<ArchiveDeclaredFieldResponse> {
+  return call(`/agent/declared-fields/${id}/archive`, token, { method: 'POST' });
 }
 
 export function renameSubintent(
