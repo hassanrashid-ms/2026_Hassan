@@ -1,4 +1,5 @@
 export { allocateTicketNumber } from './allocateTicketNumber.ts';
+export * from './applySubintentDefaultPriority.ts';
 export * from './postMessage.ts';
 export * from './resolutionCycle.ts';
 export * from './resolutionAnswer.ts';
