@@ -29,8 +29,8 @@ export function Inbox() {
   const summary = useMemo(() => {
     if (!conversationId) return undefined;
     return (
-      mine.data?.conversations.find((c) => c.id === conversationId) ??
-      escalated.data?.conversations.find((c) => c.id === conversationId)
+      mine.data?.conversations?.find((c) => c.id === conversationId) ??
+      escalated.data?.conversations?.find((c) => c.id === conversationId)
     );
   }, [conversationId, mine.data, escalated.data]);
 

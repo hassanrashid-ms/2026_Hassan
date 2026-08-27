@@ -254,7 +254,7 @@ export function Tickets() {
   const summary = (() => {
     if (!conversationId) return undefined;
     for (const query of summaryQueries) {
-      const found = query.data?.conversations.find(
+      const found = query.data?.conversations?.find(
         (conversation) => conversation.id === conversationId,
       );
       if (found) return found;
