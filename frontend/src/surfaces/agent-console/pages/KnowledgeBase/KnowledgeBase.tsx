@@ -38,6 +38,7 @@ export function KnowledgeBase() {
       </div>
       <ArticleEditorSheet
         token={session.token}
+        session={session}
         articleId={selectedId}
         open={sheetOpen}
         onOpenChange={(open) => {

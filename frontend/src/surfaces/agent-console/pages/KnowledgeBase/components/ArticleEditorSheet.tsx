@@ -39,6 +39,7 @@ import {
   parseKeywordsInput,
   parseMarkdownImport,
 } from '../articleForm.ts';
+import { canBuildForms, type StoredAgentSession } from '../../../lib/agentSession.ts';
 import { useArticleAutosave } from '../hooks/useArticleAutosave.ts';
 import { ImageDialogAdapter } from './ImageDialogAdapter.tsx';
 import { Button } from '../../../components/ui/button.tsx';
@@ -75,12 +76,14 @@ function draftFrom(article: AgentArticleDetail | null): Draft {
 
 export function ArticleEditorSheet({
   token,
+  session,
   articleId,
   open,
   onOpenChange,
   onCreated,
 }: {
   token: string;
+  session: StoredAgentSession;
   articleId: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -144,6 +147,7 @@ export function ArticleEditorSheet({
             // which is the only way to hand MDXEditor a new document.
             key={articleId ?? 'new'}
             token={token}
+            session={session}
             articleId={articleId}
             article={selected.data ?? null}
             intents={intents.data?.intents ?? []}
@@ -157,17 +161,20 @@ export function ArticleEditorSheet({
 
 function ArticleEditorForm({
   token,
+  session,
   articleId,
   article,
   intents,
   onCreated,
 }: {
   token: string;
+  session: StoredAgentSession;
   articleId: string | null;
   article: AgentArticleDetail | null;
   intents: IntentView[];
   onCreated: (id: string) => void;
 }) {
+  const canPublishOrArchive = canBuildForms(session);
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<Draft>(() => draftFrom(article));
   const [useAIKeywords, setUseAIKeywords] = useState(false);
@@ -461,25 +468,29 @@ function ArticleEditorForm({
           {autosave.status === 'saving' && 'Saving…'}
           {autosave.status === 'saved' && 'Saved'}
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => archive.mutate()}
-          disabled={resolvedArticleId === null || archive.isPending}
-        >
-          Archive
-        </Button>
-        <Button
-          type="button"
-          onClick={() => publish.mutate()}
-          disabled={
-            resolvedArticleId === null ||
-            !canPublish(state, draft.title, draft.body) ||
-            publish.isPending
-          }
-        >
-          Publish
-        </Button>
+        {canPublishOrArchive && (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => archive.mutate()}
+            disabled={resolvedArticleId === null || archive.isPending}
+          >
+            Archive
+          </Button>
+        )}
+        {canPublishOrArchive && (
+          <Button
+            type="button"
+            onClick={() => publish.mutate()}
+            disabled={
+              resolvedArticleId === null ||
+              !canPublish(state, draft.title, draft.body) ||
+              publish.isPending
+            }
+          >
+            Publish
+          </Button>
+        )}
       </SheetFooter>
     </>
   );

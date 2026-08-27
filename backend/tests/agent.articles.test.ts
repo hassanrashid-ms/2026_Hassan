@@ -44,15 +44,18 @@ beforeEach(async () => {
   vi.mocked(deleteArticleObject).mockClear();
 });
 
-async function seedAgent(workspaceId: string): Promise<{ agentId: string; token: string }> {
+async function seedAgent(
+  workspaceId: string,
+  role: 'agent' | 'team_lead' = 'agent',
+): Promise<{ agentId: string; token: string }> {
   const { rows } = await ownerPool.query<{ id: string }>(
     `insert into agent (email, display_name) values ($1, 'Test Agent') returning id`,
     [`agent-${Math.random().toString(36).slice(2)}@example.test`],
   );
   const agentId = rows[0]!.id;
   await ownerPool.query(
-    `insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`,
-    [workspaceId, agentId],
+    `insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, $3)`,
+    [workspaceId, agentId, role],
   );
   const token = await signAgentSession({ agent_id: agentId });
   return { agentId, token };
@@ -132,7 +135,9 @@ describe('POST /articles', () => {
 describe('draft -> publish -> archive', () => {
   it('walks the full state machine', async () => {
     const workspaceId = await seedWorkspace();
-    const { token } = await seedAgent(workspaceId);
+    // Publish/archive require Team Lead or Admin; team_lead can also
+    // create/edit drafts, so one seeded agent covers the whole walk.
+    const { token } = await seedAgent(workspaceId, 'team_lead');
 
     const created = await request(app)
       .post('/articles')
@@ -187,7 +192,7 @@ describe('draft -> publish -> archive', () => {
       `insert into article (workspace_id, title, body, created_by) values ($1, ' ', ' ', $2) returning id`,
       [workspaceId, agentId],
     );
-    const { token } = await seedAgent(workspaceId);
+    const { token } = await seedAgent(workspaceId, 'team_lead');
 
     await request(app)
       .post(`/articles/${rows[0]!.id}/publish`)
@@ -204,7 +209,7 @@ describe('draft -> publish -> archive', () => {
        values ($1, 'X', 'Y', 'published', $2, now()) returning id`,
       [workspaceId, agentId],
     );
-    const { token } = await seedAgent(workspaceId);
+    const { token } = await seedAgent(workspaceId, 'team_lead');
 
     await request(app)
       .post(`/articles/${rows[0]!.id}/archive`)
@@ -215,7 +220,7 @@ describe('draft -> publish -> archive', () => {
 
   it('upserts the Weaviate object on publish and deletes it on archive', async () => {
     const workspaceId = await seedWorkspace();
-    const { token } = await seedAgent(workspaceId);
+    const { token } = await seedAgent(workspaceId, 'team_lead');
 
     const created = await request(app)
       .post('/articles')
@@ -244,7 +249,7 @@ describe('draft -> publish -> archive', () => {
 
   it('does not advance state when the Weaviate publish call fails', async () => {
     const workspaceId = await seedWorkspace();
-    const { token } = await seedAgent(workspaceId);
+    const { token } = await seedAgent(workspaceId, 'team_lead');
     vi.mocked(upsertArticleObject).mockRejectedValueOnce(new Error('weaviate unreachable'));
 
     const created = await request(app)
@@ -266,6 +271,42 @@ describe('draft -> publish -> archive', () => {
       [id],
     );
     expect(rows[0]!.state).toBe('draft');
+  });
+
+  it('403s a plain agent trying to publish — building a draft is theirs, publishing is not', async () => {
+    const workspaceId = await seedWorkspace();
+    const { token } = await seedAgent(workspaceId);
+
+    const created = await request(app)
+      .post('/articles')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ title: 'X', body: 'Y' })
+      .expect(201);
+
+    await request(app)
+      .post(`/articles/${created.body.id}/publish`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(403);
+  });
+
+  it('403s a plain agent trying to archive', async () => {
+    const workspaceId = await seedWorkspace();
+    const { token } = await seedAgent(workspaceId);
+
+    const created = await request(app)
+      .post('/articles')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ title: 'X', body: 'Y' })
+      .expect(201);
+
+    await request(app)
+      .post(`/articles/${created.body.id}/archive`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(403);
   });
 });
 
@@ -340,7 +381,7 @@ describe('POST /agent/articles/:id/attachments', () => {
 
   it('409s when the article is not a draft', async () => {
     const workspaceId = await seedWorkspace();
-    const { agentId, token } = await seedAgent(workspaceId);
+    const { agentId, token } = await seedAgent(workspaceId, 'team_lead');
     const created = await request(app)
       .post('/articles')
       .set('Authorization', `Bearer ${token}`)
@@ -442,7 +483,7 @@ describe('GET /agent/articles/:id with an attachment', () => {
 describe('POST /agent/articles/:id/publish with empty fields', () => {
   it('409s when body is empty', async () => {
     const workspaceId = await seedWorkspace();
-    const { token } = await seedAgent(workspaceId);
+    const { token } = await seedAgent(workspaceId, 'team_lead');
     const created = await request(app)
       .post('/articles')
       .set('Authorization', `Bearer ${token}`)

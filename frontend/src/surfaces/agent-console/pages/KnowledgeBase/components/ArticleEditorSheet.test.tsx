@@ -4,11 +4,23 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ArticleEditorSheet } from './ArticleEditorSheet.tsx';
 import * as agentApi from '../../../api/agentApi.ts';
+import type { StoredAgentSession } from '../../../lib/agentSession.ts';
 
 function renderWithClient(ui: React.ReactElement) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return { queryClient, ...render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>) };
 }
+
+// Team lead: can see Publish/Archive, same as admin — these tests exercise
+// that flow. Role-gating itself (agent cannot publish/archive) is covered
+// separately below.
+const SESSION: StoredAgentSession = {
+  token: 'tok',
+  agentId: 'agent-1',
+  displayName: 'Agent A',
+  workspaceSlug: 'ws',
+  role: 'team_lead',
+};
 
 const EXISTING_ARTICLE = {
   id: 'art-1',
@@ -37,6 +49,7 @@ describe('ArticleEditorSheet loading', () => {
     renderWithClient(
       <ArticleEditorSheet
         token="tok"
+        session={SESSION}
         articleId="art-1"
         open
         onOpenChange={() => {}}
@@ -66,6 +79,7 @@ describe('ArticleEditorSheet MDXEditor round-trip', () => {
     renderWithClient(
       <ArticleEditorSheet
         token="tok"
+        session={SESSION}
         articleId="art-1"
         open
         onOpenChange={() => {}}
@@ -111,6 +125,7 @@ describe('ArticleEditorSheet autosave cache write', () => {
     const { queryClient } = renderWithClient(
       <ArticleEditorSheet
         token="tok"
+        session={SESSION}
         articleId="art-1"
         open
         onOpenChange={() => {}}
@@ -143,6 +158,7 @@ describe('ArticleEditorSheet body field sizing', () => {
     renderWithClient(
       <ArticleEditorSheet
         token="tok"
+        session={SESSION}
         articleId="art-1"
         open
         onOpenChange={() => {}}
@@ -171,6 +187,7 @@ describe('ArticleEditorSheet markdown import', () => {
     renderWithClient(
       <ArticleEditorSheet
         token="tok"
+        session={SESSION}
         articleId="art-1"
         open
         onOpenChange={() => {}}
@@ -206,6 +223,7 @@ describe('ArticleEditorSheet markdown import', () => {
     renderWithClient(
       <ArticleEditorSheet
         token="tok"
+        session={SESSION}
         articleId="art-1"
         open
         onOpenChange={() => {}}
@@ -255,6 +273,7 @@ describe('ArticleEditorSheet markdown import', () => {
     renderWithClient(
       <ArticleEditorSheet
         token="tok"
+        session={SESSION}
         articleId="art-1"
         open
         onOpenChange={() => {}}
@@ -296,6 +315,7 @@ describe('ArticleEditorSheet markdown import', () => {
     renderWithClient(
       <ArticleEditorSheet
         token="tok"
+        session={SESSION}
         articleId="art-1"
         open
         onOpenChange={() => {}}
@@ -324,6 +344,7 @@ describe('ArticleEditorSheet autosave status', () => {
     renderWithClient(
       <ArticleEditorSheet
         token="tok"
+        session={SESSION}
         articleId="art-1"
         open
         onOpenChange={() => {}}
@@ -351,6 +372,52 @@ describe('ArticleEditorSheet autosave status', () => {
   });
 });
 
+describe('ArticleEditorSheet publish/archive role gating', () => {
+  const AGENT_SESSION: StoredAgentSession = { ...SESSION, role: 'agent' };
+
+  it('hides Publish and Archive for a plain agent — building a draft is theirs, publishing is not', async () => {
+    vi.spyOn(agentApi, 'fetchArticle').mockResolvedValue(EXISTING_ARTICLE);
+    vi.spyOn(agentApi, 'fetchIntents').mockResolvedValue({ intents: [] });
+
+    renderWithClient(
+      <ArticleEditorSheet
+        token="tok"
+        session={AGENT_SESSION}
+        articleId="art-1"
+        open
+        onOpenChange={() => {}}
+        onCreated={() => {}}
+      />,
+    );
+
+    await screen.findByDisplayValue('Refunds');
+
+    expect(screen.queryByRole('button', { name: 'Publish' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Archive' })).toBeNull();
+  });
+
+  it('shows Publish and Archive for a team lead', async () => {
+    vi.spyOn(agentApi, 'fetchArticle').mockResolvedValue(EXISTING_ARTICLE);
+    vi.spyOn(agentApi, 'fetchIntents').mockResolvedValue({ intents: [] });
+
+    renderWithClient(
+      <ArticleEditorSheet
+        token="tok"
+        session={SESSION}
+        articleId="art-1"
+        open
+        onOpenChange={() => {}}
+        onCreated={() => {}}
+      />,
+    );
+
+    await screen.findByDisplayValue('Refunds');
+
+    expect(screen.getByRole('button', { name: 'Publish' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Archive' })).toBeInTheDocument();
+  });
+});
+
 describe('ArticleEditorSheet image upload', () => {
   it('uploads an image and inserts an attachment: reference into the body', async () => {
     vi.spyOn(agentApi, 'fetchArticle').mockResolvedValue(EXISTING_ARTICLE);
@@ -372,6 +439,7 @@ describe('ArticleEditorSheet image upload', () => {
     renderWithClient(
       <ArticleEditorSheet
         token="tok"
+        session={SESSION}
         articleId="art-1"
         open
         onOpenChange={() => {}}
@@ -416,6 +484,7 @@ describe('ArticleEditorSheet image upload', () => {
     renderWithClient(
       <ArticleEditorSheet
         token="tok"
+        session={SESSION}
         articleId="art-1"
         open
         onOpenChange={() => {}}
