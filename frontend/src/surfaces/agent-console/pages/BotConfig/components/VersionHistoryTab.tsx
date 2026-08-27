@@ -115,6 +115,7 @@ export function VersionHistoryTab({ token }: { token: string }) {
   });
 
   const versions = versionsQuery.data?.versions ?? [];
+  const currentVersion = versions[0]?.version ?? null;
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2">
@@ -146,9 +147,9 @@ export function VersionHistoryTab({ token }: { token: string }) {
                 variant="outline"
                 className="mt-2"
                 onClick={() => setRestoreTarget(entry.version)}
-                disabled={restore.isPending}
+                disabled={restore.isPending || entry.version === currentVersion}
               >
-                Restore this version
+                {entry.version === currentVersion ? 'Current version' : 'Restore this version'}
               </Button>
               {expanded === entry.version && (
                 <div className="mt-2 border-t border-slate-100 pt-2">

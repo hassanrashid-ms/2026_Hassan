@@ -98,9 +98,15 @@ describe('VersionHistoryTab', () => {
     expect(screen.getByText('Old')).toBeInTheDocument();
   });
 
-  it('restores a version behind a confirm dialog', async () => {
+  it('restores a version behind a confirm dialog, and disables restore on the current version', async () => {
     vi.spyOn(agentApi, 'fetchBotConfigVersions').mockResolvedValue({
       versions: [
+        {
+          version: 2,
+          actor: { id: 'a', display_name: 'Admin', email: 'a@x.test' },
+          changed_fields: ['prompt'],
+          created_at: '2026-08-27T00:00:00.000Z',
+        },
         {
           version: 1,
           actor: { id: 'a', display_name: 'Admin', email: 'a@x.test' },
@@ -115,7 +121,10 @@ describe('VersionHistoryTab', () => {
       .mockResolvedValue({} as never);
 
     renderTab();
-    await waitFor(() => screen.getByText('v1'));
+    await waitFor(() => screen.getByText('v2'));
+
+    expect(screen.getByRole('button', { name: 'Current version' })).toBeDisabled();
+
     fireEvent.click(screen.getByRole('button', { name: /restore/i }));
     await waitFor(() => screen.getByRole('button', { name: 'Roll back' }));
     fireEvent.click(screen.getByRole('button', { name: 'Roll back' }));
