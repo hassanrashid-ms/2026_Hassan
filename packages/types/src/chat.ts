@@ -146,7 +146,10 @@ export type AgentConversationSummary = {
   priority: ConversationPriorityValue;
   tags: TagView[];
 };
-export type AgentConversationsResponse = { conversations: AgentConversationSummary[] };
+export type AgentConversationsResponse = {
+  conversations: AgentConversationSummary[];
+  nextCursor: string | null;
+};
 
 /** The inbox-room payload: id and new status only, never the full row. */
 export type ConversationChangedEvent = { conversation_id: string; status: ConversationStatusValue };

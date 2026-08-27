@@ -20,6 +20,7 @@ import {
   seedMessage,
   seedPlayer,
   seedWorkspace,
+  seedResolutionCycle,
   truncateAll,
   seedIntent,
   seedSubintent,
@@ -424,6 +425,251 @@ describe('GET /agent/conversations filters', () => {
       .expect(200);
 
     expect(res.body.conversations.map((c: any) => c.id)).toEqual([c1]);
+  });
+});
+
+describe('GET /agent/conversations pagination', () => {
+  it('caps a page at 25 and returns a nextCursor when more rows exist', async () => {
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    for (let i = 0; i < 30; i++) {
+      await seedConversation({ workspaceId, playerId, status: 'open' });
+    }
+    const { token } = await setupAgent(workspaceId);
+
+    const res = await request(app)
+      .get('/conversations')
+      .query({ status: 'unassigned' })
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+
+    expect(res.body.conversations).toHaveLength(25);
+    expect(typeof res.body.nextCursor).toBe('string');
+  });
+
+  it('returns the remaining rows and a null nextCursor on the second page', async () => {
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const ids: string[] = [];
+    for (let i = 0; i < 30; i++) {
+      ids.push(await seedConversation({ workspaceId, playerId, status: 'open' }));
+    }
+    const { token } = await setupAgent(workspaceId);
+
+    const page1 = await request(app)
+      .get('/conversations')
+      .query({ status: 'unassigned' })
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+
+    const page2 = await request(app)
+      .get('/conversations')
+      .query({ status: 'unassigned', cursor: page1.body.nextCursor })
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+
+    expect(page2.body.conversations).toHaveLength(5);
+    expect(page2.body.nextCursor).toBeNull();
+
+    const page1Ids = page1.body.conversations.map((c: { id: string }) => c.id);
+    const page2Ids = page2.body.conversations.map((c: { id: string }) => c.id);
+    expect(new Set([...page1Ids, ...page2Ids]).size).toBe(30);
+    expect([...page1Ids, ...page2Ids].sort()).toEqual([...ids].sort());
+  });
+
+  it('does not skip or duplicate a row inserted between two page fetches', async () => {
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    for (let i = 0; i < 25; i++) {
+      await seedConversation({ workspaceId, playerId, status: 'open' });
+    }
+    const { token } = await setupAgent(workspaceId);
+
+    const page1 = await request(app)
+      .get('/conversations')
+      .query({ status: 'unassigned' })
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+    expect(page1.body.nextCursor).toBeNull();
+
+    const lateId = await seedConversation({ workspaceId, playerId, status: 'open' });
+
+    const refetched = await request(app)
+      .get('/conversations')
+      .query({ status: 'unassigned' })
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+    expect(refetched.body.conversations).toHaveLength(25);
+    expect(typeof refetched.body.nextCursor).toBe('string');
+
+    const page2 = await request(app)
+      .get('/conversations')
+      .query({ status: 'unassigned', cursor: refetched.body.nextCursor })
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+    expect(page2.body.conversations.map((c: { id: string }) => c.id)).toEqual([lateId]);
+  });
+});
+
+describe('GET /agent/conversations resolved/closed queues', () => {
+  it('lists a conversation resolved within the last 7 days', async () => {
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId, status: 'resolved' });
+    await seedResolutionCycle({
+      workspaceId,
+      conversationId,
+      resolvedAt: new Date(Date.now() - 60 * 60 * 1000),
+    });
+    const { token } = await setupAgent(workspaceId);
+
+    const res = await request(app)
+      .get('/conversations')
+      .query({ status: 'resolved' })
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+
+    expect(res.body.conversations.map((c: { id: string }) => c.id)).toEqual([conversationId]);
+    expect(res.body.nextCursor).toBeNull();
+  });
+
+  it('omits a conversation resolved more than 7 days ago', async () => {
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId, status: 'resolved' });
+    await seedResolutionCycle({
+      workspaceId,
+      conversationId,
+      resolvedAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000),
+    });
+    const { token } = await setupAgent(workspaceId);
+
+    const res = await request(app)
+      .get('/conversations')
+      .query({ status: 'resolved' })
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+
+    expect(res.body.conversations).toEqual([]);
+  });
+
+  it('excludes a resolved conversation with no resolution cycle row', async () => {
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    await seedConversation({ workspaceId, playerId, status: 'resolved' });
+    const { token } = await setupAgent(workspaceId);
+
+    const res = await request(app)
+      .get('/conversations')
+      .query({ status: 'resolved' })
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+
+    expect(res.body.conversations).toEqual([]);
+  });
+
+  it('lists closed conversations most-recently-closed first', async () => {
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const olderId = await seedConversation({ workspaceId, playerId, status: 'closed' });
+    await seedResolutionCycle({
+      workspaceId,
+      conversationId: olderId,
+      resolvedAt: new Date(Date.now() - 3 * 60 * 60 * 1000),
+      closedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+    });
+    const newerId = await seedConversation({ workspaceId, playerId, status: 'closed' });
+    await seedResolutionCycle({
+      workspaceId,
+      conversationId: newerId,
+      resolvedAt: new Date(Date.now() - 90 * 60 * 1000),
+      closedAt: new Date(Date.now() - 60 * 60 * 1000),
+    });
+    const { token } = await setupAgent(workspaceId);
+
+    const res = await request(app)
+      .get('/conversations')
+      .query({ status: 'closed' })
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+
+    expect(res.body.conversations.map((c: { id: string }) => c.id)).toEqual([newerId, olderId]);
+  });
+
+  it('uses only the latest resolution cycle for a reopened-then-reclosed conversation', async () => {
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId, status: 'closed' });
+    await seedResolutionCycle({
+      workspaceId,
+      conversationId,
+      cycleNo: 1,
+      resolvedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
+      closedAt: new Date(Date.now() - 9 * 24 * 60 * 60 * 1000),
+    });
+    await seedResolutionCycle({
+      workspaceId,
+      conversationId,
+      cycleNo: 2,
+      resolvedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+      closedAt: new Date(Date.now() - 60 * 60 * 1000),
+    });
+    const { token } = await setupAgent(workspaceId);
+
+    const res = await request(app)
+      .get('/conversations')
+      .query({ status: 'closed' })
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+
+    expect(res.body.conversations.map((c: { id: string }) => c.id)).toEqual([conversationId]);
+  });
+
+  it('paginates the resolved queue in pages of 25, newest first, with a stable cursor', async () => {
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    for (let i = 0; i < 30; i++) {
+      const conversationId = await seedConversation({ workspaceId, playerId, status: 'resolved' });
+      await seedResolutionCycle({
+        workspaceId,
+        conversationId,
+        resolvedAt: new Date(Date.now() - i * 60 * 1000),
+      });
+    }
+    const { token } = await setupAgent(workspaceId);
+
+    const page1 = await request(app)
+      .get('/conversations')
+      .query({ status: 'resolved' })
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+    expect(page1.body.conversations).toHaveLength(25);
+    expect(typeof page1.body.nextCursor).toBe('string');
+
+    const page2 = await request(app)
+      .get('/conversations')
+      .query({ status: 'resolved', cursor: page1.body.nextCursor })
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+    expect(page2.body.conversations).toHaveLength(5);
+    expect(page2.body.nextCursor).toBeNull();
+
+    const page1Ids = page1.body.conversations.map((c: { id: string }) => c.id);
+    const page2Ids = page2.body.conversations.map((c: { id: string }) => c.id);
+    expect(new Set([...page1Ids, ...page2Ids]).size).toBe(30);
   });
 });
 

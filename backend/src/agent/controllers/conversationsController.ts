@@ -25,7 +25,15 @@ import {
 } from '../services/conversationContextService.ts';
 
 const ConversationsQuery = z.object({
-  status: z.enum(['unassigned', 'mine', 'agentAssigned', 'botHandling', 'escalated']),
+  status: z.enum([
+    'unassigned',
+    'mine',
+    'agentAssigned',
+    'botHandling',
+    'escalated',
+    'resolved',
+    'closed',
+  ]),
   priority: z
     .union([z.enum(['p1', 'p2', 'p3', 'p4']), z.array(z.enum(['p1', 'p2', 'p3', 'p4']))])
     .optional()
@@ -44,6 +52,7 @@ const ConversationsQuery = z.object({
     .transform((v) => (v ? (Array.isArray(v) ? v : [v]) : undefined)),
   olderThanHours: z.coerce.number().optional(),
   q: z.string().optional(),
+  cursor: z.string().optional(),
 });
 const ConversationIdParams = z.object({ id: z.uuid() });
 
@@ -55,8 +64,8 @@ export const listConversationsHandler: RequestHandler = async (req, res) => {
     return;
   }
   const { status, ...extra } = query.data;
-  const conversations = await listConversations(ctx, status, extra);
-  res.status(200).json({ conversations });
+  const { conversations, nextCursor } = await listConversations(ctx, status, extra);
+  res.status(200).json({ conversations, nextCursor });
 };
 
 export const takeOverConversationHandler: RequestHandler = async (req, res) => {

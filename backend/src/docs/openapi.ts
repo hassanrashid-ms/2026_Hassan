@@ -540,7 +540,15 @@ registry.registerPath({
   security: [{ [bearerAgentJwt.name]: [] }],
   request: {
     query: z.object({
-      status: z.enum(['unassigned', 'mine', 'agentAssigned', 'botHandling', 'escalated']),
+      status: z.enum([
+        'unassigned',
+        'mine',
+        'agentAssigned',
+        'botHandling',
+        'escalated',
+        'resolved',
+        'closed',
+      ]),
       priority: z
         .union([z.enum(['p1', 'p2', 'p3', 'p4']), z.array(z.enum(['p1', 'p2', 'p3', 'p4']))])
         .optional(),
@@ -549,6 +557,7 @@ registry.registerPath({
       assigneeIds: z.union([z.string().uuid(), z.array(z.string().uuid())]).optional(),
       olderThanHours: z.coerce.number().optional(),
       q: z.string().optional(),
+      cursor: z.string().optional(),
     }),
   },
   responses: {

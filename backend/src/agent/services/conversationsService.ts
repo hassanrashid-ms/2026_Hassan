@@ -1,4 +1,17 @@
-import { and, desc, eq, exists, ilike, inArray, isNull, isNotNull, or, sql } from 'drizzle-orm';
+import {
+  and,
+  desc,
+  eq,
+  exists,
+  ilike,
+  inArray,
+  isNull,
+  isNotNull,
+  notExists,
+  or,
+  sql,
+} from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import type { AgentConversationSummary, AgentMessageView } from '@support/types';
 import {
   postMessage,
@@ -26,7 +39,13 @@ import { getPresenceStatusBatch } from '../../shared/realtime/presence.ts';
 import { logger } from '../../shared/logging/logger.ts';
 
 export type ConversationsFilter =
-  'unassigned' | 'mine' | 'agentAssigned' | 'botHandling' | 'escalated';
+  | 'unassigned'
+  | 'mine'
+  | 'agentAssigned'
+  | 'botHandling'
+  | 'escalated'
+  | 'resolved'
+  | 'closed';
 
 export type ConversationsListFilters = {
   priority?: (typeof conversation.priority.enumValues)[number][];
@@ -35,6 +54,12 @@ export type ConversationsListFilters = {
   assigneeIds?: string[];
   olderThanHours?: number;
   q?: string;
+  cursor?: string;
+};
+
+export type ConversationsPage = {
+  conversations: AgentConversationSummary[];
+  nextCursor: string | null;
 };
 
 const ACTIVE_AGENT_STATUSES: (typeof conversation.status.enumValues)[number][] = [
@@ -46,6 +71,54 @@ const UNASSIGNED_STATUSES: (typeof conversation.status.enumValues)[number][] = [
   'open',
   'escalated',
 ];
+
+const PAGE_SIZE = 25;
+
+type StatusCursor = { priority: string; createdAt: string; id: string };
+
+function encodeCursor(payload: StatusCursor): string {
+  return Buffer.from(JSON.stringify(payload)).toString('base64url');
+}
+
+function decodeStatusCursor(cursor: string): StatusCursor | null {
+  try {
+    const parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
+    if (
+      typeof parsed?.priority === 'string' &&
+      typeof parsed?.createdAt === 'string' &&
+      typeof parsed?.id === 'string'
+    ) {
+      return parsed as StatusCursor;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+type TimelineCursor = { ts: string; id: string };
+
+function encodeTimelineCursor(payload: TimelineCursor): string {
+  return Buffer.from(JSON.stringify(payload)).toString('base64url');
+}
+
+function decodeTimelineCursor(cursor: string): TimelineCursor | null {
+  try {
+    const parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
+    if (typeof parsed?.ts === 'string' && typeof parsed?.id === 'string') {
+      return parsed as TimelineCursor;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// Self-join alias for the "only the latest resolution_cycle row per
+// conversation" NOT EXISTS pattern below — a conversation can carry multiple
+// historical cycles (resolve → reopen → resolve again), and only the most
+// recent one reflects why the conversation is *currently* resolved/closed.
+const latestCycle = alias(resolutionCycle, 'latest_cycle');
 
 function extraFilterConditions(extra: ConversationsListFilters) {
   const conditions = [];
@@ -75,8 +148,22 @@ export async function listConversations(
   ctx: AgentContext,
   filter: ConversationsFilter,
   extra: ConversationsListFilters = {},
-): Promise<AgentConversationSummary[]> {
+): Promise<ConversationsPage> {
+  if (filter === 'resolved' || filter === 'closed') {
+    return listResolvedOrClosedConversations(ctx, filter, extra);
+  }
   return withWorkspace(ctx.workspaceId, async (tx) => {
+    // Cursors round-trip through a JS Date (millisecond precision), while
+    // conversation.createdAt is a microsecond-precision timestamptz — two rows
+    // inserted within the same millisecond would otherwise sort differently in
+    // SQL than the cursor comparison expects. Truncate both sides to
+    // milliseconds so ORDER BY and the cursor condition agree exactly.
+    const createdAtMs = sql`date_trunc('millisecond', ${conversation.createdAt})`;
+    const cursor = extra.cursor ? decodeStatusCursor(extra.cursor) : null;
+    const cursorCondition = cursor
+      ? sql`(${conversation.priority}, ${createdAtMs}, ${conversation.id}) > (${cursor.priority}::conversation_priority, ${cursor.createdAt}::timestamptz, ${cursor.id}::uuid)`
+      : undefined;
+
     const rows = await tx
       .select({
         id: conversation.id,
@@ -86,6 +173,7 @@ export async function listConversations(
         assignedAgentId: conversation.assignedAgentId,
         assignedAgentName: agent.displayName,
         priority: conversation.priority,
+        createdAt: conversation.createdAt,
       })
       .from(conversation)
       .innerJoin(player, eq(player.id, conversation.playerId))
@@ -111,13 +199,18 @@ export async function listConversations(
                       isNull(conversation.assignedAgentId),
                       inArray(conversation.status, UNASSIGNED_STATUSES),
                     ),
+          cursorCondition,
           ...extraFilterConditions(extra),
         ),
       )
-      .orderBy(conversation.priority, conversation.createdAt);
+      .orderBy(conversation.priority, createdAtMs, conversation.id)
+      .limit(PAGE_SIZE + 1);
+
+    const hasMore = rows.length > PAGE_SIZE;
+    const pageRows = hasMore ? rows.slice(0, PAGE_SIZE) : rows;
 
     const summaries: AgentConversationSummary[] = [];
-    for (const row of rows) {
+    for (const row of pageRows) {
       const [last] = await tx
         .select({ body: message.body, createdAt: message.createdAt })
         .from(message)
@@ -140,13 +233,121 @@ export async function listConversations(
       });
     }
 
+    const lastRow = pageRows[pageRows.length - 1];
+    const nextCursor =
+      hasMore && lastRow
+        ? encodeCursor({
+            priority: lastRow.priority,
+            createdAt: lastRow.createdAt.toISOString(),
+            id: lastRow.id,
+          })
+        : null;
+
     if (extra.olderThanHours !== undefined) {
       const cutoff = Date.now() - extra.olderThanHours * 60 * 60 * 1000;
-      return summaries.filter(
-        (s) => s.last_message_at !== null && new Date(s.last_message_at).getTime() < cutoff,
-      );
+      return {
+        conversations: summaries.filter(
+          (s) => s.last_message_at !== null && new Date(s.last_message_at).getTime() < cutoff,
+        ),
+        nextCursor,
+      };
     }
-    return summaries;
+    return { conversations: summaries, nextCursor };
+  });
+}
+
+async function listResolvedOrClosedConversations(
+  ctx: AgentContext,
+  filter: 'resolved' | 'closed',
+  extra: ConversationsListFilters,
+): Promise<ConversationsPage> {
+  return withWorkspace(ctx.workspaceId, async (tx) => {
+    const timestampCol =
+      filter === 'resolved' ? resolutionCycle.resolvedAt : resolutionCycle.closedAt;
+    const timestampMs = sql`date_trunc('millisecond', ${timestampCol})`;
+    const cursor = extra.cursor ? decodeTimelineCursor(extra.cursor) : null;
+    const cursorCondition = cursor
+      ? sql`(${timestampMs}, ${conversation.id}) < (${cursor.ts}::timestamptz, ${cursor.id}::uuid)`
+      : undefined;
+
+    const rows = await tx
+      .select({
+        id: conversation.id,
+        status: conversation.status,
+        externalPlayerId: player.externalId,
+        confirmPhase: conversation.confirmPhase,
+        assignedAgentId: conversation.assignedAgentId,
+        assignedAgentName: agent.displayName,
+        priority: conversation.priority,
+        ts: timestampCol,
+      })
+      .from(conversation)
+      .innerJoin(player, eq(player.id, conversation.playerId))
+      .leftJoin(agent, eq(agent.id, conversation.assignedAgentId))
+      .leftJoin(subintent, eq(subintent.id, conversation.subintentId))
+      .innerJoin(
+        resolutionCycle,
+        and(
+          eq(resolutionCycle.conversationId, conversation.id),
+          notExists(
+            tx
+              .select({ one: sql`1` })
+              .from(latestCycle)
+              .where(
+                and(
+                  eq(latestCycle.conversationId, resolutionCycle.conversationId),
+                  sql`${latestCycle.cycleNo} > ${resolutionCycle.cycleNo}`,
+                ),
+              ),
+          ),
+        ),
+      )
+      .where(
+        and(
+          eq(conversation.status, filter),
+          isNotNull(timestampCol),
+          sql`${timestampCol} >= now() - interval '7 days'`,
+          cursorCondition,
+          ...extraFilterConditions(extra),
+        ),
+      )
+      .orderBy(desc(timestampMs), desc(conversation.id))
+      .limit(PAGE_SIZE + 1);
+
+    const hasMore = rows.length > PAGE_SIZE;
+    const pageRows = hasMore ? rows.slice(0, PAGE_SIZE) : rows;
+
+    const summaries: AgentConversationSummary[] = [];
+    for (const row of pageRows) {
+      const [last] = await tx
+        .select({ body: message.body, createdAt: message.createdAt })
+        .from(message)
+        .where(eq(message.conversationId, row.id))
+        .orderBy(desc(message.seq))
+        .limit(1);
+      const tags = await getConversationTags(tx, row.id);
+
+      summaries.push({
+        id: row.id,
+        player: { external_player_id: row.externalPlayerId },
+        status: row.status,
+        confirm_phase: row.confirmPhase,
+        last_message_preview: last?.body ?? null,
+        last_message_at: last?.createdAt.toISOString() ?? null,
+        assigned_agent_id: row.assignedAgentId,
+        assigned_agent_name: row.assignedAgentName,
+        priority: row.priority,
+        tags,
+      });
+    }
+
+    const lastRow = pageRows[pageRows.length - 1];
+    const nextCursor =
+      hasMore && lastRow && lastRow.ts
+        ? encodeTimelineCursor({ ts: lastRow.ts.toISOString(), id: lastRow.id })
+        : null;
+
+    return { conversations: summaries, nextCursor };
   });
 }
 
