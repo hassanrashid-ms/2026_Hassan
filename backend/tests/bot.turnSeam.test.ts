@@ -38,6 +38,14 @@ async function conversationRow(id: string) {
   return rows[0];
 }
 
+async function priorityOf(conversationId: string) {
+  const { rows } = await ownerPool.query<{ priority: string; priority_manually_set: boolean }>(
+    `select priority, priority_manually_set from conversation where id = $1`,
+    [conversationId],
+  );
+  return rows[0]!;
+}
+
 async function messagesFor(conversationId: string) {
   const { rows } = await ownerPool.query(
     `select author_type, visibility, body from message where conversation_id = $1 order by seq`,
@@ -154,6 +162,57 @@ describe('applyBotTurn', () => {
     expect(siblingRow.subintent_id).toBeNull();
     expect(siblingRow.classification_source).toBeNull();
     expect(await eventsFor(siblingConversationId)).toEqual([]);
+  });
+
+  it('classifying to a subintent with a default priority applies it, once', async () => {
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId, priority: 'p3' });
+    const intentId = await seedIntent(workspaceId);
+    const subintentId = await seedSubintent({ workspaceId, intentId, defaultPriority: 'p1' });
+
+    await withWorkspace(workspaceId, (tx) =>
+      applyBotTurn(
+        tx,
+        { workspaceId, conversationId },
+        { kind: 'answer', reply: 'first', subintentId },
+      ),
+    );
+
+    const row = await priorityOf(conversationId);
+    expect(row.priority).toBe('p1');
+    expect(row.priority_manually_set).toBe(false);
+
+    const events = await eventsFor(conversationId);
+    expect(events.map((e) => e.type)).toEqual([
+      'message_sent',
+      'intent_set',
+      'conversation_priority_changed',
+    ]);
+  });
+
+  it('does not touch priority when already manually set', async () => {
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({
+      workspaceId,
+      playerId,
+      priority: 'p4',
+      priorityManuallySet: true,
+    });
+    const intentId = await seedIntent(workspaceId);
+    const subintentId = await seedSubintent({ workspaceId, intentId, defaultPriority: 'p1' });
+
+    await withWorkspace(workspaceId, (tx) =>
+      applyBotTurn(
+        tx,
+        { workspaceId, conversationId },
+        { kind: 'answer', reply: 'first', subintentId },
+      ),
+    );
+
+    const row = await priorityOf(conversationId);
+    expect(row.priority).toBe('p4');
   });
 
   it('handoff flips to open, posts one public system message, no internal note, assigns, appends bot_handoff', async () => {

@@ -5,6 +5,7 @@ import { botFailureNote, pickHandoffMessage, NO_AGENTS_ONLINE_MESSAGE } from './
 import { assignOnHandoff } from './assignOnHandoff.ts';
 import { postMessage, type PostedMessageRow } from '../conversations/postMessage.ts';
 import { closeResolutionCycle } from '../conversations/resolutionCycle.ts';
+import { applySubintentDefaultPriority } from '../conversations/index.ts';
 import { appendEvent } from '../../shared/events/appendEvent.ts';
 import type { Tx } from '../../shared/db/withWorkspace.ts';
 import {
@@ -329,7 +330,11 @@ async function classifyIfUnset(
     .update(conversation)
     .set({ subintentId, classificationSource: 'bot' })
     .where(and(eq(conversation.id, ctx.conversationId), isNull(conversation.subintentId)))
-    .returning({ id: conversation.id });
+    .returning({
+      id: conversation.id,
+      priority: conversation.priority,
+      priorityManuallySet: conversation.priorityManuallySet,
+    });
 
   if (updated.length === 0) return;
 
@@ -351,5 +356,15 @@ async function classifyIfUnset(
       subintent_name: names?.subintentName ?? null,
       intent_name: names?.intentName ?? null,
     },
+  });
+
+  await applySubintentDefaultPriority(tx, {
+    workspaceId: ctx.workspaceId,
+    conversationId: ctx.conversationId,
+    subintentId,
+    currentPriority: updated[0]!.priority,
+    priorityManuallySet: updated[0]!.priorityManuallySet,
+    actorId: null,
+    actorType: 'bot',
   });
 }
