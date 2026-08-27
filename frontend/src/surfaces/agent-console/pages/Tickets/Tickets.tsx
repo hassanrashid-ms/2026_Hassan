@@ -213,9 +213,12 @@ export function Tickets() {
   const queryFilters = toQueryFilters(filters);
   const filtersActive = hasActiveFilters(queryFilters);
 
+  const sessionToken = session?.token;
+  const sessionWorkspaceId = session?.workspaceId;
+
   useEffect(() => {
-    if (!session) return;
-    const socket = createSocket(session.token, 'agent', session.workspaceId);
+    if (!sessionToken) return;
+    const socket = createSocket(sessionToken, 'agent', sessionWorkspaceId);
     socket.on('connect_error', (error) => {
       if (error.message === 'unauthorized') handleSessionExpired();
     });
@@ -241,7 +244,7 @@ export function Tickets() {
     return () => {
       socket.close();
     };
-  }, [session, queryClient]);
+  }, [sessionToken, sessionWorkspaceId, queryClient]);
 
   const summaryQueries = useQueries({
     queries: COLUMNS.map(({ filter }) => ({

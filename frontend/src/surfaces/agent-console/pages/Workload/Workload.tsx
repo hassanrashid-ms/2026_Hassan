@@ -81,9 +81,12 @@ export function Workload() {
     mode: 'set' | 'clear';
   } | null>(null);
 
+  const sessionToken = session?.token;
+  const sessionWorkspaceId = session?.workspaceId;
+
   useEffect(() => {
-    if (!session) return;
-    const socket = createSocket(session.token, 'agent', session.workspaceId);
+    if (!sessionToken) return;
+    const socket = createSocket(sessionToken, 'agent', sessionWorkspaceId);
     socket.on(
       'presence_changed',
       (payload: {
@@ -118,7 +121,7 @@ export function Workload() {
     return () => {
       socket.close();
     };
-  }, [session, queryClient]);
+  }, [sessionToken, sessionWorkspaceId, queryClient]);
 
   async function handleConfirmLeave(agentId: string, nextOnLeave: boolean, days?: number) {
     if (!session) return;
