@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { ChangeLogHistoryQuery, RollbackBotConfigBody, SaveBotConfigBody } from '../src/bot.ts';
+import {
+  BotConfigVersionsQuery,
+  RollbackBotConfigVersionBody,
+  SaveBotConfigBody,
+} from '../src/bot.ts';
 
 describe('SaveBotConfigBody', () => {
   it('accepts a single field on its own', () => {
@@ -56,25 +60,30 @@ describe('SaveBotConfigBody', () => {
   });
 });
 
-describe('ChangeLogHistoryQuery', () => {
+describe('BotConfigVersionsQuery', () => {
   it('defaults limit to 50 when absent', () => {
-    const parsed = ChangeLogHistoryQuery.parse({});
+    const parsed = BotConfigVersionsQuery.parse({});
     expect(parsed.limit).toBe(50);
     expect(parsed.cursor).toBeUndefined();
   });
 
   it('coerces a string limit, because query strings are strings', () => {
-    expect(ChangeLogHistoryQuery.parse({ limit: '10' }).limit).toBe(10);
+    expect(BotConfigVersionsQuery.parse({ limit: '10' }).limit).toBe(10);
   });
 
   it('rejects a limit outside 1..200 and a non-integer limit', () => {
-    expect(ChangeLogHistoryQuery.safeParse({ limit: '0' }).success).toBe(false);
-    expect(ChangeLogHistoryQuery.safeParse({ limit: '201' }).success).toBe(false);
-    expect(ChangeLogHistoryQuery.safeParse({ limit: '1.5' }).success).toBe(false);
+    expect(BotConfigVersionsQuery.safeParse({ limit: '0' }).success).toBe(false);
+    expect(BotConfigVersionsQuery.safeParse({ limit: '201' }).success).toBe(false);
+    expect(BotConfigVersionsQuery.safeParse({ limit: '1.5' }).success).toBe(false);
   });
 
-  it('keeps an opaque cursor as an unvalidated string', () => {
-    expect(ChangeLogHistoryQuery.parse({ cursor: 'abc' }).cursor).toBe('abc');
+  it('coerces a string cursor to a positive integer version number', () => {
+    expect(BotConfigVersionsQuery.parse({ cursor: '3' }).cursor).toBe(3);
+  });
+
+  it('rejects a non-positive or non-integer cursor', () => {
+    expect(BotConfigVersionsQuery.safeParse({ cursor: '0' }).success).toBe(false);
+    expect(BotConfigVersionsQuery.safeParse({ cursor: '1.5' }).success).toBe(false);
   });
 });
 
@@ -157,32 +166,17 @@ describe('LimitToggleSchema (via SaveBotConfigBody.limits_config)', () => {
   });
 });
 
-describe('RollbackBotConfigBody', () => {
+describe('RollbackBotConfigVersionBody', () => {
   it('accepts a valid rollback request', () => {
-    expect(
-      RollbackBotConfigBody.safeParse({ field: 'rules', change_log_id: '42', side: 'before' })
-        .success,
-    ).toBe(true);
+    expect(RollbackBotConfigVersionBody.safeParse({ version: 3 }).success).toBe(true);
   });
 
-  it('accepts limits_config as a rollback field', () => {
-    expect(
-      RollbackBotConfigBody.safeParse({
-        field: 'limits_config',
-        change_log_id: '42',
-        side: 'before',
-      }).success,
-    ).toBe(true);
+  it('rejects a non-positive or non-integer version', () => {
+    expect(RollbackBotConfigVersionBody.safeParse({ version: 0 }).success).toBe(false);
+    expect(RollbackBotConfigVersionBody.safeParse({ version: 1.5 }).success).toBe(false);
   });
 
-  it('rejects an unknown field or side', () => {
-    expect(
-      RollbackBotConfigBody.safeParse({ field: 'nope', change_log_id: '1', side: 'before' })
-        .success,
-    ).toBe(false);
-    expect(
-      RollbackBotConfigBody.safeParse({ field: 'rules', change_log_id: '1', side: 'sideways' })
-        .success,
-    ).toBe(false);
+  it('rejects an unknown key', () => {
+    expect(RollbackBotConfigVersionBody.safeParse({ version: 1, nope: 1 }).success).toBe(false);
   });
 });

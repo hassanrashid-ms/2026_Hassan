@@ -93,26 +93,6 @@ export const SaveBotConfigBody = z
   );
 export type SaveBotConfigBodyValue = z.infer<typeof SaveBotConfigBody>;
 
-export const RollbackBotConfigBody = z
-  .object({
-    field: z.enum(['prompt', 'rules', 'tools_config', 'limits_config']),
-    change_log_id: z.string().min(1),
-    side: z.enum(['before', 'after']),
-  })
-  .strict();
-export type RollbackBotConfigBodyValue = z.infer<typeof RollbackBotConfigBody>;
-
-/**
- * `limit` is coerced because Express query values are always strings. The 200 cap
- * is the page ceiling; `cursor` is opaque and is validated by the server's cursor
- * decoder, not here — its format is not part of the contract.
- */
-export const ChangeLogHistoryQuery = z.object({
-  limit: z.coerce.number().int().min(1).max(200).default(50),
-  cursor: z.string().min(1).optional(),
-});
-export type ChangeLogHistoryQueryValue = z.infer<typeof ChangeLogHistoryQuery>;
-
 export type RuleEntryView = RuleEntryValue & { enforcement: 'code' | 'prompt' };
 
 /**
@@ -139,31 +119,47 @@ export type BotConfigView = {
   updated_at: string | null;
 };
 
-export type ChangeLogActorView = { id: string; display_name: string; email: string };
+export type BotConfigVersionActorView = { id: string; display_name: string; email: string };
 
-/**
- * `field` is the COLUMN name — 'is_provisioned' | 'prompt' | 'rules' |
- * 'tools_config' — never an API field name, so the trail stays readable against
- * the schema.
- *
- * `before_value` null means the field had no value before (first time it was
- * ever set); `after_value` null means it was cleared back to the default. The
- * two nulls are different facts and must not be collapsed on display.
- *
- * `id` is a string because change_log.id is a bigserial: a JSON number cannot
- * hold it safely and a JS bigint cannot be serialised at all.
- */
-export type ChangeLogEntryView = {
-  id: string;
-  field: string;
-  before_value: unknown;
-  after_value: unknown;
-  actor: ChangeLogActorView;
-  changed_at: string;
+export const BOT_CONFIG_VERSIONED_FIELDS = [
+  'prompt',
+  'rules',
+  'tools_config',
+  'limits_config',
+] as const;
+export type BotConfigVersionedField = (typeof BOT_CONFIG_VERSIONED_FIELDS)[number];
+
+/** One row in the version list — no full snapshot payload, kept light for paging. */
+export type BotConfigVersionSummaryView = {
+  version: number;
+  actor: BotConfigVersionActorView;
+  changed_fields: BotConfigVersionedField[];
+  created_at: string;
 };
 
-/** `next_cursor` null means this is the last page. */
-export type ChangeLogHistoryResponse = {
-  entries: ChangeLogEntryView[];
-  next_cursor: string | null;
+/** `next_cursor` null means this is the last page. Cursor is the last-seen version number. */
+export type BotConfigVersionsListResponse = {
+  versions: BotConfigVersionSummaryView[];
+  next_cursor: number | null;
 };
+
+/** Full snapshot for one version — fetched on demand when a row is expanded. */
+export type BotConfigVersionSnapshotView = BotConfigVersionSummaryView & {
+  prompt: string;
+  rules: RuleEntryValue[];
+  tools_config: ToolToggleValue[];
+  limits_config: LimitToggleValue[];
+};
+
+export const BotConfigVersionsQuery = z.object({
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  cursor: z.coerce.number().int().positive().optional(),
+});
+export type BotConfigVersionsQueryValue = z.infer<typeof BotConfigVersionsQuery>;
+
+export const RollbackBotConfigVersionBody = z
+  .object({
+    version: z.number().int().positive(),
+  })
+  .strict();
+export type RollbackBotConfigVersionBodyValue = z.infer<typeof RollbackBotConfigVersionBody>;
