@@ -51,6 +51,7 @@ export function ConversationDetailPane({
   };
 
   const status = summary?.status ?? detail.data?.status;
+  const priority = summary?.priority ?? detail.data?.priority;
   const readOnly = status === 'resolved' || status === 'closed';
 
   // "agentAssigned"/"escalated" queue buckets are every agent's queue, not the
@@ -70,6 +71,7 @@ export function ConversationDetailPane({
           summary?.player.external_player_id ?? detail.data?.player.external_player_id
         }
         status={status}
+        priority={priority}
         confirmPhase={summary?.confirm_phase}
         readOnly={readOnly}
         ticketNumber={detail.data?.number}

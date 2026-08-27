@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type {
   AgentMessageView,
   ConfirmPhaseValue,
+  ConversationPriorityValue,
   ConversationStatusValue,
   ResolutionSourceValue,
 } from '@support/types';
@@ -26,6 +27,7 @@ import {
 import { TagPicker } from './TagPicker.tsx';
 import { AssignPicker } from './AssignPicker.tsx';
 import { SubintentPicker } from './SubintentPicker.tsx';
+import { PriorityPicker } from './PriorityPicker.tsx';
 import { loadAgentSession, canBuildForms } from '../../../lib/agentSession.ts';
 import { createSocket } from '../../../../../features/chat/api/socket.ts';
 import { handleSessionExpired } from '../../../lib/authErrorHandling.ts';
@@ -92,6 +94,7 @@ export function ThreadPanel({
   conversationId,
   playerExternalId,
   status,
+  priority,
   confirmPhase,
   readOnly = false,
   ticketNumber,
@@ -110,6 +113,7 @@ export function ThreadPanel({
   conversationId: string | null;
   playerExternalId?: string;
   status?: ConversationStatusValue;
+  priority?: ConversationPriorityValue;
   confirmPhase?: ConfirmPhaseValue;
   readOnly?: boolean;
   ticketNumber?: number;
@@ -369,6 +373,9 @@ export function ThreadPanel({
         )}
         <span className="text-sm font-medium">{playerExternalId}</span>
         {status && <Badge variant={STATUS_BADGE_VARIANT[status]}>{formatStatus(status)}</Badge>}
+        {conversationId && priority && (
+          <PriorityPicker token={token} conversationId={conversationId} currentPriority={priority} />
+        )}
         {conversationId && (
           <SubintentPicker
             token={token}
