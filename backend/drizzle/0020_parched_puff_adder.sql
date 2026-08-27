@@ -1,0 +1,1 @@
+ALTER TABLE "conversation" ADD COLUMN "priority_manually_set" boolean DEFAULT false NOT NULL;

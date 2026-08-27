@@ -48,6 +48,10 @@ export const conversation = pgTable(
     sessionId: uuid('session_id').references(() => session.id, { onDelete: 'restrict' }),
     status: conversationStatus('status').notNull().default('bot_active'),
     priority: conversationPriority('priority').notNull().default('p3'),
+    /** True once an agent has explicitly set priority via PATCH .../priority.
+     *  Sticky: no auto-classification path may overwrite priority after this
+     *  flips true. See docs/specs/2026-08-27-conversation-priority-design.md. */
+    priorityManuallySet: boolean('priority_manually_set').notNull().default(false),
     /** NULL is the unassigned queue. There is no queue table. */
     assignedAgentId: uuid('assigned_agent_id').references(() => agent.id, { onDelete: 'restrict' }),
     /** NULL means unset — the bot never ran. Only 'bot' or 'agent' otherwise. */

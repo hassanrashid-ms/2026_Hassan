@@ -141,6 +141,13 @@
       "when": 1787638977569,
       "tag": "0019_tranquil_giant_girl",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1787811836433,
+      "tag": "0020_parched_puff_adder",
+      "breakpoints": true
     }
   ]
 }
