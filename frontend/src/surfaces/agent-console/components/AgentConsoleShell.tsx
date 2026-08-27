@@ -39,12 +39,13 @@ import { createSocket } from '../../../features/chat/api/socket.ts';
 import { handleSessionExpired } from '../lib/authErrorHandling.ts';
 import { Avatar, AvatarFallback } from './ui/avatar.tsx';
 import { Badge } from './ui/badge.tsx';
-import { Button } from './ui/button.tsx';
-import { Separator } from './ui/separator.tsx';
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu.tsx';
 import { PresenceDot } from './PresenceDot.tsx';
@@ -52,9 +53,9 @@ import { PageSkeleton } from './PageSkeleton.tsx';
 import { agentRoutePreload } from '../lib/routePreload.ts';
 import { cn } from '../lib/cn.ts';
 
-const PRESENCE_OPTIONS: { value: 'online' | 'away'; label: string }[] = [
-  { value: 'online', label: 'Online' },
-  { value: 'away', label: 'Away' },
+const PRESENCE_OPTIONS: { value: 'online' | 'away'; label: string; dotClassName: string }[] = [
+  { value: 'online', label: 'Online', dotClassName: 'bg-green-500' },
+  { value: 'away', label: 'Away', dotClassName: 'bg-yellow-500' },
 ];
 
 // Section labels mirror the role tier the items are actually gated by below
@@ -273,7 +274,6 @@ export function AgentConsoleShell() {
             <span className="truncate text-xs text-muted">Agent Console</span>
           </div>
         </div>
-        <Separator />
         <nav className="flex flex-1 flex-col gap-4 overflow-y-auto p-2 pt-3">
           {groups.map((group) => (
             <div key={group.name} className="flex flex-col gap-1">
@@ -311,52 +311,52 @@ export function AgentConsoleShell() {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4">
-          <div className="flex items-center gap-2">
-            <div className="relative">
-              <Avatar className="size-7">
-                <AvatarFallback>{initials}</AvatarFallback>
-              </Avatar>
-              <PresenceDot status={presence} className="absolute -right-0.5 -bottom-0.5" />
-            </div>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className="flex items-center gap-1.5 text-sm font-medium text-text"
+          <WorkspaceSwitcher session={session} />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="flex items-center gap-2 text-sm font-medium text-text"
+              >
+                <div className="relative">
+                  <Avatar className="size-7">
+                    <AvatarFallback>{initials}</AvatarFallback>
+                  </Avatar>
+                  <PresenceDot status={presence} className="absolute -right-0.5 -bottom-0.5" />
+                </div>
+                {session.displayName}
+                {roleLabel && (
+                  <Badge variant="secondary" className="text-accent-deep">
+                    {roleLabel}
+                  </Badge>
+                )}
+                <ChevronDown className="size-3.5 text-muted" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Status</DropdownMenuLabel>
+              {PRESENCE_OPTIONS.map((option) => (
+                <DropdownMenuCheckboxItem
+                  key={option.value}
+                  checked={presence === option.value}
+                  onSelect={() => handlePresenceSelect(option.value)}
                 >
-                  {session.displayName}
-                  {roleLabel && (
-                    <Badge variant="secondary" className="text-accent-deep">
-                      {roleLabel}
-                    </Badge>
-                  )}
-                  <ChevronDown className="size-3.5 text-muted" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
-                {PRESENCE_OPTIONS.map((option) => (
-                  <DropdownMenuItem
-                    key={option.value}
-                    onSelect={() => handlePresenceSelect(option.value)}
-                  >
-                    {option.label}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <WorkspaceSwitcher session={session} />
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              clearAgentSession();
-              navigate('/login');
-            }}
-          >
-            <LogOut className="size-4" />
-            Log out
-          </Button>
+                  <span className={cn('size-2 rounded-full', option.dotClassName)} />
+                  {option.label}
+                </DropdownMenuCheckboxItem>
+              ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onSelect={() => {
+                  clearAgentSession();
+                  navigate('/login');
+                }}
+              >
+                <LogOut className="size-4" />
+                Log out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </header>
 
         <main className="min-h-0 flex-1 overflow-hidden">

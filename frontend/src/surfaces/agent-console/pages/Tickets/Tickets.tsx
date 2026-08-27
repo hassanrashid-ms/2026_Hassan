@@ -86,7 +86,7 @@ function SortableQueueColumn({
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="mb-4 block break-inside-avoid">
+    <div ref={setNodeRef} style={style}>
       <QueueColumn
         dragHandleProps={{ ...attributes, ...listeners }}
         token={token}
@@ -318,31 +318,38 @@ export function Tickets() {
         )}
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={columnOrder} strategy={rectSortingStrategy}>
-          <div className="columns-1 gap-4 md:columns-2">
-            {columnOrder.map((filter) => {
-              const col = COLUMNS.find((c) => c.filter === filter)!;
-              const queryIndex = COLUMNS.findIndex((c) => c.filter === filter);
-              const summaryQuery = summaryQueries[queryIndex];
-              const isHidden = Boolean(
-                summaryQuery?.data &&
-                summaryQuery.data.conversations.length === 0 &&
-                !filtersActive,
-              );
+          <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
+            {[
+              columnOrder.filter((_, i) => i % 2 === 0),
+              columnOrder.filter((_, i) => i % 2 === 1),
+            ].map((filters, columnIndex) => (
+              <div key={columnIndex} className="flex flex-col gap-4">
+                {filters.map((filter) => {
+                  const col = COLUMNS.find((c) => c.filter === filter)!;
+                  const queryIndex = COLUMNS.findIndex((c) => c.filter === filter);
+                  const summaryQuery = summaryQueries[queryIndex];
+                  const isHidden = Boolean(
+                    summaryQuery?.data &&
+                    summaryQuery.data.conversations.length === 0 &&
+                    !filtersActive,
+                  );
 
-              if (isHidden) return null;
+                  if (isHidden) return null;
 
-              return (
-                <SortableQueueColumn
-                  key={filter}
-                  id={filter}
-                  col={col}
-                  token={session.token}
-                  queryFilters={queryFilters}
-                  filtersActive={filtersActive}
-                  onSelect={(id) => navigate(`/tickets/${id}`)}
-                />
-              );
-            })}
+                  return (
+                    <SortableQueueColumn
+                      key={filter}
+                      id={filter}
+                      col={col}
+                      token={session.token}
+                      queryFilters={queryFilters}
+                      filtersActive={filtersActive}
+                      onSelect={(id) => navigate(`/tickets/${id}`)}
+                    />
+                  );
+                })}
+              </div>
+            ))}
           </div>
         </SortableContext>
       </DndContext>

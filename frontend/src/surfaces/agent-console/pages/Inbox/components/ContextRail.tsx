@@ -79,7 +79,7 @@ export function ContextRail({
         // click on the transcript must not dismiss it.
         onInteractOutside={(e) => e.preventDefault()}
       >
-        <SheetHeader>
+        <SheetHeader className="px-4 py-3">
           <SheetTitle>Context</SheetTitle>
         </SheetHeader>
         <div className="min-h-0 flex-1 overflow-y-auto">
