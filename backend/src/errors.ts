@@ -20,6 +20,7 @@ export type ErrorCode =
   | 'invalid_value'
   | 'unsupported_field_type'
   | 'name_taken'
+  | 'key_taken'
   | 'not_archivable'
   | 'invalid_status'
   | 'agent_not_found'
