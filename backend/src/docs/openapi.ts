@@ -1954,48 +1954,96 @@ registry.registerPath({
   },
 });
 
+const BotConfigVersionSummarySchema = z.object({
+  version: z.number().int(),
+  actor: z.object({ id: z.uuid(), display_name: z.string(), email: z.string() }),
+  changed_fields: z.array(z.enum(['prompt', 'rules', 'tools_config', 'limits_config'])),
+  created_at: z.string(),
+});
+
+const BotConfigVersionSnapshotSchema = BotConfigVersionSummarySchema.extend({
+  prompt: z.string(),
+  rules: z.array(
+    z.object({
+      key: z.string(),
+      text: z.string(),
+      enabled: z.boolean(),
+      locked: z.boolean(),
+      source: z.enum(['builtin', 'custom']),
+    }),
+  ),
+  tools_config: z.array(z.object({ tool: z.string(), enabled: z.boolean() })),
+  limits_config: z.array(z.object({ key: z.string(), value: z.number().int().positive() })),
+});
+
 registry.registerPath({
   method: 'get',
-  path: '/agent/bot-config/history',
-  summary: 'Agent Get Bot Config Audit Trail',
+  path: '/agent/bot-config/versions',
+  summary: 'Agent List Bot Config Versions',
   description:
-    'This workspace bot-config change_log rows, newest first, cursor-paged, optionally filtered to one field. `field` on the query string narrows the page; `field` on each entry is the database column name. `before_value` null means the field had no value before; `after_value` null means it was reset to the catalog baseline. Team Lead or Admin.',
+    'This workspace bot-config version history, newest first, keyset-paged on the integer version column. Each row is a lightweight summary (no full snapshot payload) — fetch a single version for the full snapshot. Team Lead or Admin.',
   security: [{ [bearerAgentJwt.name]: [] }],
   request: {
     query: z.object({
       limit: z.coerce.number().int().min(1).max(200).optional().openapi({ example: 50 }),
-      cursor: z
-        .string()
+      cursor: z.coerce
+        .number()
+        .int()
+        .positive()
         .optional()
-        .openapi({ description: 'Opaque next_cursor from the previous page' }),
-      field: z
-        .enum(['prompt', 'rules', 'tools_config', 'limits_config', 'is_provisioned'])
-        .optional(),
+        .openapi({ description: 'Last-seen version number from the previous page' }),
     }),
   },
   responses: {
-    200: { description: 'Audit trail page' },
+    200: {
+      description: 'Version list page',
+      content: {
+        'application/json': {
+          schema: z.object({
+            versions: z.array(BotConfigVersionSummarySchema),
+            next_cursor: z.number().int().nullable(),
+          }),
+        },
+      },
+    },
     403: { description: 'Forbidden — Team Lead or Admin role required' },
-    422: { description: 'Invalid limit, cursor or field' },
+    422: { description: 'Invalid limit or cursor' },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/agent/bot-config/versions/{version}',
+  summary: 'Agent Get Bot Config Version',
+  description:
+    'The full snapshot (prompt, rules, tools_config, limits_config) for one prior bot-config version. Team Lead or Admin.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: {
+    params: z.object({ version: z.coerce.number().int().positive() }),
+  },
+  responses: {
+    200: {
+      description: 'Version snapshot',
+      content: { 'application/json': { schema: BotConfigVersionSnapshotSchema } },
+    },
+    403: { description: 'Forbidden — Team Lead or Admin role required' },
+    404: { description: 'No matching bot config version for this workspace' },
+    422: { description: 'version must be a positive integer' },
   },
 });
 
 registry.registerPath({
   method: 'post',
   path: '/agent/bot-config/rollback',
-  summary: 'Agent Rollback Bot Config Field',
+  summary: 'Agent Rollback Bot Config Version',
   description:
-    'Restores a prior change_log value for one field as the new current value. This is itself a new, audited save — history is never mutated. Admin-only.',
+    "Restores a prior version's full snapshot as the new current bot_config. This is itself a new, audited save (a fresh version and change_log rows) — history is never mutated. Admin-only.",
   security: [{ [bearerAgentJwt.name]: [] }],
   request: {
     body: {
       content: {
         'application/json': {
-          schema: z.object({
-            field: z.enum(['prompt', 'rules', 'tools_config', 'limits_config']),
-            change_log_id: z.string(),
-            side: z.enum(['before', 'after']),
-          }),
+          schema: z.object({ version: z.number().int().positive() }),
         },
       },
     },
@@ -2003,11 +2051,8 @@ registry.registerPath({
   responses: {
     200: { description: 'Resolved bot config after the rollback' },
     403: { description: 'Forbidden — admin role required' },
-    404: { description: 'No matching change_log entry for this workspace' },
-    422: {
-      description:
-        'change_log_id does not belong to the requested field, or the restored value fails validation',
-    },
+    404: { description: 'No matching bot config version for this workspace' },
+    422: { description: 'version is missing, not a positive integer, or the restored value fails validation' },
   },
 });
 

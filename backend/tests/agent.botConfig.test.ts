@@ -209,41 +209,6 @@ describe('GET /bot-config', () => {
     expect(badSave.body.error.message).toMatch(/max_bot_messages/);
   });
 
-  it('rolls back limits_config the same way as tools_config', async () => {
-    const workspaceId = await seedWorkspace();
-    const { token } = await seedAgentWithRole(workspaceId, 'admin');
-    const original = await request(app)
-      .get('/bot-config')
-      .set('Authorization', `Bearer ${token}`)
-      .set('X-Workspace-Id', workspaceId)
-      .expect(200);
-
-    await request(app)
-      .post('/bot-config')
-      .set('Authorization', `Bearer ${token}`)
-      .set('X-Workspace-Id', workspaceId)
-      .send({
-        limits_config: original.body.limits_config.map((l: { key: string; value: number }) =>
-          l.key === 'max_unhelped_replies' ? { ...l, value: 5 } : l,
-        ),
-      })
-      .expect(200);
-
-    const history = await request(app)
-      .get('/bot-config/history?field=limits_config')
-      .set('Authorization', `Bearer ${token}`)
-      .set('X-Workspace-Id', workspaceId)
-      .expect(200);
-    const changeLogId = history.body.entries[0].id;
-
-    const restored = await request(app)
-      .post('/bot-config/rollback')
-      .set('Authorization', `Bearer ${token}`)
-      .set('X-Workspace-Id', workspaceId)
-      .send({ field: 'limits_config', change_log_id: changeLogId, side: 'before' })
-      .expect(200);
-    expect(restored.body.resolved_limits.max_unhelped_replies).toBe(3);
-  });
 });
 
 describe('POST /bot-config', () => {
@@ -558,106 +523,152 @@ describe('POST /bot-config', () => {
   });
 });
 
-describe('POST /bot-config/rollback', () => {
-  it('restores a prior prompt value and writes a new, forward audit row', async () => {
+describe('GET /bot-config/versions', () => {
+  it('returns one version after seeding via first save, newest first', async () => {
     const workspaceId = await seedWorkspace();
     const { token } = await seedAgentWithRole(workspaceId, 'admin');
+
     await request(app)
       .post('/bot-config')
       .set('Authorization', `Bearer ${token}`)
       .set('X-Workspace-Id', workspaceId)
-      .send({ prompt: 'First' })
+      .send({ prompt: 'V1' })
       .expect(200);
     await request(app)
       .post('/bot-config')
       .set('Authorization', `Bearer ${token}`)
       .set('X-Workspace-Id', workspaceId)
-      .send({ prompt: 'Second' })
+      .send({ prompt: 'V2' })
       .expect(200);
 
-    const history = await request(app)
-      .get('/bot-config/history?field=prompt')
+    const res = await request(app)
+      .get('/bot-config/versions')
       .set('Authorization', `Bearer ${token}`)
       .set('X-Workspace-Id', workspaceId)
       .expect(200);
-    const firstChangeId = history.body.entries.find(
-      (e: { after_value: unknown }) => e.after_value === 'First',
-    ).id;
+
+    expect(res.body.versions.map((v: { version: number }) => v.version)).toEqual([2, 1]);
+    expect(res.body.versions[0].changed_fields).toEqual(['prompt']);
+    expect(res.body.versions[1].changed_fields.sort()).toEqual(
+      ['limits_config', 'prompt', 'rules', 'tools_config'].sort(),
+    );
+    expect(res.body.next_cursor).toBeNull();
+  });
+
+  it('never returns another workspace trail', async () => {
+    const workspaceA = await seedWorkspace();
+    const workspaceB = await seedWorkspace();
+    const { token: tokenA } = await seedAgentWithRole(workspaceA, 'admin');
+    const { token: tokenB } = await seedAgentWithRole(workspaceB, 'admin');
+
+    await request(app)
+      .post('/bot-config')
+      .set('Authorization', `Bearer ${tokenA}`)
+      .set('X-Workspace-Id', workspaceA)
+      .send({ prompt: 'A only' })
+      .expect(200);
+
+    const res = await request(app)
+      .get('/bot-config/versions')
+      .set('Authorization', `Bearer ${tokenB}`)
+      .set('X-Workspace-Id', workspaceB)
+      .expect(200);
+
+    expect(res.body.versions).toEqual([]);
+  });
+
+  it('refuses a plain agent with 403', async () => {
+    const workspaceId = await seedWorkspace();
+    const { token } = await seedAgentWithRole(workspaceId, 'agent');
+
+    await request(app)
+      .get('/bot-config/versions')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(403);
+  });
+});
+
+describe('GET /bot-config/versions/:version', () => {
+  it('returns the full snapshot for that version', async () => {
+    const workspaceId = await seedWorkspace();
+    const { token } = await seedAgentWithRole(workspaceId, 'admin');
+
+    await request(app)
+      .post('/bot-config')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ prompt: 'V1' })
+      .expect(200);
+
+    const res = await request(app)
+      .get('/bot-config/versions/1')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+
+    expect(res.body.version).toBe(1);
+    expect(res.body.prompt).toBe('V1');
+    expect(res.body.rules).toBeInstanceOf(Array);
+  });
+
+  it('404s on an unknown version', async () => {
+    const workspaceId = await seedWorkspace();
+    const { token } = await seedAgentWithRole(workspaceId, 'admin');
+
+    await request(app)
+      .get('/bot-config/versions/99')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(404);
+  });
+});
+
+describe('POST /bot-config/rollback', () => {
+  it('restores a prior version and writes a new, forward version', async () => {
+    const workspaceId = await seedWorkspace();
+    const { token } = await seedAgentWithRole(workspaceId, 'admin');
+
+    await request(app)
+      .post('/bot-config')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ prompt: 'Original' })
+      .expect(200);
+    await request(app)
+      .post('/bot-config')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ prompt: 'Changed' })
+      .expect(200);
 
     const res = await request(app)
       .post('/bot-config/rollback')
       .set('Authorization', `Bearer ${token}`)
       .set('X-Workspace-Id', workspaceId)
-      .send({ field: 'prompt', change_log_id: firstChangeId, side: 'after' })
+      .send({ version: 1 })
       .expect(200);
-    expect(res.body.prompt).toBe('First');
 
-    const { rows } = await ownerPool.query<{ count: string }>(
-      `select count(*)::text as count from change_log where entity_id = $1 and field = 'prompt'`,
-      [workspaceId],
-    );
-    expect(rows[0]!.count).toBe('3'); // First, Second, and the rollback-to-First
+    expect(res.body.prompt).toBe('Original');
+
+    const versions = await request(app)
+      .get('/bot-config/versions')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+    expect(versions.body.versions.map((v: { version: number }) => v.version)).toEqual([3, 2, 1]);
   });
 
-  it('404s on an unknown change_log_id', async () => {
+  it('404s on an unknown version', async () => {
     const workspaceId = await seedWorkspace();
     const { token } = await seedAgentWithRole(workspaceId, 'admin');
+
     await request(app)
       .post('/bot-config/rollback')
       .set('Authorization', `Bearer ${token}`)
       .set('X-Workspace-Id', workspaceId)
-      .send({ field: 'prompt', change_log_id: '999999999', side: 'after' })
+      .send({ version: 99 })
       .expect(404);
-  });
-
-  it('404s on a change_log_id belonging to another workspace', async () => {
-    const workspaceA = await seedWorkspace();
-    const workspaceB = await seedWorkspace();
-    const { token: tokenB } = await seedAgentWithRole(workspaceB, 'admin');
-    await request(app)
-      .post('/bot-config')
-      .set('Authorization', `Bearer ${tokenB}`)
-      .set('X-Workspace-Id', workspaceB)
-      .send({ prompt: 'B prompt' })
-      .expect(200);
-    const historyB = await request(app)
-      .get('/bot-config/history')
-      .set('Authorization', `Bearer ${tokenB}`)
-      .set('X-Workspace-Id', workspaceB)
-      .expect(200);
-    const idFromB = historyB.body.entries[0].id;
-
-    const { token: tokenA } = await seedAgentWithRole(workspaceA, 'admin');
-    await request(app)
-      .post('/bot-config/rollback')
-      .set('Authorization', `Bearer ${tokenA}`)
-      .set('X-Workspace-Id', workspaceA)
-      .send({ field: 'prompt', change_log_id: idFromB, side: 'after' })
-      .expect(404);
-  });
-
-  it("422s when the change_log_id's stored field does not match the request field", async () => {
-    const workspaceId = await seedWorkspace();
-    const { token } = await seedAgentWithRole(workspaceId, 'admin');
-    await request(app)
-      .post('/bot-config')
-      .set('Authorization', `Bearer ${token}`)
-      .set('X-Workspace-Id', workspaceId)
-      .send({ prompt: 'X' })
-      .expect(200);
-    const history = await request(app)
-      .get('/bot-config/history?field=prompt')
-      .set('Authorization', `Bearer ${token}`)
-      .set('X-Workspace-Id', workspaceId)
-      .expect(200);
-    const promptChangeId = history.body.entries[0].id;
-
-    await request(app)
-      .post('/bot-config/rollback')
-      .set('Authorization', `Bearer ${token}`)
-      .set('X-Workspace-Id', workspaceId)
-      .send({ field: 'rules', change_log_id: promptChangeId, side: 'after' })
-      .expect(422);
   });
 
   it('refuses a team lead with 403', async () => {
@@ -669,197 +680,13 @@ describe('POST /bot-config/rollback', () => {
       .set('X-Workspace-Id', workspaceId)
       .send({ prompt: 'X' })
       .expect(200);
-    const history = await request(app)
-      .get('/bot-config/history')
-      .set('Authorization', `Bearer ${adminToken}`)
-      .set('X-Workspace-Id', workspaceId)
-      .expect(200);
-    const { token: leadToken } = await seedAgentWithRole(workspaceId, 'team_lead');
 
+    const { token } = await seedAgentWithRole(workspaceId, 'team_lead');
     await request(app)
       .post('/bot-config/rollback')
-      .set('Authorization', `Bearer ${leadToken}`)
-      .set('X-Workspace-Id', workspaceId)
-      .send({ field: 'prompt', change_log_id: history.body.entries[0].id, side: 'after' })
-      .expect(403);
-  });
-});
-
-describe('GET /bot-config/history', () => {
-  it('returns an empty trail before anything is saved', async () => {
-    const workspaceId = await seedWorkspace();
-    const { token } = await seedAgentWithRole(workspaceId, 'admin');
-
-    const res = await request(app)
-      .get('/bot-config/history')
       .set('Authorization', `Bearer ${token}`)
       .set('X-Workspace-Id', workspaceId)
-      .expect(200);
-
-    expect(res.body).toEqual({ entries: [], next_cursor: null });
-  });
-
-  it('returns the trail newest-first with column names, actor and null semantics', async () => {
-    const workspaceId = await seedWorkspace();
-    const { agentId, token } = await seedAgentWithRole(workspaceId, 'admin');
-
-    await request(app)
-      .post('/bot-config')
-      .set('Authorization', `Bearer ${token}`)
-      .set('X-Workspace-Id', workspaceId)
-      .send({ prompt: 'First' })
-      .expect(200);
-    await request(app)
-      .post('/bot-config')
-      .set('Authorization', `Bearer ${token}`)
-      .set('X-Workspace-Id', workspaceId)
-      .send({ prompt: null })
-      .expect(200);
-
-    const res = await request(app)
-      .get('/bot-config/history?field=prompt')
-      .set('Authorization', `Bearer ${token}`)
-      .set('X-Workspace-Id', workspaceId)
-      .expect(200);
-
-    expect(res.body.entries).toHaveLength(2);
-    expect(res.body.entries[0]).toEqual({
-      id: expect.any(String),
-      field: 'prompt',
-      before_value: 'First',
-      after_value: DEFAULT_BOT_PROMPT,
-      actor: { id: agentId, display_name: 'Test Agent', email: expect.any(String) },
-      changed_at: expect.any(String),
-    });
-    // The first-ever set: before resolves to the catalog baseline (prompt is NOT
-    // NULL now), a different fact from the reset-to-baseline above.
-    expect(res.body.entries[1].before_value).toBe(DEFAULT_BOT_PROMPT);
-    expect(res.body.entries[1].after_value).toBe('First');
-    expect(res.body.next_cursor).toBeNull();
-  });
-
-  it('filters by field when ?field= is given', async () => {
-    const workspaceId = await seedWorkspace();
-    const { token } = await seedAgentWithRole(workspaceId, 'admin');
-    await request(app)
-      .post('/bot-config')
-      .set('Authorization', `Bearer ${token}`)
-      .set('X-Workspace-Id', workspaceId)
-      .send({ is_provisioned: true, prompt: 'First' })
-      .expect(200);
-
-    const res = await request(app)
-      .get('/bot-config/history?field=prompt')
-      .set('Authorization', `Bearer ${token}`)
-      .set('X-Workspace-Id', workspaceId)
-      .expect(200);
-    expect(res.body.entries.every((e: { field: string }) => e.field === 'prompt')).toBe(true);
-  });
-
-  it('pages with limit and next_cursor', async () => {
-    const workspaceId = await seedWorkspace();
-    const { token } = await seedAgentWithRole(workspaceId, 'admin');
-
-    await request(app)
-      .post('/bot-config')
-      .set('Authorization', `Bearer ${token}`)
-      .set('X-Workspace-Id', workspaceId)
-      .send({ is_provisioned: true, prompt: 'First' })
-      .expect(200);
-
-    const first = await request(app)
-      .get('/bot-config/history?limit=1')
-      .set('Authorization', `Bearer ${token}`)
-      .set('X-Workspace-Id', workspaceId)
-      .expect(200);
-    expect(first.body.entries).toHaveLength(1);
-    expect(first.body.next_cursor).toEqual(expect.any(String));
-
-    const second = await request(app)
-      .get(`/bot-config/history?limit=1&cursor=${encodeURIComponent(first.body.next_cursor)}`)
-      .set('Authorization', `Bearer ${token}`)
-      .set('X-Workspace-Id', workspaceId)
-      .expect(200);
-    expect(second.body.entries).toHaveLength(1);
-
-    const ids = [...first.body.entries, ...second.body.entries].map(
-      (entry: { id: string }) => entry.id,
-    );
-    expect(new Set(ids).size).toBe(2);
-  });
-
-  it('rejects a bad limit and an undecodable cursor with 422', async () => {
-    const workspaceId = await seedWorkspace();
-    const { token } = await seedAgentWithRole(workspaceId, 'admin');
-
-    await request(app)
-      .get('/bot-config/history?limit=0')
-      .set('Authorization', `Bearer ${token}`)
-      .set('X-Workspace-Id', workspaceId)
-      .expect(422);
-    await request(app)
-      .get('/bot-config/history?limit=201')
-      .set('Authorization', `Bearer ${token}`)
-      .set('X-Workspace-Id', workspaceId)
-      .expect(422);
-    await request(app)
-      .get('/bot-config/history?cursor=not-a-cursor!!')
-      .set('Authorization', `Bearer ${token}`)
-      .set('X-Workspace-Id', workspaceId)
-      .expect(422);
-  });
-
-  it('never returns another workspace trail', async () => {
-    const workspaceA = await seedWorkspace();
-    const workspaceB = await seedWorkspace();
-    const { token: tokenB } = await seedAgentWithRole(workspaceB, 'admin');
-    await request(app)
-      .post('/bot-config')
-      .set('Authorization', `Bearer ${tokenB}`)
-      .set('X-Workspace-Id', workspaceB)
-      .send({ prompt: 'B' })
-      .expect(200);
-    const { token: tokenA } = await seedAgentWithRole(workspaceA, 'admin');
-
-    const res = await request(app)
-      .get('/bot-config/history')
-      .set('Authorization', `Bearer ${tokenA}`)
-      .set('X-Workspace-Id', workspaceA)
-      .expect(200);
-
-    expect(res.body.entries).toEqual([]);
-  });
-
-  // Filed under "See bot config" — a Team Lead who can read the current prompt is
-  // not kept from reading the previous one.
-  it('admits a team lead', async () => {
-    const workspaceId = await seedWorkspace();
-    const { token: adminToken } = await seedAgentWithRole(workspaceId, 'admin');
-    await request(app)
-      .post('/bot-config')
-      .set('Authorization', `Bearer ${adminToken}`)
-      .set('X-Workspace-Id', workspaceId)
-      .send({ prompt: 'First' })
-      .expect(200);
-    const { token: leadToken } = await seedAgentWithRole(workspaceId, 'team_lead');
-
-    const res = await request(app)
-      .get('/bot-config/history')
-      .set('Authorization', `Bearer ${leadToken}`)
-      .set('X-Workspace-Id', workspaceId)
-      .expect(200);
-
-    expect(res.body.entries).toHaveLength(1);
-  });
-
-  it('refuses a plain agent with 403', async () => {
-    const workspaceId = await seedWorkspace();
-    const { token } = await seedAgentWithRole(workspaceId, 'agent');
-
-    await request(app)
-      .get('/bot-config/history')
-      .set('Authorization', `Bearer ${token}`)
-      .set('X-Workspace-Id', workspaceId)
+      .send({ version: 1 })
       .expect(403);
   });
 });

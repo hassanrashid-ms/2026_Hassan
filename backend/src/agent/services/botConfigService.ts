@@ -2,17 +2,14 @@ import { eq } from 'drizzle-orm';
 import { isDeepStrictEqual } from 'node:util';
 import type {
   BotConfigView,
-  ChangeLogHistoryResponse,
+  BotConfigVersionSnapshotView,
+  BotConfigVersionsListResponse,
   LimitToggleValue as LimitToggle,
   ToolToggleValue,
 } from '@support/types';
 import { botConfig } from '../../shared/db/schema/index.ts';
 import { withWorkspace, type Tx } from '../../shared/db/withWorkspace.ts';
-import {
-  BOT_CONFIG_ENTITY_TYPE,
-  resolveBotConfig,
-  saveBotConfig,
-} from '../../domain/bot/botConfig.ts';
+import { resolveBotConfig, saveBotConfig } from '../../domain/bot/botConfig.ts';
 import { DEFAULT_BOT_PROMPT } from '../../domain/bot/defaultPrompt.ts';
 import {
   buildBaselineRules,
@@ -22,8 +19,10 @@ import {
 import { buildBaselineToolsConfig, type ToolToggle } from '../../domain/bot/tools.ts';
 import { buildBaselineLimits } from '../../domain/bot/limitsCatalog.ts';
 import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts';
-import type { ChangeLogCursor } from '../../shared/changeLog/cursor.ts';
-import { getChangeLogEntryById, readChangeLog } from '../../shared/changeLog/readChangeLog.ts';
+import {
+  getBotConfigVersionByNumber,
+  listBotConfigVersions,
+} from '../../domain/bot/botConfigVersion.ts';
 
 async function readUpdatedAt(tx: Tx, workspaceId: string): Promise<Date | null> {
   const [row] = await tx
@@ -88,87 +87,87 @@ export async function saveBotConfigForAgent(
   });
 }
 
-export async function listBotConfigHistory(
+export async function listBotConfigVersionsForAgent(
   ctx: AgentContext,
-  input: {
-    limit: number;
-    cursor?: ChangeLogCursor;
-    field?: 'prompt' | 'rules' | 'tools_config' | 'limits_config' | 'is_provisioned';
-  },
-): Promise<ChangeLogHistoryResponse> {
+  input: { limit: number; cursor?: number },
+): Promise<BotConfigVersionsListResponse> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
-    const page = await readChangeLog(tx, {
+    const page = await listBotConfigVersions(tx, {
       workspaceId: ctx.workspaceId,
-      entityType: BOT_CONFIG_ENTITY_TYPE,
-      entityId: ctx.workspaceId,
       limit: input.limit,
       cursor: input.cursor,
     });
-
-    const filtered = input.field ? page.rows.filter((r) => r.field === input.field) : page.rows;
-
     return {
-      entries: filtered.map((row) => ({
-        id: row.id,
-        field: row.field,
-        before_value: row.beforeValue,
-        after_value: row.afterValue,
-        actor: { id: row.actor.id, display_name: row.actor.displayName, email: row.actor.email },
-        changed_at: row.changedAt.toISOString(),
+      versions: page.rows.map((row) => ({
+        version: row.version,
+        actor: {
+          id: row.actor.id,
+          display_name: row.actor.displayName,
+          email: row.actor.email,
+        },
+        changed_fields: row.changedFields as BotConfigVersionsListResponse['versions'][number]['changed_fields'],
+        created_at: row.createdAt.toISOString(),
       })),
       next_cursor: page.nextCursor,
     };
   });
 }
 
-export class ChangeLogEntryNotFound extends Error {
+export class BotConfigVersionNotFound extends Error {
   constructor() {
-    super('No matching change_log entry.');
-    this.name = 'ChangeLogEntryNotFound';
+    super('No matching bot config version.');
+    this.name = 'BotConfigVersionNotFound';
   }
 }
 
-export class ChangeLogFieldMismatch extends Error {
-  constructor(actual: string, requested: string) {
-    super(`change_log_id refers to field "${actual}", not "${requested}".`);
-    this.name = 'ChangeLogFieldMismatch';
-  }
+export async function getBotConfigVersionForAgent(
+  ctx: AgentContext,
+  version: number,
+): Promise<BotConfigVersionSnapshotView> {
+  return withWorkspace(ctx.workspaceId, async (tx) => {
+    const row = await getBotConfigVersionByNumber(tx, { workspaceId: ctx.workspaceId, version });
+    if (!row) throw new BotConfigVersionNotFound();
+    return {
+      version: row.version,
+      actor: {
+        id: row.actor.id,
+        display_name: row.actor.displayName,
+        email: row.actor.email,
+      },
+      changed_fields: row.changedFields as BotConfigVersionSnapshotView['changed_fields'],
+      created_at: row.createdAt.toISOString(),
+      prompt: row.prompt,
+      rules: row.rules.map((r) => ({ ...r, enforcement: deriveEnforcement(r) })),
+      tools_config: row.toolsConfig as ToolToggleValue[],
+      limits_config: row.limitsConfig,
+    };
+  });
 }
 
 /**
- * Restores a prior change_log value as the new current value — a normal,
- * newly-audited save, never a mutation of history (spec "Versioning /
- * history / rollback").
+ * Restores a prior version's full snapshot as the new current bot_config — a
+ * normal, newly-audited save (through saveBotConfig, which writes both
+ * change_log and a fresh bot_config_version), never a mutation of history.
  */
-export async function rollbackBotConfigForAgent(
+export async function rollbackBotConfigVersionForAgent(
   ctx: AgentContext,
-  input: {
-    field: 'prompt' | 'rules' | 'tools_config' | 'limits_config';
-    changeLogId: string;
-    side: 'before' | 'after';
-  },
+  version: number,
 ): Promise<BotConfigView> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
-    const entry = await getChangeLogEntryById(tx, {
+    const snapshot = await getBotConfigVersionByNumber(tx, {
       workspaceId: ctx.workspaceId,
-      entityType: BOT_CONFIG_ENTITY_TYPE,
-      entityId: ctx.workspaceId,
-      id: input.changeLogId,
+      version,
     });
-    if (!entry) throw new ChangeLogEntryNotFound();
-    if (entry.field !== input.field) throw new ChangeLogFieldMismatch(entry.field, input.field);
+    if (!snapshot) throw new BotConfigVersionNotFound();
 
-    const value = input.side === 'before' ? entry.beforeValue : entry.afterValue;
-    const save =
-      input.field === 'prompt'
-        ? { prompt: value as string | null }
-        : input.field === 'rules'
-          ? { rules: value as RuleEntry[] | null }
-          : input.field === 'tools_config'
-            ? { toolsConfig: value as ToolToggle[] | null }
-            : { limitsConfig: value as LimitToggle[] | null };
-
-    await saveBotConfig(tx, { workspaceId: ctx.workspaceId, actorId: ctx.agentId, ...save });
+    await saveBotConfig(tx, {
+      workspaceId: ctx.workspaceId,
+      actorId: ctx.agentId,
+      prompt: snapshot.prompt,
+      rules: snapshot.rules,
+      toolsConfig: snapshot.toolsConfig,
+      limitsConfig: snapshot.limitsConfig,
+    });
     return view(tx, ctx.workspaceId);
   });
 }

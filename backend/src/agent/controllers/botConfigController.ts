@@ -1,5 +1,9 @@
 import type { RequestHandler } from 'express';
-import { ChangeLogHistoryQuery, RollbackBotConfigBody, SaveBotConfigBody } from '@support/types';
+import {
+  BotConfigVersionsQuery,
+  RollbackBotConfigVersionBody,
+  SaveBotConfigBody,
+} from '@support/types';
 import { sendError } from '../../errors.ts';
 import {
   EmptyBotPrompt,
@@ -7,13 +11,12 @@ import {
   InvalidToolsPayload,
   InvalidLimitsPayload,
 } from '../../domain/bot/botConfig.ts';
-import { decodeChangeLogCursor } from '../../shared/changeLog/cursor.ts';
 import {
-  ChangeLogEntryNotFound,
-  ChangeLogFieldMismatch,
+  BotConfigVersionNotFound,
+  getBotConfigVersionForAgent,
   getBotConfigView,
-  listBotConfigHistory,
-  rollbackBotConfigForAgent,
+  listBotConfigVersionsForAgent,
+  rollbackBotConfigVersionForAgent,
   saveBotConfigForAgent,
 } from '../services/botConfigService.ts';
 
@@ -57,71 +60,51 @@ export const saveBotConfigHandler: RequestHandler = async (req, res) => {
   }
 };
 
-const HISTORY_FIELDS = new Set([
-  'prompt',
-  'rules',
-  'tools_config',
-  'limits_config',
-  'is_provisioned',
-]);
-
-export const getBotConfigHistoryHandler: RequestHandler = async (req, res) => {
-  const query = ChangeLogHistoryQuery.safeParse(req.query);
+export const getBotConfigVersionsHandler: RequestHandler = async (req, res) => {
+  const query = BotConfigVersionsQuery.safeParse(req.query);
   if (!query.success) {
-    sendError(res, 422, 'invalid_request', 'limit must be an integer between 1 and 200.');
+    sendError(res, 422, 'invalid_request', 'limit must be 1-200, cursor must be a positive integer.');
     return;
   }
-
-  const rawField = req.query.field;
-  if (rawField !== undefined && (typeof rawField !== 'string' || !HISTORY_FIELDS.has(rawField))) {
-    sendError(
-      res,
-      422,
-      'invalid_request',
-      'field must be one of prompt, rules, tools_config, limits_config, is_provisioned.',
-    );
-    return;
-  }
-
-  const cursor =
-    query.data.cursor === undefined ? undefined : decodeChangeLogCursor(query.data.cursor);
-  if (cursor === null) {
-    sendError(res, 422, 'invalid_request', 'cursor is not a valid page cursor.');
-    return;
-  }
-
   res.status(200).json(
-    await listBotConfigHistory(req.agent!, {
+    await listBotConfigVersionsForAgent(req.agent!, {
       limit: query.data.limit,
-      cursor,
-      field: rawField as
-        'prompt' | 'rules' | 'tools_config' | 'limits_config' | 'is_provisioned' | undefined,
+      cursor: query.data.cursor,
     }),
   );
 };
 
-export const rollbackBotConfigHandler: RequestHandler = async (req, res) => {
-  const body = RollbackBotConfigBody.safeParse(req.body);
-  if (!body.success) {
-    sendError(res, 422, 'invalid_request', 'field, change_log_id and side are required.');
+export const getBotConfigVersionHandler: RequestHandler = async (req, res) => {
+  const version = Number(req.params.version);
+  if (!Number.isInteger(version) || version < 1) {
+    sendError(res, 422, 'invalid_request', 'version must be a positive integer.');
     return;
   }
-
   try {
-    res.status(200).json(
-      await rollbackBotConfigForAgent(req.agent!, {
-        field: body.data.field,
-        changeLogId: body.data.change_log_id,
-        side: body.data.side,
-      }),
-    );
+    res.status(200).json(await getBotConfigVersionForAgent(req.agent!, version));
   } catch (error) {
-    if (error instanceof ChangeLogEntryNotFound) {
+    if (error instanceof BotConfigVersionNotFound) {
+      sendError(res, 404, 'not_found', error.message);
+      return;
+    }
+    throw error;
+  }
+};
+
+export const rollbackBotConfigHandler: RequestHandler = async (req, res) => {
+  const body = RollbackBotConfigVersionBody.safeParse(req.body);
+  if (!body.success) {
+    sendError(res, 422, 'invalid_request', 'version is required and must be a positive integer.');
+    return;
+  }
+  try {
+    res.status(200).json(await rollbackBotConfigVersionForAgent(req.agent!, body.data.version));
+  } catch (error) {
+    if (error instanceof BotConfigVersionNotFound) {
       sendError(res, 404, 'not_found', error.message);
       return;
     }
     if (
-      error instanceof ChangeLogFieldMismatch ||
       error instanceof InvalidRulesPayload ||
       error instanceof InvalidToolsPayload ||
       error instanceof InvalidLimitsPayload ||

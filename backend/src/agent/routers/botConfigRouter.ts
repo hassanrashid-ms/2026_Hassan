@@ -3,7 +3,8 @@ import { requireAdminRole } from '../../shared/middleware/requireAdminRole.ts';
 import { requireTeamLeadOrAdmin } from '../../shared/middleware/requireTeamLeadOrAdmin.ts';
 import {
   getBotConfigHandler,
-  getBotConfigHistoryHandler,
+  getBotConfigVersionHandler,
+  getBotConfigVersionsHandler,
   rollbackBotConfigHandler,
   saveBotConfigHandler,
 } from '../controllers/botConfigController.ts';
@@ -32,5 +33,6 @@ botConfigRouter.post('/bot-config', requireAdminRole, saveBotConfigHandler);
 // canSeeBotConfig, the same Team Lead+Admin gate as the config read — reuse the
 // constant rather than a second requireWorkspaceRole(...) call, so the two reads
 // cannot drift apart.
-botConfigRouter.get('/bot-config/history', canSeeBotConfig, getBotConfigHistoryHandler);
+botConfigRouter.get('/bot-config/versions', canSeeBotConfig, getBotConfigVersionsHandler);
+botConfigRouter.get('/bot-config/versions/:version', canSeeBotConfig, getBotConfigVersionHandler);
 botConfigRouter.post('/bot-config/rollback', requireAdminRole, rollbackBotConfigHandler);
