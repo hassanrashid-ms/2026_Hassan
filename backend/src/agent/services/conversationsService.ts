@@ -14,6 +14,7 @@ import {
 import { alias } from 'drizzle-orm/pg-core';
 import type { AgentConversationSummary, AgentMessageView } from '@support/types';
 import {
+  applySubintentDefaultPriority,
   postMessage,
   toAgentView,
   type PostedMessageRow,
@@ -550,6 +551,8 @@ export async function reclassifyConversation(
         id: conversation.id,
         subintentId: conversation.subintentId,
         status: conversation.status,
+        priority: conversation.priority,
+        priorityManuallySet: conversation.priorityManuallySet,
       })
       .from(conversation)
       .where(eq(conversation.id, conversationId))
@@ -573,6 +576,16 @@ export async function reclassifyConversation(
       .update(conversation)
       .set({ subintentId, classificationSource: 'agent' })
       .where(eq(conversation.id, conversationId));
+
+    await applySubintentDefaultPriority(tx, {
+      workspaceId: ctx.workspaceId,
+      conversationId,
+      subintentId,
+      currentPriority: conv.priority,
+      priorityManuallySet: conv.priorityManuallySet,
+      actorId: ctx.agentId,
+      actorType: 'agent',
+    });
 
     await appendEvent(tx, {
       workspaceId: ctx.workspaceId,

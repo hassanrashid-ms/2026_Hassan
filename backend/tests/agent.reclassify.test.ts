@@ -329,4 +329,73 @@ describe('PATCH /agent/conversations/:id/subintent', () => {
     ]);
     expect(rows).toHaveLength(0);
   });
+
+  it('applies the target subintent default priority when not manually set', async () => {
+    const workspaceId = await seedWorkspace();
+    const intentId = await seedIntent(workspaceId);
+    const fromSubintentId = await seedSubintent({ workspaceId, intentId });
+    const toSubintentId = await seedSubintent({ workspaceId, intentId, defaultPriority: 'p1' });
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({
+      workspaceId,
+      playerId,
+      status: 'open',
+      subintentId: fromSubintentId,
+      priority: 'p3',
+    });
+    const { agentId, token } = await setupAgent(workspaceId);
+
+    await request(app)
+      .patch(`/conversations/${conversationId}/subintent`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ subintentId: toSubintentId })
+      .expect(200);
+
+    const { rows } = await ownerPool.query<{ priority: string }>(
+      `select priority from conversation where id = $1`,
+      [conversationId],
+    );
+    expect(rows[0]!.priority).toBe('p1');
+
+    const events = await ownerPool.query(
+      `select type, actor_id, payload from event where conversation_id = $1 and type = 'conversation_priority_changed'`,
+      [conversationId],
+    );
+    expect(events.rows).toHaveLength(1);
+    expect(events.rows[0]).toMatchObject({
+      actor_id: agentId,
+      payload: { from: 'p3', to: 'p1', reason: 'subintent_default' },
+    });
+  });
+
+  it('does not override a manually-set priority on reclassify', async () => {
+    const workspaceId = await seedWorkspace();
+    const intentId = await seedIntent(workspaceId);
+    const fromSubintentId = await seedSubintent({ workspaceId, intentId });
+    const toSubintentId = await seedSubintent({ workspaceId, intentId, defaultPriority: 'p1' });
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({
+      workspaceId,
+      playerId,
+      status: 'open',
+      subintentId: fromSubintentId,
+      priority: 'p4',
+      priorityManuallySet: true,
+    });
+    const { token } = await setupAgent(workspaceId);
+
+    await request(app)
+      .patch(`/conversations/${conversationId}/subintent`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ subintentId: toSubintentId })
+      .expect(200);
+
+    const { rows } = await ownerPool.query<{ priority: string }>(
+      `select priority from conversation where id = $1`,
+      [conversationId],
+    );
+    expect(rows[0]!.priority).toBe('p4');
+  });
 });
