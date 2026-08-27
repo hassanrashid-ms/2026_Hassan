@@ -8,6 +8,7 @@ const EXPECTED_TABLES = [
   'article_attachment',
   'attachment',
   'bot_config',
+  'bot_config_version',
   'change_log',
   'conversation',
   'conversation_tag',
@@ -59,7 +60,7 @@ async function columns(
 afterAll(closeOwnerPool);
 
 describe('schema', () => {
-  it('creates exactly the twenty tables of the SDK-path + articles-KB + bot-config + forms subset', async () => {
+  it('creates exactly the expected tables of the SDK-path + articles-KB + bot-config + forms subset', async () => {
     const { rows } = await ownerPool.query<{ table_name: string }>(
       `select table_name from information_schema.tables
         where table_schema = 'public' and table_type = 'BASE TABLE'
