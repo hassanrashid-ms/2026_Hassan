@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ConversationList } from './ConversationList.tsx';
@@ -57,7 +57,10 @@ beforeEach(() => {
 describe.skip('ConversationList claim flow', () => {
   it('claims an unassigned conversation and refreshes the list', async () => {
     vi.spyOn(agentApi, 'fetchInbox').mockImplementation((_token, status) =>
-      Promise.resolve({ conversations: status === 'unassigned' ? [UNASSIGNED_CONVERSATION] : [] }),
+      Promise.resolve({
+        conversations: status === 'unassigned' ? [UNASSIGNED_CONVERSATION] : [],
+        nextCursor: null,
+      }),
     );
     const claimSpy = vi.spyOn(agentApi, 'claimConversation').mockResolvedValue({ claimed: true });
 
@@ -71,7 +74,10 @@ describe.skip('ConversationList claim flow', () => {
 
   it('shows a notice when the conversation was already claimed by someone else', async () => {
     vi.spyOn(agentApi, 'fetchInbox').mockImplementation((_token, status) =>
-      Promise.resolve({ conversations: status === 'unassigned' ? [UNASSIGNED_CONVERSATION] : [] }),
+      Promise.resolve({
+        conversations: status === 'unassigned' ? [UNASSIGNED_CONVERSATION] : [],
+        nextCursor: null,
+      }),
     );
     vi.spyOn(agentApi, 'claimConversation').mockResolvedValue({ claimed: false });
 
@@ -92,7 +98,7 @@ describe('ConversationList reacts to conversation:changed without a blocking ref
     const fetchSpy = vi
       .spyOn(agentApi, 'fetchInbox')
       .mockImplementation((_token, status) =>
-        Promise.resolve({ conversations: status === 'mine' ? [mine] : [] }),
+        Promise.resolve({ conversations: status === 'mine' ? [mine] : [], nextCursor: null }),
       );
     renderWithClient(<ConversationList token="tok" selectedId={null} onSelect={() => {}} />);
     return fetchSpy;
@@ -161,6 +167,7 @@ describe('ConversationList form label', () => {
                 },
               ]
             : [],
+        nextCursor: null,
       }),
     );
 
@@ -173,12 +180,50 @@ describe('ConversationList form label', () => {
 
   it('does not label a row in any other phase', async () => {
     vi.spyOn(agentApi, 'fetchInbox').mockImplementation((_token, status) =>
-      Promise.resolve({ conversations: status === 'mine' ? [UNASSIGNED_CONVERSATION] : [] }),
+      Promise.resolve({
+        conversations: status === 'mine' ? [UNASSIGNED_CONVERSATION] : [],
+        nextCursor: null,
+      }),
     );
 
     renderWithClient(<ConversationList token="tok" selectedId={null} onSelect={() => {}} />);
 
     await screen.findByText('player-42');
     expect(screen.queryByText('Answering questions')).not.toBeInTheDocument();
+  });
+});
+
+describe('ConversationList pagination', () => {
+  it('fetches the next page of "mine" when scrolled near the bottom', async () => {
+    const c2 = { ...UNASSIGNED_CONVERSATION, id: 'conv-2' };
+    const fetchSpy = vi
+      .spyOn(agentApi, 'fetchInbox')
+      .mockImplementation((_token, status, _filters, cursor) => {
+        if (status !== 'mine') return Promise.resolve({ conversations: [], nextCursor: null });
+        if (!cursor) {
+          return Promise.resolve({
+            conversations: [UNASSIGNED_CONVERSATION],
+            nextCursor: 'page-2',
+          });
+        }
+        return Promise.resolve({ conversations: [c2], nextCursor: null });
+      });
+
+    renderWithClient(<ConversationList token="tok" selectedId={null} onSelect={() => {}} />);
+    await waitFor(() =>
+      expect(fetchSpy).toHaveBeenCalledWith('tok', 'mine', undefined, undefined),
+    );
+    await screen.findByText('player-42');
+
+    const scrollable = screen.getByTestId('conversation-list-scroll');
+    Object.defineProperty(scrollable, 'scrollHeight', { value: 1000, configurable: true });
+    Object.defineProperty(scrollable, 'clientHeight', { value: 400, configurable: true });
+    Object.defineProperty(scrollable, 'scrollTop', { value: 700, configurable: true });
+    fireEvent.scroll(scrollable);
+
+    await waitFor(() =>
+      expect(fetchSpy).toHaveBeenCalledWith('tok', 'mine', undefined, 'page-2'),
+    );
+    await waitFor(() => expect(screen.getAllByText('player-42')).toHaveLength(2));
   });
 });

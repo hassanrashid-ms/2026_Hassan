@@ -5,8 +5,13 @@ import { cn } from '../../lib/cn.ts';
 function ScrollArea({
   className,
   children,
+  onScroll,
+  viewportTestId,
   ...props
-}: React.ComponentProps<typeof ScrollAreaPrimitive.Root>) {
+}: React.ComponentProps<typeof ScrollAreaPrimitive.Root> & {
+  onScroll?: React.UIEventHandler<HTMLDivElement>;
+  viewportTestId?: string;
+}) {
   return (
     <ScrollAreaPrimitive.Root className={cn('relative overflow-hidden', className)} {...props}>
       {/* Radix injects an internal div with `display: table; min-width: 100%`
@@ -16,7 +21,11 @@ function ScrollArea({
           viewport instead of wrapping/truncating, and with only a vertical
           scrollbar rendered the excess width is silently clipped. Forcing it
           back to block layout restores normal width constraints. */}
-      <ScrollAreaPrimitive.Viewport className="size-full rounded-[inherit] [&>div]:!block">
+      <ScrollAreaPrimitive.Viewport
+        className="size-full rounded-[inherit] [&>div]:!block"
+        onScroll={onScroll}
+        data-testid={viewportTestId}
+      >
         {children}
       </ScrollAreaPrimitive.Viewport>
       <ScrollBar />
