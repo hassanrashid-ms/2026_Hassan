@@ -45,6 +45,7 @@ export async function getConversationDetail(
         id: conversation.id,
         number: conversation.number,
         status: conversation.status,
+        priority: conversation.priority,
         resolutionSource: conversation.resolutionSource,
         createdAt: conversation.createdAt,
         playerId: player.id,
@@ -70,6 +71,7 @@ export async function getConversationDetail(
       number: row.number,
       player: { id: row.playerId, external_player_id: row.externalPlayerId },
       status: row.status,
+      priority: row.priority,
       subintent:
         row.subintentName && row.intentName
           ? {

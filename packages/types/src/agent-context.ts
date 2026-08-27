@@ -1,4 +1,4 @@
-import type { ConversationStatusValue } from './chat.ts';
+import type { ConversationPriorityValue, ConversationStatusValue } from './chat.ts';
 import type { FormFieldType, FormSubmissionStatus } from './forms.ts';
 import type { DeclaredFieldType } from './player-state.ts';
 import type { TagView } from './tags.ts';
@@ -19,6 +19,7 @@ export type AgentConversationDetail = {
   number: number;
   player: { id: string; external_player_id: string };
   status: ConversationStatusValue;
+  priority: ConversationPriorityValue;
   subintent: { intent_name: string; subintent_name: string; subintent_id: string | null } | null;
   assigned_agent: { id: string; display_name: string } | null;
   resolution_source: ResolutionSourceValue | null;
