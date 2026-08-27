@@ -14,6 +14,8 @@ export const importWorkload = () => import('../pages/Workload/Workload.tsx');
 export const importBotConfig = () => import('../pages/BotConfig/BotConfig.tsx');
 export const importWorkspaceSettings = () =>
   import('../pages/WorkspaceSettings/WorkspaceSettings.tsx');
+export const importDeclaredFields = () =>
+  import('../pages/DeclaredFields/DeclaredFields.tsx');
 
 // Keyed by the NavLink `to` path AgentConsoleShell renders.
 export const agentRoutePreload: Record<string, () => Promise<unknown>> = {
@@ -26,4 +28,5 @@ export const agentRoutePreload: Record<string, () => Promise<unknown>> = {
   '/workload': importWorkload,
   '/bot-config': importBotConfig,
   '/workspace-settings': importWorkspaceSettings,
+  '/declared-fields': importDeclaredFields,
 };

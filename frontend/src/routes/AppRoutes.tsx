@@ -3,9 +3,10 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { AgentLogin } from '../surfaces/agent-console/pages/AgentLogin.tsx';
 import { AdminLogin } from '../surfaces/admin-console/pages/AdminLogin.tsx';
 import { RequireRole } from '../surfaces/agent-console/components/RequireRole.tsx';
-import { canBuildForms } from '../surfaces/agent-console/lib/agentSession.ts';
+import { canBuildForms, isAdmin } from '../surfaces/agent-console/lib/agentSession.ts';
 import {
   importBotConfig,
+  importDeclaredFields,
   importForms,
   importGlobalInbox,
   importInbox,
@@ -43,6 +44,9 @@ const Workload = lazy(async () => ({ default: (await importWorkload()).Workload 
 const BotConfigPage = lazy(async () => ({ default: (await importBotConfig()).BotConfig }));
 const WorkspaceSettingsPage = lazy(async () => ({
   default: (await importWorkspaceSettings()).WorkspaceSettings,
+}));
+const DeclaredFieldsPage = lazy(async () => ({
+  default: (await importDeclaredFields()).DeclaredFields,
 }));
 const AgentNotFound = lazy(async () => ({
   default: (await import('../surfaces/agent-console/pages/NotFound.tsx')).NotFound,
@@ -134,6 +138,14 @@ export function AppRoutes() {
           element={
             <RequireRole allow={canBuildForms}>
               <WorkspaceSettingsPage />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="declared-fields"
+          element={
+            <RequireRole allow={isAdmin}>
+              <DeclaredFieldsPage />
             </RequireRole>
           }
         />
