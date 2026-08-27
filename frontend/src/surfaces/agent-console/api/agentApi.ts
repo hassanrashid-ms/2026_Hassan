@@ -181,6 +181,17 @@ export function reclassifyConversation(
   });
 }
 
+export function setConversationPriority(
+  token: string,
+  conversationId: string,
+  priority: string,
+): Promise<{ updated: boolean }> {
+  return call(`/agent/conversations/${conversationId}/priority`, token, {
+    method: 'PATCH',
+    body: JSON.stringify({ priority }),
+  });
+}
+
 /**
  * The header row for one conversation. Required, not an optimisation: an older
  * ticket is in neither the `unassigned` nor the `mine` list and never will be,
