@@ -15,6 +15,7 @@ import {
   listConversations,
   reclassifyConversation,
   reassignConversation,
+  setConversationPriority,
   takeOverConversation,
 } from '../services/conversationsService.ts';
 import { askResolved } from '../services/resolutionService.ts';
@@ -181,6 +182,41 @@ export const reclassifyConversationHandler: RequestHandler = async (req, res) =>
   }
   emitInboxChanged(getIo(), ctx.workspaceId, params.data.id, result.status);
   res.status(200).json({ reclassified: true });
+};
+
+const SetPriorityBody = z.object({ priority: z.enum(['p1', 'p2', 'p3', 'p4']) });
+
+const SET_PRIORITY_ERRORS = {
+  not_found: [404, 'Conversation not found.'],
+} as const;
+
+export const setConversationPriorityHandler: RequestHandler = async (req, res) => {
+  const ctx = req.agent!;
+  const params = ConversationIdParams.safeParse(req.params);
+  const body = SetPriorityBody.safeParse(req.body);
+  if (!params.success || !body.success) {
+    sendError(
+      res,
+      422,
+      'invalid_request',
+      'id must be a uuid, body must be { priority: p1|p2|p3|p4 }.',
+    );
+    return;
+  }
+  const result = await setConversationPriority(ctx, params.data.id, body.data.priority);
+  if (!result.ok) {
+    const [status, message] = SET_PRIORITY_ERRORS[result.reason];
+    sendError(res, status, result.reason, message);
+    return;
+  }
+  // Status is unaffected by a priority change — this is the same signal
+  // reclassify emits, which ContextRail's socket listener already
+  // invalidates its caches on. Skipped on a no-op so an unchanged value
+  // doesn't trigger a cache invalidation for nothing.
+  if (result.updated) {
+    emitInboxChanged(getIo(), ctx.workspaceId, params.data.id, result.status);
+  }
+  res.status(200).json({ updated: result.updated });
 };
 
 export const getConversationMessagesHandler: RequestHandler = async (req, res) => {

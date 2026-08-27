@@ -610,6 +610,48 @@ export async function reclassifyConversation(
   });
 }
 
+export type SetPriorityResult =
+  | { ok: true; updated: boolean; status: string }
+  | { ok: false; reason: 'not_found' };
+
+export async function setConversationPriority(
+  ctx: AgentContext,
+  conversationId: string,
+  priority: (typeof conversation.priority.enumValues)[number],
+): Promise<SetPriorityResult> {
+  return withWorkspace(ctx.workspaceId, async (tx) => {
+    const [conv] = await tx
+      .select({ id: conversation.id, priority: conversation.priority, status: conversation.status })
+      .from(conversation)
+      .where(eq(conversation.id, conversationId))
+      .limit(1);
+    if (!conv) return { ok: false, reason: 'not_found' };
+    if (conv.priority === priority) return { ok: true, updated: false, status: conv.status };
+
+    await tx
+      .update(conversation)
+      .set({ priority, priorityManuallySet: true })
+      .where(eq(conversation.id, conversationId));
+
+    await appendEvent(tx, {
+      workspaceId: ctx.workspaceId,
+      type: 'conversation_priority_changed',
+      conversationId,
+      actorId: ctx.agentId,
+      actorType: 'agent',
+      payload: { from: conv.priority, to: priority, reason: 'manual' },
+    });
+    await appendChangeLog(tx, {
+      workspaceId: ctx.workspaceId,
+      entityType: 'conversation',
+      entityId: conversationId,
+      actorId: ctx.agentId,
+      changes: [{ field: 'priority', before: conv.priority, after: priority }],
+    });
+    return { ok: true, updated: true, status: conv.status };
+  });
+}
+
 export type WorkspaceWorkloadAgent = {
   agentId: string;
   agentName: string;

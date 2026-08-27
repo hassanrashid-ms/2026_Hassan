@@ -971,6 +971,28 @@ registry.registerPath({
 });
 
 registry.registerPath({
+  method: 'patch',
+  path: '/agent/conversations/{id}/priority',
+  summary: 'Agent Set Conversation Priority',
+  description:
+    'Sets a conversation\'s priority directly. Marks it manually-set, which permanently prevents subintent-classification auto-priority from overwriting it again. No-op (updated: false) when the requested value already matches.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: {
+    params: z.object({ id: z.uuid() }),
+    body: {
+      content: { 'application/json': { schema: z.object({ priority: z.enum(['p1', 'p2', 'p3', 'p4']) }) } },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Set-priority result',
+      content: { 'application/json': { schema: z.object({ updated: z.boolean() }) } },
+    },
+    404: { description: 'Conversation not found' },
+  },
+});
+
+registry.registerPath({
   method: 'post',
   path: '/agent/conversations/{id}/ask-resolved',
   summary: 'Agent Ask If Resolved',

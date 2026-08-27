@@ -11,6 +11,7 @@ import {
   listConversationsHandler,
   reclassifyConversationHandler,
   reassignConversationHandler,
+  setConversationPriorityHandler,
   takeOverConversationHandler,
   unescalateConversationHandler,
 } from '../controllers/conversationsController.ts';
@@ -32,3 +33,4 @@ conversationsRouter.patch(
   reassignConversationHandler,
 );
 conversationsRouter.patch('/conversations/:id/subintent', reclassifyConversationHandler);
+conversationsRouter.patch('/conversations/:id/priority', setConversationPriorityHandler);
