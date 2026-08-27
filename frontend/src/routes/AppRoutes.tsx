@@ -2,6 +2,8 @@ import { Suspense, lazy } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AgentLogin } from '../surfaces/agent-console/pages/AgentLogin.tsx';
 import { AdminLogin } from '../surfaces/admin-console/pages/AdminLogin.tsx';
+import { RequireRole } from '../surfaces/agent-console/components/RequireRole.tsx';
+import { canBuildForms } from '../surfaces/agent-console/lib/agentSession.ts';
 import {
   importBotConfig,
   importForms,
@@ -90,12 +92,51 @@ export function AppRoutes() {
         <Route path="tickets/:conversationId" element={<Tickets />} />
         <Route path="articles" element={<KnowledgeBase />} />
         <Route path="articles/:id" element={<KnowledgeBase />} />
-        <Route path="forms" element={<Forms />} />
-        <Route path="forms/:id" element={<Forms />} />
+        <Route
+          path="forms"
+          element={
+            <RequireRole allow={canBuildForms}>
+              <Forms />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="forms/:id"
+          element={
+            <RequireRole allow={canBuildForms}>
+              <Forms />
+            </RequireRole>
+          }
+        />
         <Route path="taxonomy" element={<Taxonomy />} />
-        <Route path="workload" element={<Workload />} />
-        <Route path="bot-config" element={<BotConfigPage />} />
-        <Route path="workspace-settings" element={<WorkspaceSettingsPage />} />
+        <Route
+          path="workload"
+          element={
+            <RequireRole allow={canBuildForms}>
+              <Workload />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="bot-config"
+          element={
+            // "See bot config · trigger manual sync" is Team Lead + Admin
+            // per docs/project-overview.md's permission matrix — only
+            // editing the prompt/rules or provisioning is Admin-only, and
+            // that split is enforced inside the page itself, not here.
+            <RequireRole allow={canBuildForms}>
+              <BotConfigPage />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="workspace-settings"
+          element={
+            <RequireRole allow={canBuildForms}>
+              <WorkspaceSettingsPage />
+            </RequireRole>
+          }
+        />
         <Route path="*" element={<AgentNotFound />} />
       </Route>
 

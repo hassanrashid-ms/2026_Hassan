@@ -22,7 +22,6 @@ import { scrubToken } from '@/lib/boot.ts';
 import {
   canBuildForms,
   clearAgentSession,
-  isAdmin,
   loadAgentSession,
   saveAgentSession,
   saveLastActiveWorkspaceId,
@@ -51,9 +50,8 @@ const PRESENCE_OPTIONS: { value: 'online' | 'away'; label: string }[] = [
   { value: 'away', label: 'Away' },
 ];
 
-// Section labels mirror the role tiers the items are actually gated by below
-// (canBuildForms / isAdmin) — they encode the real permission boundary, not
-// decoration.
+// Section labels mirror the role tier the items are actually gated by below
+// (canBuildForms) — they encode the real permission boundary, not decoration.
 const NAV_ITEMS = [
   { to: '/inbox', label: 'Inbox', icon: InboxIcon, group: 'Workspace' },
   { to: '/global-inbox', label: 'Global Inbox', icon: Globe, group: 'Workspace' },
@@ -71,14 +69,16 @@ const FORMS_NAV_ITEM = { to: '/forms', label: 'Forms', icon: ClipboardList, grou
 // the API anyway once /agent/workload is implemented.
 const WORKLOAD_NAV_ITEM = { to: '/workload', label: 'Team', icon: Gauge, group: 'Manage' };
 
-// Admin-only in the permission matrix ("Edit bot prompt or rules" is Admin).
-// Hiding the link here is UX, not the enforcement point — the API still
-// requires admin on POST/rollback.
+// Team Lead + Admin, same gate as Forms/Workload/Workspace Settings above —
+// "See bot config · trigger manual sync" is Team Lead + Admin in the
+// permission matrix; only "Edit bot prompt or rules · provision or disable
+// bot" is Admin-only, enforced inside the page itself and again by the API
+// on POST/rollback. Hiding the link here is UX, not the enforcement point.
 const BOT_CONFIG_NAV_ITEM = {
   to: '/bot-config',
   label: 'Bot Config',
   icon: Settings,
-  group: 'Admin',
+  group: 'Manage',
 };
 
 // Team Lead + Admin can read (GET /agent/workspace-settings), same gate as
@@ -214,12 +214,15 @@ export function AgentConsoleShell() {
     void updatePresence(session!.token, status);
   }
 
-  const navItems = [
-    ...(canBuildForms(session)
-      ? [...NAV_ITEMS, FORMS_NAV_ITEM, WORKLOAD_NAV_ITEM, WORKSPACE_SETTINGS_NAV_ITEM]
-      : NAV_ITEMS),
-    ...(isAdmin(session) ? [BOT_CONFIG_NAV_ITEM] : []),
-  ];
+  const navItems = canBuildForms(session)
+    ? [
+        ...NAV_ITEMS,
+        FORMS_NAV_ITEM,
+        WORKLOAD_NAV_ITEM,
+        BOT_CONFIG_NAV_ITEM,
+        WORKSPACE_SETTINGS_NAV_ITEM,
+      ]
+    : NAV_ITEMS;
 
   // Preserves NAV_ITEMS/FORMS/WORKLOAD/etc.'s declaration order within each
   // group, and only emits a group header for a group that actually has

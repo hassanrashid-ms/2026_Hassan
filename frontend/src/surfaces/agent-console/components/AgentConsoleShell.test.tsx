@@ -137,6 +137,36 @@ describe('AgentConsoleShell Workload nav gating', () => {
   });
 });
 
+describe('AgentConsoleShell Bot Config nav gating', () => {
+  // "See bot config · trigger manual sync" is Team Lead + Admin per the
+  // permission matrix (docs/project-overview.md) — only editing the
+  // prompt/rules is Admin-only, so the nav item (and its route guard) must
+  // not be gated tighter than that.
+  it('hides Bot Config for an agent role session', () => {
+    vi.mocked(loadAgentSession).mockReturnValue(AGENT_SESSION);
+
+    renderShell();
+
+    expect(screen.queryByRole('link', { name: /bot config/i })).not.toBeInTheDocument();
+  });
+
+  it('shows Bot Config for a team_lead role session', () => {
+    vi.mocked(loadAgentSession).mockReturnValue(TEAM_LEAD_SESSION);
+
+    renderShell();
+
+    expect(screen.getByRole('link', { name: /bot config/i })).toBeInTheDocument();
+  });
+
+  it('shows Bot Config for an admin role session', () => {
+    vi.mocked(loadAgentSession).mockReturnValue(ADMIN_SESSION);
+
+    renderShell();
+
+    expect(screen.getByRole('link', { name: /bot config/i })).toBeInTheDocument();
+  });
+});
+
 describe('AgentConsoleShell role reconciliation', () => {
   beforeEach(async () => {
     // Earlier describe blocks in this file leave loadAgentSession pinned to a
