@@ -14,7 +14,8 @@ import type {
   AskResolvedResponse,
   AttachTagResponse,
   BotConfigView,
-  ChangeLogHistoryResponse,
+  BotConfigVersionsListResponse,
+  BotConfigVersionSnapshotView,
   ClaimResponse,
   TakeOverResponse,
   ConversationPriority,
@@ -37,7 +38,6 @@ import type {
   MoveSubintentResponse,
   RenameIntentResponse,
   RenameSubintentResponse,
-  RollbackBotConfigBodyValue,
   SaveBotConfigBodyValue,
   TagView,
   UnescalateResponse,
@@ -602,27 +602,29 @@ export function saveBotConfig(
   return call('/agent/bot-config', token, { method: 'POST', body: JSON.stringify(patch) });
 }
 
-export function fetchBotConfigHistory(
+export function fetchBotConfigVersions(
   token: string,
-  opts: {
-    field?: 'prompt' | 'rules' | 'tools_config' | 'limits_config';
-    limit?: number;
-    cursor?: string;
-  } = {},
-): Promise<ChangeLogHistoryResponse> {
+  opts: { limit?: number; cursor?: number } = {},
+): Promise<BotConfigVersionsListResponse> {
   const params = new URLSearchParams();
-  if (opts.field) params.set('field', opts.field);
   if (opts.limit) params.set('limit', String(opts.limit));
-  if (opts.cursor) params.set('cursor', opts.cursor);
+  if (opts.cursor) params.set('cursor', String(opts.cursor));
   const query = params.toString();
-  return call(`/agent/bot-config/history${query ? `?${query}` : ''}`, token);
+  return call(`/agent/bot-config/versions${query ? `?${query}` : ''}`, token);
 }
 
-export function rollbackBotConfig(
+export function fetchBotConfigVersion(
   token: string,
-  input: RollbackBotConfigBodyValue,
-): Promise<BotConfigView> {
-  return call('/agent/bot-config/rollback', token, { method: 'POST', body: JSON.stringify(input) });
+  version: number,
+): Promise<BotConfigVersionSnapshotView> {
+  return call(`/agent/bot-config/versions/${version}`, token);
+}
+
+export function rollbackBotConfigVersion(token: string, version: number): Promise<BotConfigView> {
+  return call('/agent/bot-config/rollback', token, {
+    method: 'POST',
+    body: JSON.stringify({ version }),
+  });
 }
 
 /**
