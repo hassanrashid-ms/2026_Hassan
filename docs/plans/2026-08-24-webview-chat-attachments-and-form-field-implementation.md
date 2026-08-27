@@ -1052,7 +1052,7 @@ Add `allowAttachments`, `onUpload`, `onCancelUpload` to `ChatComposer`'s prop ty
 At the `<ChatComposer ... />` call (line ~388 per the current file), add:
 
 ```tsx
-allowAttachments
+allowAttachments={messagesQuery.data?.status !== 'bot_active'}
 onUpload={async (file) => {
   const uploaded = await requestUpload(token, { filename: file.name, contentType: file.type, byteSize: file.size });
   await putFileToUploadUrl(uploaded.upload_url, file);
@@ -1062,6 +1062,8 @@ onCancelUpload={(key) => { void cancelUpload(token, key); }}
 ```
 
 Update the existing `onSend` handler passed to `ChatComposer` to forward the attachment argument into `sendMessage(...)` (its third positional argument from Step 1), and to include the current form's pending `attachment`-field key when `confirmPhase === 'form'` and the active field is that type — read this off the same local form-progress state `FormCard` already derives, lifted or duplicated one level up into `SupportChat.tsx` only as far as is needed to know "is the current field an attachment field, and if so what's its key" (do not lift `FormCard`'s full draft/committed state — that stays local to the card per its existing design comment).
+
+**Bot can't read images:** `allowAttachments` is gated on `messagesQuery.data?.status !== 'bot_active'`, not passed unconditionally — a bot-answered turn has no path to see or act on an image, so the attach control must not be offered while the bot is the active responder. This mirrors the existing pattern at line ~414 where the composer is already disabled based on conversation status (`settled`), rather than adding new enforcement machinery. Add a test in `SupportChat.test.tsx` asserting the attach control (`getByLabelText('Attach image')` or equivalent, whatever `Composer`/`ChatComposer` actually renders) is absent/not-queryable when `status: 'bot_active'` and present once status moves to `'open'`/`'escalated'`/`'awaiting_player'`. This is UI-only gating (same as the existing `settled` gate) — no backend change in Task 4 is required for this; a message with an attachment sent while `bot_active` is not something the API needs to reject, it is simply not offerable in the composer.
 
 - [ ] **Step 6: Write the failing `FormCard` test**
 

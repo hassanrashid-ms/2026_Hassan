@@ -169,4 +169,79 @@ describe('FormCard', () => {
     fireEvent.click(screen.getByRole('button', { name: /^submit$/i }));
     expect(onSubmit).toHaveBeenCalledOnce();
   });
+
+  it('renders an attach-image control for the attachment field type instead of the inert message', () => {
+    const form: PlayerFormView = {
+      submission_id: 's1',
+      form_id: 'f1',
+      form_name: 'Proof of purchase',
+      version: 1,
+      fields: [
+        {
+          key: 'proof',
+          label: 'Upload a photo',
+          type: 'attachment',
+          isRequired: false,
+          position: 0,
+        },
+      ],
+      answers: [],
+    };
+    render(
+      <FormCard
+        form={form}
+        onAnswer={vi.fn()}
+        onSubmit={vi.fn()}
+        onSkip={vi.fn()}
+        busy={false}
+        onSendAttachment={vi.fn()}
+      />,
+    );
+    expect(screen.getByLabelText('Attach image')).toBeInTheDocument();
+    expect(screen.queryByText('This question cannot be answered here yet.')).not.toBeInTheDocument();
+  });
+
+  it('advances to the next question after onSendAttachment resolves', async () => {
+    const onSubmit = vi.fn();
+    const onSendAttachment = vi.fn().mockResolvedValue(undefined);
+    const form: PlayerFormView = {
+      submission_id: 's1',
+      form_id: 'f1',
+      form_name: 'Proof of purchase',
+      version: 1,
+      fields: [
+        {
+          key: 'proof',
+          label: 'Upload a photo',
+          type: 'attachment',
+          isRequired: false,
+          position: 0,
+        },
+        {
+          key: 'order_id',
+          label: 'Order or receipt ID',
+          type: 'short_text',
+          isRequired: true,
+          position: 1,
+        },
+      ],
+      answers: [],
+    };
+    render(
+      <FormCard
+        form={form}
+        onAnswer={vi.fn()}
+        onSubmit={onSubmit}
+        onSkip={vi.fn()}
+        busy={false}
+        onSendAttachment={onSendAttachment}
+      />,
+    );
+    const file = new File([new Uint8Array(3)], 'shot.png', { type: 'image/png' });
+    fireEvent.change(screen.getByLabelText('Attach image'), { target: { files: [file] } });
+
+    expect(await screen.findByText('2 of 2')).toBeInTheDocument();
+    expect(onSendAttachment).toHaveBeenCalledWith('proof', file);
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
 });

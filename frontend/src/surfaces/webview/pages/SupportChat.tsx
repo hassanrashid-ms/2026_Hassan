@@ -12,14 +12,18 @@ import { ArticleSheet } from '@/surfaces/webview/components/ArticleSheet';
 import { useCloseOverlay } from '@/surfaces/webview/hooks/useCloseOverlay';
 import {
   answerResolution,
+  cancelUpload,
   fetchPlayerMessages,
   markPlayerMessagesRead,
   openNewTicket,
   postFormAnswer,
+  putFileToUploadUrl,
+  requestUpload,
   sendPlayerMessage,
   skipForm,
   submitForm,
 } from '@/features/chat/api/playerChatApi';
+import type { UploadedAttachment } from '@/features/chat/components/Composer';
 import { createSocket } from '@/features/chat/api/socket';
 import { reconcilePending, type PendingMessage } from '@/features/chat/hooks/chatReconcile';
 import { showBotTyping } from './showBotTyping.ts';
@@ -116,8 +120,15 @@ export function SupportChat() {
   });
 
   const send = useMutation({
-    mutationFn: (body: string) => sendPlayerMessage(boot!.token, body, boot!.sessionId),
-    onMutate: (body: string) => {
+    mutationFn: (input: { body: string; attachment?: UploadedAttachment; formFieldKey?: string }) =>
+      sendPlayerMessage(
+        boot!.token,
+        input.body,
+        boot!.sessionId,
+        input.attachment,
+        input.formFieldKey,
+      ),
+    onMutate: (input: { body: string; attachment?: UploadedAttachment; formFieldKey?: string }) => {
       const tempId = `temp-${Date.now()}-${Math.random()}`;
       setPending((current) => [
         ...current,
@@ -125,14 +136,14 @@ export function SupportChat() {
           tempId,
           id: tempId,
           authorType: 'player',
-          body,
+          body: input.body,
           createdAt: new Date().toISOString(),
           deliveryState: 'sending',
         },
       ]);
       return { tempId };
     },
-    onSuccess: (data, _body, context) => {
+    onSuccess: (data, _input, context) => {
       // Deliberately does not clear `pending` here: stamping the server's id on
       // the entry lets chatReconcile.ts's reconcilePending drop it only once the
       // refetched list actually contains that message, so the optimistic bubble
@@ -143,13 +154,13 @@ export function SupportChat() {
       setPending((current) =>
         current.map((p) =>
           p.tempId === context?.tempId
-            ? { ...p, serverId: data.message.id, deliveryState: 'sent' }
+            ? { ...p, serverId: data.message?.id, deliveryState: 'sent' }
             : p,
         ),
       );
       void queryClient.invalidateQueries({ queryKey: ['playerMessages', boot?.sessionId] });
     },
-    onError: (_error, _body, context) => {
+    onError: (_error, _input, context) => {
       setPending((current) =>
         current.map((p) => (p.tempId === context?.tempId ? { ...p, deliveryState: 'failed' } : p)),
       );
@@ -203,7 +214,7 @@ export function SupportChat() {
 
   const onRetry = (failed: ChatMessage) => {
     setPending((current) => current.filter((p) => p.id !== failed.id));
-    send.mutate(failed.body);
+    send.mutate({ body: failed.body });
   };
 
   useEffect(() => {
@@ -253,6 +264,28 @@ export function SupportChat() {
   const confirmPending =
     phase === 'bot_article' || phase === 'agent_ask' || phase === 'inactivity_ask';
   const activeForm = phase === 'form' ? (messagesQuery.data?.form ?? null) : null;
+
+  /**
+   * Just enough of FormCard's own field-progress logic, duplicated rather than
+   * lifted, to answer one question here: is the field the player would next
+   * see an attachment field, and if so what's its key. Not FormCard's full
+   * draft/committed state, which stays local to the card per its own design
+   * comment — this is only ever read by the main composer's onSend below, and
+   * that composer is already disabled while a form is active, so this is
+   * defensive rather than reachable today.
+   */
+  const activeFormFields = activeForm
+    ? [...activeForm.fields].sort((a, b) => a.position - b.position)
+    : [];
+  const activeFormAnsweredKeys = new Set((activeForm?.answers ?? []).map((a) => a.field_key));
+  const activeFormFieldIndex = (() => {
+    const firstUnanswered = activeFormFields.findIndex((f) => !activeFormAnsweredKeys.has(f.key));
+    return firstUnanswered === -1 ? Math.max(activeFormFields.length - 1, 0) : firstUnanswered;
+  })();
+  const activeFormAttachmentFieldKey =
+    activeFormFields[activeFormFieldIndex]?.type === 'attachment'
+      ? activeFormFields[activeFormFieldIndex].key
+      : undefined;
 
   /**
    * Two independent signals for the same condition, because either can be the
@@ -338,6 +371,31 @@ export function SupportChat() {
             onSubmit={() => formTerminate.mutate('submit')}
             onSkip={() => formTerminate.mutate('skip')}
             busy={formTerminate.isPending}
+            onSendAttachment={async (fieldKey, file) => {
+              const uploaded = await requestUpload(boot!.token, {
+                filename: file.name,
+                contentType: file.type,
+                byteSize: file.size,
+              });
+              await putFileToUploadUrl(uploaded.upload_url, file);
+              await sendPlayerMessage(
+                boot!.token,
+                '',
+                boot!.sessionId,
+                {
+                  key: uploaded.key,
+                  filename: file.name,
+                  mimeType: file.type,
+                  byteSize: file.size,
+                },
+                fieldKey,
+              );
+              // The card owns its own progress and deliberately never
+              // refetches mid-form (see FormCard's docstring) — but the
+              // attachment answer just posted a real message row, and that
+              // message must show up in the thread once the field advances.
+              void queryClient.invalidateQueries({ queryKey: ['playerMessages', boot?.sessionId] });
+            }}
           />
         </div>
       )}
@@ -390,7 +448,7 @@ export function SupportChat() {
             <SupportButton
               variant="primary"
               className="min-h-11 w-full px-4 py-2.5 text-base"
-              onClick={() => send.mutate("I'm still facing issues.")}
+              onClick={() => send.mutate({ body: "I'm still facing issues." })}
             >
               Still facing issues
             </SupportButton>
@@ -410,8 +468,36 @@ export function SupportChat() {
           leaving the composer live let them talk past it and strand the
           conversation mid-decision. */}
       <ChatComposer
-        onSend={(body) => send.mutate(body)}
+        onSend={(body, attachment) =>
+          send.mutate({
+            body,
+            attachment,
+            formFieldKey: activeFormAttachmentFieldKey,
+          })
+        }
         disabled={send.isPending || confirmPending || activeForm !== null || settled}
+        // The bot can't read images: while it is the active responder there is
+        // no path for an attached photo to reach anyone who can act on it, so
+        // the control is not offered at all — the same UI-only gating pattern
+        // as `settled` above, not new enforcement machinery.
+        allowAttachments={messagesQuery.data?.status !== 'bot_active'}
+        onUpload={async (file) => {
+          const uploaded = await requestUpload(boot!.token, {
+            filename: file.name,
+            contentType: file.type,
+            byteSize: file.size,
+          });
+          await putFileToUploadUrl(uploaded.upload_url, file);
+          return {
+            key: uploaded.key,
+            filename: file.name,
+            mimeType: file.type,
+            byteSize: file.size,
+          };
+        }}
+        onCancelUpload={(key) => {
+          void cancelUpload(boot!.token, key);
+        }}
       />
 
       {/* ArticleSheet fires its own once-per-session reportArticleRead and

@@ -9,6 +9,14 @@ type FormCardProps = {
   onSubmit: () => void;
   onSkip: () => void;
   busy: boolean;
+  /**
+   * The attachment field's own send-and-advance path, separate from
+   * onAnswer/advance: a picked file that uploads successfully has no
+   * "unchanged, don't resubmit" case the way a re-shown text field does, so
+   * it bypasses the draft/committed/advance machinery entirely. Optional so
+   * existing callers/tests that seed no attachment field are unaffected.
+   */
+  onSendAttachment?: (fieldKey: string, file: File) => Promise<void>;
 };
 
 /** Empty means "nothing to send": a blank value is never posted, required or not. */
@@ -27,7 +35,14 @@ function isEmpty(value: unknown): boolean {
  * never refetched mid-form. `form.answers` seeds it once — that is what makes a
  * reconnect resume at the right question rather than at question one.
  */
-export function FormCard({ form, onAnswer, onSubmit, onSkip, busy }: FormCardProps) {
+export function FormCard({
+  form,
+  onAnswer,
+  onSubmit,
+  onSkip,
+  busy,
+  onSendAttachment,
+}: FormCardProps) {
   const fields = useMemo(
     () => [...form.fields].sort((a, b) => a.position - b.position),
     [form.fields],
@@ -77,6 +92,24 @@ export function FormCard({ form, onAnswer, onSubmit, onSkip, busy }: FormCardPro
 
   const set = (next: unknown) => setDraft((current) => ({ ...current, [field.key]: next }));
 
+  // The attachment field's own advance path: no draft/changed value to
+  // compare, since a picked file that uploaded successfully is always a
+  // "yes, send this" — there is no re-shown-unchanged case to skip posting
+  // for. This mirrors advance()'s isLast/onSubmit/setIndex tail without its
+  // changed-value branch.
+  const handleAttachmentPicked = async (fieldKey: string, file: File) => {
+    if (!onSendAttachment) return;
+    setSending(true);
+    try {
+      await onSendAttachment(fieldKey, file);
+      setCommitted((current) => ({ ...current, [fieldKey]: true }));
+      if (isLast) onSubmit();
+      else setIndex((current) => current + 1);
+    } finally {
+      setSending(false);
+    }
+  };
+
   return (
     <div role="group" aria-label={form.form_name} className="flex flex-col gap-4">
       {/* One line, not a paragraph: it only needs to set expectations once,
@@ -113,7 +146,13 @@ export function FormCard({ form, onAnswer, onSubmit, onSkip, busy }: FormCardPro
         {field.helperText && <p className="text-sm text-muted">{field.helperText}</p>}
       </div>
 
-      <FieldInput field={field} value={value} onChange={set} disabled={disabled} />
+      <FieldInput
+        field={field}
+        value={value}
+        onChange={set}
+        disabled={disabled}
+        onAttachmentPicked={(file) => void handleAttachmentPicked(field.key, file)}
+      />
 
       <SupportButton
         variant="primary"
@@ -143,19 +182,20 @@ export function FormCard({ form, onAnswer, onSubmit, onSkip, busy }: FormCardPro
 /**
  * A map from the six usable types to inputs. `choice` renders as buttons, not a
  * <select> — the product mockup draws it that way and it is one tap on a phone.
- * `attachment` and `time` are unreachable: no seeded form uses either, and the
- * answer route rejects attachment outright.
+ * `time` is unreachable: no seeded form uses it.
  */
 function FieldInput({
   field,
   value,
   onChange,
   disabled,
+  onAttachmentPicked,
 }: {
   field: FormField;
   value: unknown;
   onChange: (next: unknown) => void;
   disabled: boolean;
+  onAttachmentPicked: (file: File) => void;
 }) {
   // Older form versions may not include a placeholder. Keep those inputs
   // actionable by using the field label as a frontend-only fallback.
@@ -240,9 +280,23 @@ function FieldInput({
         />
       );
     case 'attachment':
-      // Declared but inert until the attachment table exists. Rendering nothing
-      // still leaves Next and Skip live, so it can never trap a player.
-      return <p className="text-sm text-muted">This question cannot be answered here yet.</p>;
+      // Bypasses draft/onChange entirely: picking a file drives its own
+      // upload-then-advance path in FormCard (handleAttachmentPicked), not
+      // the changed-value comparison Next relies on for typed fields.
+      return (
+        <div className="flex flex-col gap-2">
+          <input
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            aria-label="Attach image"
+            disabled={disabled}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) onAttachmentPicked(file);
+            }}
+          />
+        </div>
+      );
     case 'short_text':
     default:
       return (

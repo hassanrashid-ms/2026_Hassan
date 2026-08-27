@@ -181,6 +181,28 @@ describe('SupportChat composer gating', () => {
   });
 });
 
+describe('SupportChat attachment gating', () => {
+  it('hides the attach control while the bot is the active responder', async () => {
+    vi.mocked(fetchPlayerMessages).mockResolvedValue(messages({ status: 'bot_active' }));
+    renderChat();
+    // Wait for the query to actually settle, not just for the composer's
+    // always-false initial disabled state: allowAttachments derives from
+    // messagesQuery.data, which is still undefined on the very first render.
+    await screen.findByText('my game crashed');
+    expect(screen.queryByLabelText('Attach image')).not.toBeInTheDocument();
+  });
+
+  it.each(['open', 'escalated', 'awaiting_player'] as const)(
+    'offers the attach control once status is %s',
+    async (status) => {
+      vi.mocked(fetchPlayerMessages).mockResolvedValue(messages({ status }));
+      renderChat();
+      await screen.findByText('my game crashed');
+      expect(screen.getByLabelText('Attach image')).toBeInTheDocument();
+    },
+  );
+});
+
 describe('SupportChat banner focus', () => {
   it('dims the screen behind the banner and lifts the banner above the scrim', async () => {
     vi.mocked(fetchPlayerMessages).mockResolvedValue(messages({ confirm_phase: 'agent_ask' }));
