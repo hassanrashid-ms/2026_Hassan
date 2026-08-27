@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ConversationStatusValue } from '@support/types';
-import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQueries, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   claimConversation,
@@ -40,6 +40,8 @@ const COLUMNS: { title: string; filter: ConversationListFilter; claimable?: bool
   { title: 'Bot Handling', filter: 'botHandling' },
   { title: 'Agent Assigned', filter: 'agentAssigned' },
   { title: 'Escalated', filter: 'escalated' },
+  { title: 'Resolved', filter: 'resolved' },
+  { title: 'Closed', filter: 'closed' },
 ];
 
 function toQueryFilters(f: ReturnType<typeof useTicketsFilters>[0]): TicketsQueryFilters {
@@ -119,9 +121,12 @@ function QueueColumn({
   onSelect: (id: string) => void;
 }) {
   const queryClient = useQueryClient();
-  const queue = useQuery({
+  const queue = useInfiniteQuery({
     queryKey: ['tickets', filter, queryFilters],
-    queryFn: () => fetchInbox(token, filter, queryFilters),
+    queryFn: ({ pageParam }: { pageParam: string | undefined }) =>
+      fetchInbox(token, filter, queryFilters, pageParam),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
   });
   const claim = useMutation({
     mutationFn: (conversationId: string) => claimConversation(token, conversationId),
@@ -147,7 +152,17 @@ function QueueColumn({
     return () => observer.disconnect();
   }, [filter]);
 
-  if (queue.data && queue.data.conversations.length === 0 && !filtersActive) return null;
+  const conversations = queue.data?.pages.flatMap((page) => page.conversations) ?? [];
+
+  function handleScroll(event: React.UIEvent<HTMLDivElement>) {
+    const el = event.currentTarget;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 200;
+    if (nearBottom && queue.hasNextPage && !queue.isFetchingNextPage) {
+      void queue.fetchNextPage();
+    }
+  }
+
+  if (queue.data && conversations.length === 0 && !filtersActive) return null;
   return (
     <section
       ref={sectionRef}
@@ -166,13 +181,13 @@ function QueueColumn({
           )}
           <h2 className="text-sm font-semibold">{title}</h2>
         </div>
-        <span className="text-xs text-muted">{queue.data?.conversations.length ?? 0}</span>
+        <span className="text-xs text-muted">{conversations.length}</span>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        {queue.data?.conversations.length === 0 && filtersActive && (
+      <div className="min-h-0 flex-1 overflow-y-auto" onScroll={handleScroll}>
+        {conversations.length === 0 && filtersActive && (
           <p className="p-3 text-xs text-muted">No tickets match your filters.</p>
         )}
-        {queue.data?.conversations.map((conversation) => (
+        {conversations.map((conversation) => (
           <ConversationRow
             key={conversation.id}
             conversation={conversation}
@@ -182,6 +197,7 @@ function QueueColumn({
             claiming={claim.isPending}
           />
         ))}
+        {queue.isFetchingNextPage && <p className="p-3 text-xs text-muted">Loading more...</p>}
         {queue.isError && <p className="p-3 text-xs text-muted">Could not load tickets.</p>}
       </div>
     </section>
@@ -208,7 +224,13 @@ export function Tickets() {
       (payload: { conversation_id?: unknown; status?: unknown }) => {
         const status = payload.status as ConversationStatusValue | undefined;
         const filtersToInvalidate: ConversationListFilter[] =
-          status === 'bot_active' ? ['botHandling'] : ['unassigned', 'agentAssigned', 'escalated'];
+          status === 'bot_active'
+            ? ['botHandling']
+            : status === 'resolved'
+              ? ['resolved']
+              : status === 'closed'
+                ? ['closed']
+                : ['unassigned', 'agentAssigned', 'escalated'];
         for (const filter of filtersToInvalidate)
           void queryClient.invalidateQueries({ queryKey: ['tickets', filter] });
         const changedId = payload.conversation_id;
@@ -221,9 +243,9 @@ export function Tickets() {
     };
   }, [session, queryClient]);
 
-  const queueQueries = useQueries({
+  const summaryQueries = useQueries({
     queries: COLUMNS.map(({ filter }) => ({
-      queryKey: ['tickets', filter, queryFilters],
+      queryKey: ['tickets-summary', filter, queryFilters],
       queryFn: () => fetchInbox(session!.token, filter, queryFilters),
       enabled: session !== null,
     })),
@@ -231,7 +253,7 @@ export function Tickets() {
 
   const summary = (() => {
     if (!conversationId) return undefined;
-    for (const query of queueQueries) {
+    for (const query of summaryQueries) {
       const found = query.data?.conversations.find(
         (conversation) => conversation.id === conversationId,
       );
@@ -290,8 +312,8 @@ export function Tickets() {
       </div>
       <TicketsFilterBar token={session.token} filters={filters} onChange={updateFilters} />
       {!filtersActive &&
-        queueQueries.every((q) => q.data) &&
-        queueQueries.every((q) => q.data!.conversations.length === 0) && (
+        summaryQueries.every((q) => q.data) &&
+        summaryQueries.every((q) => q.data!.conversations.length === 0) && (
           <EmptyState message="Nothing to show" />
         )}
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
@@ -300,9 +322,11 @@ export function Tickets() {
             {columnOrder.map((filter) => {
               const col = COLUMNS.find((c) => c.filter === filter)!;
               const queryIndex = COLUMNS.findIndex((c) => c.filter === filter);
-              const queueQuery = queueQueries[queryIndex];
+              const summaryQuery = summaryQueries[queryIndex];
               const isHidden = Boolean(
-                queueQuery?.data && queueQuery.data.conversations.length === 0 && !filtersActive,
+                summaryQuery?.data &&
+                  summaryQuery.data.conversations.length === 0 &&
+                  !filtersActive,
               );
 
               if (isHidden) return null;

@@ -104,7 +104,13 @@ export async function devLogin(agentId: string): Promise<DevLoginResponse> {
 }
 
 export type ConversationListFilter =
-  'unassigned' | 'mine' | 'agentAssigned' | 'botHandling' | 'escalated';
+  | 'unassigned'
+  | 'mine'
+  | 'agentAssigned'
+  | 'botHandling'
+  | 'escalated'
+  | 'resolved'
+  | 'closed';
 
 export type TicketsQueryFilters = {
   q?: string;
@@ -115,7 +121,11 @@ export type TicketsQueryFilters = {
   olderThanHours?: number;
 };
 
-function buildTicketsQuery(status: ConversationListFilter, filters?: TicketsQueryFilters): string {
+function buildTicketsQuery(
+  status: ConversationListFilter,
+  filters?: TicketsQueryFilters,
+  cursor?: string,
+): string {
   const params = new URLSearchParams({ status });
   if (filters?.q) params.set('q', filters.q);
   if (filters?.priority?.length) filters.priority.forEach((p) => params.append('priority', p));
@@ -125,6 +135,7 @@ function buildTicketsQuery(status: ConversationListFilter, filters?: TicketsQuer
   if (filters?.assigneeIds?.length)
     filters.assigneeIds.forEach((a) => params.append('assigneeIds', a));
   if (filters?.olderThanHours) params.set('olderThanHours', String(filters.olderThanHours));
+  if (cursor) params.set('cursor', cursor);
   return params.toString();
 }
 
@@ -132,8 +143,9 @@ export function fetchInbox(
   token: string,
   status: ConversationListFilter,
   filters?: TicketsQueryFilters,
+  cursor?: string,
 ): Promise<AgentConversationsResponse> {
-  return call(`/agent/conversations?${buildTicketsQuery(status, filters)}`, token);
+  return call(`/agent/conversations?${buildTicketsQuery(status, filters, cursor)}`, token);
 }
 
 export function takeOverConversation(
