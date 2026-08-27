@@ -9,7 +9,7 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
-import { declaredFieldType } from './enums.ts';
+import { declaredFieldStatus, declaredFieldType } from './enums.ts';
 import { agent, workspace } from './identity.ts';
 import { session } from './players.ts';
 
@@ -37,6 +37,16 @@ export const declaredField = pgTable(
     declaredAt: timestamp('declared_at', tz).notNull().defaultNow(),
     /** Nullable: the eleven seeded rows have no human actor. */
     declaredBy: uuid('declared_by').references(() => agent.id, { onDelete: 'restrict' }),
+    /**
+     * Soft-remove, never a hard delete, with three states rather than a boolean:
+     * `active` — loadDeclaredKeys includes it, the split routes this key to `declared`.
+     * `inactive` — excluded from loadDeclaredKeys (routes back to `raw`), but stays
+     *   visible in the admin list, reactivatable with one click.
+     * `archived` — excluded from loadDeclaredKeys AND hidden from the list entirely.
+     *   No unarchive action; re-promoting the same key (createDeclaredField) is the
+     *   only way back, reviving this row instead of hitting the unique index below.
+     */
+    status: declaredFieldStatus('status').notNull().default('active'),
   },
   (t) => [uniqueIndex('declared_field_workspace_key_uk').on(t.workspaceId, t.key)],
 );

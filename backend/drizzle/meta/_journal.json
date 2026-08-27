@@ -148,6 +148,13 @@
       "when": 1787811836433,
       "tag": "0020_parched_puff_adder",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1787816934893,
+      "tag": "0021_known_arclight",
+      "breakpoints": true
     }
   ]
 }

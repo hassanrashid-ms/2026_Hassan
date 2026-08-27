@@ -36,6 +36,11 @@ export const declaredFieldType = pgEnum('declared_field_type', [
   'boolean',
   'timestamp',
 ]);
+export const declaredFieldStatus = pgEnum('declared_field_status', [
+  'active',
+  'inactive',
+  'archived',
+]);
 export const articleState = pgEnum('article_state', ['draft', 'published', 'archived']);
 // `bot_article` is set by the bot's answer_from_article, `agent_ask` by
 // POST /agent/conversations/:id/ask-resolved, `inactivity_ask` by the inactivity
