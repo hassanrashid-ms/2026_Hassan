@@ -23,6 +23,7 @@ const SCOPED_TABLES = [
   'message',
   'event',
   'bot_config',
+  'bot_config_version',
   'change_log',
   'form',
   'form_version',
@@ -133,6 +134,27 @@ describe('row-level security', () => {
     await expect(asWorkspace(WS_A, () => app.query('delete from change_log'))).rejects.toThrow(
       /permission denied/i,
     );
+  });
+
+  it('cannot update or delete a bot_config_version row — a full-snapshot audit trail is append-only', async () => {
+    const agentId = 'ffffffff-3333-3333-3333-333333333333';
+    await ownerPool.query(
+      `insert into agent (id, email, display_name) values ($1, 'version-auditor@example.test', 'Version Auditor')`,
+      [agentId],
+    );
+    await ownerPool.query(
+      `insert into bot_config_version
+         (workspace_id, version, prompt, rules, tools_config, limits_config, actor_id, changed_fields)
+       values ($1, 1, 'hi', '[]', '[]', '[]', $2, '{prompt}')`,
+      [WS_A, agentId],
+    );
+
+    await expect(
+      asWorkspace(WS_A, () => app.query(`update bot_config_version set prompt = 'tampered'`)),
+    ).rejects.toThrow(/permission denied/i);
+    await expect(
+      asWorkspace(WS_A, () => app.query('delete from bot_config_version')),
+    ).rejects.toThrow(/permission denied/i);
   });
 
   it('cannot update or delete a form_answer — a correction is a new row, never an edit', async () => {
@@ -418,6 +440,13 @@ describe('WITH CHECK on every scoped table', () => {
         table: 'change_log',
         sql: `insert into change_log (workspace_id, entity_type, entity_id, field, before_value, after_value, actor_id)
               values ($1, 'bot_config', $1, 'is_provisioned', null, 'true'::jsonb, $2)`,
+        params: [WS_B, AGENT_A],
+      },
+      {
+        table: 'bot_config_version',
+        sql: `insert into bot_config_version
+              (workspace_id, version, prompt, rules, tools_config, limits_config, actor_id, changed_fields)
+              values ($1, 1, 'hi', '[]', '[]', '[]', $2, '{prompt}')`,
         params: [WS_B, AGENT_A],
       },
       {

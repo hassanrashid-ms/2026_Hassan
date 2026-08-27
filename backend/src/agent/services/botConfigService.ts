@@ -148,6 +148,14 @@ export async function getBotConfigVersionForAgent(
  * Restores a prior version's full snapshot as the new current bot_config — a
  * normal, newly-audited save (through saveBotConfig, which writes both
  * change_log and a fresh bot_config_version), never a mutation of history.
+ *
+ * saveBotConfig's validators require every CURRENT catalog entry
+ * (BUILTIN_RULE_KEYS / TOOL_CATALOG / LIMIT_CATALOG) to be present in the
+ * payload. A snapshot taken before a builtin rule/tool/limit was added to the
+ * catalog won't have it, so restoring that snapshot as-is would 422. Merge
+ * the snapshot over today's catalog baseline first — baseline fills in any
+ * catalog entry the snapshot predates, and the snapshot's own values win for
+ * everything it does have.
  */
 export async function rollbackBotConfigVersionForAgent(
   ctx: AgentContext,
@@ -164,10 +172,31 @@ export async function rollbackBotConfigVersionForAgent(
       workspaceId: ctx.workspaceId,
       actorId: ctx.agentId,
       prompt: snapshot.prompt,
-      rules: snapshot.rules,
-      toolsConfig: snapshot.toolsConfig,
-      limitsConfig: snapshot.limitsConfig,
+      rules: mergeRulesOverBaseline(snapshot.rules),
+      toolsConfig: mergeToolsOverBaseline(snapshot.toolsConfig),
+      limitsConfig: mergeLimitsOverBaseline(snapshot.limitsConfig),
     });
     return view(tx, ctx.workspaceId);
   });
+}
+
+/** Baseline entries not present in the snapshot are appended; snapshot values always win. */
+function mergeRulesOverBaseline(snapshotRules: RuleEntry[]): RuleEntry[] {
+  const snapshotKeys = new Set(snapshotRules.map((r) => r.key));
+  const missingFromBaseline = buildBaselineRules().filter((r) => !snapshotKeys.has(r.key));
+  return [...snapshotRules, ...missingFromBaseline];
+}
+
+function mergeToolsOverBaseline(snapshotTools: ToolToggle[]): ToolToggle[] {
+  const snapshotNames = new Set(snapshotTools.map((t) => t.tool));
+  const missingFromBaseline = buildBaselineToolsConfig().filter(
+    (t) => !snapshotNames.has(t.tool),
+  );
+  return [...snapshotTools, ...missingFromBaseline];
+}
+
+function mergeLimitsOverBaseline(snapshotLimits: LimitToggle[]): LimitToggle[] {
+  const snapshotKeys = new Set(snapshotLimits.map((l) => l.key));
+  const missingFromBaseline = buildBaselineLimits().filter((l) => !snapshotKeys.has(l.key));
+  return [...snapshotLimits, ...missingFromBaseline];
 }

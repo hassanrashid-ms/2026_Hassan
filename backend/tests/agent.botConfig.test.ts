@@ -14,6 +14,7 @@ import { botConfigRouter } from '../src/agent/routers/botConfigRouter.ts';
 import { DEFAULT_BOT_PROMPT, buildSystemPrompt } from '../src/domain/bot/defaultPrompt.ts';
 import { buildBaselineRules } from '../src/domain/bot/rulesCatalog.ts';
 import { buildBaselineToolsConfig } from '../src/domain/bot/tools.ts';
+import { buildBaselineLimits } from '../src/domain/bot/limitsCatalog.ts';
 import { closeOwnerPool, ownerPool, seedWorkspace, truncateAll } from './helpers/db.ts';
 
 // Standalone app carrying just this router behind the real session and role
@@ -768,5 +769,60 @@ describe('bot_config_version writes', () => {
       [workspaceId],
     );
     expect(rows).toHaveLength(1);
+  });
+});
+
+describe('rollback against a snapshot older than the current catalog', () => {
+  it('fills in baseline values for rule/tool/limit entries the old snapshot predates', async () => {
+    const workspaceId = await seedWorkspace();
+    const { token, agentId } = await seedAgentWithRole(workspaceId, 'admin');
+
+    // Build an "old" snapshot the way a version taken before a catalog entry
+    // existed would look: every builtin rule/tool/limit EXCEPT one, mirroring
+    // a rule/tool/limit added to the catalog after this version was written.
+    const staleRules = buildBaselineRules().filter((r) => r.key !== 'no_regreet');
+    const staleTools = buildBaselineToolsConfig().filter((t) => t.tool !== 'classify');
+    const staleLimits = buildBaselineLimits().filter((l) => l.key !== 'max_unhelped_replies');
+
+    await ownerPool.query(
+      `insert into bot_config_version
+         (workspace_id, version, prompt, rules, tools_config, limits_config, actor_id, changed_fields)
+       values ($1, 1, 'Stale prompt', $2::jsonb, $3::jsonb, $4::jsonb, $5, '{prompt,rules,tools_config,limits_config}')`,
+      [
+        workspaceId,
+        JSON.stringify(staleRules),
+        JSON.stringify(staleTools),
+        JSON.stringify(staleLimits),
+        agentId,
+      ],
+    );
+
+    const res = await request(app)
+      .post('/bot-config/rollback')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ version: 1 })
+      .expect(200);
+
+    expect(res.body.prompt).toBe('Stale prompt');
+
+    const restoredRuleKeys = res.body.rules.map((r: { key: string }) => r.key).sort();
+    expect(restoredRuleKeys).toEqual(buildBaselineRules().map((r) => r.key).sort());
+    const noRegreet = res.body.rules.find((r: { key: string }) => r.key === 'no_regreet');
+    expect(noRegreet).toBeDefined();
+    expect(noRegreet.enabled).toBe(
+      buildBaselineRules().find((r) => r.key === 'no_regreet')!.enabled,
+    );
+
+    const restoredToolNames = res.body.tools_config.map((t: { tool: string }) => t.tool).sort();
+    expect(restoredToolNames).toEqual(buildBaselineToolsConfig().map((t) => t.tool).sort());
+
+    const restoredLimit = res.body.limits_config.find(
+      (l: { key: string }) => l.key === 'max_unhelped_replies',
+    );
+    expect(restoredLimit).toBeDefined();
+    expect(restoredLimit.value).toBe(
+      buildBaselineLimits().find((l) => l.key === 'max_unhelped_replies')!.value,
+    );
   });
 });
