@@ -1,7 +1,11 @@
 import type { LimitToggleValue, RuleEntryView, ToolToggleValue } from '@support/types';
 
 export type PromptDiffToken = { text: string; type: 'same' | 'added' | 'removed' };
-export type StructuredDiffEntry = { key: string; kind: 'added' | 'removed' | 'changed'; description: string };
+export type StructuredDiffEntry = {
+  key: string;
+  kind: 'added' | 'removed' | 'changed';
+  description: string;
+};
 
 /**
  * Word-level LCS diff. No external dependency: bot prompts are a few hundred
@@ -63,7 +67,8 @@ export function diffRules(before: RuleEntryView[], after: RuleEntryView[]): Stru
     }
   }
   for (const key of beforeByKey.keys()) {
-    if (!afterByKey.has(key)) entries.push({ key, kind: 'removed', description: `Rule "${key}" removed` });
+    if (!afterByKey.has(key))
+      entries.push({ key, kind: 'removed', description: `Rule "${key}" removed` });
   }
   return entries;
 }
@@ -73,16 +78,23 @@ export function diffToolsConfig(
   after: ToolToggleValue[],
 ): StructuredDiffEntry[] {
   const beforeByTool = new Map(before.map((t) => [t.tool, t]));
+  const afterByTool = new Map(after.map((t) => [t.tool, t]));
   const entries: StructuredDiffEntry[] = [];
   for (const t of after) {
     const prior = beforeByTool.get(t.tool);
-    if (prior && prior.enabled !== t.enabled) {
+    if (!prior) {
+      entries.push({ key: t.tool, kind: 'added', description: `Tool "${t.tool}" added` });
+    } else if (prior.enabled !== t.enabled) {
       entries.push({
         key: t.tool,
         kind: 'changed',
         description: `Tool "${t.tool}": ${prior.enabled ? 'enabled' : 'disabled'} → ${t.enabled ? 'enabled' : 'disabled'}`,
       });
     }
+  }
+  for (const tool of beforeByTool.keys()) {
+    if (!afterByTool.has(tool))
+      entries.push({ key: tool, kind: 'removed', description: `Tool "${tool}" removed` });
   }
   return entries;
 }
@@ -92,16 +104,23 @@ export function diffLimitsConfig(
   after: LimitToggleValue[],
 ): StructuredDiffEntry[] {
   const beforeByKey = new Map(before.map((l) => [l.key, l]));
+  const afterByKey = new Map(after.map((l) => [l.key, l]));
   const entries: StructuredDiffEntry[] = [];
   for (const l of after) {
     const prior = beforeByKey.get(l.key);
-    if (prior && prior.value !== l.value) {
+    if (!prior) {
+      entries.push({ key: l.key, kind: 'added', description: `Limit "${l.key}" added` });
+    } else if (prior.value !== l.value) {
       entries.push({
         key: l.key,
         kind: 'changed',
         description: `Limit "${l.key}": ${prior.value} → ${l.value}`,
       });
     }
+  }
+  for (const key of beforeByKey.keys()) {
+    if (!afterByKey.has(key))
+      entries.push({ key, kind: 'removed', description: `Limit "${key}" removed` });
   }
   return entries;
 }

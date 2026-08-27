@@ -73,6 +73,20 @@ describe('diffToolsConfig', () => {
       },
     ]);
   });
+
+  it('reports a tool present only in after as added', () => {
+    const entries = diffToolsConfig([], [{ tool: 'search_articles', enabled: true }]);
+    expect(entries).toEqual([
+      { key: 'search_articles', kind: 'added', description: 'Tool "search_articles" added' },
+    ]);
+  });
+
+  it('reports a tool present only in before as removed', () => {
+    const entries = diffToolsConfig([{ tool: 'search_articles', enabled: true }], []);
+    expect(entries).toEqual([
+      { key: 'search_articles', kind: 'removed', description: 'Tool "search_articles" removed' },
+    ]);
+  });
 });
 
 describe('diffLimitsConfig', () => {
@@ -86,6 +100,24 @@ describe('diffLimitsConfig', () => {
         key: 'max_bot_messages',
         kind: 'changed',
         description: 'Limit "max_bot_messages": 3 → 5',
+      },
+    ]);
+  });
+
+  it('reports a limit present only in after as added', () => {
+    const entries = diffLimitsConfig([], [{ key: 'max_bot_messages', value: 5 }]);
+    expect(entries).toEqual([
+      { key: 'max_bot_messages', kind: 'added', description: 'Limit "max_bot_messages" added' },
+    ]);
+  });
+
+  it('reports a limit present only in before as removed', () => {
+    const entries = diffLimitsConfig([{ key: 'max_bot_messages', value: 5 }], []);
+    expect(entries).toEqual([
+      {
+        key: 'max_bot_messages',
+        kind: 'removed',
+        description: 'Limit "max_bot_messages" removed',
       },
     ]);
   });
