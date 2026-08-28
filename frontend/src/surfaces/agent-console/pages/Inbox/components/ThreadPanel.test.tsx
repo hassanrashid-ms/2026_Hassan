@@ -292,7 +292,7 @@ describe('ThreadPanel optimistic sends', () => {
     renderPanel();
     await screen.findByLabelText('Message');
 
-    fireEvent.change(screen.getByLabelText('Attach image'), {
+    fireEvent.change(screen.getByLabelText('Attach image or video'), {
       target: { files: [new File([new Uint8Array(3)], 'shot.png', { type: 'image/png' })] },
     });
     await screen.findByAltText('shot.png');

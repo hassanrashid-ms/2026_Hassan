@@ -1,12 +1,25 @@
 import { useRef, useState } from 'react';
 import { Paperclip, X } from 'lucide-react';
 
-// Mirrors backend/src/shared/storage/presign.ts's ALLOWED_IMAGE_MIME_TYPES /
-// MAX_ATTACHMENT_BYTES. Duplicated rather than imported — the frontend
+// Mirrors backend/src/shared/storage/presign.ts's ALLOWED_CHAT_ATTACHMENT_MIME_TYPES /
+// maxBytesForAttachment. Duplicated rather than imported — the frontend
 // doesn't import backend code — so a fast client-side rejection matches what
 // the server would reject anyway, instead of round-tripping to find out.
-const ALLOWED_IMAGE_MIME_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
-const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+const ALLOWED_CHAT_ATTACHMENT_MIME_TYPES = [
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/gif',
+  'video/mp4',
+  'video/webm',
+];
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
+const VIDEO_MIME_TYPES = new Set(['video/mp4', 'video/webm']);
+
+function maxBytesForAttachment(mimeType: string): number {
+  return VIDEO_MIME_TYPES.has(mimeType) ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
+}
 
 export type UploadedAttachment = {
   key: string;
@@ -77,13 +90,18 @@ export function Composer({
     if (!onUpload) return;
     setUploadError(null);
 
-    if (!ALLOWED_IMAGE_MIME_TYPES.includes(file.type)) {
-      setUploadError('Only PNG, JPEG, WebP or GIF images are supported.');
+    if (!ALLOWED_CHAT_ATTACHMENT_MIME_TYPES.includes(file.type)) {
+      setUploadError('Only PNG, JPEG, WebP, GIF images or MP4/WebM videos are supported.');
       if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
-    if (file.size > MAX_ATTACHMENT_BYTES) {
-      setUploadError('Images must be 10 MB or smaller.');
+    const cap = maxBytesForAttachment(file.type);
+    if (file.size > cap) {
+      setUploadError(
+        VIDEO_MIME_TYPES.has(file.type)
+          ? 'Videos must be 50 MB or smaller.'
+          : 'Images must be 10 MB or smaller.',
+      );
       if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
@@ -105,11 +123,20 @@ export function Composer({
     <div className="flex shrink-0 flex-col gap-2 border-t border-muted/20 bg-bg p-2">
       {pendingAttachment && previewUrl && (
         <div className="flex items-center gap-2">
-          <img
-            src={previewUrl}
-            alt={pendingAttachment.filename}
-            className="h-14 w-14 rounded-md object-cover"
-          />
+          {VIDEO_MIME_TYPES.has(pendingAttachment.mimeType) ? (
+            <video
+              data-testid="pending-video-preview"
+              src={previewUrl}
+              muted
+              className="h-14 w-14 rounded-md object-cover"
+            />
+          ) : (
+            <img
+              src={previewUrl}
+              alt={pendingAttachment.filename}
+              className="h-14 w-14 rounded-md object-cover"
+            />
+          )}
           <button
             type="button"
             aria-label="Remove attachment"
@@ -155,8 +182,8 @@ export function Composer({
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/png,image/jpeg,image/webp,image/gif"
-              aria-label="Attach image"
+              accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm"
+              aria-label="Attach image or video"
               className="hidden"
               disabled={disabled || uploading}
               onChange={(event) => {

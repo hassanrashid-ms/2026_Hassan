@@ -10,7 +10,7 @@ function makeFile(name: string, type: string, size: number): File {
 describe('Composer attachments', () => {
   it('shows no attach control when allowAttachments is not set', () => {
     render(<Composer onSend={() => {}} />);
-    expect(screen.queryByLabelText('Attach image')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Attach image or video')).not.toBeInTheDocument();
   });
 
   it('calls onUpload with the picked file, then onSend with the returned attachment on submit', async () => {
@@ -23,7 +23,7 @@ describe('Composer attachments', () => {
     const onSend = vi.fn();
     render(<Composer onSend={onSend} allowAttachments onUpload={onUpload} />);
 
-    const input = screen.getByLabelText('Attach image');
+    const input = screen.getByLabelText('Attach image or video');
     const file = makeFile('shot.png', 'image/png', 3);
     fireEvent.change(input, { target: { files: [file] } });
 
@@ -56,7 +56,7 @@ describe('Composer attachments', () => {
       />,
     );
 
-    fireEvent.change(screen.getByLabelText('Attach image'), {
+    fireEvent.change(screen.getByLabelText('Attach image or video'), {
       target: { files: [makeFile('shot.png', 'image/png', 3)] },
     });
     await screen.findByAltText('shot.png');
@@ -70,7 +70,7 @@ describe('Composer attachments', () => {
     const onUpload = vi.fn();
     render(<Composer onSend={() => {}} allowAttachments onUpload={onUpload} />);
 
-    const input = screen.getByLabelText('Attach image');
+    const input = screen.getByLabelText('Attach image or video');
     const big = makeFile('huge.png', 'image/png', 11 * 1024 * 1024);
     fireEvent.change(input, { target: { files: [big] } });
 
@@ -82,10 +82,66 @@ describe('Composer attachments', () => {
     const onUpload = vi.fn().mockRejectedValue(new Error('network error'));
     render(<Composer onSend={() => {}} allowAttachments onUpload={onUpload} />);
 
-    const input = screen.getByLabelText('Attach image');
+    const input = screen.getByLabelText('Attach image or video');
     fireEvent.change(input, { target: { files: [makeFile('shot.png', 'image/png', 3)] } });
 
     await screen.findByText(/Upload failed/);
-    expect(screen.getByLabelText('Attach image')).not.toBeDisabled();
+    expect(screen.getByLabelText('Attach image or video')).not.toBeDisabled();
+  });
+
+  it('calls onUpload with a picked video, then onSend with the returned attachment on submit', async () => {
+    const onUpload = vi.fn().mockResolvedValue({
+      key: 'pending/ws/agent/uuid.mp4',
+      filename: 'clip.mp4',
+      mimeType: 'video/mp4',
+      byteSize: 20 * 1024 * 1024,
+    });
+    const onSend = vi.fn();
+    render(<Composer onSend={onSend} allowAttachments onUpload={onUpload} />);
+
+    const input = screen.getByLabelText('Attach image or video');
+    const file = makeFile('clip.mp4', 'video/mp4', 20 * 1024 * 1024);
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await screen.findByTestId('pending-video-preview');
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    expect(onUpload).toHaveBeenCalledWith(file);
+    expect(onSend).toHaveBeenCalledWith('', undefined, {
+      key: 'pending/ws/agent/uuid.mp4',
+      filename: 'clip.mp4',
+      mimeType: 'video/mp4',
+      byteSize: 20 * 1024 * 1024,
+    });
+  });
+
+  it('rejects a video over the 50 MB video cap client-side, without calling onUpload', () => {
+    const onUpload = vi.fn();
+    render(<Composer onSend={() => {}} allowAttachments onUpload={onUpload} />);
+
+    const input = screen.getByLabelText('Attach image or video');
+    const big = makeFile('huge.mp4', 'video/mp4', 51 * 1024 * 1024);
+    fireEvent.change(input, { target: { files: [big] } });
+
+    expect(onUpload).not.toHaveBeenCalled();
+    expect(screen.getByText(/50 MB or smaller/)).toBeInTheDocument();
+  });
+
+  it('accepts a video between the image cap and the video cap', async () => {
+    const onUpload = vi.fn().mockResolvedValue({
+      key: 'pending/ws/agent/uuid.webm',
+      filename: 'clip.webm',
+      mimeType: 'video/webm',
+      byteSize: 30 * 1024 * 1024,
+    });
+    render(<Composer onSend={() => {}} allowAttachments onUpload={onUpload} />);
+
+    const input = screen.getByLabelText('Attach image or video');
+    fireEvent.change(input, {
+      target: { files: [makeFile('clip.webm', 'video/webm', 30 * 1024 * 1024)] },
+    });
+
+    await screen.findByTestId('pending-video-preview');
+    expect(onUpload).toHaveBeenCalled();
   });
 });
