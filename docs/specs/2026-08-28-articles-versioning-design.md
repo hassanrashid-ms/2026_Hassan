@@ -39,7 +39,7 @@ as both the version-history table and the one-active-draft-per-article store:
 | --- | --- | --- |
 | `id` | bigserial PK | |
 | `articleId` | uuid, FK → `article` | |
-| `status` | `'draft' \| 'published'` | at most one `'draft'` row per `articleId` (partial unique index on `articleId` where `status = 'draft'`) |
+| `status` | `'draft' \| 'published' \| 'discarded'` | at most one `'draft'` row per `articleId` (partial unique index on `articleId` where `status = 'draft'`) |
 | `version` | int, nullable | assigned only on publish, `MAX(published version for articleId) + 1`; null while `status = 'draft'` |
 | `title` | text | full snapshot |
 | `body` | text | full snapshot |
@@ -50,10 +50,15 @@ as both the version-history table and the one-active-draft-per-article store:
 | `createdAt` | timestamptz | |
 | `updatedAt` | timestamptz | bumped on every draft save |
 
-- Published rows are append-only (`REVOKE UPDATE, DELETE`), matching `change_log` /
-  `bot_config_version`. Draft rows (`status='draft'`) are the one exception — they are
-  mutated in place while being edited, and hard-deleted on discard, since they never
-  went live and carry no audit obligation.
+- `support_app` (the application DB role) is never granted `DELETE` on any table in
+  this schema — nothing can be hard-deleted, full stop. So published rows can't be
+  mutated (enforced the same way as `change_log`/`bot_config_version`, via a
+  `BEFORE UPDATE OR DELETE` trigger that raises when `OLD.status = 'published'`,
+  since a blanket `REVOKE UPDATE` on the whole table would also block legitimate
+  draft edits), and a discarded draft is never deleted either — `discardArticleDraft`
+  updates the row's `status` to `'discarded'` instead. `'discarded'` rows are excluded
+  from both "current draft" lookups (`status='draft'`) and version history
+  (`status='published'`); they just sit there as an inert record of an abandoned edit.
 - Unique index `(articleId, version)` where `status='published'`, plus
   `(articleId, createdAt)` for the list view.
 
@@ -96,9 +101,11 @@ stays at its default, unused until their first publish.
 - New `saveArticleDraft(articleId, {title, body, keywords}, actorId)` — published
   articles only (400 otherwise). Upserts the `status='draft'` row: create if absent,
   else update `title`/`body`/`keywords`/`actorId`/`updatedAt`.
-- New `discardArticleDraft(articleId)` — deletes the `status='draft'` row; soft-removes
-  (`removedAt`) any `draftOnly` attachments; clears `pendingRemovalAt` on any attachment
-  that had one staged. Live content and version history untouched.
+- New `discardArticleDraft(articleId)` — updates the `status='draft'` row to
+  `status='discarded'` (never deleted — `support_app` has no `DELETE` grant on any
+  table); soft-removes (`removedAt`) any `draftOnly` attachments; clears
+  `pendingRemovalAt` on any attachment that had one staged. Live content and version
+  history untouched.
 - `publishArticle` — branches:
   - **Draft row exists**: compute `changedFields` (diff draft vs. current live
     `title`/`body`/`keywords` and live-attachment-set), assign
@@ -179,8 +186,8 @@ Backend:
   updated, Weaviate reindexed, staged attachment flags cleared.
 - `publishArticle` first-ever publish (no draft row): unchanged existing behavior,
   still creates `version=1`.
-- `discardArticleDraft`: deletes draft row, soft-removes `draftOnly` attachments, clears
-  `pendingRemovalAt`, live article/history untouched.
+- `discardArticleDraft`: sets draft row to `status='discarded'`, soft-removes
+  `draftOnly` attachments, clears `pendingRemovalAt`, live article/history untouched.
 - `restoreArticleVersion`: populates draft without touching live content or
   `article.version`; re-stages a since-removed attachment as `draftOnly` without
   re-upload.
