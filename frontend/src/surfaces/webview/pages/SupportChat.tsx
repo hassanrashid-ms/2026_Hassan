@@ -481,13 +481,13 @@ export function SupportChat() {
         // the control is not offered at all — the same UI-only gating pattern
         // as `settled` above, not new enforcement machinery.
         allowAttachments={messagesQuery.data?.status !== 'bot_active'}
-        onUpload={async (file) => {
+        onUpload={async (file, onProgress) => {
           const uploaded = await requestUpload(boot!.token, {
             filename: file.name,
             contentType: file.type,
             byteSize: file.size,
           });
-          await putFileToUploadUrl(uploaded.upload_url, file);
+          await putFileToUploadUrl(uploaded.upload_url, file, onProgress);
           return {
             key: uploaded.key,
             filename: file.name,

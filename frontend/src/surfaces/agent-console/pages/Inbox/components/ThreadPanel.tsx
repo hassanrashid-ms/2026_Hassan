@@ -555,13 +555,13 @@ export function ThreadPanel({
           onSend={(body, visibility, attachment) => send.mutate({ body, visibility, attachment })}
           allowVisibilityToggle
           allowAttachments
-          onUpload={async (file) => {
+          onUpload={async (file, onProgress) => {
             const { key, upload_url } = await requestUpload(token, {
               filename: file.name,
               contentType: file.type,
               byteSize: file.size,
             });
-            await putFileToUploadUrl(upload_url, file);
+            await putFileToUploadUrl(upload_url, file, onProgress);
             return { key, filename: file.name, mimeType: file.type, byteSize: file.size };
           }}
           onCancelUpload={(key) => void cancelUpload(token, key)}

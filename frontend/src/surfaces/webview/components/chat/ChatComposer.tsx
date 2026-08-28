@@ -3,6 +3,7 @@ import { Paperclip, SendHorizontal, X } from 'lucide-react';
 import { cn } from '@/surfaces/webview/lib/cn';
 import { post } from '@/services/bridgeService';
 import type { UploadedAttachment } from '@/features/chat/components/Composer';
+import { AttachmentThumbnail } from '@/features/chat/components/AttachmentThumbnail';
 
 // Mirrors backend/src/shared/storage/presign.ts's ALLOWED_CHAT_ATTACHMENT_MIME_TYPES /
 // maxBytesForAttachment — same duplication rationale as
@@ -48,13 +49,17 @@ export function ChatComposer({
   onSend: (body: string, attachment?: UploadedAttachment) => void;
   disabled?: boolean;
   allowAttachments?: boolean;
-  onUpload?: (file: File) => Promise<UploadedAttachment>;
+  onUpload?: (file: File, onProgress?: (percent: number) => void) => Promise<UploadedAttachment>;
   onCancelUpload?: (key: string) => void;
 }) {
   const [value, setValue] = useState('');
   const [pendingAttachment, setPendingAttachment] = useState<UploadedAttachment | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewMeta, setPreviewMeta] = useState<{ filename: string; mimeType: string } | null>(
+    null,
+  );
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -62,6 +67,7 @@ export function ChatComposer({
     if (pendingAttachment) onCancelUpload?.(pendingAttachment.key);
     setPendingAttachment(null);
     setPreviewUrl(null);
+    setPreviewMeta(null);
   };
 
   const submit = () => {
@@ -71,6 +77,7 @@ export function ChatComposer({
     setValue('');
     setPendingAttachment(null);
     setPreviewUrl(null);
+    setPreviewMeta(null);
     setUploadError(null);
   };
 
@@ -94,13 +101,20 @@ export function ChatComposer({
       return;
     }
 
+    // Local blob URL shown immediately — the user sees their file before the
+    // network upload even starts, not only once it finishes.
+    setPendingAttachment(null);
+    setPreviewUrl(URL.createObjectURL(file));
+    setPreviewMeta({ filename: file.name, mimeType: file.type });
     setUploading(true);
+    setUploadProgress(0);
     try {
-      const uploaded = await onUpload(file);
+      const uploaded = await onUpload(file, setUploadProgress);
       setPendingAttachment(uploaded);
-      setPreviewUrl(URL.createObjectURL(file));
     } catch {
       setUploadError('Upload failed. Please try again.');
+      setPreviewUrl(null);
+      setPreviewMeta(null);
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -116,30 +130,26 @@ export function ChatComposer({
       // row is the bottom-most thing on screen and must clear the home indicator
       // even while the keyboard is up and the shell's own padding is collapsed.
     >
-      {pendingAttachment && previewUrl && (
+      {previewUrl && previewMeta && (
         <div className="flex items-center gap-2">
-          {VIDEO_MIME_TYPES.has(pendingAttachment.mimeType) ? (
-            <video
-              data-testid="pending-video-preview"
-              src={previewUrl}
-              muted
-              className="h-14 w-14 rounded-card object-cover"
-            />
-          ) : (
-            <img
-              src={previewUrl}
-              alt={pendingAttachment.filename}
-              className="h-14 w-14 rounded-card object-cover"
-            />
+          <AttachmentThumbnail
+            previewUrl={previewUrl}
+            mimeType={previewMeta.mimeType}
+            filename={previewMeta.filename}
+            uploading={uploading}
+            progress={uploadProgress}
+            className="h-14 w-14 rounded-card"
+          />
+          {!uploading && (
+            <button
+              type="button"
+              aria-label="Remove attachment"
+              onClick={clearAttachment}
+              className="rounded-full bg-surface p-1 text-muted"
+            >
+              <X className="size-3.5" />
+            </button>
           )}
-          <button
-            type="button"
-            aria-label="Remove attachment"
-            onClick={clearAttachment}
-            className="rounded-full bg-surface p-1 text-muted"
-          >
-            <X className="size-3.5" />
-          </button>
         </div>
       )}
       {uploadError && <span className="text-xs text-red-600">{uploadError}</span>}

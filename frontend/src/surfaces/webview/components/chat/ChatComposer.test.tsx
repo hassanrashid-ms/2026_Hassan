@@ -55,6 +55,43 @@ describe('ChatComposer attachments', () => {
     expect(onUpload).not.toHaveBeenCalled();
     expect(screen.getByText(/50 MB or smaller/)).toBeInTheDocument();
   });
+
+  it('shows the picked file immediately with a progress overlay, then clears it once upload resolves', async () => {
+    let resolveUpload!: (v: {
+      key: string;
+      filename: string;
+      mimeType: string;
+      byteSize: number;
+    }) => void;
+    const onUpload = vi.fn(
+      (_file: File, onProgress?: (percent: number) => void) =>
+        new Promise<{ key: string; filename: string; mimeType: string; byteSize: number }>(
+          (resolve) => {
+            onProgress?.(42);
+            resolveUpload = resolve;
+          },
+        ),
+    );
+    render(<ChatComposer onSend={() => {}} allowAttachments onUpload={onUpload} />);
+
+    fireEvent.change(screen.getByLabelText('Attach image or video'), {
+      target: { files: [new File([new Uint8Array(3)], 'shot.png', { type: 'image/png' })] },
+    });
+
+    await screen.findByAltText('shot.png');
+    expect(screen.getByTestId('upload-progress-overlay')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Remove attachment')).not.toBeInTheDocument();
+
+    resolveUpload({
+      key: 'pending/ws/player/uuid.png',
+      filename: 'shot.png',
+      mimeType: 'image/png',
+      byteSize: 3,
+    });
+
+    await screen.findByLabelText('Remove attachment');
+    expect(screen.queryByTestId('upload-progress-overlay')).not.toBeInTheDocument();
+  });
 });
 
 describe('ChatComposer native dialog handoff', () => {

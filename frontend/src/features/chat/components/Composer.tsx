@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { Paperclip, X } from 'lucide-react';
+import { AttachmentThumbnail } from './AttachmentThumbnail.tsx';
 
 // Mirrors backend/src/shared/storage/presign.ts's ALLOWED_CHAT_ATTACHMENT_MIME_TYPES /
 // maxBytesForAttachment. Duplicated rather than imported — the frontend
@@ -43,7 +44,7 @@ type ComposerProps = {
   placeholder?: string;
   /** Only the agent console passes these three — the player surface's usage omits them. */
   allowAttachments?: boolean;
-  onUpload?: (file: File) => Promise<UploadedAttachment>;
+  onUpload?: (file: File, onProgress?: (percent: number) => void) => Promise<UploadedAttachment>;
   onCancelUpload?: (key: string) => void;
 };
 
@@ -65,7 +66,11 @@ export function Composer({
   const [visibility, setVisibility] = useState<'public' | 'internal'>('public');
   const [pendingAttachment, setPendingAttachment] = useState<UploadedAttachment | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewMeta, setPreviewMeta] = useState<{ filename: string; mimeType: string } | null>(
+    null,
+  );
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -73,6 +78,7 @@ export function Composer({
     if (pendingAttachment) onCancelUpload?.(pendingAttachment.key);
     setPendingAttachment(null);
     setPreviewUrl(null);
+    setPreviewMeta(null);
   };
 
   const submit = () => {
@@ -83,6 +89,7 @@ export function Composer({
     setVisibility('public');
     setPendingAttachment(null);
     setPreviewUrl(null);
+    setPreviewMeta(null);
     setUploadError(null);
   };
 
@@ -106,13 +113,20 @@ export function Composer({
       return;
     }
 
+    // Local blob URL shown immediately — the user sees their file before the
+    // network upload even starts, not only once it finishes.
+    setPendingAttachment(null);
+    setPreviewUrl(URL.createObjectURL(file));
+    setPreviewMeta({ filename: file.name, mimeType: file.type });
     setUploading(true);
+    setUploadProgress(0);
     try {
-      const uploaded = await onUpload(file);
+      const uploaded = await onUpload(file, setUploadProgress);
       setPendingAttachment(uploaded);
-      setPreviewUrl(URL.createObjectURL(file));
     } catch {
       setUploadError('Upload failed. Please try again.');
+      setPreviewUrl(null);
+      setPreviewMeta(null);
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -121,30 +135,25 @@ export function Composer({
 
   return (
     <div className="flex shrink-0 flex-col gap-2 border-t border-muted/20 bg-bg p-2">
-      {pendingAttachment && previewUrl && (
+      {previewUrl && previewMeta && (
         <div className="flex items-center gap-2">
-          {VIDEO_MIME_TYPES.has(pendingAttachment.mimeType) ? (
-            <video
-              data-testid="pending-video-preview"
-              src={previewUrl}
-              muted
-              className="h-14 w-14 rounded-md object-cover"
-            />
-          ) : (
-            <img
-              src={previewUrl}
-              alt={pendingAttachment.filename}
-              className="h-14 w-14 rounded-md object-cover"
-            />
+          <AttachmentThumbnail
+            previewUrl={previewUrl}
+            mimeType={previewMeta.mimeType}
+            filename={previewMeta.filename}
+            uploading={uploading}
+            progress={uploadProgress}
+          />
+          {!uploading && (
+            <button
+              type="button"
+              aria-label="Remove attachment"
+              onClick={clearAttachment}
+              className="rounded-full bg-muted/20 p-1"
+            >
+              <X className="size-3.5" />
+            </button>
           )}
-          <button
-            type="button"
-            aria-label="Remove attachment"
-            onClick={clearAttachment}
-            className="rounded-full bg-muted/20 p-1"
-          >
-            <X className="size-3.5" />
-          </button>
         </div>
       )}
       {uploadError && <span className="text-xs text-red-600">{uploadError}</span>}

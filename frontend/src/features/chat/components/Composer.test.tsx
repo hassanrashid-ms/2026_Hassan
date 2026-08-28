@@ -30,7 +30,7 @@ describe('Composer attachments', () => {
     await screen.findByAltText('shot.png');
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
-    expect(onUpload).toHaveBeenCalledWith(file);
+    expect(onUpload).toHaveBeenCalledWith(file, expect.any(Function));
     expect(onSend).toHaveBeenCalledWith('', undefined, {
       key: 'pending/ws/agent/uuid.png',
       filename: 'shot.png',
@@ -106,7 +106,7 @@ describe('Composer attachments', () => {
     await screen.findByTestId('pending-video-preview');
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
-    expect(onUpload).toHaveBeenCalledWith(file);
+    expect(onUpload).toHaveBeenCalledWith(file, expect.any(Function));
     expect(onSend).toHaveBeenCalledWith('', undefined, {
       key: 'pending/ws/agent/uuid.mp4',
       filename: 'clip.mp4',
@@ -143,5 +143,43 @@ describe('Composer attachments', () => {
 
     await screen.findByTestId('pending-video-preview');
     expect(onUpload).toHaveBeenCalled();
+  });
+
+  it('shows the picked file immediately with a progress overlay, then clears the overlay once upload resolves', async () => {
+    let resolveUpload!: (v: {
+      key: string;
+      filename: string;
+      mimeType: string;
+      byteSize: number;
+    }) => void;
+    const onUpload = vi.fn(
+      (_file: File, onProgress?: (percent: number) => void) =>
+        new Promise<{ key: string; filename: string; mimeType: string; byteSize: number }>(
+          (resolve) => {
+            onProgress?.(42);
+            resolveUpload = resolve;
+          },
+        ),
+    );
+    render(<Composer onSend={() => {}} allowAttachments onUpload={onUpload} />);
+
+    fireEvent.change(screen.getByLabelText('Attach image or video'), {
+      target: { files: [makeFile('shot.png', 'image/png', 3)] },
+    });
+
+    // Preview appears before the upload promise ever resolves.
+    await screen.findByAltText('shot.png');
+    expect(screen.getByTestId('upload-progress-overlay')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Remove attachment')).not.toBeInTheDocument();
+
+    resolveUpload({
+      key: 'pending/ws/agent/uuid.png',
+      filename: 'shot.png',
+      mimeType: 'image/png',
+      byteSize: 3,
+    });
+
+    await screen.findByLabelText('Remove attachment');
+    expect(screen.queryByTestId('upload-progress-overlay')).not.toBeInTheDocument();
   });
 });

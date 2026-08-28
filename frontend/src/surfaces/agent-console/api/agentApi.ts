@@ -237,13 +237,35 @@ export function requestUpload(
   });
 }
 
-export async function putFileToUploadUrl(uploadUrl: string, file: File): Promise<void> {
-  const res = await fetch(uploadUrl, {
-    method: 'PUT',
-    headers: { 'Content-Type': file.type, 'Content-Length': String(file.size) },
-    body: file,
+/**
+ * XHR, not fetch — fetch has no upload-progress event, and the pretty
+ * uploading UI needs a real percentage, not a fake one.
+ */
+export function putFileToUploadUrl(
+  uploadUrl: string,
+  file: File,
+  onProgress?: (percent: number) => void,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', uploadUrl);
+    xhr.setRequestHeader('Content-Type', file.type);
+    xhr.upload.onprogress = (event) => {
+      if (onProgress && event.lengthComputable) {
+        onProgress(Math.round((event.loaded / event.total) * 100));
+      }
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        onProgress?.(100);
+        resolve();
+      } else {
+        reject(new Error(`Upload failed with ${xhr.status}`));
+      }
+    };
+    xhr.onerror = () => reject(new Error('Upload failed'));
+    xhr.send(file);
   });
-  if (!res.ok) throw new Error(`Upload failed with ${res.status}`);
 }
 
 export function cancelUpload(token: string, key: string): Promise<void> {
