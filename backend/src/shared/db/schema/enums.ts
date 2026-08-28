@@ -42,6 +42,11 @@ export const declaredFieldStatus = pgEnum('declared_field_status', [
   'archived',
 ]);
 export const articleState = pgEnum('article_state', ['draft', 'published', 'archived']);
+export const articleVersionStatus = pgEnum('article_version_status', [
+  'draft',
+  'published',
+  'discarded',
+]);
 // `bot_article` is set by the bot's answer_from_article, `agent_ask` by
 // POST /agent/conversations/:id/ask-resolved, `inactivity_ask` by the inactivity
 // clock's stage 1 — all three mean a yes/no question is on the player's screen.

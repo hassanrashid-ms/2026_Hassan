@@ -162,3 +162,21 @@ BEGIN
       $policy$, t);
   END LOOP;
 END $$;
+
+-- article_version has no workspace_id column — scope through article_id instead.
+ALTER TABLE article_version ENABLE ROW LEVEL SECURITY;
+ALTER TABLE article_version FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant ON article_version;
+CREATE POLICY tenant ON article_version
+  USING (
+    article_id IN (
+      SELECT id FROM article
+       WHERE workspace_id = nullif(current_setting('app.workspace_id', true), '')::uuid
+    )
+  )
+  WITH CHECK (
+    article_id IN (
+      SELECT id FROM article
+       WHERE workspace_id = nullif(current_setting('app.workspace_id', true), '')::uuid
+    )
+  );
