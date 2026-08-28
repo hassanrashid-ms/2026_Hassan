@@ -1,13 +1,14 @@
 import { randomUUID } from 'node:crypto';
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, isNull, or } from 'drizzle-orm';
 import type {
   AgentArticleDetail,
   AgentArticlesResponse,
   ArticleAttachmentView,
+  ArticleDraftView,
   FinalizeArticleAttachmentBody,
 } from '@support/types';
 import type { z } from 'zod';
-import { article, articleAttachment, intent } from '../../shared/db/schema/index.ts';
+import { article, articleAttachment, articleVersion, intent } from '../../shared/db/schema/index.ts';
 import { withWorkspace, type Tx } from '../../shared/db/withWorkspace.ts';
 import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts';
 import {
@@ -19,13 +20,14 @@ import {
 } from '../../shared/storage/presign.ts';
 import { deleteArticleObject, upsertArticleObject } from '../../shared/weaviate/articlesIndex.ts';
 
-function toDetail(row: typeof article.$inferSelect): Omit<AgentArticleDetail, 'attachments'> {
+function toDetail(row: typeof article.$inferSelect): Omit<AgentArticleDetail, 'attachments' | 'draft'> {
   return {
     id: row.id,
     title: row.title,
     body: row.body,
     keywords: row.keywords,
     state: row.state,
+    version: row.version,
     intent_id: row.intentId,
     created_by: row.createdBy,
     published_by: row.publishedBy,
@@ -49,6 +51,43 @@ async function attachmentsFor(tx: Tx, articleId: string): Promise<ArticleAttachm
       url: await presignGetObject(a.storageKey).catch(() => null),
     })),
   );
+}
+
+async function draftFor(tx: Tx, articleId: string): Promise<ArticleDraftView> {
+  const [draft] = await tx
+    .select()
+    .from(articleVersion)
+    .where(and(eq(articleVersion.articleId, articleId), eq(articleVersion.status, 'draft')))
+    .limit(1);
+  if (!draft) return null;
+
+  const attachmentRows = await tx
+    .select()
+    .from(articleAttachment)
+    .where(
+      and(
+        eq(articleAttachment.articleId, articleId),
+        isNull(articleAttachment.removedAt),
+        or(isNull(articleAttachment.pendingRemovalAt), eq(articleAttachment.draftOnly, true)),
+      ),
+    );
+  const attachments = await Promise.all(
+    attachmentRows.map(async (a) => ({
+      id: a.id,
+      filename: a.filename,
+      mime_type: a.mimeType,
+      byte_size: a.byteSize,
+      url: await presignGetObject(a.storageKey).catch(() => null),
+    })),
+  );
+
+  return {
+    title: draft.title,
+    body: draft.body,
+    keywords: draft.keywords,
+    attachments,
+    updated_at: draft.updatedAt.toISOString(),
+  };
 }
 
 export async function listArticles(ctx: AgentContext): Promise<AgentArticlesResponse> {
@@ -76,7 +115,11 @@ export async function getArticle(
     const [row] = await tx.select().from(article).where(eq(article.id, id)).limit(1);
     if (!row) return null;
 
-    return { ...toDetail(row), attachments: await attachmentsFor(tx, id) };
+    return {
+      ...toDetail(row),
+      attachments: await attachmentsFor(tx, id),
+      draft: await draftFor(tx, id),
+    };
   });
 }
 
@@ -115,7 +158,7 @@ export async function createArticle(
       .returning();
     // A just-created article can't have attachments yet — nothing to upload
     // against an id that didn't exist a moment ago.
-    return { ok: true, article: { ...toDetail(row!), attachments: [] } };
+    return { ok: true, article: { ...toDetail(row!), attachments: [], draft: null } };
   });
 }
 
@@ -156,7 +199,113 @@ export async function updateArticle(
       })
       .where(eq(article.id, id))
       .returning();
-    return { ok: true, article: { ...toDetail(row!), attachments: await attachmentsFor(tx, id) } };
+    return {
+      ok: true,
+      article: {
+        ...toDetail(row!),
+        attachments: await attachmentsFor(tx, id),
+        draft: await draftFor(tx, id),
+      },
+    };
+  });
+}
+
+export type SaveArticleDraftInput = { title?: string; body?: string; keywords?: string[] };
+export type SaveArticleDraftResult =
+  | { ok: true; article: AgentArticleDetail }
+  | { ok: false; reason: 'not_found' | 'not_published' };
+
+export async function saveArticleDraft(
+  ctx: AgentContext,
+  id: string,
+  patch: SaveArticleDraftInput,
+): Promise<SaveArticleDraftResult> {
+  return withWorkspace(ctx.workspaceId, async (tx) => {
+    const [existing] = await tx.select().from(article).where(eq(article.id, id)).limit(1);
+    if (!existing) return { ok: false, reason: 'not_found' };
+    if (existing.state !== 'published') return { ok: false, reason: 'not_published' };
+
+    const [current] = await tx
+      .select()
+      .from(articleVersion)
+      .where(and(eq(articleVersion.articleId, id), eq(articleVersion.status, 'draft')))
+      .limit(1);
+
+    if (current) {
+      await tx
+        .update(articleVersion)
+        .set({
+          ...(patch.title !== undefined ? { title: patch.title } : {}),
+          ...(patch.body !== undefined ? { body: patch.body } : {}),
+          ...(patch.keywords !== undefined ? { keywords: patch.keywords } : {}),
+          actorId: ctx.agentId,
+          updatedAt: new Date(),
+        })
+        .where(eq(articleVersion.id, current.id));
+    } else {
+      await tx.insert(articleVersion).values({
+        articleId: id,
+        status: 'draft',
+        title: patch.title ?? existing.title,
+        body: patch.body ?? existing.body,
+        keywords: patch.keywords ?? existing.keywords,
+        actorId: ctx.agentId,
+      });
+    }
+
+    return {
+      ok: true,
+      article: {
+        ...toDetail(existing),
+        attachments: await attachmentsFor(tx, id),
+        draft: await draftFor(tx, id),
+      },
+    };
+  });
+}
+
+export type DiscardArticleDraftResult =
+  | { ok: true; article: AgentArticleDetail }
+  | { ok: false; reason: 'not_found' | 'no_draft' };
+
+export async function discardArticleDraft(
+  ctx: AgentContext,
+  id: string,
+): Promise<DiscardArticleDraftResult> {
+  return withWorkspace(ctx.workspaceId, async (tx) => {
+    const [existing] = await tx.select().from(article).where(eq(article.id, id)).limit(1);
+    if (!existing) return { ok: false, reason: 'not_found' };
+
+    const [draft] = await tx
+      .select()
+      .from(articleVersion)
+      .where(and(eq(articleVersion.articleId, id), eq(articleVersion.status, 'draft')))
+      .limit(1);
+    if (!draft) return { ok: false, reason: 'no_draft' };
+
+    await tx
+      .update(articleVersion)
+      .set({ status: 'discarded' })
+      .where(eq(articleVersion.id, draft.id));
+    await tx
+      .update(articleAttachment)
+      .set({ removedAt: new Date() })
+      .where(and(eq(articleAttachment.articleId, id), eq(articleAttachment.draftOnly, true)));
+    await tx
+      .update(articleAttachment)
+      .set({ pendingRemovalAt: null })
+      .where(
+        and(eq(articleAttachment.articleId, id), isNotNull(articleAttachment.pendingRemovalAt)),
+      );
+
+    return {
+      ok: true,
+      article: {
+        ...toDetail(existing),
+        attachments: await attachmentsFor(tx, id),
+        draft: null,
+      },
+    };
   });
 }
 
@@ -269,7 +418,14 @@ export async function publishArticle(ctx: AgentContext, id: string): Promise<Pub
       intentId: row!.intentId,
       workspaceId: row!.workspaceId,
     });
-    return { ok: true, article: { ...toDetail(row!), attachments: await attachmentsFor(tx, id) } };
+    return {
+      ok: true,
+      article: {
+        ...toDetail(row!),
+        attachments: await attachmentsFor(tx, id),
+        draft: await draftFor(tx, id),
+      },
+    };
   });
 }
 
@@ -287,7 +443,11 @@ export async function archiveArticle(ctx: AgentContext, id: string): Promise<Arc
     await deleteArticleObject(row.id);
     return {
       ok: true,
-      article: { ...toDetail(row), attachments: await attachmentsFor(tx, row.id) },
+      article: {
+        ...toDetail(row),
+        attachments: await attachmentsFor(tx, row.id),
+        draft: await draftFor(tx, row.id),
+      },
     };
   });
 }

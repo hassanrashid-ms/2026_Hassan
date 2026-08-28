@@ -310,6 +310,110 @@ describe('draft -> publish -> archive', () => {
   });
 });
 
+describe('draft overlay on a published article', () => {
+  async function publishedArticle(workspaceId: string, token: string) {
+    const created = await request(app)
+      .post('/articles')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ title: 'Original title', body: 'Original body' })
+      .expect(201);
+    await request(app)
+      .post(`/articles/${created.body.id}/publish`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+    return created.body.id as string;
+  }
+
+  it('saves a draft on a published article without touching live content', async () => {
+    const workspaceId = await seedWorkspace();
+    const { token } = await seedAgent(workspaceId, 'team_lead');
+    const id = await publishedArticle(workspaceId, token);
+
+    const res = await request(app)
+      .patch(`/articles/${id}/draft`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ title: 'Edited title' })
+      .expect(200);
+
+    expect(res.body.draft).toMatchObject({ title: 'Edited title' });
+    expect(res.body.title).toBe('Original title');
+    expect(res.body.state).toBe('published');
+  });
+
+  it('409s saving a draft on an article that is not published', async () => {
+    const workspaceId = await seedWorkspace();
+    const { token } = await seedAgent(workspaceId, 'team_lead');
+    const created = await request(app)
+      .post('/articles')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ title: 'X', body: 'Y' })
+      .expect(201);
+
+    await request(app)
+      .patch(`/articles/${created.body.id}/draft`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ title: 'Z' })
+      .expect(409);
+  });
+
+  it('upserts the same draft row across repeated saves', async () => {
+    const workspaceId = await seedWorkspace();
+    const { token } = await seedAgent(workspaceId, 'team_lead');
+    const id = await publishedArticle(workspaceId, token);
+
+    await request(app)
+      .patch(`/articles/${id}/draft`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ title: 'First edit' })
+      .expect(200);
+    const second = await request(app)
+      .patch(`/articles/${id}/draft`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ body: 'Second edit body' })
+      .expect(200);
+
+    expect(second.body.draft).toMatchObject({ title: 'First edit', body: 'Second edit body' });
+    const { rows } = await ownerPool.query(
+      `select count(*)::int as n from article_version where article_id = $1 and status = 'draft'`,
+      [id],
+    );
+    expect(rows[0].n).toBe(1);
+  });
+
+  it('discards a draft, clearing it without touching live content', async () => {
+    const workspaceId = await seedWorkspace();
+    const { token } = await seedAgent(workspaceId, 'team_lead');
+    const id = await publishedArticle(workspaceId, token);
+    await request(app)
+      .patch(`/articles/${id}/draft`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ title: 'Edited title' })
+      .expect(200);
+
+    const res = await request(app)
+      .delete(`/articles/${id}/draft`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+
+    expect(res.body.draft).toBeNull();
+    expect(res.body.title).toBe('Original title');
+    const { rows } = await ownerPool.query(
+      `select status from article_version where article_id = $1`,
+      [id],
+    );
+    expect(rows[0].status).toBe('discarded');
+  });
+});
+
 describe('workspace isolation', () => {
   it('GET /articles/:id 404s for another workspace article', async () => {
     const workspaceA = await seedWorkspace();
