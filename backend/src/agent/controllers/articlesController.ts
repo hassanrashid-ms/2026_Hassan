@@ -1,6 +1,7 @@
 import type { RequestHandler } from 'express';
 import { z } from 'zod';
 import {
+  ArticleVersionsQuery,
   CreateArticleBody,
   FinalizeArticleAttachmentBody,
   SaveArticleDraftBody,
@@ -14,8 +15,12 @@ import {
   discardArticleDraft,
   finalizeArticleAttachment,
   getArticle,
+  getArticleVersion,
   listArticles,
+  listArticleVersions,
   publishArticle,
+  removeArticleAttachment,
+  restoreArticleVersion,
   saveArticleDraft,
   updateArticle,
   generateKeywords,
@@ -23,6 +28,8 @@ import {
 import { GenerateKeywordsBody } from '@support/types';
 
 const ArticleIdParams = z.object({ id: z.uuid() });
+const ArticleAttachmentParams = z.object({ id: z.uuid(), attachmentId: z.uuid() });
+const ArticleVersionParams = z.object({ id: z.uuid(), version: z.coerce.number().int().positive() });
 
 export const listArticlesHandler: RequestHandler = async (req, res) => {
   res.status(200).json(await listArticles(req.agent!));
@@ -121,6 +128,67 @@ export const discardArticleDraftHandler: RequestHandler = async (req, res) => {
       return;
     }
     sendError(res, 409, 'invalid_request', 'No draft to discard.');
+    return;
+  }
+  res.status(200).json(result.article);
+};
+
+export const listArticleVersionsHandler: RequestHandler = async (req, res) => {
+  const params = ArticleIdParams.safeParse(req.params);
+  const query = ArticleVersionsQuery.safeParse(req.query);
+  if (!params.success || !query.success) {
+    sendError(res, 422, 'invalid_request', 'Invalid query.');
+    return;
+  }
+  const result = await listArticleVersions(req.agent!, params.data.id, query.data);
+  if (!result.ok) {
+    sendError(res, 404, 'not_found', 'Article not found.');
+    return;
+  }
+  res.status(200).json(result.versions);
+};
+
+export const getArticleVersionHandler: RequestHandler = async (req, res) => {
+  const params = ArticleVersionParams.safeParse(req.params);
+  if (!params.success) {
+    sendError(res, 422, 'invalid_request', 'Invalid version.');
+    return;
+  }
+  const result = await getArticleVersion(req.agent!, params.data.id, params.data.version);
+  if (!result.ok) {
+    sendError(res, 404, 'not_found', 'Version not found.');
+    return;
+  }
+  res.status(200).json(result.version);
+};
+
+export const restoreArticleVersionHandler: RequestHandler = async (req, res) => {
+  const params = ArticleVersionParams.safeParse(req.params);
+  if (!params.success) {
+    sendError(res, 422, 'invalid_request', 'Invalid version.');
+    return;
+  }
+  const result = await restoreArticleVersion(req.agent!, params.data.id, params.data.version);
+  if (!result.ok) {
+    if (result.reason === 'not_found') {
+      sendError(res, 404, 'not_found', 'Article or version not found.');
+      return;
+    }
+    sendError(res, 409, 'invalid_request', 'Article is not published.');
+    return;
+  }
+  res.status(200).json(result.article);
+};
+
+export const removeArticleAttachmentHandler: RequestHandler = async (req, res) => {
+  const params = ArticleAttachmentParams.safeParse(req.params);
+  if (!params.success) {
+    sendError(res, 422, 'invalid_request', 'Invalid ids.');
+    return;
+  }
+  const result = await removeArticleAttachment(req.agent!, params.data.id, params.data.attachmentId);
+  if (!result.ok) {
+    sendError(res, 404, 'not_found', 'Article or attachment not found.');
     return;
   }
   res.status(200).json(result.article);

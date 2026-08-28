@@ -1745,6 +1745,7 @@ registry.registerPath({
             filename: z.string().min(1).max(255),
             mime_type: z.enum(['image/png', 'image/jpeg', 'image/webp', 'image/gif']),
             byte_size: z.number().int().positive(),
+            draft: z.boolean().optional(),
           }),
         },
       },
@@ -1756,6 +1757,100 @@ registry.registerPath({
     409: { description: 'Article is not a draft' },
     422: { description: 'Upload not found, expired, or mismatched' },
   },
+});
+
+registry.registerPath({
+  method: 'patch',
+  path: '/agent/articles/{id}/draft',
+  summary: 'Agent Save Article Draft',
+  description:
+    'Upserts the in-progress draft for a published article. 409 if the article is not published.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: {
+    params: z.object({ id: z.uuid() }),
+    body: {
+      content: {
+        'application/json': {
+          schema: z.object({
+            title: z.string().max(200).optional(),
+            body: z.string().optional(),
+            keywords: z.array(z.string()).optional(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: { description: 'Draft saved' },
+    404: { description: 'Not found' },
+    409: { description: 'Article is not published' },
+  },
+});
+
+registry.registerPath({
+  method: 'delete',
+  path: '/agent/articles/{id}/draft',
+  summary: 'Agent Discard Article Draft',
+  description: 'Discards the in-progress draft. Live content is untouched.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: { params: z.object({ id: z.uuid() }) },
+  responses: {
+    200: { description: 'Draft discarded' },
+    404: { description: 'Not found' },
+    409: { description: 'No draft to discard' },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/agent/articles/{id}/versions',
+  summary: 'Agent List Article Versions',
+  description: 'Paginated version history, newest first.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: {
+    params: z.object({ id: z.uuid() }),
+    query: z.object({
+      limit: z.coerce.number().int().min(1).max(200).optional(),
+      cursor: z.coerce.number().int().positive().optional(),
+    }),
+  },
+  responses: { 200: { description: 'Version list' }, 404: { description: 'Not found' } },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/agent/articles/{id}/versions/{version}',
+  summary: 'Agent Get Article Version',
+  description: 'Full snapshot for one published version.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: { params: z.object({ id: z.uuid(), version: z.coerce.number().int() }) },
+  responses: { 200: { description: 'Version snapshot' }, 404: { description: 'Not found' } },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/agent/articles/{id}/versions/{version}/restore',
+  summary: 'Agent Restore Article Version',
+  description:
+    'Loads a past version into the draft for review. Does not publish or touch live content.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: { params: z.object({ id: z.uuid(), version: z.coerce.number().int() }) },
+  responses: {
+    200: { description: 'Draft populated from the version' },
+    404: { description: 'Article or version not found' },
+    409: { description: 'Article is not published' },
+  },
+});
+
+registry.registerPath({
+  method: 'delete',
+  path: '/agent/articles/{id}/attachments/{attachmentId}',
+  summary: 'Agent Remove Article Attachment',
+  description:
+    'On a published article with a draft in progress, stages the removal (applied at publish). Otherwise removes immediately.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: { params: z.object({ id: z.uuid(), attachmentId: z.uuid() }) },
+  responses: { 200: { description: 'Removed or staged for removal' }, 404: { description: 'Not found' } },
 });
 
 registry.registerPath({

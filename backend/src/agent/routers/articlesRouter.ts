@@ -6,8 +6,12 @@ import {
   discardArticleDraftHandler,
   finalizeArticleAttachmentHandler,
   getArticleHandler,
+  getArticleVersionHandler,
   listArticlesHandler,
+  listArticleVersionsHandler,
   publishArticleHandler,
+  removeArticleAttachmentHandler,
+  restoreArticleVersionHandler,
   saveArticleDraftHandler,
   updateArticleHandler,
   generateKeywordsHandler,
@@ -20,6 +24,10 @@ articlesRouter.post('/articles', createArticleHandler);
 articlesRouter.patch('/articles/:id', updateArticleHandler);
 articlesRouter.patch('/articles/:id/draft', saveArticleDraftHandler);
 articlesRouter.delete('/articles/:id/draft', discardArticleDraftHandler);
+articlesRouter.get('/articles/:id/versions', listArticleVersionsHandler);
+articlesRouter.get('/articles/:id/versions/:version', getArticleVersionHandler);
+articlesRouter.post('/articles/:id/versions/:version/restore', restoreArticleVersionHandler);
+articlesRouter.delete('/articles/:id/attachments/:attachmentId', removeArticleAttachmentHandler);
 // Building (create/edit a draft) is every role's; publishing and archiving —
 // "putting things in front of players" / taking them away — are Team Lead +
 // Admin only, same split formsRouter.ts already enforces for forms.
