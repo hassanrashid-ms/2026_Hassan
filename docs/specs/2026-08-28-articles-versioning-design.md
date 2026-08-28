@@ -167,10 +167,12 @@ index, so bot answers never cite unpublished/staged content.
   (text diff for `title`/`body`, plain-language add/remove list for
   `keywords`/attachments). "Restore this version" per non-current row loads it into the
   draft and returns to the editor for review. Empty state: "No prior changes."
-- `articlesApi.ts` (`frontend/src/features/articles/api/`): add `saveArticleDraft`,
-  `discardArticleDraft`, `fetchArticleVersions`, `fetchArticleVersion`,
-  `restoreArticleVersion`, typed against new `@support/types` shapes shared with the
-  backend Zod schemas.
+- `agentApi.ts` (`frontend/src/surfaces/agent-console/api/agentApi.ts` — the client the
+  editor sheet already imports `fetchArticle`/`updateArticle`/`publishArticle` from,
+  not the public-surface `features/articles/api/articlesApi.ts`): add
+  `saveArticleDraft`, `discardArticleDraft`, `fetchArticleVersions`,
+  `fetchArticleVersion`, `restoreArticleVersion`, `removeArticleAttachment`, typed
+  against new `@support/types` shapes shared with the backend Zod schemas.
 
 Player-facing surfaces (`frontend/src/surfaces/webview/`) are unaffected — they only
 ever read `article.title/body/keywords`, always the live version.
