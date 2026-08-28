@@ -1,9 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import {
+  ALLOWED_CHAT_ATTACHMENT_MIME_TYPES,
   copyObject,
   deleteObject,
   headObject,
+  MAX_ATTACHMENT_BYTES,
+  MAX_VIDEO_BYTES,
+  maxBytesForAttachment,
   presignGetObject,
   presignPutObject,
 } from '../src/shared/storage/presign.ts';
@@ -51,5 +55,25 @@ describe('storage/presign', () => {
 
   it('deleteObject resolves even when the object never existed', async () => {
     await expect(deleteObject(`test/${randomUUID()}.png`)).resolves.toBeUndefined();
+  });
+});
+
+describe('maxBytesForAttachment', () => {
+  it('returns the video cap for an allowed video type', () => {
+    expect(maxBytesForAttachment('video/mp4')).toBe(MAX_VIDEO_BYTES);
+    expect(maxBytesForAttachment('video/webm')).toBe(MAX_VIDEO_BYTES);
+  });
+
+  it('returns the image cap for an image type or anything else', () => {
+    expect(maxBytesForAttachment('image/png')).toBe(MAX_ATTACHMENT_BYTES);
+    expect(maxBytesForAttachment('application/pdf')).toBe(MAX_ATTACHMENT_BYTES);
+  });
+});
+
+describe('ALLOWED_CHAT_ATTACHMENT_MIME_TYPES', () => {
+  it('includes both images and video', () => {
+    expect(ALLOWED_CHAT_ATTACHMENT_MIME_TYPES).toContain('image/png');
+    expect(ALLOWED_CHAT_ATTACHMENT_MIME_TYPES).toContain('video/mp4');
+    expect(ALLOWED_CHAT_ATTACHMENT_MIME_TYPES).toContain('video/webm');
   });
 });

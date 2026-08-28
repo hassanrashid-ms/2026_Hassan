@@ -19,6 +19,22 @@ export const ALLOWED_IMAGE_MIME_TYPES = [
 
 export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 
+export const ALLOWED_VIDEO_MIME_TYPES = ['video/mp4', 'video/webm'] as const;
+
+export const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
+
+export const ALLOWED_CHAT_ATTACHMENT_MIME_TYPES = [
+  ...ALLOWED_IMAGE_MIME_TYPES,
+  ...ALLOWED_VIDEO_MIME_TYPES,
+] as const;
+
+/** Chat/forms attachments only — articles keep the flat MAX_ATTACHMENT_BYTES image cap. */
+export function maxBytesForAttachment(contentType: string): number {
+  return (ALLOWED_VIDEO_MIME_TYPES as readonly string[]).includes(contentType)
+    ? MAX_VIDEO_BYTES
+    : MAX_ATTACHMENT_BYTES;
+}
+
 const PUT_TTL_SECONDS = 5 * 60;
 const GET_TTL_SECONDS = 10 * 60;
 
