@@ -19,6 +19,7 @@ export function useArticleAutosave(params: {
   status: AutosaveStatus;
   ensureArticleId: () => Promise<string>;
   flush: () => Promise<void>;
+  syncFields: (fields: Fields) => void;
 } {
   const { token, mode, onCreated, onSaved } = params;
   const [status, setStatus] = useState<AutosaveStatus>('saved');
@@ -120,5 +121,19 @@ export function useArticleAutosave(params: {
     await persist(fieldsRef.current);
   }
 
-  return { status, ensureArticleId, flush };
+  // For callers that programmatically overwrite the form's fields with content
+  // that's already saved server-side (e.g. reverting the editor to live content
+  // after a discard) — updates what the change-detection effect compares
+  // against without scheduling a save, so the revert itself doesn't get read as
+  // a fresh edit and spawn a new draft.
+  function syncFields(fields: Fields): void {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    fieldsRef.current = fields;
+    setStatus('saved');
+  }
+
+  return { status, ensureArticleId, flush, syncFields };
 }

@@ -289,6 +289,28 @@ function ArticleEditorForm({
     onSuccess: (updated) => {
       queryClient.setQueryData<AgentArticleDetail>(['admin-article', updated.id], updated);
       invalidateArticles();
+      // `draft`/`editorSeed` are local state, seeded once from the article prop
+      // at mount — they don't track later prop changes (see the comment above
+      // `editorSeed`), so without this the form keeps showing the just-discarded
+      // draft content until the sheet is closed and reopened. Revert them to the
+      // live content the server just reported, and bump editorVersion to force
+      // MDXEditor to remount against the reverted body (its `markdown` prop is
+      // otherwise only read once, on mount).
+      const reverted = draftFrom(updated);
+      setDraft(reverted);
+      setEditorSeed(reverted.body);
+      setEditorVersion((v) => v + 1);
+      setAttachments(updated.attachments);
+      // Without this, the autosave hook reads the revert itself as a fresh
+      // edit (its last-seen fields still hold the just-discarded draft
+      // content) and immediately schedules a save — spawning a brand new,
+      // content-identical draft the instant the old one was discarded.
+      autosave.syncFields({
+        title: reverted.title,
+        body: reverted.body,
+        keywords: parseKeywordsInput(reverted.keywordsInput),
+        intentId: reverted.intentId || undefined,
+      });
     },
   });
 
