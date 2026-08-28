@@ -398,18 +398,130 @@ export type PublishArticleResult =
   | { ok: true; article: AgentArticleDetail }
   | { ok: false; reason: 'not_found' | 'not_draft' | 'empty_fields' };
 
+async function liveAttachmentIdsFor(tx: Tx, articleId: string): Promise<string[]> {
+  const rows = await tx
+    .select({ id: articleAttachment.id })
+    .from(articleAttachment)
+    .where(
+      and(
+        eq(articleAttachment.articleId, articleId),
+        isNull(articleAttachment.removedAt),
+        eq(articleAttachment.draftOnly, false),
+      ),
+    );
+  return rows.map((r) => r.id);
+}
+
 export async function publishArticle(ctx: AgentContext, id: string): Promise<PublishArticleResult> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
     const [existing] = await tx.select().from(article).where(eq(article.id, id)).limit(1);
     if (!existing) return { ok: false, reason: 'not_found' };
-    if (existing.state !== 'draft') return { ok: false, reason: 'not_draft' };
-    if (existing.title.trim() === '' || existing.body.trim() === '')
+
+    const [draftRow] = await tx
+      .select()
+      .from(articleVersion)
+      .where(and(eq(articleVersion.articleId, id), eq(articleVersion.status, 'draft')))
+      .limit(1);
+
+    if (!draftRow) {
+      // First-ever publish: existing draft-state-article flow, unchanged, plus a v1
+      // version row.
+      if (existing.state !== 'draft') return { ok: false, reason: 'not_draft' };
+      if (existing.title.trim() === '' || existing.body.trim() === '')
+        return { ok: false, reason: 'empty_fields' };
+
+      const [row] = await tx
+        .update(article)
+        .set({ state: 'published', publishedBy: ctx.agentId, publishedAt: new Date(), version: 1 })
+        .where(eq(article.id, id))
+        .returning();
+      const liveAttachmentIds = await liveAttachmentIdsFor(tx, id);
+      await tx.insert(articleVersion).values({
+        articleId: id,
+        status: 'published',
+        version: 1,
+        title: row!.title,
+        body: row!.body,
+        keywords: row!.keywords,
+        attachmentIds: liveAttachmentIds,
+        actorId: ctx.agentId,
+        changedFields: ['title', 'body', 'keywords'],
+      });
+      await upsertArticleObject({
+        id: row!.id,
+        title: row!.title,
+        body: row!.body,
+        keywords: row!.keywords,
+        intentId: row!.intentId,
+        workspaceId: row!.workspaceId,
+      });
+      return {
+        ok: true,
+        article: {
+          ...toDetail(row!),
+          attachments: await attachmentsFor(tx, id),
+          draft: null,
+        },
+      };
+    }
+
+    // Promoting a draft on an already-published article.
+    if (draftRow.title.trim() === '' || draftRow.body.trim() === '')
       return { ok: false, reason: 'empty_fields' };
+
+    const changedFields: string[] = [];
+    if (draftRow.title !== existing.title) changedFields.push('title');
+    if (draftRow.body !== existing.body) changedFields.push('body');
+    if (JSON.stringify(draftRow.keywords) !== JSON.stringify(existing.keywords))
+      changedFields.push('keywords');
+
+    await tx
+      .update(articleAttachment)
+      .set({ draftOnly: false })
+      .where(and(eq(articleAttachment.articleId, id), eq(articleAttachment.draftOnly, true)));
+    await tx
+      .update(articleAttachment)
+      .set({ removedAt: new Date(), pendingRemovalAt: null })
+      .where(
+        and(eq(articleAttachment.articleId, id), isNotNull(articleAttachment.pendingRemovalAt)),
+      );
+    const liveAttachmentIds = await liveAttachmentIdsFor(tx, id);
+    if (changedFields.length === 0 && liveAttachmentIds.length === draftRow.attachmentIds.length) {
+      // Nothing actually changed (draft saved, then untouched) — still clear it, but
+      // don't mint an empty version.
+      await tx.update(articleVersion).set({ status: 'discarded' }).where(eq(articleVersion.id, draftRow.id));
+      return {
+        ok: true,
+        article: { ...toDetail(existing), attachments: await attachmentsFor(tx, id), draft: null },
+      };
+    }
+    if (liveAttachmentIds.sort().join(',') !== draftRow.attachmentIds.slice().sort().join(',')) {
+      changedFields.push('attachments');
+    }
+
+    const nextVersion = existing.version + 1;
     const [row] = await tx
       .update(article)
-      .set({ state: 'published', publishedBy: ctx.agentId, publishedAt: new Date() })
+      .set({
+        title: draftRow.title,
+        body: draftRow.body,
+        keywords: draftRow.keywords,
+        version: nextVersion,
+        publishedBy: ctx.agentId,
+        publishedAt: new Date(),
+      })
       .where(eq(article.id, id))
       .returning();
+    await tx
+      .update(articleVersion)
+      .set({
+        status: 'published',
+        version: nextVersion,
+        attachmentIds: liveAttachmentIds,
+        changedFields,
+        actorId: ctx.agentId,
+      })
+      .where(eq(articleVersion.id, draftRow.id));
     await upsertArticleObject({
       id: row!.id,
       title: row!.title,
@@ -418,13 +530,10 @@ export async function publishArticle(ctx: AgentContext, id: string): Promise<Pub
       intentId: row!.intentId,
       workspaceId: row!.workspaceId,
     });
+
     return {
       ok: true,
-      article: {
-        ...toDetail(row!),
-        attachments: await attachmentsFor(tx, id),
-        draft: await draftFor(tx, id),
-      },
+      article: { ...toDetail(row!), attachments: await attachmentsFor(tx, id), draft: null },
     };
   });
 }

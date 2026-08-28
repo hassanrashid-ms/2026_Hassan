@@ -3,10 +3,12 @@ import { requireTeamLeadOrAdmin } from '../../shared/middleware/requireTeamLeadO
 import {
   archiveArticleHandler,
   createArticleHandler,
+  discardArticleDraftHandler,
   finalizeArticleAttachmentHandler,
   getArticleHandler,
   listArticlesHandler,
   publishArticleHandler,
+  saveArticleDraftHandler,
   updateArticleHandler,
   generateKeywordsHandler,
 } from '../controllers/articlesController.ts';
@@ -16,6 +18,8 @@ articlesRouter.get('/articles', listArticlesHandler);
 articlesRouter.get('/articles/:id', getArticleHandler);
 articlesRouter.post('/articles', createArticleHandler);
 articlesRouter.patch('/articles/:id', updateArticleHandler);
+articlesRouter.patch('/articles/:id/draft', saveArticleDraftHandler);
+articlesRouter.delete('/articles/:id/draft', discardArticleDraftHandler);
 // Building (create/edit a draft) is every role's; publishing and archiving —
 // "putting things in front of players" / taking them away — are Team Lead +
 // Admin only, same split formsRouter.ts already enforces for forms.

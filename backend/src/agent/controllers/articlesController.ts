@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   CreateArticleBody,
   FinalizeArticleAttachmentBody,
+  SaveArticleDraftBody,
   UpdateArticleBody,
 } from '@support/types';
 import { sendError } from '../../errors.ts';
@@ -10,10 +11,12 @@ import { deleteObject } from '../../shared/storage/presign.ts';
 import {
   archiveArticle,
   createArticle,
+  discardArticleDraft,
   finalizeArticleAttachment,
   getArticle,
   listArticles,
   publishArticle,
+  saveArticleDraft,
   updateArticle,
   generateKeywords,
 } from '../services/articlesService.ts';
@@ -77,6 +80,47 @@ export const updateArticleHandler: RequestHandler = async (req, res) => {
       return;
     }
     sendError(res, 409, 'invalid_request', 'Article is not a draft.');
+    return;
+  }
+  res.status(200).json(result.article);
+};
+
+export const saveArticleDraftHandler: RequestHandler = async (req, res) => {
+  const params = ArticleIdParams.safeParse(req.params);
+  const body = SaveArticleDraftBody.safeParse(req.body);
+  if (!params.success || !body.success) {
+    sendError(res, 422, 'invalid_request', 'Invalid draft payload.');
+    return;
+  }
+  const result = await saveArticleDraft(req.agent!, params.data.id, {
+    title: body.data.title,
+    body: body.data.body,
+    keywords: body.data.keywords,
+  });
+  if (!result.ok) {
+    if (result.reason === 'not_found') {
+      sendError(res, 404, 'not_found', 'Article not found.');
+      return;
+    }
+    sendError(res, 409, 'invalid_request', 'Article is not published.');
+    return;
+  }
+  res.status(200).json(result.article);
+};
+
+export const discardArticleDraftHandler: RequestHandler = async (req, res) => {
+  const params = ArticleIdParams.safeParse(req.params);
+  if (!params.success) {
+    sendError(res, 422, 'invalid_request', 'id must be a uuid.');
+    return;
+  }
+  const result = await discardArticleDraft(req.agent!, params.data.id);
+  if (!result.ok) {
+    if (result.reason === 'not_found') {
+      sendError(res, 404, 'not_found', 'Article not found.');
+      return;
+    }
+    sendError(res, 409, 'invalid_request', 'No draft to discard.');
     return;
   }
   res.status(200).json(result.article);

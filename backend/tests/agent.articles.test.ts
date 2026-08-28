@@ -407,10 +407,67 @@ describe('draft overlay on a published article', () => {
     expect(res.body.draft).toBeNull();
     expect(res.body.title).toBe('Original title');
     const { rows } = await ownerPool.query(
-      `select status from article_version where article_id = $1`,
+      `select status from article_version where article_id = $1 and status = 'discarded'`,
       [id],
     );
-    expect(rows[0].status).toBe('discarded');
+    expect(rows).toHaveLength(1);
+  });
+
+  it('publishing a draft bumps the version and clears the draft', async () => {
+    const workspaceId = await seedWorkspace();
+    const { token } = await seedAgent(workspaceId, 'team_lead');
+    const id = await publishedArticle(workspaceId, token);
+    await request(app)
+      .patch(`/articles/${id}/draft`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ title: 'v2 title', body: 'v2 body' })
+      .expect(200);
+
+    const res = await request(app)
+      .post(`/articles/${id}/publish`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+
+    expect(res.body.title).toBe('v2 title');
+    expect(res.body.version).toBe(2);
+    expect(res.body.draft).toBeNull();
+    expect(upsertArticleObject).toHaveBeenCalledWith(
+      expect.objectContaining({ id, title: 'v2 title', body: 'v2 body' }),
+    );
+
+    const { rows } = await ownerPool.query(
+      `select version, status, changed_fields from article_version where article_id = $1 order by created_at`,
+      [id],
+    );
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({ version: 1, status: 'published' });
+    expect(rows[1]).toMatchObject({ version: 2, status: 'published' });
+    expect(rows[1].changed_fields.sort()).toEqual(['body', 'title']);
+  });
+
+  it('publishing with no draft is a no-op for version history (first-ever publish only)', async () => {
+    const workspaceId = await seedWorkspace();
+    const { token } = await seedAgent(workspaceId, 'team_lead');
+    const created = await request(app)
+      .post('/articles')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ title: 'X', body: 'Y' })
+      .expect(201);
+
+    await request(app)
+      .post(`/articles/${created.body.id}/publish`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+
+    const { rows } = await ownerPool.query(
+      `select version, status from article_version where article_id = $1`,
+      [created.body.id],
+    );
+    expect(rows).toEqual([{ version: 1, status: 'published' }]);
   });
 });
 
