@@ -11,6 +11,8 @@ import type {
   ArchiveIntentResponse,
   ArchiveSubintentResponse,
   ArticleAttachmentView,
+  ArticleVersionSnapshotView,
+  ArticleVersionsListResponse,
   AskResolvedResponse,
   AttachTagResponse,
   BotConfigView,
@@ -521,7 +523,7 @@ export function archiveArticle(token: string, id: string): Promise<AgentArticleD
 export function finalizeArticleAttachment(
   token: string,
   articleId: string,
-  input: { key: string; filename: string; mimeType: string; byteSize: number },
+  input: { key: string; filename: string; mimeType: string; byteSize: number; draft?: boolean },
 ): Promise<ArticleAttachmentView> {
   return call(`/agent/articles/${articleId}/attachments`, token, {
     method: 'POST',
@@ -530,7 +532,61 @@ export function finalizeArticleAttachment(
       filename: input.filename,
       mime_type: input.mimeType,
       byte_size: input.byteSize,
+      draft: input.draft,
     }),
+  });
+}
+
+export function saveArticleDraft(
+  token: string,
+  articleId: string,
+  patch: { title?: string; body?: string; keywords?: string[] },
+): Promise<AgentArticleDetail> {
+  return call(`/agent/articles/${articleId}/draft`, token, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
+}
+
+export function discardArticleDraft(token: string, articleId: string): Promise<AgentArticleDetail> {
+  return call(`/agent/articles/${articleId}/draft`, token, { method: 'DELETE' });
+}
+
+export function fetchArticleVersions(
+  token: string,
+  articleId: string,
+  opts: { limit?: number; cursor?: number } = {},
+): Promise<ArticleVersionsListResponse> {
+  const params = new URLSearchParams();
+  if (opts.limit) params.set('limit', String(opts.limit));
+  if (opts.cursor) params.set('cursor', String(opts.cursor));
+  const query = params.toString();
+  return call(`/agent/articles/${articleId}/versions${query ? `?${query}` : ''}`, token);
+}
+
+export function fetchArticleVersion(
+  token: string,
+  articleId: string,
+  version: number,
+): Promise<ArticleVersionSnapshotView> {
+  return call(`/agent/articles/${articleId}/versions/${version}`, token);
+}
+
+export function restoreArticleVersion(
+  token: string,
+  articleId: string,
+  version: number,
+): Promise<AgentArticleDetail> {
+  return call(`/agent/articles/${articleId}/versions/${version}/restore`, token, { method: 'POST' });
+}
+
+export function removeArticleAttachment(
+  token: string,
+  articleId: string,
+  attachmentId: string,
+): Promise<AgentArticleDetail> {
+  return call(`/agent/articles/${articleId}/attachments/${attachmentId}`, token, {
+    method: 'DELETE',
   });
 }
 
