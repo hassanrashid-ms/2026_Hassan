@@ -56,6 +56,42 @@ describe('POST /uploads (player)', () => {
       .expect(422);
     expect(res.body.error.code).toBe('unsupported_media_type');
   });
+
+  it('returns a presigned PUT url for an allowed video type', async () => {
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const token = await mintToken({
+      workspace_id: workspaceId,
+      player_id: playerId,
+      external_player_id: 'p1',
+    });
+
+    const res = await request(app)
+      .post('/uploads')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ filename: 'clip.mp4', content_type: 'video/mp4', byte_size: 20 * 1024 * 1024 })
+      .expect(200);
+
+    expect(res.body.key).toContain(`pending/${workspaceId}/${playerId}/`);
+    expect(res.body.key).toMatch(/\.mp4$/);
+  });
+
+  it('422s for a video over the 50 MB video cap', async () => {
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const token = await mintToken({
+      workspace_id: workspaceId,
+      player_id: playerId,
+      external_player_id: 'p1',
+    });
+
+    const res = await request(app)
+      .post('/uploads')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ filename: 'huge.webm', content_type: 'video/webm', byte_size: 51 * 1024 * 1024 })
+      .expect(422);
+    expect(res.body.error.code).toBe('invalid_request');
+  });
 });
 
 describe('DELETE /uploads/:key (player)', () => {

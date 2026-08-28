@@ -1,6 +1,7 @@
 import type { RequestHandler } from 'express';
 import { RequestUploadBody } from '@support/types';
 import { sendError } from '../../errors.ts';
+import { maxBytesForAttachment } from '../../shared/storage/presign.ts';
 import { cancelPlayerUpload, requestPlayerUpload } from '../services/uploadsService.ts';
 
 export const postUploadRequestHandler: RequestHandler = async (req, res) => {
@@ -10,17 +11,22 @@ export const postUploadRequestHandler: RequestHandler = async (req, res) => {
     sendError(res, 422, 'invalid_request', 'filename, content_type and byte_size are required.');
     return;
   }
-  if (body.data.byte_size > 10 * 1024 * 1024) {
-    sendError(res, 422, 'invalid_request', 'byte_size exceeds the 10 MB limit.');
+  if (body.data.byte_size > maxBytesForAttachment(body.data.content_type)) {
+    sendError(res, 422, 'invalid_request', 'byte_size exceeds the size limit for this file type.');
     return;
   }
   const result = await requestPlayerUpload(ctx, body.data);
   if (result.outcome === 'invalid_media_type') {
-    sendError(res, 422, 'unsupported_media_type', 'Only PNG, JPEG, WEBP and GIF are accepted.');
+    sendError(
+      res,
+      422,
+      'unsupported_media_type',
+      'Only PNG, JPEG, WEBP, GIF, MP4 or WEBM are accepted.',
+    );
     return;
   }
   if (result.outcome === 'too_large') {
-    sendError(res, 422, 'invalid_request', 'byte_size exceeds the 10 MB limit.');
+    sendError(res, 422, 'invalid_request', 'byte_size exceeds the size limit for this file type.');
     return;
   }
   res

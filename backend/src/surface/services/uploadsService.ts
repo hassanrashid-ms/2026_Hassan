@@ -2,9 +2,9 @@ import { randomUUID } from 'node:crypto';
 import type { z } from 'zod';
 import type { RequestUploadBody, RequestUploadResponse } from '@support/types';
 import {
-  ALLOWED_IMAGE_MIME_TYPES,
-  MAX_ATTACHMENT_BYTES,
+  ALLOWED_CHAT_ATTACHMENT_MIME_TYPES,
   deleteObject,
+  maxBytesForAttachment,
   presignPutObject,
 } from '../../shared/storage/presign.ts';
 import type { PlayerContext } from '../../shared/middleware/requirePlayerToken.ts';
@@ -19,6 +19,10 @@ function extensionFor(contentType: string): string {
       return 'webp';
     case 'image/gif':
       return 'gif';
+    case 'video/mp4':
+      return 'mp4';
+    case 'video/webm':
+      return 'webm';
     default:
       return 'bin';
   }
@@ -42,13 +46,13 @@ export async function requestPlayerUpload(
   body: z.infer<typeof RequestUploadBody>,
 ): Promise<RequestUploadResult> {
   if (
-    !ALLOWED_IMAGE_MIME_TYPES.includes(
-      body.content_type as (typeof ALLOWED_IMAGE_MIME_TYPES)[number],
+    !ALLOWED_CHAT_ATTACHMENT_MIME_TYPES.includes(
+      body.content_type as (typeof ALLOWED_CHAT_ATTACHMENT_MIME_TYPES)[number],
     )
   ) {
     return { outcome: 'invalid_media_type' };
   }
-  if (body.byte_size > MAX_ATTACHMENT_BYTES) {
+  if (body.byte_size > maxBytesForAttachment(body.content_type)) {
     return { outcome: 'too_large' };
   }
   const key = buildPendingPlayerKey(ctx.workspaceId, ctx.playerId, body.content_type);
