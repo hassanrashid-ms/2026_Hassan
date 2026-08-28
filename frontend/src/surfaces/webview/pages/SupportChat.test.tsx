@@ -189,7 +189,7 @@ describe('SupportChat attachment gating', () => {
     // always-false initial disabled state: allowAttachments derives from
     // messagesQuery.data, which is still undefined on the very first render.
     await screen.findByText('my game crashed');
-    expect(screen.queryByLabelText('Attach image')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Attach image or video')).not.toBeInTheDocument();
   });
 
   it.each(['open', 'escalated', 'awaiting_player'] as const)(
@@ -198,7 +198,7 @@ describe('SupportChat attachment gating', () => {
       vi.mocked(fetchPlayerMessages).mockResolvedValue(messages({ status }));
       renderChat();
       await screen.findByText('my game crashed');
-      expect(screen.getByLabelText('Attach image')).toBeInTheDocument();
+      expect(screen.getByLabelText('Attach image or video')).toBeInTheDocument();
     },
   );
 });

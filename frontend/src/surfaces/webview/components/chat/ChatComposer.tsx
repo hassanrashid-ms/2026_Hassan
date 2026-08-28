@@ -4,12 +4,25 @@ import { cn } from '@/surfaces/webview/lib/cn';
 import { post } from '@/services/bridgeService';
 import type { UploadedAttachment } from '@/features/chat/components/Composer';
 
-// Mirrors backend/src/shared/storage/presign.ts's ALLOWED_IMAGE_MIME_TYPES /
-// MAX_ATTACHMENT_BYTES — same duplication rationale as
-// features/chat/components/Composer.tsx's own copy of these two constants: a
+// Mirrors backend/src/shared/storage/presign.ts's ALLOWED_CHAT_ATTACHMENT_MIME_TYPES /
+// maxBytesForAttachment — same duplication rationale as
+// features/chat/components/Composer.tsx's own copy of these constants: a
 // fast client-side rejection that matches what the server would reject anyway.
-const ALLOWED_IMAGE_MIME_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
-const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+const ALLOWED_CHAT_ATTACHMENT_MIME_TYPES = [
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/gif',
+  'video/mp4',
+  'video/webm',
+];
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
+const VIDEO_MIME_TYPES = new Set(['video/mp4', 'video/webm']);
+
+function maxBytesForAttachment(mimeType: string): number {
+  return VIDEO_MIME_TYPES.has(mimeType) ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
+}
 
 /**
  * Same behaviour as features/chat/components/Composer.tsx — trim, ignore empty,
@@ -65,13 +78,18 @@ export function ChatComposer({
     if (!onUpload) return;
     setUploadError(null);
 
-    if (!ALLOWED_IMAGE_MIME_TYPES.includes(file.type)) {
-      setUploadError('Only PNG, JPEG, WebP or GIF images are supported.');
+    if (!ALLOWED_CHAT_ATTACHMENT_MIME_TYPES.includes(file.type)) {
+      setUploadError('Only PNG, JPEG, WebP, GIF images or MP4/WebM videos are supported.');
       if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
-    if (file.size > MAX_ATTACHMENT_BYTES) {
-      setUploadError('Images must be 10 MB or smaller.');
+    const cap = maxBytesForAttachment(file.type);
+    if (file.size > cap) {
+      setUploadError(
+        VIDEO_MIME_TYPES.has(file.type)
+          ? 'Videos must be 50 MB or smaller.'
+          : 'Images must be 10 MB or smaller.',
+      );
       if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
@@ -100,11 +118,20 @@ export function ChatComposer({
     >
       {pendingAttachment && previewUrl && (
         <div className="flex items-center gap-2">
-          <img
-            src={previewUrl}
-            alt={pendingAttachment.filename}
-            className="h-14 w-14 rounded-card object-cover"
-          />
+          {VIDEO_MIME_TYPES.has(pendingAttachment.mimeType) ? (
+            <video
+              data-testid="pending-video-preview"
+              src={previewUrl}
+              muted
+              className="h-14 w-14 rounded-card object-cover"
+            />
+          ) : (
+            <img
+              src={previewUrl}
+              alt={pendingAttachment.filename}
+              className="h-14 w-14 rounded-card object-cover"
+            />
+          )}
           <button
             type="button"
             aria-label="Remove attachment"
@@ -122,8 +149,8 @@ export function ChatComposer({
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/png,image/jpeg,image/webp,image/gif"
-              aria-label="Attach image"
+              accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm"
+              aria-label="Attach image or video"
               className="hidden"
               disabled={disabled || uploading}
               onChange={(event) => {
@@ -133,7 +160,7 @@ export function ChatComposer({
             />
             <button
               type="button"
-              aria-label="Choose image"
+              aria-label="Choose image or video"
               disabled={disabled || uploading}
               onClick={() => {
                 // Must post before .click(): the native picker (and any OS
