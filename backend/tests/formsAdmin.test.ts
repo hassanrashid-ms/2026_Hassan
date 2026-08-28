@@ -106,7 +106,19 @@ describe('formsService', () => {
     expect(updated.form.draft!.fields).toEqual([]);
   });
 
-  it('rejects a field list containing attachment or time', async () => {
+  it('rejects a field list containing time', async () => {
+    const workspaceId = await seedWorkspace();
+    const { ctx } = await seedAgentWithRole(workspaceId, 'admin');
+    const created = await createForm(ctx, 'Refund');
+
+    const withTime: FormField[] = [
+      { key: 'when', label: 'When', type: 'time', isRequired: false, position: 0 },
+    ];
+    const result = await updateForm(ctx, created.id, { fields: withTime });
+    expect(result).toEqual({ ok: false, reason: 'forbidden_field_type' });
+  });
+
+  it('accepts a field list containing attachment', async () => {
     const workspaceId = await seedWorkspace();
     const { ctx } = await seedAgentWithRole(workspaceId, 'admin');
     const created = await createForm(ctx, 'Refund');
@@ -115,7 +127,7 @@ describe('formsService', () => {
       { key: 'proof', label: 'Proof', type: 'attachment', isRequired: false, position: 0 },
     ];
     const result = await updateForm(ctx, created.id, { fields: withAttachment });
-    expect(result).toEqual({ ok: false, reason: 'forbidden_field_type' });
+    expect(result.ok).toBe(true);
   });
 
   it('publish rejects when the draft is empty', async () => {

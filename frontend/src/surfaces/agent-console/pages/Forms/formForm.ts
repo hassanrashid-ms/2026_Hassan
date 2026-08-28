@@ -1,12 +1,21 @@
 import type { FormField, FormFieldType } from '@support/types';
 
 /**
- * The five types the builder offers. `attachment` and `time` are declared in
- * `FORM_FIELD_TYPES` (`@support/types`) but must never appear in this picker —
- * `attachment` is declared-but-inert until the attachment table exists, `time`
- * is declared and unused, per the forms-builder-admin design doc.
+ * The six types the builder offers. `time` is declared in `FORM_FIELD_TYPES`
+ * (`@support/types`) but must never appear in this picker — it is declared
+ * and unused, per the forms-builder-admin design doc. `attachment` is
+ * agent-console-selectable but has no upload UI here: the field only asks a
+ * player for a photo, and only the player-facing webview implements picking
+ * and sending one.
  */
-export const BUILDER_FIELD_TYPES = ['short_text', 'long_text', 'number', 'date', 'choice'] as const;
+export const BUILDER_FIELD_TYPES = [
+  'short_text',
+  'long_text',
+  'number',
+  'date',
+  'choice',
+  'attachment',
+] as const;
 export type BuilderFieldType = (typeof BUILDER_FIELD_TYPES)[number];
 
 export const FIELD_TYPE_LABELS: Record<BuilderFieldType, string> = {
@@ -15,6 +24,7 @@ export const FIELD_TYPE_LABELS: Record<BuilderFieldType, string> = {
   number: 'Number',
   date: 'Date',
   choice: 'Choice',
+  attachment: 'Attachment (photo)',
 };
 
 /**

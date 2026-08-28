@@ -13,7 +13,7 @@ import type { AgentContext } from '../../shared/middleware/requireAgentSession.t
 import type { Tx } from '../../shared/db/withWorkspace.ts';
 
 /** Field types declared in the shared enum but never offered by the builder — see forms.ts. */
-const FORBIDDEN_FIELD_TYPES = new Set<FormField['type']>(['attachment', 'time']);
+const FORBIDDEN_FIELD_TYPES = new Set<FormField['type']>(['time']);
 
 function hasForbiddenFieldType(fields: FormField[]): boolean {
   return fields.some((f) => FORBIDDEN_FIELD_TYPES.has(f.type));

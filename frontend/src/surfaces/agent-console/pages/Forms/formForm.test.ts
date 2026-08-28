@@ -68,10 +68,10 @@ describe('validateFields', () => {
 });
 
 describe('isBuilderFieldType', () => {
-  it('excludes attachment and time', () => {
-    expect(BUILDER_FIELD_TYPES).not.toContain('attachment');
+  it('excludes time but includes attachment', () => {
+    expect(BUILDER_FIELD_TYPES).toContain('attachment');
     expect(BUILDER_FIELD_TYPES).not.toContain('time');
-    expect(isBuilderFieldType('attachment')).toBe(false);
+    expect(isBuilderFieldType('attachment')).toBe(true);
     expect(isBuilderFieldType('time')).toBe(false);
     expect(isBuilderFieldType('choice')).toBe(true);
   });
