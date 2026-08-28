@@ -5,11 +5,11 @@ import { MarkAgentReadBody, SendAgentMessageBody, type AgentMessageView } from '
 import { postMessage, toAgentView, toPlayerView } from '../../domain/conversations/index.ts';
 import { attachment, conversation, message } from '../../shared/db/schema/index.ts';
 import {
-  ALLOWED_IMAGE_MIME_TYPES,
-  MAX_ATTACHMENT_BYTES,
+  ALLOWED_CHAT_ATTACHMENT_MIME_TYPES,
   copyObject,
   deleteObject,
   headObject,
+  maxBytesForAttachment,
 } from '../../shared/storage/presign.ts';
 import { withWorkspace } from '../../shared/db/withWorkspace.ts';
 import { appendEvent } from '../../shared/events/appendEvent.ts';
@@ -61,10 +61,10 @@ export async function sendAgentMessage(
     // presign-time checks alone would trust whatever the object turned out
     // to actually be.
     if (
-      !ALLOWED_IMAGE_MIME_TYPES.includes(
-        real.contentType as (typeof ALLOWED_IMAGE_MIME_TYPES)[number],
+      !ALLOWED_CHAT_ATTACHMENT_MIME_TYPES.includes(
+        real.contentType as (typeof ALLOWED_CHAT_ATTACHMENT_MIME_TYPES)[number],
       ) ||
-      real.contentLength > MAX_ATTACHMENT_BYTES
+      real.contentLength > maxBytesForAttachment(real.contentType)
     ) {
       return { outcome: 'attachment_mismatch' };
     }

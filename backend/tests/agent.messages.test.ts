@@ -176,6 +176,43 @@ describe('POST /agent/messages with an attachment', () => {
     expect(rows[0].storage_key).toContain(`ws/${workspaceId}/attachments/`);
   });
 
+  it('claims a video attachment', async () => {
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
+    const { agentId, token } = await setupAssignedAgent(workspaceId, conversationId);
+
+    const key = `pending/${workspaceId}/${agentId}/${crypto.randomUUID()}.mp4`;
+    const body = Buffer.from('fake-mp4-bytes');
+    const { url } = await presignPutObject({
+      key,
+      contentType: 'video/mp4',
+      contentLength: body.length,
+    });
+    await fetch(url, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'video/mp4', 'Content-Length': String(body.length) },
+      body,
+    });
+
+    const res = await request(app)
+      .post('/messages')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({
+        conversation_id: conversationId,
+        body: '',
+        attachment: { key, filename: 'clip.mp4', mime_type: 'video/mp4', byte_size: body.length },
+      })
+      .expect(200);
+
+    expect(res.body.message.attachment).toMatchObject({
+      filename: 'clip.mp4',
+      mime_type: 'video/mp4',
+      byte_size: body.length,
+    });
+  });
+
   it('422s with attachment_not_found when the pending key does not exist', async () => {
     const workspaceId = await seedWorkspace();
     const playerId = await seedPlayer(workspaceId);
