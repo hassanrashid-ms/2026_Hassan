@@ -43,8 +43,10 @@ import {
 import { canBuildForms, type StoredAgentSession } from '../../../lib/agentSession.ts';
 import { useArticleAutosave } from '../hooks/useArticleAutosave.ts';
 import { ImageDialogAdapter } from './ImageDialogAdapter.tsx';
+import { ArticleVersionHistoryTab } from './ArticleVersionHistoryTab.tsx';
 import { Button } from '../../../components/ui/button.tsx';
 import { Input } from '../../../components/ui/input.tsx';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../components/ui/tabs.tsx';
 import {
   Select,
   SelectContent,
@@ -187,6 +189,7 @@ function ArticleEditorForm({
     article?.attachments ?? [],
   );
   const [resolvedArticleId, setResolvedArticleId] = useState(articleId);
+  const [activeTab, setActiveTab] = useState<'edit' | 'history'>('edit');
   // The value MDXEditor's `markdown` prop is seeded with. Deliberately NOT
   // kept in sync with draft.body on every keystroke — MDXEditor treats a
   // prop change as an authoritative external reset and re-parses the whole
@@ -281,7 +284,7 @@ function ArticleEditorForm({
   const state = article?.state ?? 'draft';
   const editable = articleId === null || canEditFields(state);
 
-  return (
+  const formContent = (
     <>
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
         {state === 'archived' && (
@@ -484,6 +487,39 @@ function ArticleEditorForm({
           </div>
         </div>
       </div>
+    </>
+  );
+
+  return (
+    <>
+      {hasLiveContent ? (
+        <Tabs
+          value={activeTab}
+          onValueChange={(v) => setActiveTab(v as 'edit' | 'history')}
+          className="flex min-h-0 flex-1 flex-col gap-0"
+        >
+          <TabsList className="mx-4 mt-2 w-fit">
+            <TabsTrigger value="edit">Edit</TabsTrigger>
+            <TabsTrigger value="history">History</TabsTrigger>
+          </TabsList>
+          <TabsContent
+            value="edit"
+            className="flex min-h-0 flex-1 flex-col gap-0 data-[state=inactive]:hidden"
+            forceMount
+          >
+            {formContent}
+          </TabsContent>
+          <TabsContent value="history" className="min-h-0 flex-1 overflow-auto p-4">
+            <ArticleVersionHistoryTab
+              token={token}
+              articleId={resolvedArticleId!}
+              onRestored={() => setActiveTab('edit')}
+            />
+          </TabsContent>
+        </Tabs>
+      ) : (
+        formContent
+      )}
 
       <SheetFooter className="flex-row justify-end gap-2 border-t border-slate-200">
         <div className="flex items-center gap-2 text-xs text-muted">

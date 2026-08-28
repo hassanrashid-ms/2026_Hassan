@@ -74,7 +74,18 @@ export function ArticleTable({
                     {displayTitle(a.title, a.body)}
                   </TableCell>
                   <TableCell>
-                    <Badge variant={STATE_BADGE_VARIANT[a.state]}>{a.state}</Badge>
+                    <div className="flex items-center gap-1">
+                      <Badge variant={STATE_BADGE_VARIANT[a.state]}>{a.state}</Badge>
+                      {a.state === 'published' && (
+                        <span className="text-xs text-muted">v{a.version}</span>
+                      )}
+                      {a.has_draft && (
+                        <span
+                          className="h-1.5 w-1.5 rounded-full bg-amber-500"
+                          title="Draft in progress"
+                        />
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="text-muted">
                     {new Date(a.published_at ?? a.created_at).toLocaleDateString()}

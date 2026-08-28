@@ -102,12 +102,22 @@ async function draftFor(tx: Tx, articleId: string): Promise<ArticleDraftView> {
 export async function listArticles(ctx: AgentContext): Promise<AgentArticlesResponse> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
     const rows = await tx.select().from(article).orderBy(desc(article.createdAt));
+    const draftArticleIds = new Set(
+      (
+        await tx
+          .select({ articleId: articleVersion.articleId })
+          .from(articleVersion)
+          .where(eq(articleVersion.status, 'draft'))
+      ).map((r) => r.articleId),
+    );
     return {
       articles: rows.map((r) => ({
         id: r.id,
         title: r.title,
         body: r.body,
         state: r.state,
+        version: r.version,
+        has_draft: draftArticleIds.has(r.id),
         intent_id: r.intentId,
         created_at: r.createdAt.toISOString(),
         published_at: r.publishedAt ? r.publishedAt.toISOString() : null,
