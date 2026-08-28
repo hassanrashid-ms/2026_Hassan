@@ -288,8 +288,8 @@ function FieldInput({
         <div className="flex flex-col gap-2">
           <input
             type="file"
-            accept="image/png,image/jpeg,image/webp,image/gif"
-            aria-label="Attach image"
+            accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm"
+            aria-label="Attach image or video"
             disabled={disabled}
             // Must post before the native picker opens (it starts as this
             // click's default action): the SDK's resume watchdog needs to
