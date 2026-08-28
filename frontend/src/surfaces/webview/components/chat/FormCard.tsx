@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { FormField, PlayerFormView } from '@support/types';
 import { SupportButton } from '@/surfaces/webview/components/SupportButton';
+import { post } from '@/services/bridgeService';
 import { cn } from '@/surfaces/webview/lib/cn';
 
 type FormCardProps = {
@@ -290,6 +291,10 @@ function FieldInput({
             accept="image/png,image/jpeg,image/webp,image/gif"
             aria-label="Attach image"
             disabled={disabled}
+            // Must post before the native picker opens (it starts as this
+            // click's default action): the SDK's resume watchdog needs to
+            // already know to expect the pause it's about to see.
+            onClick={() => post({ type: 'expect_native_dialog' })}
             onChange={(event) => {
               const file = event.target.files?.[0];
               if (file) onAttachmentPicked(file);

@@ -2,6 +2,7 @@ import { eq, isNull } from 'drizzle-orm';
 import { agent as agentTable, workspace, workspaceMember } from '../../shared/db/schema/index.ts';
 import { withoutWorkspace, withWorkspace } from '../../shared/db/withWorkspace.ts';
 import { signAgentSession } from '../../shared/auth/agentSession.ts';
+import { logger } from '../../shared/logging/logger.ts';
 
 export type DevAgentOption = { id: string; email: string; display_name: string };
 
@@ -54,6 +55,16 @@ export async function listDevAgents(): Promise<DevAgentOption[]> {
 
 export type DevLoginResult = { token: string; agent: { id: string; display_name: string } } | null;
 
+/**
+ * A first successful login is the acceptance — there is no separate "accept
+ * invite" step or UI for one. `invited` is a real gate elsewhere
+ * (reassignConversation, setAgentLeaveStatus both refuse it), so leaving it
+ * unset here would let an agent authenticate yet never become assignable.
+ * No change-log row: `appendChangeLog` requires a real actor, and the
+ * logging-in agent isn't acting on themselves as an admin would — same
+ * reasoning as the system-driven transition in leaveExpiry.ts. `logger.info`
+ * is the audit trail instead.
+ */
 export async function devLogin(agentId: string): Promise<DevLoginResult> {
   const agentRow = await withoutWorkspace(async (tx) => {
     const [row] = await tx
@@ -61,11 +72,19 @@ export async function devLogin(agentId: string): Promise<DevLoginResult> {
         id: agentTable.id,
         displayName: agentTable.displayName,
         isAdmin: agentTable.isAdmin,
+        status: agentTable.status,
       })
       .from(agentTable)
       .where(eq(agentTable.id, agentId))
       .limit(1);
-    return row ?? null;
+    if (!row) return null;
+
+    if (row.status === 'invited') {
+      await tx.update(agentTable).set({ status: 'active' }).where(eq(agentTable.id, row.id));
+      logger.info('auth', `agent ${row.id} accepted invite on first login`);
+    }
+
+    return row;
   });
   if (!agentRow) return null;
 

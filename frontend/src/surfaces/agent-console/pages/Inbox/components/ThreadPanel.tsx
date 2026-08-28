@@ -8,6 +8,7 @@ import type {
 } from '@support/types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Archive, Clock, MessageSquare, PanelRight, X } from 'lucide-react';
+import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { toast } from 'sonner';
 import {
   askResolved,
@@ -41,9 +42,10 @@ import {
   Composer,
   type UploadedAttachment,
 } from '../../../../../features/chat/components/Composer.tsx';
-import type { ChatMessage } from '../../../../../features/chat/components/types.ts';
+import type { ChatAttachment, ChatMessage } from '../../../../../features/chat/components/types.ts';
 import { Badge } from '../../../components/ui/badge.tsx';
 import { Button } from '../../../components/ui/button.tsx';
+import { Dialog, DialogContent, DialogTitle } from '../../../components/ui/dialog.tsx';
 import { STATUS_BADGE_VARIANT, formatStatus } from './ConversationRow.tsx';
 
 function toChatMessage(m: AgentMessageView): ChatMessage {
@@ -130,6 +132,7 @@ export function ThreadPanel({
 }) {
   const queryClient = useQueryClient();
   const [pending, setPending] = useState<PendingMessage[]>([]);
+  const [expandedImage, setExpandedImage] = useState<ChatAttachment | null>(null);
 
   const messagesQuery = useQuery({
     queryKey: ['conversation', conversationId, 'messages'],
@@ -358,147 +361,148 @@ export function ThreadPanel({
   const chatMessages = reconcilePending(serverMessages, pending);
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="flex shrink-0 items-center gap-2 border-b border-slate-200 px-4 py-3">
-        {onBack && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={onBack}
-            aria-label="Back to list"
-          >
-            <ArrowLeft className="size-4" />
-          </Button>
-        )}
-        <span className="text-sm font-medium">{playerExternalId}</span>
-        {status && <Badge variant={STATUS_BADGE_VARIANT[status]}>{formatStatus(status)}</Badge>}
-        {conversationId && priority && (
-          <PriorityPicker
-            token={token}
-            conversationId={conversationId}
-            currentPriority={priority}
-          />
-        )}
-        {conversationId && (
-          <SubintentPicker
-            token={token}
-            conversationId={conversationId}
-            currentSubintentId={subintent?.subintent_id}
-            currentSubintentName={
-              subintent
-                ? { intent_name: subintent.intent_name, subintent_name: subintent.subintent_name }
-                : null
-            }
-          />
-        )}
-        {tags.map((tag) => (
-          <Badge key={tag.id} className={tagBadgeClassName(tag.colorIndex)}>
-            {tag.name}
-            <button
-              type="button"
-              aria-label="Remove tag"
-              disabled={detach.isPending}
-              onClick={() => detach.mutate(tag.id)}
-            >
-              <X className="size-3" />
-            </button>
-          </Badge>
-        ))}
-        {conversationId && (
-          <TagPicker
-            token={token}
-            conversationId={conversationId}
-            attachedTagIds={tags.map((t) => t.id)}
-          />
-        )}
-        {conversationId && canBuildForms(loadAgentSession()) && (
-          <AssignPicker
-            token={token}
-            conversationId={conversationId}
-            currentAssigneeId={assignedAgentId}
-            currentAssigneeName={assignedAgentName}
-          />
-        )}
-        <div className="ml-auto flex items-center gap-2">
-          {takeOverAvailable && (
-            <Button
-              type="button"
-              size="sm"
-              disabled={takeOver.isPending}
-              onClick={() => takeOver.mutate()}
-            >
-              Take over
-            </Button>
-          )}
-          {claimAvailable && (
-            <Button
-              type="button"
-              size="sm"
-              disabled={claim.isPending}
-              onClick={() => claim.mutate()}
-            >
-              Take over
-            </Button>
-          )}
-          {/* Hidden outright when read-only: a disabled control here explains nothing. */}
-          {!readOnly && (askable || waiting) && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={!askable || ask.isPending}
-              // A real tooltip primitive isn't in this surface yet; the native
-              // title is enough for a disabled-state explanation.
-              title={waiting ? 'Waiting on player' : undefined}
-              onClick={() => ask.mutate()}
-            >
-              Ask if resolved
-            </Button>
-          )}
-          {escalatable && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={escalate.isPending}
-              onClick={() => escalate.mutate()}
-            >
-              Escalate
-            </Button>
-          )}
-          {onToggleRail && (
+    <>
+      <div className="flex h-full min-h-0 flex-col">
+        <div className="flex shrink-0 items-center gap-2 border-b border-slate-200 px-4 py-3">
+          {onBack && (
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              aria-label="Player context"
-              aria-pressed={railOpen}
-              onClick={onToggleRail}
+              onClick={onBack}
+              aria-label="Back to list"
             >
-              <PanelRight className="size-4" />
+              <ArrowLeft className="size-4" />
             </Button>
           )}
+          <span className="text-sm font-medium">{playerExternalId}</span>
+          {status && <Badge variant={STATUS_BADGE_VARIANT[status]}>{formatStatus(status)}</Badge>}
+          {conversationId && priority && (
+            <PriorityPicker
+              token={token}
+              conversationId={conversationId}
+              currentPriority={priority}
+            />
+          )}
+          {conversationId && (
+            <SubintentPicker
+              token={token}
+              conversationId={conversationId}
+              currentSubintentId={subintent?.subintent_id}
+              currentSubintentName={
+                subintent
+                  ? { intent_name: subintent.intent_name, subintent_name: subintent.subintent_name }
+                  : null
+              }
+            />
+          )}
+          {tags.map((tag) => (
+            <Badge key={tag.id} className={tagBadgeClassName(tag.colorIndex)}>
+              {tag.name}
+              <button
+                type="button"
+                aria-label="Remove tag"
+                disabled={detach.isPending}
+                onClick={() => detach.mutate(tag.id)}
+              >
+                <X className="size-3" />
+              </button>
+            </Badge>
+          ))}
+          {conversationId && (
+            <TagPicker
+              token={token}
+              conversationId={conversationId}
+              attachedTagIds={tags.map((t) => t.id)}
+            />
+          )}
+          {conversationId && canBuildForms(loadAgentSession()) && (
+            <AssignPicker
+              token={token}
+              conversationId={conversationId}
+              currentAssigneeId={assignedAgentId}
+              currentAssigneeName={assignedAgentName}
+            />
+          )}
+          <div className="ml-auto flex items-center gap-2">
+            {takeOverAvailable && (
+              <Button
+                type="button"
+                size="sm"
+                disabled={takeOver.isPending}
+                onClick={() => takeOver.mutate()}
+              >
+                Take over
+              </Button>
+            )}
+            {claimAvailable && (
+              <Button
+                type="button"
+                size="sm"
+                disabled={claim.isPending}
+                onClick={() => claim.mutate()}
+              >
+                Take over
+              </Button>
+            )}
+            {/* Hidden outright when read-only: a disabled control here explains nothing. */}
+            {!readOnly && (askable || waiting) && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={!askable || ask.isPending}
+                // A real tooltip primitive isn't in this surface yet; the native
+                // title is enough for a disabled-state explanation.
+                title={waiting ? 'Waiting on player' : undefined}
+                onClick={() => ask.mutate()}
+              >
+                Ask if resolved
+              </Button>
+            )}
+            {escalatable && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={escalate.isPending}
+                onClick={() => escalate.mutate()}
+              >
+                Escalate
+              </Button>
+            )}
+            {onToggleRail && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label="Player context"
+                aria-pressed={railOpen}
+                onClick={onToggleRail}
+              >
+                <PanelRight className="size-4" />
+              </Button>
+            )}
+          </div>
         </div>
-      </div>
-      {/* Without this an agent lands on June's transcript and reasonably
+        {/* Without this an agent lands on June's transcript and reasonably
           concludes the live ticket changed under them. */}
-      {readOnly && (
-        <div
-          role="status"
-          className="flex shrink-0 items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-900"
-        >
-          <Archive className="size-3.5 shrink-0" />
-          Viewing an earlier ticket
-          {ticketNumber != null && ` · #${ticketNumber}`}
-          {/* "opened", not "resolved": the only date the API carries is
+        {readOnly && (
+          <div
+            role="status"
+            className="flex shrink-0 items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-900"
+          >
+            <Archive className="size-3.5 shrink-0" />
+            Viewing an earlier ticket
+            {ticketNumber != null && ` · #${ticketNumber}`}
+            {/* "opened", not "resolved": the only date the API carries is
               created_at, and labelling it with the ticket's status would put a
               date in front of the agent that is not the date of that status. */}
-          {openedAt && ` · ${status ?? 'resolved'} · opened ${formatTicketDate(openedAt)}`}
-        </div>
-      )}
-      <div className="min-h-0 flex-1">
-        {/* Keyed on the conversation so switching threads remounts the list at
+            {openedAt && ` · ${status ?? 'resolved'} · opened ${formatTicketDate(openedAt)}`}
+          </div>
+        )}
+        <div className="min-h-0 flex-1">
+          {/* Keyed on the conversation so switching threads remounts the list at
             the bottom instead of holding the previous thread's scroll offset.
 
             Not rendered until the messages are here. Virtuoso applies
@@ -507,65 +511,104 @@ export function ThreadPanel({
             the thread opened was then left to followOutput catching the first
             data arrival. Mounting with the real transcript makes the initial
             position the deterministic thing it reads as. */}
-        {messagesQuery.data ? (
-          <ChatThread
-            key={conversationId}
-            messages={chatMessages}
-            currentAuthorType="agent"
-            onRetry={onRetry}
-            playerLabel={playerExternalId}
-          />
-        ) : (
-          <div className="flex h-full items-center justify-center text-sm text-muted">
-            {messagesQuery.isError ? 'Could not load this conversation.' : 'Loading…'}
-          </div>
-        )}
-      </div>
-      {/* The ask used to be visible only as a disabled header button with a
+          {messagesQuery.data ? (
+            <ChatThread
+              key={conversationId}
+              messages={chatMessages}
+              currentAuthorType="agent"
+              onRetry={onRetry}
+              playerLabel={playerExternalId}
+              onImageClick={setExpandedImage}
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center text-sm text-muted">
+              {messagesQuery.isError ? 'Could not load this conversation.' : 'Loading…'}
+            </div>
+          )}
+        </div>
+        {/* The ask used to be visible only as a disabled header button with a
           native title. It is a state the whole panel is in — the agent is
           blocked on the player — so it says so where the agent is looking. */}
-      {waiting && (
-        <div
-          role="status"
-          className="flex shrink-0 items-center gap-2 border-t border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-900"
-        >
-          <Clock className="size-3.5 shrink-0" />
-          Waiting on the player&rsquo;s answer to &ldquo;Did this solve it?&rdquo;
-        </div>
-      )}
-      {/* No longer disabled on send.isPending: the optimistic bubble is the
+        {waiting && (
+          <div
+            role="status"
+            className="flex shrink-0 items-center gap-2 border-t border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-900"
+          >
+            <Clock className="size-3.5 shrink-0" />
+            Waiting on the player&rsquo;s answer to &ldquo;Did this solve it?&rdquo;
+          </div>
+        )}
+        {/* No longer disabled on send.isPending: the optimistic bubble is the
           feedback now, and greying the composer for the length of a round trip
           was the most visible part of the lag it was meant to explain. Each
           send is independent, so a second one need not wait on the first. */}
-      <Composer
-        // Known limitation (see the design doc's "Out of scope"): a `public`
-        // attachment sent here is not yet visible to the player — the webview
-        // read path doesn't join `attachment` until that phase ships. Only
-        // other agents viewing this thread see the image today.
-        onSend={(body, visibility, attachment) => send.mutate({ body, visibility, attachment })}
-        allowVisibilityToggle
-        allowAttachments
-        onUpload={async (file) => {
-          const { key, upload_url } = await requestUpload(token, {
-            filename: file.name,
-            contentType: file.type,
-            byteSize: file.size,
-          });
-          await putFileToUploadUrl(upload_url, file);
-          return { key, filename: file.name, mimeType: file.type, byteSize: file.size };
-        }}
-        onCancelUpload={(key) => void cancelUpload(token, key)}
-        disabled={!status || readOnly || takeOverAvailable || claimAvailable}
-        placeholder={
-          !status
-            ? 'Loading...'
-            : readOnly
-              ? resolverLabel(resolutionSource, resolvedByAgentName)
-              : takeOverAvailable || claimAvailable
-                ? 'Take over to send a message'
-                : undefined
-        }
-      />
-    </div>
+        <Composer
+          // Known limitation (see the design doc's "Out of scope"): a `public`
+          // attachment sent here is not yet visible to the player — the webview
+          // read path doesn't join `attachment` until that phase ships. Only
+          // other agents viewing this thread see the image today.
+          onSend={(body, visibility, attachment) => send.mutate({ body, visibility, attachment })}
+          allowVisibilityToggle
+          allowAttachments
+          onUpload={async (file) => {
+            const { key, upload_url } = await requestUpload(token, {
+              filename: file.name,
+              contentType: file.type,
+              byteSize: file.size,
+            });
+            await putFileToUploadUrl(upload_url, file);
+            return { key, filename: file.name, mimeType: file.type, byteSize: file.size };
+          }}
+          onCancelUpload={(key) => void cancelUpload(token, key)}
+          disabled={!status || readOnly || takeOverAvailable || claimAvailable}
+          placeholder={
+            !status
+              ? 'Loading...'
+              : readOnly
+                ? resolverLabel(resolutionSource, resolvedByAgentName)
+                : takeOverAvailable || claimAvailable
+                  ? 'Take over to send a message'
+                  : undefined
+          }
+        />
+      </div>
+      {/* Owned here, not inside ChatThread/MessageBody: those are shared with
+          the webview, and a click-to-expand lightbox is an agent-console-only,
+          desktop affordance. */}
+      <Dialog
+        open={expandedImage !== null}
+        onOpenChange={(open) => !open && setExpandedImage(null)}
+      >
+        {/* w-auto, not w-full: the content's own bounding box must hug the
+            image, not stretch to max-w-[90vw] regardless of the image's real
+            size — otherwise a click in the empty space around a small image
+            still lands "inside" the dialog content and Radix's
+            click-outside-to-close never fires. */}
+        <DialogContent
+          showCloseButton={false}
+          className="w-auto max-w-[90vw] border-none bg-transparent p-0 shadow-none"
+        >
+          <DialogTitle className="sr-only">
+            {expandedImage?.filename ?? 'Attachment preview'}
+          </DialogTitle>
+          {/* Own close button, not the Dialog's default small corner X: that
+              default is styled for a solid bg-bg card and reads as nearly
+              invisible against a photo or the transparent backdrop here. */}
+          <DialogPrimitive.Close
+            aria-label="Close"
+            className="absolute -top-4 -right-4 z-10 flex size-9 items-center justify-center rounded-full bg-bg text-text shadow-lg outline-none hover:bg-muted/20"
+          >
+            <X className="size-5" />
+          </DialogPrimitive.Close>
+          {expandedImage?.url && (
+            <img
+              src={expandedImage.url}
+              alt={expandedImage.filename}
+              className="max-h-[85vh] max-w-[90vw] rounded-card object-contain"
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

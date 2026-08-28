@@ -8,6 +8,7 @@ import { authRouter } from '../src/agent/routers/authRouter.ts';
 import { verifyAgentSession } from '../src/shared/auth/agentSession.ts';
 import {
   closeOwnerPool,
+  ownerPool,
   seedAgent,
   seedWorkspace,
   seedWorkspaceMember,
@@ -57,6 +58,15 @@ describe('POST /auth/dev-login', () => {
 
     const claims = await verifyAgentSession(res.body.token);
     expect(claims).toEqual({ agent_id: adminId, is_admin: true });
+  });
+
+  it('accepts an invite on first login, flipping status from invited to active', async () => {
+    const agentId = await seedAgent(undefined, { status: 'invited' });
+
+    await request(app).post('/auth/dev-login').send({ agent_id: agentId }).expect(200);
+
+    const { rows } = await ownerPool.query('select status from agent where id = $1', [agentId]);
+    expect(rows[0].status).toBe('active');
   });
 
   it('404s an agent id that does not exist', async () => {

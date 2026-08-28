@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ChatComposer } from './ChatComposer.tsx';
 
 describe('ChatComposer attachments', () => {
@@ -24,5 +24,28 @@ describe('ChatComposer attachments', () => {
       />,
     );
     expect(screen.getByLabelText('Attach image')).toBeInTheDocument();
+  });
+});
+
+describe('ChatComposer native dialog handoff', () => {
+  afterEach(() => {
+    delete window.SupportBridge;
+  });
+
+  it('posts expect_native_dialog before opening the file picker', () => {
+    const post = vi.fn();
+    window.SupportBridge = { post };
+    render(
+      <ChatComposer
+        onSend={() => {}}
+        allowAttachments
+        onUpload={vi.fn().mockResolvedValue({})}
+        onCancelUpload={() => {}}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText('Choose image'));
+
+    expect(post).toHaveBeenCalledWith({ type: 'expect_native_dialog' });
   });
 });

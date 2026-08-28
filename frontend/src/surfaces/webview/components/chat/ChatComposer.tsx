@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { Paperclip, SendHorizontal, X } from 'lucide-react';
 import { cn } from '@/surfaces/webview/lib/cn';
+import { post } from '@/services/bridgeService';
 import type { UploadedAttachment } from '@/features/chat/components/Composer';
 
 // Mirrors backend/src/shared/storage/presign.ts's ALLOWED_IMAGE_MIME_TYPES /
@@ -132,8 +133,16 @@ export function ChatComposer({
             />
             <button
               type="button"
+              aria-label="Choose image"
               disabled={disabled || uploading}
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => {
+                // Must post before .click(): the native picker (and any OS
+                // permission prompt ahead of it) can start pausing the app as
+                // soon as the click happens, and the SDK has to already know
+                // to expect it.
+                post({ type: 'expect_native_dialog' });
+                fileInputRef.current?.click();
+              }}
               className={cn(
                 'inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-surface text-muted transition-colors outline-none',
                 'disabled:opacity-60',

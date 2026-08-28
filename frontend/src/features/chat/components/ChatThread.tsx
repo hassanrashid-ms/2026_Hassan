@@ -4,7 +4,7 @@ import { ArrowDown, Bot, CircleUserRound, Headset } from 'lucide-react';
 import { DeliveryTicks } from './DeliveryTicks.tsx';
 import { MessageBody } from './MessageBody.tsx';
 import { useJumpToLatest } from '../hooks/useJumpToLatest.ts';
-import type { ChatAuthorType, ChatMessage } from './types.ts';
+import type { ChatAttachment, ChatAuthorType, ChatMessage } from './types.ts';
 
 type ChatThreadProps = {
   messages: ChatMessage[];
@@ -18,6 +18,14 @@ type ChatThreadProps = {
    * has not resolved one yet, so a bubble is never left unlabelled mid-load.
    */
   playerLabel?: string;
+  /**
+   * Omitted by the webview's own renderer (ChatBubbles.tsx doesn't call
+   * ChatThread at all) — threading this through rather than handling clicks
+   * here keeps ChatThread free of any surface-specific Dialog, since this
+   * file lives under the shared features/chat/ directory even though only
+   * the agent console currently renders it.
+   */
+  onImageClick?: (attachment: ChatAttachment) => void;
 };
 
 /**
@@ -39,7 +47,13 @@ type ChatThreadProps = {
  * bubble and leaving atBottom permanently false, which is what pins the "jump to
  * latest" button on screen. Space items with padding on a wrapper instead.
  */
-export function ChatThread({ messages, currentAuthorType, onRetry, playerLabel }: ChatThreadProps) {
+export function ChatThread({
+  messages,
+  currentAuthorType,
+  onRetry,
+  playerLabel,
+  onImageClick,
+}: ChatThreadProps) {
   const { ref, showJump, missed, onAtBottomChange, jump } = useJumpToLatest(messages.length);
 
   return (
@@ -184,6 +198,7 @@ export function ChatThread({ messages, currentAuthorType, onRetry, playerLabel }
                         body={chatMessage.body}
                         attachment={chatMessage.attachment}
                         dark={isOwn}
+                        onImageClick={onImageClick}
                       />
                     </div>
                     <time

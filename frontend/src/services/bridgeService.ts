@@ -17,6 +17,20 @@ export type BridgeMessage =
    */
   | { type: 'open_url'; url: string }
   /**
+   * "I'm about to hand off to a native OS dialog — don't treat what happens
+   * next as the player backgrounding the app."
+   *
+   * Opening a file picker (or the OS permission prompt that can precede it)
+   * pauses and resumes the Unity app the same way switching away from the
+   * game does, from the SDK's point of view — `OnApplicationPause` fires
+   * either way. Without this signal, the SDK's resume watchdog cannot tell
+   * "the player picked a photo" from "the player alt-tabbed away" and closes
+   * the surface on both. Sent right before the native picker is triggered,
+   * never after: the pause can start as soon as the click happens, and this
+   * has to already be in flight for the SDK to catch it in time.
+   */
+  | { type: 'expect_native_dialog' }
+  /**
    * "I have painted; you can show me now."
    *
    * The SDK keeps the native webview hidden until this arrives. Its own page-load

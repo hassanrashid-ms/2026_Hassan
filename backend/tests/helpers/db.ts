@@ -94,12 +94,17 @@ export async function seedWorkspaceSecret(args: {
 
 export async function seedAgent(
   email = `a-${randomUUID().slice(0, 8)}@example.test`,
-  options: { isAdmin?: boolean; isSuperAdmin?: boolean } = {},
+  options: {
+    isAdmin?: boolean;
+    isSuperAdmin?: boolean;
+    status?: 'active' | 'on_leave' | 'deactivated' | 'invited';
+  } = {},
 ): Promise<string> {
   const id = randomUUID();
   await ownerPool.query(
-    `insert into agent (id, email, display_name, is_admin, is_super_admin) values ($1, $2, 'Test Agent', $3, $4)`,
-    [id, email, options.isAdmin ?? false, options.isSuperAdmin ?? false],
+    `insert into agent (id, email, display_name, is_admin, is_super_admin, status)
+     values ($1, $2, 'Test Agent', $3, $4, coalesce($5::agent_status, 'active'))`,
+    [id, email, options.isAdmin ?? false, options.isSuperAdmin ?? false, options.status ?? null],
   );
   return id;
 }

@@ -244,4 +244,34 @@ describe('FormCard', () => {
     expect(onSendAttachment).toHaveBeenCalledWith('proof', file);
     expect(onSubmit).not.toHaveBeenCalled();
   });
+
+  it('posts expect_native_dialog before the native picker opens for an attachment field', () => {
+    const post = vi.fn();
+    window.SupportBridge = { post };
+    const form: PlayerFormView = {
+      submission_id: 's1',
+      form_id: 'f1',
+      form_name: 'Proof of purchase',
+      version: 1,
+      fields: [
+        { key: 'proof', label: 'Upload a photo', type: 'attachment', isRequired: false, position: 0 },
+      ],
+      answers: [],
+    };
+    render(
+      <FormCard
+        form={form}
+        onAnswer={vi.fn()}
+        onSubmit={vi.fn()}
+        onSkip={vi.fn()}
+        busy={false}
+        onSendAttachment={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText('Attach image'));
+
+    expect(post).toHaveBeenCalledWith({ type: 'expect_native_dialog' });
+    delete window.SupportBridge;
+  });
 });

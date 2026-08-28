@@ -1,4 +1,5 @@
-import { lazy } from 'react';
+import { lazy, useState, type KeyboardEvent } from 'react';
+import { Maximize2 } from 'lucide-react';
 import type { ChatAttachment, ChatAuthorType } from './types.ts';
 
 /*
@@ -34,13 +35,25 @@ export function MessageBody({
   body,
   attachment,
   dark = false,
+  onImageClick,
 }: {
   authorType: ChatAuthorType;
   body: string;
   attachment?: ChatAttachment | null;
   /** The bubble behind this body is a dark, on-brand background (e.g. the agent-console's own-message bubble) rather than the light `bg`/`surface` an article page renders on — so markdown body text should render in the light `accent-fg` colour instead of the default dark `text`. */
   dark?: boolean;
+  /**
+   * Omitted by the webview on purpose — a click-to-expand affordance is a
+   * desktop agent-console feature, not a player one. When provided, the
+   * image becomes clickable and shows a hover affordance; MessageBody itself
+   * renders no lightbox, that's the caller's to own since it needs a
+   * surface-styled Dialog.
+   */
+  onImageClick?: (attachment: ChatAttachment) => void;
 }) {
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageErrored, setImageErrored] = useState(false);
+
   const text = !MARKDOWN_AUTHORS.has(authorType) ? (
     <>{body}</>
   ) : (
@@ -58,15 +71,41 @@ export function MessageBody({
   return (
     <div className="flex flex-col gap-1">
       {hasTypedText && text}
-      {attachment.url ? (
-        <img
-          src={attachment.url}
-          alt={attachment.filename}
-          className="max-h-64 max-w-full rounded-md object-contain"
-          onError={(event) => {
-            (event.currentTarget as HTMLImageElement).style.display = 'none';
-          }}
-        />
+      {attachment.url && !imageErrored ? (
+        <div
+          className={`group relative h-64 w-64 max-w-full overflow-hidden rounded-md ${
+            onImageClick ? 'cursor-pointer' : ''
+          }`}
+          {...(onImageClick && {
+            role: 'button',
+            tabIndex: 0,
+            onClick: () => onImageClick(attachment),
+            onKeyDown: (event: KeyboardEvent) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                onImageClick(attachment);
+              }
+            },
+          })}
+        >
+          {!imageLoaded && (
+            <div className="absolute inset-0 animate-pulse rounded-md bg-muted/20" />
+          )}
+          <img
+            src={attachment.url}
+            alt={attachment.filename}
+            className={`h-full w-full object-contain transition-opacity duration-200 ${
+              imageLoaded ? 'opacity-100' : 'opacity-0'
+            }`}
+            onLoad={() => setImageLoaded(true)}
+            onError={() => setImageErrored(true)}
+          />
+          {onImageClick && imageLoaded && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-all duration-150 group-hover:bg-black/30 group-hover:opacity-100">
+              <Maximize2 className="size-6 text-white drop-shadow" />
+            </div>
+          )}
+        </div>
       ) : (
         <span className="text-xs italic opacity-75">
           Attachment unavailable — {attachment.filename}
