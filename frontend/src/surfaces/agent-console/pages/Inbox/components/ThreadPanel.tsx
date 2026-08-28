@@ -255,6 +255,11 @@ export function ThreadPanel({
   const invalidateAfterTakeOver = () => {
     void queryClient.invalidateQueries({ queryKey: ['conversation', conversationId, 'detail'] });
     void queryClient.invalidateQueries({ queryKey: ['tickets'] });
+    // Distinct top-level key from ['tickets', ...] — not covered by the
+    // invalidation above. ConversationDetailPane prefers this stale summary's
+    // status over the freshly-refetched detail, so without this the Take over
+    // button and disabled Composer stick around until a manual reload.
+    void queryClient.invalidateQueries({ queryKey: ['tickets-summary'] });
     void queryClient.invalidateQueries({ queryKey: ['inbox', 'mine'] });
   };
 
