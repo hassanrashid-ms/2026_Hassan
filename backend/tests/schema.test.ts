@@ -6,6 +6,7 @@ const EXPECTED_TABLES = [
   'agent',
   'article',
   'article_attachment',
+  'article_version',
   'attachment',
   'bot_config',
   'bot_config_version',
@@ -121,10 +122,13 @@ describe('schema', () => {
     expect(defs).toMatch(/\(conversation_id, occurred_at\)/);
   });
 
-  it('carries workspace_id on every table except workspace and agent', async () => {
+  it('carries workspace_id on every table except workspace, agent, and article_version', async () => {
+    // article_version scopes through article_id -> article.workspace_id instead
+    // (see the hand-written RLS policy in 002_rls.sql) — a version/draft row has
+    // no workspace of its own outside the article it belongs to.
     for (const table of EXPECTED_TABLES) {
       const cols = await columns(table);
-      const expected = table === 'workspace' || table === 'agent';
+      const expected = table === 'workspace' || table === 'agent' || table === 'article_version';
       expect(cols.has('workspace_id'), `${table}.workspace_id`).toBe(!expected);
     }
   });

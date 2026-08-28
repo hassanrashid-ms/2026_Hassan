@@ -330,11 +330,16 @@ describe('row-level security', () => {
 
   it('finds no table with RLS enabled but no workspace_id column — the inverse guard', async () => {
     // The complementary drift case: a table that somehow got RLS turned on despite
-    // not being workspace-scoped by the same definition. Also zero today.
+    // not being workspace-scoped by the same definition. `article_version` is the
+    // one known, intentional exception — it scopes through article_id via a
+    // subquery onto article.workspace_id instead of holding the column directly
+    // (see the hand-written policy in 002_rls.sql), because a version/draft row
+    // has no workspace of its own outside the article it belongs to.
     const { rows } = await ownerPool.query<{ relname: string }>(`
       select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace
       where n.nspname = 'public' and c.relkind = 'r'
         and c.relrowsecurity = true
+        and c.relname <> 'article_version'
         and not exists (select 1 from pg_attribute a where a.attrelid = c.oid
                     and a.attname = 'workspace_id' and a.attnum > 0 and not a.attisdropped)
     `);
