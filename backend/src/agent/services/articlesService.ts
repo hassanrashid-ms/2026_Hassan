@@ -778,6 +778,47 @@ export async function archiveArticle(ctx: AgentContext, id: string): Promise<Arc
   });
 }
 
+export type UnarchiveArticleResult =
+  | { ok: true; article: AgentArticleDetail }
+  | { ok: false; reason: 'not_found' | 'not_archived' };
+
+export async function unarchiveArticle(
+  ctx: AgentContext,
+  id: string,
+): Promise<UnarchiveArticleResult> {
+  return withWorkspace(ctx.workspaceId, async (tx) => {
+    const [existing] = await tx.select().from(article).where(eq(article.id, id)).limit(1);
+    if (!existing) return { ok: false, reason: 'not_found' };
+    if (existing.state !== 'archived') return { ok: false, reason: 'not_archived' };
+
+    // Content and version are untouched by archive/unarchive — the article
+    // still shows whatever it last published as. Only the state flips back and
+    // the Weaviate object (removed on archive) is re-indexed from that
+    // unchanged content, so the bot can cite it again.
+    const [row] = await tx
+      .update(article)
+      .set({ state: 'published' })
+      .where(eq(article.id, id))
+      .returning();
+    await upsertArticleObject({
+      id: row!.id,
+      title: row!.title,
+      body: row!.body,
+      keywords: row!.keywords,
+      intentId: row!.intentId,
+      workspaceId: row!.workspaceId,
+    });
+    return {
+      ok: true,
+      article: {
+        ...toDetail(row!),
+        attachments: await attachmentsFor(tx, id),
+        draft: await draftFor(tx, id),
+      },
+    };
+  });
+}
+
 import { callModel } from '../../domain/bot/openaiClient.ts';
 
 export async function generateKeywords(title: string, body: string): Promise<string[]> {

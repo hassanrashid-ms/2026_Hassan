@@ -247,6 +247,59 @@ describe('draft -> publish -> archive', () => {
     expect(deleteArticleObject).toHaveBeenCalledWith(id);
   });
 
+  it('unarchives back to published and re-indexes the unchanged content in Weaviate', async () => {
+    const workspaceId = await seedWorkspace();
+    const { token } = await seedAgent(workspaceId, 'team_lead');
+
+    const created = await request(app)
+      .post('/articles')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ title: 'X', body: 'Y', keywords: ['k'] })
+      .expect(201);
+    const id = created.body.id as string;
+    await request(app)
+      .post(`/articles/${id}/publish`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+    await request(app)
+      .post(`/articles/${id}/archive`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+    vi.mocked(upsertArticleObject).mockClear();
+
+    const res = await request(app)
+      .post(`/articles/${id}/unarchive`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+
+    expect(res.body.state).toBe('published');
+    expect(res.body.title).toBe('X');
+    expect(upsertArticleObject).toHaveBeenCalledWith(
+      expect.objectContaining({ id, title: 'X', body: 'Y', keywords: ['k'] }),
+    );
+  });
+
+  it('409s unarchiving an article that is not archived', async () => {
+    const workspaceId = await seedWorkspace();
+    const { token } = await seedAgent(workspaceId, 'team_lead');
+    const created = await request(app)
+      .post('/articles')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ title: 'X', body: 'Y' })
+      .expect(201);
+
+    await request(app)
+      .post(`/articles/${created.body.id}/unarchive`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(409);
+  });
+
   it('does not advance state when the Weaviate publish call fails', async () => {
     const workspaceId = await seedWorkspace();
     const { token } = await seedAgent(workspaceId, 'team_lead');

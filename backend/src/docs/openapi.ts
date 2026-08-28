@@ -1863,6 +1863,21 @@ registry.registerPath({
   responses: { 200: { description: 'Article archived' }, 404: { description: 'Not found' } },
 });
 
+registry.registerPath({
+  method: 'post',
+  path: '/agent/articles/{id}/unarchive',
+  summary: 'Agent Unarchive Article',
+  description:
+    'archived -> published, unchanged content. Re-indexes the article in Weaviate.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: { params: z.object({ id: z.uuid() }) },
+  responses: {
+    200: { description: 'Article unarchived' },
+    404: { description: 'Not found' },
+    409: { description: 'Article is not archived' },
+  },
+});
+
 // --- 5b. AGENT FORMS ENDPOINTS ---
 // PATCH routes from the design doc fall back to POST-with-verb-suffix here:
 // app.ts's CORS allows only GET and POST (see botConfigRouter's own note).

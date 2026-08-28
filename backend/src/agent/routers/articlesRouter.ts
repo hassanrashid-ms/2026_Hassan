@@ -13,6 +13,7 @@ import {
   removeArticleAttachmentHandler,
   restoreArticleVersionHandler,
   saveArticleDraftHandler,
+  unarchiveArticleHandler,
   updateArticleHandler,
   generateKeywordsHandler,
 } from '../controllers/articlesController.ts';
@@ -33,5 +34,6 @@ articlesRouter.delete('/articles/:id/attachments/:attachmentId', removeArticleAt
 // Admin only, same split formsRouter.ts already enforces for forms.
 articlesRouter.post('/articles/:id/publish', requireTeamLeadOrAdmin, publishArticleHandler);
 articlesRouter.post('/articles/:id/archive', requireTeamLeadOrAdmin, archiveArticleHandler);
+articlesRouter.post('/articles/:id/unarchive', requireTeamLeadOrAdmin, unarchiveArticleHandler);
 articlesRouter.post('/articles/:id/attachments', finalizeArticleAttachmentHandler);
 articlesRouter.post('/articles/generate-keywords', generateKeywordsHandler);

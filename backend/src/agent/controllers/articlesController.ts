@@ -22,6 +22,7 @@ import {
   removeArticleAttachment,
   restoreArticleVersion,
   saveArticleDraft,
+  unarchiveArticle,
   updateArticle,
   generateKeywords,
 } from '../services/articlesService.ts';
@@ -225,6 +226,24 @@ export const archiveArticleHandler: RequestHandler = async (req, res) => {
   const result = await archiveArticle(req.agent!, params.data.id);
   if (!result.ok) {
     sendError(res, 404, 'not_found', 'Article not found.');
+    return;
+  }
+  res.status(200).json(result.article);
+};
+
+export const unarchiveArticleHandler: RequestHandler = async (req, res) => {
+  const params = ArticleIdParams.safeParse(req.params);
+  if (!params.success) {
+    sendError(res, 422, 'invalid_request', 'id must be a uuid.');
+    return;
+  }
+  const result = await unarchiveArticle(req.agent!, params.data.id);
+  if (!result.ok) {
+    if (result.reason === 'not_found') {
+      sendError(res, 404, 'not_found', 'Article not found.');
+      return;
+    }
+    sendError(res, 409, 'invalid_request', 'Article is not archived.');
     return;
   }
   res.status(200).json(result.article);

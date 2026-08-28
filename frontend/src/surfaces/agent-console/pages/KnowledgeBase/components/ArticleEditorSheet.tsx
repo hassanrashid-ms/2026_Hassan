@@ -31,6 +31,7 @@ import {
   publishArticle,
   putFileToUploadUrl,
   requestUpload,
+  unarchiveArticle,
   generateKeywords,
 } from '../../../api/agentApi.ts';
 import {
@@ -283,6 +284,13 @@ function ArticleEditorForm({
   const archive = useMutation({
     mutationFn: () => archiveArticle(token, resolvedArticleId!),
     onSuccess: invalidateArticles,
+  });
+  const unarchive = useMutation({
+    mutationFn: () => unarchiveArticle(token, resolvedArticleId!),
+    onSuccess: (updated) => {
+      queryClient.setQueryData<AgentArticleDetail>(['admin-article', updated.id], updated);
+      invalidateArticles();
+    },
   });
   const discardDraft = useMutation({
     mutationFn: () => discardArticleDraft(token, resolvedArticleId!),
@@ -576,7 +584,17 @@ function ArticleEditorForm({
             Discard draft
           </Button>
         )}
-        {canPublishOrArchive && (
+        {canPublishOrArchive && state === 'archived' && (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => unarchive.mutate()}
+            disabled={resolvedArticleId === null || unarchive.isPending}
+          >
+            Unarchive
+          </Button>
+        )}
+        {canPublishOrArchive && state !== 'archived' && (
           <Button
             type="button"
             variant="outline"

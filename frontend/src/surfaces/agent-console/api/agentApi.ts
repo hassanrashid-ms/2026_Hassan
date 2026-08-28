@@ -520,6 +520,10 @@ export function archiveArticle(token: string, id: string): Promise<AgentArticleD
   return call(`/agent/articles/${id}/archive`, token, { method: 'POST' });
 }
 
+export function unarchiveArticle(token: string, id: string): Promise<AgentArticleDetail> {
+  return call(`/agent/articles/${id}/unarchive`, token, { method: 'POST' });
+}
+
 export function finalizeArticleAttachment(
   token: string,
   articleId: string,
