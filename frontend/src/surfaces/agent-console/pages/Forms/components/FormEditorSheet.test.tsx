@@ -209,7 +209,7 @@ describe('FormEditorSheet — publish visibility', () => {
 });
 
 describe('FormEditorSheet — field type picker', () => {
-  it('offers only the five builder types, never attachment or time', async () => {
+  it('offers the six builder types, including attachment, never time', async () => {
     vi.spyOn(agentApi, 'fetchIntents').mockResolvedValue(INTENTS);
 
     renderWithClient(
@@ -232,7 +232,7 @@ describe('FormEditorSheet — field type picker', () => {
     expect(within(dialog).getByRole('button', { name: 'Number' })).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: 'Date' })).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: 'Choice' })).toBeInTheDocument();
-    expect(within(dialog).queryByRole('button', { name: /attachment/i })).not.toBeInTheDocument();
-    expect(within(dialog).queryByRole('button', { name: /time/i })).not.toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: /attachment/i })).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: /^time$/i })).not.toBeInTheDocument();
   });
 });
