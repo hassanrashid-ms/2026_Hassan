@@ -83,6 +83,46 @@ describe('POST /agent/uploads', () => {
       .expect(422);
     expect(res.body.error.code).toBe('invalid_request');
   });
+
+  it('returns a presigned PUT url for an allowed video type', async () => {
+    const workspaceId = await seedWorkspace();
+    const { agentId, token } = await seedAgentToken(workspaceId);
+
+    const res = await request(app)
+      .post('/uploads')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ filename: 'clip.mp4', content_type: 'video/mp4', byte_size: 20 * 1024 * 1024 })
+      .expect(200);
+
+    expect(res.body.key).toContain(`pending/${workspaceId}/${agentId}/`);
+    expect(res.body.key).toMatch(/\.mp4$/);
+  });
+
+  it('accepts a video between the image cap and the video cap', async () => {
+    const workspaceId = await seedWorkspace();
+    const { token } = await seedAgentToken(workspaceId);
+
+    await request(app)
+      .post('/uploads')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ filename: 'clip.webm', content_type: 'video/webm', byte_size: 30 * 1024 * 1024 })
+      .expect(200);
+  });
+
+  it('422s for a video over the 50 MB video cap', async () => {
+    const workspaceId = await seedWorkspace();
+    const { token } = await seedAgentToken(workspaceId);
+
+    const res = await request(app)
+      .post('/uploads')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ filename: 'huge.mp4', content_type: 'video/mp4', byte_size: 51 * 1024 * 1024 })
+      .expect(422);
+    expect(res.body.error.code).toBe('invalid_request');
+  });
 });
 
 describe('DELETE /agent/uploads/:key', () => {
