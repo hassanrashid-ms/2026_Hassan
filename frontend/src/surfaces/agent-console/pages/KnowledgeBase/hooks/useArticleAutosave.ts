@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { AgentArticleDetail } from '@support/types';
-import { createArticle, updateArticle } from '../../../api/agentApi.ts';
+import { createArticle, saveArticleDraft, updateArticle } from '../../../api/agentApi.ts';
 
 export type AutosaveStatus = 'unsaved' | 'saving' | 'saved';
 
@@ -11,6 +11,7 @@ const DEBOUNCE_MS = 800;
 export function useArticleAutosave(params: {
   token: string;
   articleId: string | null;
+  mode: 'article' | 'draft';
   onCreated: (id: string) => void;
   onSaved?: (article: AgentArticleDetail) => void;
   fields: Fields;
@@ -19,7 +20,7 @@ export function useArticleAutosave(params: {
   ensureArticleId: () => Promise<string>;
   flush: () => Promise<void>;
 } {
-  const { token, onCreated, onSaved } = params;
+  const { token, mode, onCreated, onSaved } = params;
   const [status, setStatus] = useState<AutosaveStatus>('saved');
 
   // Refs, not state: this data must be read inside a debounced timeout closure
@@ -52,6 +53,13 @@ export function useArticleAutosave(params: {
       articleIdRef.current = created.id;
       onCreated(created.id);
       onSaved?.(created);
+    } else if (mode === 'draft') {
+      const updated = await saveArticleDraft(token, articleIdRef.current, {
+        title: body.title,
+        body: body.body,
+        keywords: body.keywords,
+      });
+      onSaved?.(updated);
     } else {
       // Write the server's response straight into the query cache (see
       // ArticleEditorForm's onSaved) instead of only invalidating — an

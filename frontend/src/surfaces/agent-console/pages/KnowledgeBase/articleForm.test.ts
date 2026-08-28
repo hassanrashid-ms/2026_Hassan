@@ -8,19 +8,20 @@ import {
 } from './articleForm.ts';
 
 describe('canEditFields', () => {
-  it('allows edits only while draft', () => {
+  it('allows edits while draft or published, not archived', () => {
     expect(canEditFields('draft')).toBe(true);
-    expect(canEditFields('published')).toBe(false);
+    expect(canEditFields('published')).toBe(true);
     expect(canEditFields('archived')).toBe(false);
   });
 });
 
 describe('canPublish', () => {
-  it('requires draft state and non-blank title and body', () => {
+  it('requires draft or published state and non-blank title and body', () => {
     expect(canPublish('draft', 'Title', 'Body')).toBe(true);
     expect(canPublish('draft', '  ', 'Body')).toBe(false);
     expect(canPublish('draft', 'Title', '  ')).toBe(false);
-    expect(canPublish('published', 'Title', 'Body')).toBe(false);
+    expect(canPublish('published', 'Title', 'Body')).toBe(true);
+    expect(canPublish('archived', 'Title', 'Body')).toBe(false);
   });
 });
 

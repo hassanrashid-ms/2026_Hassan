@@ -2,11 +2,13 @@ import type { ArticleStateValue } from '@support/types';
 import fm from 'front-matter';
 
 export function canEditFields(state: ArticleStateValue): boolean {
-  return state === 'draft';
+  return state === 'draft' || state === 'published';
 }
 
 export function canPublish(state: ArticleStateValue, title: string, body: string): boolean {
-  return state === 'draft' && title.trim() !== '' && body.trim() !== '';
+  return (
+    (state === 'draft' || state === 'published') && title.trim() !== '' && body.trim() !== ''
+  );
 }
 
 export function parseKeywordsInput(raw: string): string[] {

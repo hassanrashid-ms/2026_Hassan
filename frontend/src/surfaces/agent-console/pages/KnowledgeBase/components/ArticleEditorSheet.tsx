@@ -24,6 +24,7 @@ import {
 import '@mdxeditor/editor/style.css';
 import {
   archiveArticle,
+  discardArticleDraft,
   fetchArticle,
   fetchIntents,
   finalizeArticleAttachment,
@@ -66,10 +67,11 @@ type Draft = { title: string; body: string; keywordsInput: string; intentId: str
 
 function draftFrom(article: AgentArticleDetail | null): Draft {
   if (!article) return { title: '', body: '', keywordsInput: '', intentId: '' };
+  const source = article.draft ?? article;
   return {
-    title: article.title,
-    body: article.body,
-    keywordsInput: article.keywords.join(', '),
+    title: source.title,
+    body: source.body,
+    keywordsInput: source.keywords.join(', '),
     intentId: article.intent_id ?? '',
   };
 }
@@ -176,6 +178,9 @@ function ArticleEditorForm({
 }) {
   const canPublishOrArchive = canBuildForms(session);
   const queryClient = useQueryClient();
+  const hasLiveContent = article !== null && article.state === 'published';
+  const draftView = article?.draft ?? null;
+  const editingMode: 'article' | 'draft' = hasLiveContent ? 'draft' : 'article';
   const [draft, setDraft] = useState<Draft>(() => draftFrom(article));
   const [useAIKeywords, setUseAIKeywords] = useState(false);
   const [attachments, setAttachments] = useState<ArticleAttachmentView[]>(
@@ -231,6 +236,7 @@ function ArticleEditorForm({
   const autosave = useArticleAutosave({
     token,
     articleId: resolvedArticleId,
+    mode: editingMode,
     onCreated: (id) => {
       setResolvedArticleId(id);
       invalidateArticles();
@@ -264,6 +270,13 @@ function ArticleEditorForm({
     mutationFn: () => archiveArticle(token, resolvedArticleId!),
     onSuccess: invalidateArticles,
   });
+  const discardDraft = useMutation({
+    mutationFn: () => discardArticleDraft(token, resolvedArticleId!),
+    onSuccess: (updated) => {
+      queryClient.setQueryData<AgentArticleDetail>(['admin-article', updated.id], updated);
+      invalidateArticles();
+    },
+  });
 
   const state = article?.state ?? 'draft';
   const editable = articleId === null || canEditFields(state);
@@ -271,11 +284,21 @@ function ArticleEditorForm({
   return (
     <>
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
-        {!editable && (
+        {state === 'archived' && (
           <p className="rounded-md bg-amber-100 px-3 py-2 text-xs text-amber-900">
-            This article is {state} and can no longer be edited
-            {state === 'published' ? ' — only Archive is available.' : '.'}
+            This article is archived and can no longer be edited.
           </p>
+        )}
+
+        {hasLiveContent && (
+          <div className="flex items-center justify-between rounded-md bg-slate-100 px-3 py-2 text-xs">
+            <span className="font-medium">Live: v{article!.version}</span>
+            {draftView && (
+              <span className="text-muted">
+                Draft in progress · saved {new Date(draftView.updated_at).toLocaleTimeString()}
+              </span>
+            )}
+          </div>
         )}
 
         <div className="flex justify-end">
@@ -468,6 +491,16 @@ function ArticleEditorForm({
           {autosave.status === 'saving' && 'Saving…'}
           {autosave.status === 'saved' && 'Saved'}
         </div>
+        {canPublishOrArchive && draftView && (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => discardDraft.mutate()}
+            disabled={discardDraft.isPending}
+          >
+            Discard draft
+          </Button>
+        )}
         {canPublishOrArchive && (
           <Button
             type="button"

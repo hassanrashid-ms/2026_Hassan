@@ -24,11 +24,14 @@ describe('useArticleAutosave', () => {
       published_at: null,
       created_at: new Date().toISOString(),
       attachments: [],
+      version: 1,
+      draft: null,
     });
     const onCreated = vi.fn();
 
     const { result, rerender } = renderHook(
-      (fields) => useArticleAutosave({ token: 't', articleId: null, onCreated, fields }),
+      (fields) =>
+        useArticleAutosave({ token: 't', articleId: null, mode: 'article', onCreated, fields }),
       { initialProps: { title: '', body: '', keywords: [], intentId: undefined } },
     );
 
@@ -58,10 +61,19 @@ describe('useArticleAutosave', () => {
       published_at: null,
       created_at: new Date().toISOString(),
       attachments: [],
+      version: 1,
+      draft: null,
     });
 
     const { result, rerender } = renderHook(
-      (fields) => useArticleAutosave({ token: 't', articleId: 'a1', onCreated: vi.fn(), fields }),
+      (fields) =>
+        useArticleAutosave({
+          token: 't',
+          articleId: 'a1',
+          mode: 'article',
+          onCreated: vi.fn(),
+          fields,
+        }),
       { initialProps: { title: 'T', body: 'B', keywords: [], intentId: undefined } },
     );
     expect(result.current.status).toBe('saved');
@@ -94,12 +106,15 @@ describe('useArticleAutosave', () => {
       published_at: null,
       created_at: new Date().toISOString(),
       attachments: [],
+      version: 1,
+      draft: null,
     });
 
     const { result } = renderHook(() =>
       useArticleAutosave({
         token: 't',
         articleId: null,
+        mode: 'article',
         onCreated: vi.fn(),
         fields: { title: '', body: '', keywords: [], intentId: undefined },
       }),

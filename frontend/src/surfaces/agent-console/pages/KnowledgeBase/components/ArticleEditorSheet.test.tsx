@@ -31,6 +31,8 @@ const EXISTING_ARTICLE = {
   body: '# Refund policy\n\nWe refund within **30 days**.',
   keywords: ['refund'],
   state: 'draft' as const,
+  version: 1,
+  draft: null,
   intent_id: null,
   created_by: 'agent-1',
   published_by: null,
