@@ -201,6 +201,17 @@ function ArticleEditorForm({
   const [editorSeed, setEditorSeed] = useState(() => article?.body ?? '');
   const [editorVersion, setEditorVersion] = useState(0);
   const importInputRef = useRef<HTMLInputElement>(null);
+  // MDXEditor fires onChange once on mount with its own re-serialized markdown
+  // (heading/list/escaping normalization), which can differ from `editorSeed`
+  // byte-for-byte even though the user hasn't typed anything. Treating that
+  // call as a real edit is what made opening a published article instantly
+  // start a draft/autosave with zero user input — skip exactly one onChange
+  // per mount (reset whenever `editorVersion` forces a fresh MDXEditor
+  // instance, e.g. a markdown import).
+  const editorInitializedRef = useRef(false);
+  useEffect(() => {
+    editorInitializedRef.current = false;
+  }, [editorVersion]);
 
   const handleImportFile = async (file: File) => {
     try {
@@ -413,7 +424,13 @@ function ArticleEditorForm({
               key={editorVersion}
               markdown={editorSeed}
               readOnly={!editable}
-              onChange={(markdown) => setDraft((d) => ({ ...d, body: markdown }))}
+              onChange={(markdown) => {
+                if (!editorInitializedRef.current) {
+                  editorInitializedRef.current = true;
+                  return;
+                }
+                setDraft((d) => ({ ...d, body: markdown }));
+              }}
               contentEditableClassName="prose prose-sm max-w-none px-3 py-2 min-h-56"
               plugins={[
                 headingsPlugin(),
