@@ -679,3 +679,129 @@ describe('POST /agent/articles/:id/publish with empty fields', () => {
       .expect(200);
   });
 });
+
+describe('article version history', () => {
+  it('lists versions newest-first with changed fields', async () => {
+    const workspaceId = await seedWorkspace();
+    const { token } = await seedAgent(workspaceId, 'team_lead');
+    const created = await request(app)
+      .post('/articles')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ title: 'v1', body: 'v1 body' })
+      .expect(201);
+    const id = created.body.id as string;
+    await request(app)
+      .post(`/articles/${id}/publish`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+    await request(app)
+      .patch(`/articles/${id}/draft`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ title: 'v2' })
+      .expect(200);
+    await request(app)
+      .post(`/articles/${id}/publish`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+
+    const res = await request(app)
+      .get(`/articles/${id}/versions`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+
+    expect(res.body.versions).toHaveLength(2);
+    expect(res.body.versions[0]).toMatchObject({ version: 2, changed_fields: ['title'] });
+    expect(res.body.versions[1]).toMatchObject({ version: 1 });
+    expect(res.body.next_cursor).toBeNull();
+  });
+
+  it('fetches a single version snapshot', async () => {
+    const workspaceId = await seedWorkspace();
+    const { token } = await seedAgent(workspaceId, 'team_lead');
+    const created = await request(app)
+      .post('/articles')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ title: 'v1', body: 'v1 body' })
+      .expect(201);
+    const id = created.body.id as string;
+    await request(app)
+      .post(`/articles/${id}/publish`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+
+    const res = await request(app)
+      .get(`/articles/${id}/versions/1`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+
+    expect(res.body).toMatchObject({ version: 1, title: 'v1', body: 'v1 body' });
+  });
+
+  it('404s a version number that does not exist', async () => {
+    const workspaceId = await seedWorkspace();
+    const { token } = await seedAgent(workspaceId, 'team_lead');
+    const created = await request(app)
+      .post('/articles')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ title: 'v1', body: 'v1 body' })
+      .expect(201);
+    await request(app)
+      .post(`/articles/${created.body.id}/publish`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+
+    await request(app)
+      .get(`/articles/${created.body.id}/versions/99`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(404);
+  });
+
+  it('restore loads a past version into the draft without publishing', async () => {
+    const workspaceId = await seedWorkspace();
+    const { token } = await seedAgent(workspaceId, 'team_lead');
+    const created = await request(app)
+      .post('/articles')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ title: 'v1', body: 'v1 body' })
+      .expect(201);
+    const id = created.body.id as string;
+    await request(app)
+      .post(`/articles/${id}/publish`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+    await request(app)
+      .patch(`/articles/${id}/draft`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ title: 'v2' })
+      .expect(200);
+    await request(app)
+      .post(`/articles/${id}/publish`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+
+    const res = await request(app)
+      .post(`/articles/${id}/versions/1/restore`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+
+    expect(res.body.title).toBe('v2'); // live content untouched
+    expect(res.body.version).toBe(2);
+    expect(res.body.draft).toMatchObject({ title: 'v1' });
+  });
+});

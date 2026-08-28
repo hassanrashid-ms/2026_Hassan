@@ -1,14 +1,17 @@
 import { randomUUID } from 'node:crypto';
-import { and, desc, eq, isNotNull, isNull, or } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, isNull, lt, or } from 'drizzle-orm';
 import type {
   AgentArticleDetail,
   AgentArticlesResponse,
   ArticleAttachmentView,
   ArticleDraftView,
+  ArticleVersionedField,
+  ArticleVersionSnapshotView,
+  ArticleVersionsListResponse,
   FinalizeArticleAttachmentBody,
 } from '@support/types';
 import type { z } from 'zod';
-import { article, articleAttachment, articleVersion, intent } from '../../shared/db/schema/index.ts';
+import { agent, article, articleAttachment, articleVersion, intent } from '../../shared/db/schema/index.ts';
 import { withWorkspace, type Tx } from '../../shared/db/withWorkspace.ts';
 import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts';
 import {
@@ -306,6 +309,153 @@ export async function discardArticleDraft(
         draft: null,
       },
     };
+  });
+}
+
+export type ListArticleVersionsResult =
+  | { ok: true; versions: ArticleVersionsListResponse }
+  | { ok: false; reason: 'not_found' };
+
+export async function listArticleVersions(
+  ctx: AgentContext,
+  articleId: string,
+  opts: { limit: number; cursor?: number },
+): Promise<ListArticleVersionsResult> {
+  return withWorkspace(ctx.workspaceId, async (tx) => {
+    const [existing] = await tx.select({ id: article.id }).from(article).where(eq(article.id, articleId)).limit(1);
+    if (!existing) return { ok: false, reason: 'not_found' };
+
+    const where =
+      opts.cursor === undefined
+        ? and(eq(articleVersion.articleId, articleId), eq(articleVersion.status, 'published'))
+        : and(
+            eq(articleVersion.articleId, articleId),
+            eq(articleVersion.status, 'published'),
+            lt(articleVersion.version, opts.cursor),
+          );
+
+    const found = await tx
+      .select({
+        version: articleVersion.version,
+        createdAt: articleVersion.createdAt,
+        changedFields: articleVersion.changedFields,
+        actorId: agent.id,
+        actorDisplayName: agent.displayName,
+        actorEmail: agent.email,
+      })
+      .from(articleVersion)
+      .innerJoin(agent, eq(agent.id, articleVersion.actorId))
+      .where(where)
+      .orderBy(desc(articleVersion.version))
+      .limit(opts.limit + 1);
+
+    const page = found.slice(0, opts.limit);
+    const versions = page.map((row) => ({
+      version: row.version!,
+      changed_fields: row.changedFields as ArticleVersionedField[],
+      created_at: row.createdAt.toISOString(),
+      actor: { id: row.actorId, display_name: row.actorDisplayName, email: row.actorEmail },
+    }));
+    const last = versions.at(-1);
+    const nextCursor = found.length > opts.limit && last ? last.version : null;
+
+    return { ok: true, versions: { versions, next_cursor: nextCursor } };
+  });
+}
+
+export type GetArticleVersionResult =
+  | { ok: true; version: ArticleVersionSnapshotView }
+  | { ok: false; reason: 'not_found' };
+
+export async function getArticleVersion(
+  ctx: AgentContext,
+  articleId: string,
+  versionNumber: number,
+): Promise<GetArticleVersionResult> {
+  return withWorkspace(ctx.workspaceId, async (tx) => {
+    const [row] = await tx
+      .select({
+        version: articleVersion.version,
+        title: articleVersion.title,
+        body: articleVersion.body,
+        keywords: articleVersion.keywords,
+        attachmentIds: articleVersion.attachmentIds,
+        changedFields: articleVersion.changedFields,
+        createdAt: articleVersion.createdAt,
+        actorId: agent.id,
+        actorDisplayName: agent.displayName,
+        actorEmail: agent.email,
+      })
+      .from(articleVersion)
+      .innerJoin(agent, eq(agent.id, articleVersion.actorId))
+      .where(
+        and(
+          eq(articleVersion.articleId, articleId),
+          eq(articleVersion.status, 'published'),
+          eq(articleVersion.version, versionNumber),
+        ),
+      )
+      .limit(1);
+    if (!row) return { ok: false, reason: 'not_found' };
+
+    const attachmentRows =
+      row.attachmentIds.length === 0
+        ? []
+        : await tx.select().from(articleAttachment).where(inArray(articleAttachment.id, row.attachmentIds));
+    const attachments = await Promise.all(
+      attachmentRows.map(async (a) => ({
+        id: a.id,
+        filename: a.filename,
+        mime_type: a.mimeType,
+        byte_size: a.byteSize,
+        url: await presignGetObject(a.storageKey).catch(() => null),
+      })),
+    );
+
+    return {
+      ok: true,
+      version: {
+        version: row.version!,
+        title: row.title,
+        body: row.body,
+        keywords: row.keywords,
+        attachments,
+        changed_fields: row.changedFields as ArticleVersionedField[],
+        created_at: row.createdAt.toISOString(),
+        actor: { id: row.actorId, display_name: row.actorDisplayName, email: row.actorEmail },
+      },
+    };
+  });
+}
+
+export async function restoreArticleVersion(
+  ctx: AgentContext,
+  articleId: string,
+  versionNumber: number,
+): Promise<SaveArticleDraftResult> {
+  return withWorkspace(ctx.workspaceId, async (tx) => {
+    const [existing] = await tx.select().from(article).where(eq(article.id, articleId)).limit(1);
+    if (!existing) return { ok: false, reason: 'not_found' };
+    if (existing.state !== 'published') return { ok: false, reason: 'not_published' };
+
+    const [snapshot] = await tx
+      .select()
+      .from(articleVersion)
+      .where(
+        and(
+          eq(articleVersion.articleId, articleId),
+          eq(articleVersion.status, 'published'),
+          eq(articleVersion.version, versionNumber),
+        ),
+      )
+      .limit(1);
+    if (!snapshot) return { ok: false, reason: 'not_found' };
+
+    return saveArticleDraft(ctx, articleId, {
+      title: snapshot.title,
+      body: snapshot.body,
+      keywords: snapshot.keywords,
+    });
   });
 }
 
