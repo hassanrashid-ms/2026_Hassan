@@ -101,6 +101,8 @@ export type AgentArticleSummary = {
   title: string;
   body: string;
   state: ArticleStateValue;
+  version: number;
+  has_draft: boolean;
   intent_id: string | null;
   created_at: string;
   published_at: string | null;
@@ -113,12 +115,14 @@ export type AgentArticleDetail = {
   body: string;
   keywords: string[];
   state: ArticleStateValue;
+  version: number;
   intent_id: string | null;
   created_by: string;
   published_by: string | null;
   published_at: string | null;
   created_at: string;
   attachments: ArticleAttachmentView[];
+  draft: ArticleDraftView;
 };
 
 export type PublicArticleSummary = {
@@ -140,3 +144,49 @@ export type PublicArticleDetail = {
   published_at: string | null;
   attachments: ArticleAttachmentView[];
 };
+
+export const ARTICLE_VERSIONED_FIELDS = ['title', 'body', 'keywords', 'attachments'] as const;
+export type ArticleVersionedField = (typeof ARTICLE_VERSIONED_FIELDS)[number];
+
+export type ArticleVersionActorView = { id: string; display_name: string; email: string };
+
+/** One row in the version list — no full snapshot payload, kept light for paging. */
+export type ArticleVersionSummaryView = {
+  version: number;
+  actor: ArticleVersionActorView;
+  changed_fields: ArticleVersionedField[];
+  created_at: string;
+};
+
+export type ArticleVersionsListResponse = {
+  versions: ArticleVersionSummaryView[];
+  next_cursor: number | null;
+};
+
+/** Full snapshot for one version — fetched on demand when a row is expanded. */
+export type ArticleVersionSnapshotView = ArticleVersionSummaryView & {
+  title: string;
+  body: string;
+  keywords: string[];
+  attachments: ArticleAttachmentView[];
+};
+
+export const ArticleVersionsQuery = z.object({
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  cursor: z.coerce.number().int().positive().optional(),
+});
+
+export const SaveArticleDraftBody = z.object({
+  title: z.string().max(200).optional(),
+  body: z.string().optional(),
+  keywords: z.array(z.string()).optional(),
+});
+
+/** Draft state included in AgentArticleDetail so the editor can show the banner/badge. */
+export type ArticleDraftView = {
+  title: string;
+  body: string;
+  keywords: string[];
+  attachments: ArticleAttachmentView[];
+  updated_at: string;
+} | null;
