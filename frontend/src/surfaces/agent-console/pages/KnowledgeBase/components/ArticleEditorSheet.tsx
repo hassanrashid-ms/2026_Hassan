@@ -45,6 +45,7 @@ import { canBuildForms, type StoredAgentSession } from '../../../lib/agentSessio
 import { useArticleAutosave } from '../hooks/useArticleAutosave.ts';
 import { ImageDialogAdapter } from './ImageDialogAdapter.tsx';
 import { ArticleVersionHistoryTab } from './ArticleVersionHistoryTab.tsx';
+import { ConfirmDialog } from '../../../components/ConfirmDialog.tsx';
 import { Button } from '../../../components/ui/button.tsx';
 import { Input } from '../../../components/ui/input.tsx';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../components/ui/tabs.tsx';
@@ -191,6 +192,9 @@ function ArticleEditorForm({
   );
   const [resolvedArticleId, setResolvedArticleId] = useState(articleId);
   const [activeTab, setActiveTab] = useState<'edit' | 'history'>('edit');
+  const [confirmAction, setConfirmAction] = useState<'archive' | 'unarchive' | 'publish' | null>(
+    null,
+  );
   // The value MDXEditor's `markdown` prop is seeded with. Deliberately NOT
   // kept in sync with draft.body on every keystroke — MDXEditor treats a
   // prop change as an authoritative external reset and re-parses the whole
@@ -279,15 +283,22 @@ function ArticleEditorForm({
 
   const publish = useMutation({
     mutationFn: () => publishArticle(token, resolvedArticleId!),
-    onSuccess: invalidateArticles,
+    onSuccess: () => {
+      setConfirmAction(null);
+      invalidateArticles();
+    },
   });
   const archive = useMutation({
     mutationFn: () => archiveArticle(token, resolvedArticleId!),
-    onSuccess: invalidateArticles,
+    onSuccess: () => {
+      setConfirmAction(null);
+      invalidateArticles();
+    },
   });
   const unarchive = useMutation({
     mutationFn: () => unarchiveArticle(token, resolvedArticleId!),
     onSuccess: (updated) => {
+      setConfirmAction(null);
       queryClient.setQueryData<AgentArticleDetail>(['admin-article', updated.id], updated);
       invalidateArticles();
     },
@@ -588,7 +599,7 @@ function ArticleEditorForm({
           <Button
             type="button"
             variant="outline"
-            onClick={() => unarchive.mutate()}
+            onClick={() => setConfirmAction('unarchive')}
             disabled={resolvedArticleId === null || unarchive.isPending}
           >
             Unarchive
@@ -598,7 +609,7 @@ function ArticleEditorForm({
           <Button
             type="button"
             variant="outline"
-            onClick={() => archive.mutate()}
+            onClick={() => setConfirmAction('archive')}
             disabled={resolvedArticleId === null || archive.isPending}
           >
             Archive
@@ -607,7 +618,7 @@ function ArticleEditorForm({
         {canPublishOrArchive && (
           <Button
             type="button"
-            onClick={() => publish.mutate()}
+            onClick={() => setConfirmAction('publish')}
             disabled={
               resolvedArticleId === null ||
               !canPublish(state, draft.title, draft.body) ||
@@ -618,6 +629,39 @@ function ArticleEditorForm({
           </Button>
         )}
       </SheetFooter>
+
+      <ConfirmDialog
+        open={confirmAction === 'publish'}
+        onOpenChange={(open) => !open && setConfirmAction(null)}
+        title={hasLiveContent ? 'Publish this draft?' : 'Publish this article?'}
+        description={
+          hasLiveContent
+            ? `This makes the draft the new live version (v${(article?.version ?? 1) + 1}), visible to players immediately.`
+            : 'This makes the article visible to players immediately.'
+        }
+        confirmLabel="Publish"
+        confirming={publish.isPending}
+        onConfirm={() => publish.mutate()}
+      />
+      <ConfirmDialog
+        open={confirmAction === 'archive'}
+        onOpenChange={(open) => !open && setConfirmAction(null)}
+        title="Archive this article?"
+        description="It's removed from player-facing search and the bot's knowledge base immediately. You can unarchive it later without losing its content or version history."
+        confirmLabel="Archive"
+        variant="destructive"
+        confirming={archive.isPending}
+        onConfirm={() => archive.mutate()}
+      />
+      <ConfirmDialog
+        open={confirmAction === 'unarchive'}
+        onOpenChange={(open) => !open && setConfirmAction(null)}
+        title="Unarchive this article?"
+        description="It goes back to published with its existing content and re-enters the bot's knowledge base immediately."
+        confirmLabel="Unarchive"
+        confirming={unarchive.isPending}
+        onConfirm={() => unarchive.mutate()}
+      />
     </>
   );
 }

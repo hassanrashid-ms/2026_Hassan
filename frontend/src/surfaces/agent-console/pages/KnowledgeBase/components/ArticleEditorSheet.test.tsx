@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ArticleEditorSheet } from './ArticleEditorSheet.tsx';
@@ -420,6 +420,67 @@ describe('ArticleEditorSheet publish/archive role gating', () => {
 
     expect(screen.getByRole('button', { name: 'Publish' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Archive' })).toBeInTheDocument();
+  });
+
+  it('requires confirming before Publish/Archive actually call the API', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(agentApi, 'fetchArticle').mockResolvedValue(EXISTING_ARTICLE);
+    vi.spyOn(agentApi, 'fetchIntents').mockResolvedValue({ intents: [] });
+    const publishSpy = vi.spyOn(agentApi, 'publishArticle').mockResolvedValue(EXISTING_ARTICLE);
+    const archiveSpy = vi.spyOn(agentApi, 'archiveArticle').mockResolvedValue(EXISTING_ARTICLE);
+
+    renderWithClient(
+      <ArticleEditorSheet
+        token="tok"
+        session={SESSION}
+        articleId="art-1"
+        open
+        onOpenChange={() => {}}
+        onCreated={() => {}}
+      />,
+    );
+    await screen.findByDisplayValue('Refunds');
+
+    await user.click(screen.getByRole('button', { name: 'Publish' }));
+    expect(publishSpy).not.toHaveBeenCalled();
+    let dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText('Publish this article?')).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Publish' }));
+    await waitFor(() => expect(publishSpy).toHaveBeenCalledWith('tok', 'art-1'));
+
+    await user.click(screen.getByRole('button', { name: 'Archive' }));
+    expect(archiveSpy).not.toHaveBeenCalled();
+    dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText('Archive this article?')).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Archive' }));
+    await waitFor(() => expect(archiveSpy).toHaveBeenCalledWith('tok', 'art-1'));
+  });
+
+  it('requires confirming before Unarchive actually calls the API', async () => {
+    const user = userEvent.setup();
+    const archived = { ...EXISTING_ARTICLE, state: 'archived' as const };
+    vi.spyOn(agentApi, 'fetchArticle').mockResolvedValue(archived);
+    vi.spyOn(agentApi, 'fetchIntents').mockResolvedValue({ intents: [] });
+    const unarchiveSpy = vi.spyOn(agentApi, 'unarchiveArticle').mockResolvedValue(archived);
+
+    renderWithClient(
+      <ArticleEditorSheet
+        token="tok"
+        session={SESSION}
+        articleId="art-1"
+        open
+        onOpenChange={() => {}}
+        onCreated={() => {}}
+      />,
+    );
+    await screen.findByDisplayValue('Refunds');
+
+    await user.click(screen.getByRole('button', { name: 'Unarchive' }));
+    expect(unarchiveSpy).not.toHaveBeenCalled();
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText('Unarchive this article?')).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Unarchive' }));
+    await waitFor(() => expect(unarchiveSpy).toHaveBeenCalledWith('tok', 'art-1'));
   });
 });
 
