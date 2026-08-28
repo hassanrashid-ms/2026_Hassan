@@ -805,3 +805,91 @@ describe('article version history', () => {
     expect(res.body.draft).toMatchObject({ title: 'v1' });
   });
 });
+
+describe('attachment staging during a draft edit', () => {
+  it('marks an upload during draft-editing as draftOnly, not yet in attachmentsFor on the live view', async () => {
+    const workspaceId = await seedWorkspace();
+    const { agentId, token } = await seedAgent(workspaceId, 'team_lead');
+    const created = await request(app)
+      .post('/articles')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ title: 'X', body: 'Y' })
+      .expect(201);
+    const id = created.body.id as string;
+    await request(app)
+      .post(`/articles/${id}/publish`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+    const key = await uploadFixtureImage(workspaceId, agentId);
+
+    await request(app)
+      .post(`/articles/${id}/attachments`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ key, filename: 'diagram.png', mime_type: 'image/png', byte_size: 14, draft: true })
+      .expect(200);
+
+    const { rows } = await ownerPool.query(
+      `select draft_only from article_attachment where article_id = $1`,
+      [id],
+    );
+    expect(rows[0].draft_only).toBe(true);
+  });
+
+  it('stages removal of a live attachment, only actually removed on publish', async () => {
+    const workspaceId = await seedWorkspace();
+    const { agentId, token } = await seedAgent(workspaceId, 'team_lead');
+    const created = await request(app)
+      .post('/articles')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ title: 'X', body: 'Y' })
+      .expect(201);
+    const id = created.body.id as string;
+    const key = await uploadFixtureImage(workspaceId, agentId);
+    const attachment = await request(app)
+      .post(`/articles/${id}/attachments`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ key, filename: 'diagram.png', mime_type: 'image/png', byte_size: 14 })
+      .expect(200);
+    await request(app)
+      .post(`/articles/${id}/publish`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+
+    await request(app)
+      .delete(`/articles/${id}/attachments/${attachment.body.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+
+    const beforePublish = await ownerPool.query(
+      `select removed_at, pending_removal_at from article_attachment where id = $1`,
+      [attachment.body.id],
+    );
+    expect(beforePublish.rows[0].removed_at).toBeNull();
+    expect(beforePublish.rows[0].pending_removal_at).not.toBeNull();
+
+    await request(app)
+      .patch(`/articles/${id}/draft`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ title: 'v2' })
+      .expect(200);
+    await request(app)
+      .post(`/articles/${id}/publish`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+
+    const afterPublish = await ownerPool.query(
+      `select removed_at from article_attachment where id = $1`,
+      [attachment.body.id],
+    );
+    expect(afterPublish.rows[0].removed_at).not.toBeNull();
+  });
+});

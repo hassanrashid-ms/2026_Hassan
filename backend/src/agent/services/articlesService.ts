@@ -43,7 +43,13 @@ async function attachmentsFor(tx: Tx, articleId: string): Promise<ArticleAttachm
   const attachmentRows = await tx
     .select()
     .from(articleAttachment)
-    .where(eq(articleAttachment.articleId, articleId));
+    .where(
+      and(
+        eq(articleAttachment.articleId, articleId),
+        isNull(articleAttachment.removedAt),
+        eq(articleAttachment.draftOnly, false),
+      ),
+    );
 
   return Promise.all(
     attachmentRows.map(async (a) => ({
@@ -489,7 +495,12 @@ export async function finalizeArticleAttachment(
   return withWorkspace(ctx.workspaceId, async (tx) => {
     const [existing] = await tx.select().from(article).where(eq(article.id, articleId)).limit(1);
     if (!existing) return { ok: false, reason: 'not_found' };
-    if (existing.state !== 'draft') return { ok: false, reason: 'not_draft' };
+    // Draft-state articles: unchanged, draft-only. Published articles: only
+    // allowed as a draftOnly staged upload (body.draft must be true) — an
+    // attachment can't land directly on the live article outside the draft flow.
+    if (existing.state !== 'draft' && !(existing.state === 'published' && body.draft)) {
+      return { ok: false, reason: 'not_draft' };
+    }
 
     // Same ownership-prefix check as sendAgentMessage's chat claim: only this
     // agent's own pending prefix may be claimed. A wrong-tenant/wrong-agent
@@ -527,6 +538,7 @@ export async function finalizeArticleAttachment(
         filename: body.filename,
         mimeType: body.mime_type,
         byteSize: body.byte_size,
+        draftOnly: existing.state === 'published',
       })
       .returning();
 
@@ -539,6 +551,51 @@ export async function finalizeArticleAttachment(
         mime_type: row!.mimeType,
         byte_size: row!.byteSize,
         url: await presignGetObject(destKey),
+      },
+    };
+  });
+}
+
+export type RemoveArticleAttachmentResult =
+  | { ok: true; article: AgentArticleDetail }
+  | { ok: false; reason: 'not_found' };
+
+export async function removeArticleAttachment(
+  ctx: AgentContext,
+  articleId: string,
+  attachmentId: string,
+): Promise<RemoveArticleAttachmentResult> {
+  return withWorkspace(ctx.workspaceId, async (tx) => {
+    const [existing] = await tx.select().from(article).where(eq(article.id, articleId)).limit(1);
+    if (!existing) return { ok: false, reason: 'not_found' };
+    const [attachment] = await tx
+      .select()
+      .from(articleAttachment)
+      .where(and(eq(articleAttachment.id, attachmentId), eq(articleAttachment.articleId, articleId)))
+      .limit(1);
+    if (!attachment) return { ok: false, reason: 'not_found' };
+
+    if (existing.state === 'published' && !attachment.draftOnly) {
+      // Live attachment on a published article: stage the removal, applied at publish.
+      await tx
+        .update(articleAttachment)
+        .set({ pendingRemovalAt: new Date() })
+        .where(eq(articleAttachment.id, attachmentId));
+    } else {
+      // Draft-state article, or a draftOnly attachment that was never live: no
+      // staging needed, soft-remove now (never a DELETE).
+      await tx
+        .update(articleAttachment)
+        .set({ removedAt: new Date() })
+        .where(eq(articleAttachment.id, attachmentId));
+    }
+
+    return {
+      ok: true,
+      article: {
+        ...toDetail(existing),
+        attachments: await attachmentsFor(tx, articleId),
+        draft: await draftFor(tx, articleId),
       },
     };
   });

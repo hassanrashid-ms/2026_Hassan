@@ -39,6 +39,7 @@ export const FinalizeArticleAttachmentBody = z.object({
   filename: z.string().min(1).max(255),
   mime_type: z.string().min(1),
   byte_size: z.number().int().positive(),
+  draft: z.boolean().optional(),
 });
 
 export type ArticleAttachmentView = {
