@@ -78,6 +78,22 @@ async function uploadFixtureImage(workspaceId: string, playerId: string) {
   return key;
 }
 
+async function uploadFixtureVideo(workspaceId: string, playerId: string) {
+  const key = `pending/${workspaceId}/${playerId}/${crypto.randomUUID()}.mp4`;
+  const body = Buffer.from('fake-mp4-bytes');
+  const { url } = await presignPutObject({
+    key,
+    contentType: 'video/mp4',
+    contentLength: body.length,
+  });
+  await fetch(url, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'video/mp4', 'Content-Length': String(body.length) },
+    body,
+  });
+  return key;
+}
+
 describe('POST /surface/messages with an attachment', () => {
   it('claims the pending object and inserts an attachment row', async () => {
     const { workspaceId, playerId, token } = await setup();
@@ -97,6 +113,28 @@ describe('POST /surface/messages with an attachment', () => {
       filename: 'shot.png',
       mime_type: 'image/png',
       byte_size: 14,
+    });
+  });
+
+  it('claims a pending video and inserts an attachment row', async () => {
+    const { workspaceId, playerId, token } = await setup();
+    const key = await uploadFixtureVideo(workspaceId, playerId);
+    const byteSize = Buffer.from('fake-mp4-bytes').length;
+
+    const res = await request(app)
+      .post('/surface/messages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        body: '',
+        attachment: { key, filename: 'clip.mp4', mime_type: 'video/mp4', byte_size: byteSize },
+      })
+      .expect(200);
+
+    expect(res.body.message.body).toBe('clip.mp4');
+    expect(res.body.message.attachment).toMatchObject({
+      filename: 'clip.mp4',
+      mime_type: 'video/mp4',
+      byte_size: byteSize,
     });
   });
 

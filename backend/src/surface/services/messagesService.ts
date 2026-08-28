@@ -40,11 +40,11 @@ import {
   session,
 } from '../../shared/db/schema/index.ts';
 import {
-  ALLOWED_IMAGE_MIME_TYPES,
-  MAX_ATTACHMENT_BYTES,
+  ALLOWED_CHAT_ATTACHMENT_MIME_TYPES,
   copyObject,
   deleteObject,
   headObject,
+  maxBytesForAttachment,
   presignGetObject,
 } from '../../shared/storage/presign.ts';
 import { withWorkspace, type Tx } from '../../shared/db/withWorkspace.ts';
@@ -104,10 +104,10 @@ export async function sendPlayerMessage(
     // Defense-in-depth: re-check the allowlist/size cap against the real,
     // HEAD-verified values at claim time too, not only at presign time.
     if (
-      !ALLOWED_IMAGE_MIME_TYPES.includes(
-        real.contentType as (typeof ALLOWED_IMAGE_MIME_TYPES)[number],
+      !ALLOWED_CHAT_ATTACHMENT_MIME_TYPES.includes(
+        real.contentType as (typeof ALLOWED_CHAT_ATTACHMENT_MIME_TYPES)[number],
       ) ||
-      real.contentLength > MAX_ATTACHMENT_BYTES
+      real.contentLength > maxBytesForAttachment(real.contentType)
     ) {
       return { outcome: 'attachment_mismatch' };
     }
