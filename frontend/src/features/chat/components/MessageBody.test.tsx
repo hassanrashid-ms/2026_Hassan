@@ -105,4 +105,42 @@ describe('MessageBody', () => {
     );
     expect(screen.getByText(/Attachment unavailable/)).toBeInTheDocument();
   });
+
+  it('renders a video element (not an img) for a message with a video attachment', () => {
+    const { container } = render(
+      <MessageBody
+        authorType="agent"
+        body="clip.mp4"
+        attachment={{
+          id: 'a1',
+          filename: 'clip.mp4',
+          mimeType: 'video/mp4',
+          byteSize: 3,
+          url: 'https://example.test/clip.mp4',
+        }}
+      />,
+    );
+    const video = container.querySelector('video');
+    expect(video).not.toBeNull();
+    expect(video).toHaveAttribute('src', 'https://example.test/clip.mp4');
+    expect(video).toHaveAttribute('controls');
+    expect(container.querySelector('img')).toBeNull();
+  });
+
+  it('renders the fallback label when a video attachment has no url', () => {
+    render(
+      <MessageBody
+        authorType="agent"
+        body="clip.mp4"
+        attachment={{
+          id: 'a1',
+          filename: 'clip.mp4',
+          mimeType: 'video/mp4',
+          byteSize: 3,
+          url: null,
+        }}
+      />,
+    );
+    expect(screen.getByText(/Attachment unavailable/)).toBeInTheDocument();
+  });
 });

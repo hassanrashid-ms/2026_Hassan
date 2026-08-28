@@ -51,8 +51,8 @@ export function MessageBody({
    */
   onImageClick?: (attachment: ChatAttachment) => void;
 }) {
-  const [imageLoaded, setImageLoaded] = useState(false);
-  const [imageErrored, setImageErrored] = useState(false);
+  const [mediaLoaded, setMediaLoaded] = useState(false);
+  const [mediaErrored, setMediaErrored] = useState(false);
 
   const text = !MARKDOWN_AUTHORS.has(authorType) ? (
     <>{body}</>
@@ -67,45 +67,56 @@ export function MessageBody({
   // That's an implementation detail, not something the agent actually typed —
   // showing it a second time above the image would read as a duplicated caption.
   const hasTypedText = body.trim().length > 0 && body !== attachment.filename;
+  const isVideo = attachment.mimeType.startsWith('video/');
 
   return (
     <div className="flex flex-col gap-1">
       {hasTypedText && text}
-      {attachment.url && !imageErrored ? (
-        <div
-          className={`group relative h-64 w-64 max-w-full overflow-hidden rounded-md ${
-            onImageClick ? 'cursor-pointer' : ''
-          }`}
-          {...(onImageClick && {
-            role: 'button',
-            tabIndex: 0,
-            onClick: () => onImageClick(attachment),
-            onKeyDown: (event: KeyboardEvent) => {
-              if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault();
-                onImageClick(attachment);
-              }
-            },
-          })}
-        >
-          {!imageLoaded && (
-            <div className="absolute inset-0 animate-pulse rounded-md bg-muted/20" />
-          )}
-          <img
+      {attachment.url && !mediaErrored ? (
+        isVideo ? (
+          <video
             src={attachment.url}
-            alt={attachment.filename}
-            className={`h-full w-full object-contain transition-opacity duration-200 ${
-              imageLoaded ? 'opacity-100' : 'opacity-0'
-            }`}
-            onLoad={() => setImageLoaded(true)}
-            onError={() => setImageErrored(true)}
+            controls
+            className="max-w-xs rounded-md"
+            onLoadedData={() => setMediaLoaded(true)}
+            onError={() => setMediaErrored(true)}
           />
-          {onImageClick && imageLoaded && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-all duration-150 group-hover:bg-black/30 group-hover:opacity-100">
-              <Maximize2 className="size-6 text-white drop-shadow" />
-            </div>
-          )}
-        </div>
+        ) : (
+          <div
+            className={`group relative h-64 w-64 max-w-full overflow-hidden rounded-md ${
+              onImageClick ? 'cursor-pointer' : ''
+            }`}
+            {...(onImageClick && {
+              role: 'button',
+              tabIndex: 0,
+              onClick: () => onImageClick(attachment),
+              onKeyDown: (event: KeyboardEvent) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  onImageClick(attachment);
+                }
+              },
+            })}
+          >
+            {!mediaLoaded && (
+              <div className="absolute inset-0 animate-pulse rounded-md bg-muted/20" />
+            )}
+            <img
+              src={attachment.url}
+              alt={attachment.filename}
+              className={`h-full w-full object-contain transition-opacity duration-200 ${
+                mediaLoaded ? 'opacity-100' : 'opacity-0'
+              }`}
+              onLoad={() => setMediaLoaded(true)}
+              onError={() => setMediaErrored(true)}
+            />
+            {onImageClick && mediaLoaded && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-all duration-150 group-hover:bg-black/30 group-hover:opacity-100">
+                <Maximize2 className="size-6 text-white drop-shadow" />
+              </div>
+            )}
+          </div>
+        )
       ) : (
         <span className="text-xs italic opacity-75">
           Attachment unavailable — {attachment.filename}
