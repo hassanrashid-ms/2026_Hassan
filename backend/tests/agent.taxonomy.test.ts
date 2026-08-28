@@ -289,6 +289,59 @@ describe('POST /intents/:id/archive', () => {
   });
 });
 
+describe('POST /intents/:id/unarchive', () => {
+  it('unarchives an intent', async () => {
+    const workspaceId = await seedWorkspace();
+    const intentId = await seedIntent(workspaceId, 'Billing');
+    await ownerPool.query(`update intent set archived_at = now() where id = $1`, [intentId]);
+    const { token } = await seedAgentWithRole(workspaceId, 'admin');
+
+    const res = await request(app)
+      .post(`/intents/${intentId}/unarchive`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+
+    expect(res.body).toEqual({ id: intentId, name: 'Billing', archivedAt: null });
+  });
+
+  it('409s when the intent is not archived', async () => {
+    const workspaceId = await seedWorkspace();
+    const intentId = await seedIntent(workspaceId, 'Billing');
+    const { token } = await seedAgentWithRole(workspaceId, 'admin');
+
+    await request(app)
+      .post(`/intents/${intentId}/unarchive`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(409);
+  });
+
+  it('404s for an unknown intent id', async () => {
+    const workspaceId = await seedWorkspace();
+    const { token } = await seedAgentWithRole(workspaceId, 'admin');
+
+    await request(app)
+      .post(`/intents/${randomUUID()}/unarchive`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(404);
+  });
+
+  it('refuses a non-admin agent with 403', async () => {
+    const workspaceId = await seedWorkspace();
+    const intentId = await seedIntent(workspaceId, 'Billing');
+    await ownerPool.query(`update intent set archived_at = now() where id = $1`, [intentId]);
+    const { token } = await seedAgentWithRole(workspaceId, 'agent');
+
+    await request(app)
+      .post(`/intents/${intentId}/unarchive`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(403);
+  });
+});
+
 describe('PATCH /subintents/:id', () => {
   it('renames a subintent and sets its default priority', async () => {
     const workspaceId = await seedWorkspace();
@@ -367,6 +420,93 @@ describe('POST /subintents/:id/archive', () => {
       .set('Authorization', `Bearer ${token}`)
       .set('X-Workspace-Id', workspaceId)
       .expect(409);
+  });
+});
+
+describe('POST /subintents/:id/unarchive', () => {
+  it('unarchives a subintent', async () => {
+    const workspaceId = await seedWorkspace();
+    const intentId = await seedIntent(workspaceId, 'Billing');
+    const subintentId = await seedSubintent({ workspaceId, intentId, name: 'Refunds' });
+    await ownerPool.query(`update subintent set archived_at = now() where id = $1`, [subintentId]);
+    const { token } = await seedAgentWithRole(workspaceId, 'admin');
+
+    const res = await request(app)
+      .post(`/subintents/${subintentId}/unarchive`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+
+    expect(res.body).toEqual({
+      id: subintentId,
+      name: 'Refunds',
+      archivedAt: null,
+      mergedIntoId: null,
+    });
+  });
+
+  it('clears mergedIntoId when unarchiving a merged subintent', async () => {
+    const workspaceId = await seedWorkspace();
+    const intentId = await seedIntent(workspaceId, 'Billing');
+    const loserId = await seedSubintent({ workspaceId, intentId, name: 'Refunds' });
+    const survivorId = await seedSubintent({ workspaceId, intentId, name: 'Refund Requests' });
+    await ownerPool.query(
+      `update subintent set archived_at = now(), merged_into_id = $1 where id = $2`,
+      [survivorId, loserId],
+    );
+    const { token } = await seedAgentWithRole(workspaceId, 'admin');
+
+    const res = await request(app)
+      .post(`/subintents/${loserId}/unarchive`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+
+    expect(res.body).toEqual({
+      id: loserId,
+      name: 'Refunds',
+      archivedAt: null,
+      mergedIntoId: null,
+    });
+  });
+
+  it('409s while the parent intent is still archived', async () => {
+    const workspaceId = await seedWorkspace();
+    const intentId = await seedIntent(workspaceId, 'Billing');
+    const subintentId = await seedSubintent({ workspaceId, intentId, name: 'Refunds' });
+    await ownerPool.query(`update subintent set archived_at = now() where id = $1`, [subintentId]);
+    await ownerPool.query(`update intent set archived_at = now() where id = $1`, [intentId]);
+    const { token } = await seedAgentWithRole(workspaceId, 'admin');
+
+    await request(app)
+      .post(`/subintents/${subintentId}/unarchive`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(409);
+  });
+
+  it('409s when the subintent is not archived', async () => {
+    const workspaceId = await seedWorkspace();
+    const intentId = await seedIntent(workspaceId, 'Billing');
+    const subintentId = await seedSubintent({ workspaceId, intentId, name: 'Refunds' });
+    const { token } = await seedAgentWithRole(workspaceId, 'admin');
+
+    await request(app)
+      .post(`/subintents/${subintentId}/unarchive`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(409);
+  });
+
+  it('404s for an unknown subintent id', async () => {
+    const workspaceId = await seedWorkspace();
+    const { token } = await seedAgentWithRole(workspaceId, 'admin');
+
+    await request(app)
+      .post(`/subintents/${randomUUID()}/unarchive`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(404);
   });
 });
 

@@ -23,7 +23,7 @@ export type ResolutionAnswerOutcome =
    */
   | {
       kind: 'resolved';
-      source: 'bot' | 'agent' | 'player_confirmed';
+      source: 'bot' | 'agent' | 'player_confirmed' | 'player_stated';
       posted: PostedMessageRow | null;
     }
   | { kind: 'handed_off'; posted: PostedMessageRow }
@@ -76,13 +76,19 @@ export async function applyResolutionAnswer(
     return { kind: 'handed_off', posted };
   }
 
-  // agent_ask and inactivity_ask share this code: the two differ only in who
-  // asked, and the player's client cannot tell them apart — the banner is the
-  // same, the route is the same, and `helped` means the same thing. What differs
-  // is attribution, so the kind and the event's `source` are derived from the
-  // phase rather than duplicated into a second branch.
-  const askedBy = found.confirmPhase === 'inactivity_ask' ? 'inactivity' : 'agent';
-  const resolutionKind = askedBy === 'inactivity' ? 'player_confirmed' : 'agent';
+  // agent_ask, inactivity_ask and player_stated all share this code: they
+  // differ only in who asked, and the player's client cannot tell them apart —
+  // the banner is the same, the route is the same, and `helped` means the same
+  // thing. What differs is attribution, so the kind and the event's `source`
+  // are derived from the phase rather than duplicated into a third branch.
+  const askedBy =
+    found.confirmPhase === 'inactivity_ask'
+      ? 'inactivity'
+      : found.confirmPhase === 'player_stated'
+        ? 'player'
+        : 'agent';
+  const resolutionKind =
+    askedBy === 'inactivity' ? 'player_confirmed' : askedBy === 'player' ? 'player_stated' : 'agent';
 
   if (helped) {
     // Posted before the status flip so the transcript reads in the order it

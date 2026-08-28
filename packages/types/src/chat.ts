@@ -191,7 +191,13 @@ export type MessageReadEvent = {
  * whenever this is not 'none'; the value only tells the *server* what a tap
  * means, which is why the webview never branches on it.
  */
-export type ConfirmPhaseValue = 'none' | 'bot_article' | 'agent_ask' | 'form' | 'inactivity_ask';
+export type ConfirmPhaseValue =
+  | 'none'
+  | 'bot_article'
+  | 'agent_ask'
+  | 'form'
+  | 'inactivity_ask'
+  | 'player_stated';
 
 /**
  * The banner's Yes/No. No conversation id: the thread is resolved from the

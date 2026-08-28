@@ -83,12 +83,19 @@ export type CreateSubintentResponse = { id: string; name: string; intent_id: str
 
 export type RenameIntentResponse = { id: string; name: string };
 export type ArchiveIntentResponse = { id: string; name: string; archivedAt: string };
+export type UnarchiveIntentResponse = { id: string; name: string; archivedAt: null };
 export type RenameSubintentResponse = {
   id: string;
   name: string;
   defaultPriority: ConversationPriority | null;
 };
 export type ArchiveSubintentResponse = { id: string; name: string; archivedAt: string };
+export type UnarchiveSubintentResponse = {
+  id: string;
+  name: string;
+  archivedAt: null;
+  mergedIntoId: null;
+};
 export type MoveSubintentResponse = { id: string; name: string; intentId: string };
 export type MergeSubintentResponse = {
   id: string;

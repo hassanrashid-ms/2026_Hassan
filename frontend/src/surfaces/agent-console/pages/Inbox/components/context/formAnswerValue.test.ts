@@ -37,8 +37,10 @@ describe('formAnswerValue', () => {
     expect(formAnswerValue('short_text', null, true)).toBe(NOT_ANSWERED);
   });
 
-  // attachment is declared-but-inert: no attachment table, so no answer of this
-  // type can exist yet. Naming it beats rendering a raw uuid blob if one ever does.
+  // FormPanel resolves an attachment answer into a thumbnail itself and never
+  // calls this function for one — this is the fallback for the one case it
+  // can't render: a resolved-attachment lookup/presign failure, which leaves
+  // the raw `{ attachmentId }` shape in place. Naming it beats dumping the raw id.
   it('names an attachment rather than dumping it', () => {
     expect(formAnswerValue('attachment', { attachmentId: 'abc' }, true)).toBe('Attachment');
   });

@@ -4,7 +4,8 @@ import type { DeclaredFieldType } from './player-state.ts';
 import type { TagView } from './tags.ts';
 
 /** The resolving side. Mirrors the `resolution_source` pg enum. */
-export type ResolutionSourceValue = 'bot' | 'agent' | 'player_confirmed' | 'timed_out';
+export type ResolutionSourceValue =
+  'bot' | 'agent' | 'player_confirmed' | 'timed_out' | 'player_stated';
 
 /**
  * The header row for one conversation, fetched by id.
@@ -64,6 +65,23 @@ export type AgentTicketSummary = {
 };
 
 /**
+ * The resolved shape of `AgentFormFieldView.value` when `field_type` is
+ * `'attachment'` and `answered` is true. The stored answer is only
+ * `{ attachmentId }`; the context endpoint joins the `attachment` row and
+ * signs a fresh GET url server-side (the same presign-at-read-time rule every
+ * other attachment in this app follows) so the rail can render a preview
+ * without a second round trip. `url` is null if signing failed — the row
+ * still renders, just without a preview.
+ */
+export type AgentFormAttachmentValue = {
+  attachmentId: string;
+  filename: string;
+  mimeType: string;
+  byteSize: number;
+  url: string | null;
+};
+
+/**
  * One row of the form section. Every field in the submission's version gets one,
  * answered or not: a gap is a row, never an omission, because the agent has to
  * be able to tell "the player did not answer this" from "this was never asked".
@@ -79,7 +97,10 @@ export type AgentFormFieldView = {
    * exists. From the version's declared type when unanswered.
    */
   field_type: FormFieldType;
-  /** null when the field has no answer row. Read `answered`, not this. */
+  /**
+   * null when the field has no answer row. Read `answered`, not this.
+   * Shaped as `AgentFormAttachmentValue` when `field_type === 'attachment'`.
+   */
   value: unknown;
   answered: boolean;
 };

@@ -1,7 +1,12 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { IntentSubintentView, IntentView } from '@support/types';
-import { archiveIntent, createSubintent, renameIntent } from '../../../api/agentApi.ts';
+import {
+  archiveIntent,
+  createSubintent,
+  renameIntent,
+  unarchiveIntent,
+} from '../../../api/agentApi.ts';
 import { isAdmin, type StoredAgentSession } from '../../../lib/agentSession.ts';
 import { Badge } from '../../../components/ui/badge.tsx';
 import { Button } from '../../../components/ui/button.tsx';
@@ -46,6 +51,11 @@ export function IntentRow({
       setConfirmArchive(false);
       void invalidate();
     },
+  });
+
+  const unarchive = useMutation({
+    mutationFn: () => unarchiveIntent(token, intent.id),
+    onSuccess: () => void invalidate(),
   });
 
   const addSubintent = useMutation({
@@ -118,8 +128,24 @@ export function IntentRow({
             </span>
           </div>
         )}
+        {admin && !editing && intent.archivedAt !== null && (
+          <div className="ml-auto flex items-center gap-1">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => unarchive.mutate()}
+              disabled={unarchive.isPending}
+            >
+              Unarchive
+            </Button>
+          </div>
+        )}
       </div>
       {archive.isError && <p className="pl-0 text-xs text-red-600">{archive.error?.message}</p>}
+      {unarchive.isError && (
+        <p className="pl-0 text-xs text-red-600">{unarchive.error?.message}</p>
+      )}
       {addingSubintent && (
         <div className="mt-1 flex items-center gap-2 pl-3">
           <Input

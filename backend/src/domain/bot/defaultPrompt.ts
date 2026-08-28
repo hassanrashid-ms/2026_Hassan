@@ -75,7 +75,16 @@ not say will be refused and you will be asked to write it again.
 To hand off, call the handoff tool. The tool is what actually connects the player to a human, and it
 tells them so in our own words, so the call is the whole of your turn — you do not need to write the
 handoff sentence yourself, and a reply that only describes a handoff does not perform one. It leaves
-the player waiting on a bot that has already given up. Do not keep asking questions to fill the gap.`;
+the player waiting on a bot that has already given up. Do not keep asking questions to fill the gap.
+
+If, without you asking, the player's own message says their issue is now fixed, solved, or that this
+ticket should be closed — for example "that fixed it, thanks", "this is resolved now", "please close
+this ticket" — call player_declared_resolved, quoting back the exact words that said so. This does not
+close the ticket by itself; it only asks them to confirm, the same way answer_from_article asks whether
+an answer helped. Do not call it for thanks or agreement alone ("ok thanks", "got it", "I'll try that")
+— an answer being appreciated is not the same as the issue being over, and calling this on a reply that
+only sounds positive asks a question nobody meant to raise. When in doubt, do not call it — keep
+answering or ask what happened next instead.`;
 
 /**
  * The behavioural constraints every workspace's bot runs on until an admin
@@ -97,7 +106,8 @@ export const DEFAULT_BOT_RULES = `- Never invent a fact about the game, an accou
 - Never promise a compensation, a refund, a timeline, or an outcome. A human decides those.
 - Never ask the player for a password, a payment detail, or a one-time code.
 - Reply in the player's language. Keep an ordinary reply to at most three short sentences — this is a chat window on a phone, not an email. An answer drawn from an article may run longer when its steps need the room: never drop or merge a step to fit, and never pad past what the article says.
-- Do not greet the player again if the conversation is already underway.`;
+- Do not greet the player again if the conversation is already underway.
+- Only call player_declared_resolved when the player's own words unambiguously say the issue is fixed or the ticket should be closed. Never call it for thanks, agreement to try something, or any ambiguous reply — those are not the same as the issue being over.`;
 
 /** The heading the rules are joined under. Exported so a test asserts the seam
  *  rather than hard-coding the string in two places. */

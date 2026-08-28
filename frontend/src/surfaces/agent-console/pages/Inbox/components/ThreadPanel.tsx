@@ -8,7 +8,6 @@ import type {
 } from '@support/types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Archive, Clock, MessageSquare, PanelRight, X } from 'lucide-react';
-import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { toast } from 'sonner';
 import {
   askResolved,
@@ -45,7 +44,7 @@ import {
 import type { ChatAttachment, ChatMessage } from '../../../../../features/chat/components/types.ts';
 import { Badge } from '../../../components/ui/badge.tsx';
 import { Button } from '../../../components/ui/button.tsx';
-import { Dialog, DialogContent, DialogTitle } from '../../../components/ui/dialog.tsx';
+import { AttachmentLightbox } from '../../../components/AttachmentLightbox.tsx';
 import { STATUS_BADGE_VARIANT, formatStatus } from './ConversationRow.tsx';
 
 function toChatMessage(m: AgentMessageView): ChatMessage {
@@ -79,7 +78,7 @@ function formatTicketDate(iso: string): string {
   });
 }
 
-/** "Resolved by Sam" / "Resolved by the bot" / "Closed" when no source is known. */
+/** "Resolved by Sam" / "Resolved by the bot" / "Resolved — player asked to close it" / "Closed" when no source is known. */
 function resolverLabel(
   source: ResolutionSourceValue | null | undefined,
   agentName: string | null | undefined,
@@ -87,6 +86,7 @@ function resolverLabel(
   if (source === 'agent') return `Resolved by ${agentName ?? 'an agent'}`;
   if (source === 'bot') return 'Resolved by the bot';
   if (source === 'player_confirmed') return 'Resolved by the player';
+  if (source === 'player_stated') return 'Resolved — player asked to close it';
   if (source === 'timed_out') return 'Resolved after no reply';
   return 'Closed';
 }
@@ -577,43 +577,7 @@ export function ThreadPanel({
           }
         />
       </div>
-      {/* Owned here, not inside ChatThread/MessageBody: those are shared with
-          the webview, and a click-to-expand lightbox is an agent-console-only,
-          desktop affordance. */}
-      <Dialog
-        open={expandedImage !== null}
-        onOpenChange={(open) => !open && setExpandedImage(null)}
-      >
-        {/* w-auto, not w-full: the content's own bounding box must hug the
-            image, not stretch to max-w-[90vw] regardless of the image's real
-            size — otherwise a click in the empty space around a small image
-            still lands "inside" the dialog content and Radix's
-            click-outside-to-close never fires. */}
-        <DialogContent
-          showCloseButton={false}
-          className="w-auto max-w-[90vw] border-none bg-transparent p-0 shadow-none"
-        >
-          <DialogTitle className="sr-only">
-            {expandedImage?.filename ?? 'Attachment preview'}
-          </DialogTitle>
-          {/* Own close button, not the Dialog's default small corner X: that
-              default is styled for a solid bg-bg card and reads as nearly
-              invisible against a photo or the transparent backdrop here. */}
-          <DialogPrimitive.Close
-            aria-label="Close"
-            className="absolute -top-4 -right-4 z-10 flex size-9 items-center justify-center rounded-full bg-bg text-text shadow-lg outline-none hover:bg-muted/20"
-          >
-            <X className="size-5" />
-          </DialogPrimitive.Close>
-          {expandedImage?.url && (
-            <img
-              src={expandedImage.url}
-              alt={expandedImage.filename}
-              className="max-h-[85vh] max-w-[90vw] rounded-card object-contain"
-            />
-          )}
-        </DialogContent>
-      </Dialog>
+      <AttachmentLightbox attachment={expandedImage} onClose={() => setExpandedImage(null)} />
     </>
   );
 }

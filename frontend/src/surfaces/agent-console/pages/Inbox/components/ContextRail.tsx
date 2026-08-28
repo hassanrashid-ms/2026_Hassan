@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { fetchConversationContext } from '../../../api/agentApi.ts';
@@ -8,9 +8,11 @@ import { handleSessionExpired } from '../../../lib/authErrorHandling.ts';
 import { ApiError } from '../../../../../lib/httpClient.ts';
 import { Button } from '../../../components/ui/button.tsx';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../../../components/ui/sheet.tsx';
+import { AttachmentLightbox } from '../../../components/AttachmentLightbox.tsx';
 import { FormPanel } from './context/FormPanel.tsx';
 import { PlayerStatePanel } from './context/PlayerStatePanel.tsx';
 import { TicketList } from './context/TicketList.tsx';
+import type { ChatAttachment } from '../../../../../features/chat/components/types.ts';
 
 export function ContextRail({
   token,
@@ -25,6 +27,7 @@ export function ContextRail({
 }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [expandedAttachment, setExpandedAttachment] = useState<ChatAttachment | null>(null);
 
   // Long staleTime: the snapshot is immutable by construction and ticket
   // history moves on the order of days. Navigating to another ticket changes the
@@ -70,51 +73,62 @@ export function ContextRail({
   const notFound = error instanceof ApiError && error.status === 404;
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange} modal={false}>
-      <SheetContent
-        side="right"
-        showOverlay={false}
-        className="w-96 sm:max-w-96"
-        // The rail sits beside a thread that stays live and clickable, so a
-        // click on the transcript must not dismiss it.
-        onInteractOutside={(e) => e.preventDefault()}
-      >
-        <SheetHeader className="px-4 py-3">
-          <SheetTitle>Context</SheetTitle>
-        </SheetHeader>
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          {contextQuery.isError ? (
-            <div className="flex flex-col items-start gap-2 px-4 py-3">
-              <p className="text-sm text-muted">
-                {notFound ? 'Ticket not found' : 'Could not load context.'}
-              </p>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => void contextQuery.refetch()}
-              >
-                Retry
-              </Button>
-            </div>
-          ) : contextQuery.data ? (
-            <>
-              <PlayerStatePanel state={contextQuery.data.player_state} />
-              <TicketList
-                tickets={contextQuery.data.tickets}
-                summary={contextQuery.data.summary}
-                currentId={conversationId}
-                onSelect={(id) => void navigate(`/inbox/${id}`)}
-              />
-              {/* Five states, and this is the one that renders nothing: no form
+    <>
+      <Sheet open={open} onOpenChange={onOpenChange} modal={false}>
+        <SheetContent
+          side="right"
+          showOverlay={false}
+          className="w-[28rem] sm:max-w-[28rem]"
+          // The rail sits beside a thread that stays live and clickable, so a
+          // click on the transcript must not dismiss it.
+          onInteractOutside={(e) => e.preventDefault()}
+        >
+          <SheetHeader className="px-4 py-3">
+            <SheetTitle>Context</SheetTitle>
+          </SheetHeader>
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {contextQuery.isError ? (
+              <div className="flex flex-col items-start gap-2 px-4 py-3">
+                <p className="text-sm text-muted">
+                  {notFound ? 'Ticket not found' : 'Could not load context.'}
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void contextQuery.refetch()}
+                >
+                  Retry
+                </Button>
+              </div>
+            ) : contextQuery.data ? (
+              <>
+                <PlayerStatePanel state={contextQuery.data.player_state} />
+                {/* Five states, and this is the one that renders nothing: no form
                   means no section, following the raw-is-{} precedent. */}
-              {contextQuery.data.form ? <FormPanel form={contextQuery.data.form} /> : null}
-            </>
-          ) : (
-            <p className="px-4 py-3 text-sm text-muted">Loading…</p>
-          )}
-        </div>
-      </SheetContent>
-    </Sheet>
+                {contextQuery.data.form ? (
+                  <FormPanel
+                    form={contextQuery.data.form}
+                    onExpandAttachment={setExpandedAttachment}
+                  />
+                ) : null}
+                <TicketList
+                  tickets={contextQuery.data.tickets}
+                  summary={contextQuery.data.summary}
+                  currentId={conversationId}
+                  onSelect={(id) => void navigate(`/inbox/${id}`)}
+                />
+              </>
+            ) : (
+              <p className="px-4 py-3 text-sm text-muted">Loading…</p>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
+      <AttachmentLightbox
+        attachment={expandedAttachment}
+        onClose={() => setExpandedAttachment(null)}
+      />
+    </>
   );
 }

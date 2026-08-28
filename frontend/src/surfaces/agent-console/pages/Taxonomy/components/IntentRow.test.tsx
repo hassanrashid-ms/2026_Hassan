@@ -111,4 +111,29 @@ describe('IntentRow', () => {
 
     await waitFor(() => expect(spy).toHaveBeenCalledWith('t', 'i1'));
   });
+
+  it('shows Unarchive instead of the active-state controls for an archived intent, and calls it', async () => {
+    const archived: IntentView = { ...billing, archivedAt: '2026-01-01T00:00:00Z' };
+    const spy = vi
+      .spyOn(agentApi, 'unarchiveIntent')
+      .mockResolvedValue({ id: 'i1', name: 'Billing', archivedAt: null });
+    renderWithClient(
+      <IntentRow
+        token="t"
+        session={ADMIN_SESSION}
+        intent={archived}
+        allIntents={[archived]}
+        allSubintents={allSubintents}
+      />,
+    );
+
+    expect(screen.queryByText('Archive')).not.toBeInTheDocument();
+    expect(screen.queryByText('Rename')).not.toBeInTheDocument();
+    const unarchiveButton = screen.getByText('Unarchive');
+
+    const user = userEvent.setup();
+    await user.click(unarchiveButton);
+
+    await waitFor(() => expect(spy).toHaveBeenCalledWith('t', 'i1'));
+  });
 });

@@ -457,8 +457,15 @@ describe('resolution_cycle', () => {
       'agent_ask',
       'form',
       'inactivity_ask',
+      'player_stated',
     ]);
-    expect(byName.resolution_source).toEqual(['bot', 'agent', 'player_confirmed', 'timed_out']);
+    expect(byName.resolution_source).toEqual([
+      'bot',
+      'agent',
+      'player_confirmed',
+      'timed_out',
+      'player_stated',
+    ]);
   });
 
   it('gives workspace an auto_close_days default of 7', async () => {

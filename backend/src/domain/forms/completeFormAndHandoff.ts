@@ -1,6 +1,7 @@
 import { and, desc, eq, asc } from 'drizzle-orm';
 import type { Tx } from '../../shared/db/withWorkspace.ts';
 import {
+  attachment,
   conversation,
   event,
   form,
@@ -203,6 +204,50 @@ export async function completeFormAndHandoff(
       body: formatFormAnswers(submission.formName, orderedFields, latestAnswers),
       visibility: 'internal',
     });
+
+    // `attachment`-type answers get their own message instead of a line in the
+    // summary above: `attachment.messageId` is unique, so one message can never
+    // carry two of these, and the summary's body is plain markdown text with no
+    // slot for a thumbnail anyway. Each one reuses the player's original upload's
+    // storageKey — the object in storage is read-only and immutable, so pointing
+    // a second attachment row at the same key needs no copy — per the FK-bypasses-
+    // RLS rule, the id is re-confirmed visible with a scoped select before trusting it.
+    for (const field of orderedFields) {
+      if (field.type !== 'attachment') continue;
+      const val = latestAnswers.get(field.key) as { attachmentId?: string } | undefined;
+      const attachmentId = val?.attachmentId;
+      if (!attachmentId) continue;
+
+      const [source] = await tx
+        .select({
+          storageKey: attachment.storageKey,
+          filename: attachment.filename,
+          mimeType: attachment.mimeType,
+          byteSize: attachment.byteSize,
+        })
+        .from(attachment)
+        .where(and(eq(attachment.id, attachmentId), eq(attachment.workspaceId, ctx.workspaceId)))
+        .limit(1);
+      if (!source) continue;
+
+      const attachmentMessage = await postMessage(tx, {
+        workspaceId: ctx.workspaceId,
+        conversationId: ctx.conversationId,
+        authorType: 'system',
+        actorId: null,
+        body: escapeMarkdown(String(field.label).trim()) || 'Attachment',
+        visibility: 'internal',
+      });
+
+      await tx.insert(attachment).values({
+        workspaceId: ctx.workspaceId,
+        messageId: attachmentMessage.id,
+        storageKey: source.storageKey,
+        filename: source.filename,
+        mimeType: source.mimeType,
+        byteSize: source.byteSize,
+      });
+    }
   }
 
   return {
@@ -216,20 +261,43 @@ export async function completeFormAndHandoff(
   };
 }
 
+// Player-supplied form answers and workspace-configured field labels/names ride into a
+// `system` message body that MessageBody.tsx renders as markdown. Escaping the markdown-
+// significant characters here is what keeps a crafted answer (e.g. "[click](evil)") from
+// becoming a live link in the agent console — see the MARKDOWN_AUTHORS contract note there.
+function escapeMarkdown(value: string): string {
+  return value.replace(/[\\`*_{}[\]()#+\-.!>|~]/g, '\\$&');
+}
+
 function formatFormAnswers(
   formName: string,
   orderedFields: any[],
   latestAnswers: Map<string, any>,
 ): string {
-  const lines: string[] = [`**Form Submitted:** ${formName}`, ''];
+  const lines: string[] = [`**Form Submitted:** ${escapeMarkdown(formName)}`, ''];
   for (const field of orderedFields) {
+    // Attachment answers ride in their own message (see the loop in
+    // completeFormAndHandoff, above) so they get a real preview instead of a
+    // stringified value — nothing to render for them in this summary.
+    if (field.type === 'attachment') continue;
+
     const val = latestAnswers.get(field.key);
     const displayVal = Array.isArray(val) ? val.join(', ') : val;
     const isEmptyArray = Array.isArray(val) && val.length === 0;
+    // Trimmed before wrapping in `**`: CommonMark refuses to close an emphasis
+    // run when the closing delimiter is preceded by whitespace, so a label with
+    // a trailing space (e.g. a form builder typo) would render its asterisks
+    // literally instead of bold.
+    const label = escapeMarkdown(String(field.label).trim());
+    // A real GFM list marker (`- `), not a bullet character: react-markdown
+    // treats consecutive `\n`-joined lines with no blank line between them as
+    // one paragraph, where a single `\n` is a soft break that renders as a
+    // space — which is why every "bullet" used to run together on one line.
+    // List items are a block boundary, so a single `\n` between them is enough.
     if (val !== undefined && val !== null && val !== '' && !isEmptyArray) {
-      lines.push(`• **${field.label}**: ${displayVal}`);
+      lines.push(`- **${label}**: ${escapeMarkdown(String(displayVal))}`);
     } else {
-      lines.push(`• **${field.label}**: *(Not answered)*`);
+      lines.push(`- **${label}**: *(Not answered)*`);
     }
   }
   return lines.join('\n');

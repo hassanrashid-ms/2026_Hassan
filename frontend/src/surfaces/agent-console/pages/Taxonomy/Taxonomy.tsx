@@ -33,6 +33,8 @@ export function Taxonomy() {
   const allSubintents = intents.flatMap((i) =>
     i.subintents.map((s) => ({ ...s, intentId: i.id, intentName: i.name })),
   );
+  const activeIntents = intents.filter((i) => i.archivedAt === null);
+  const archivedIntents = intents.filter((i) => i.archivedAt !== null);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -61,18 +63,37 @@ export function Taxonomy() {
         {intentsQuery.data && intents.length === 0 ? (
           <EmptyState message="Nothing to show" />
         ) : (
-          <ul className="flex flex-col gap-4">
-            {intents.map((intent) => (
-              <IntentRow
-                key={intent.id}
-                token={session.token}
-                session={session}
-                intent={intent}
-                allIntents={intents}
-                allSubintents={allSubintents}
-              />
-            ))}
-          </ul>
+          <>
+            <ul className="flex flex-col gap-4">
+              {activeIntents.map((intent) => (
+                <IntentRow
+                  key={intent.id}
+                  token={session.token}
+                  session={session}
+                  intent={intent}
+                  allIntents={intents}
+                  allSubintents={allSubintents}
+                />
+              ))}
+            </ul>
+            {archivedIntents.length > 0 && (
+              <div className="mt-6">
+                <p className="mb-2 text-xs font-semibold text-muted">Archived</p>
+                <ul className="flex flex-col gap-4">
+                  {archivedIntents.map((intent) => (
+                    <IntentRow
+                      key={intent.id}
+                      token={session.token}
+                      session={session}
+                      intent={intent}
+                      allIntents={intents}
+                      allSubintents={allSubintents}
+                    />
+                  ))}
+                </ul>
+              </div>
+            )}
+          </>
         )}
       </ScrollArea>
     </div>

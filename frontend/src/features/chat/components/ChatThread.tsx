@@ -154,14 +154,22 @@ export function ChatThread({
                       // — kept separate from the colour below so the bot can sit on
                       // support's side without also borrowing the agent's styling.
                       onOwnSide ? 'rounded-br-sm' : 'rounded-bl-sm',
-                      isOwn
-                        ? 'bg-accent text-accent-fg'
-                        : 'border border-muted/20 bg-accent-soft text-text',
+                      // Internal note colouring wins outright, not layered on top of
+                      // isOwn's bg-accent/text-accent-fg: two background-color (or two
+                      // text-color) utilities in the same class list is a coin flip
+                      // decided by Tailwind's generated CSS order, not by array order —
+                      // that's what put white text-accent-fg text on an agent's own
+                      // internal note instead of the intended dark amber text.
+                      isInternal
+                        ? 'border border-amber-500 bg-amber-100 text-amber-900'
+                        : isOwn
+                          ? 'bg-accent text-accent-fg'
+                          : 'border border-muted/20 bg-accent-soft text-text',
                       // The bot shares a side with the agent now, so the label is no
                       // longer the only thing separating them — this keeps them
-                      // distinguishable at a glance, without reading.
-                      isBot ? 'border-dashed border-muted/50 bg-muted/10' : null,
-                      isInternal ? 'border border-amber-500 bg-amber-100 text-amber-900' : null,
+                      // distinguishable at a glance, without reading. Skipped for an
+                      // internal note for the same reason: one background wins, not two.
+                      isBot && !isInternal ? 'border-dashed border-muted/50 bg-muted/10' : null,
                     ]
                       .filter(Boolean)
                       .join(' ')}
@@ -190,14 +198,15 @@ export function ChatThread({
                     {/* `agent` renders as markdown too, so article steps an agent
                       pasted read exactly like the bot's own answer. */}
                     <div className="m-0">
-                      {/* dark only for a genuinely-own bubble: that's the only one styled
-                        bg-accent text-accent-fg above. The bot's own-side bubble stays on
-                        the light bg-muted/10 and keeps the default dark article text. */}
+                      {/* dark only for a genuinely-own, non-internal bubble: that's the
+                        only one styled bg-accent text-accent-fg above. The bot's own-side
+                        bubble and an internal note (amber, always dark text — see the
+                        bubble className above) keep the default dark article text. */}
                       <MessageBody
                         authorType={chatMessage.authorType}
                         body={chatMessage.body}
                         attachment={chatMessage.attachment}
-                        dark={isOwn}
+                        dark={isOwn && !isInternal}
                         onImageClick={onImageClick}
                       />
                     </div>

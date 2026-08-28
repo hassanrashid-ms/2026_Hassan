@@ -19,6 +19,8 @@ import {
   moveSubintent,
   renameIntent,
   renameSubintent,
+  unarchiveIntent,
+  unarchiveSubintent,
 } from '../services/taxonomyService.ts';
 
 const IntentIdParams = z.object({ id: z.uuid() });
@@ -102,6 +104,24 @@ export const archiveIntentHandler: RequestHandler = async (req, res) => {
   res.status(200).json(result.intent);
 };
 
+export const unarchiveIntentHandler: RequestHandler = async (req, res) => {
+  const params = IntentIdParams.safeParse(req.params);
+  if (!params.success) {
+    sendError(res, 422, 'invalid_request', 'A valid intent id is required.');
+    return;
+  }
+  const result = await unarchiveIntent(req.agent!, params.data.id);
+  if (!result.ok) {
+    if (result.reason === 'not_found') {
+      sendError(res, 404, 'not_found', 'Intent not found.');
+      return;
+    }
+    sendError(res, 409, 'not_archivable', 'This intent is not archived.');
+    return;
+  }
+  res.status(200).json(result.intent);
+};
+
 export const renameSubintentHandler: RequestHandler = async (req, res) => {
   const params = SubintentIdParams.safeParse(req.params);
   const body = RenameSubintentBody.safeParse(req.body);
@@ -134,6 +154,28 @@ export const archiveSubintentHandler: RequestHandler = async (req, res) => {
       return;
     }
     sendError(res, 409, 'not_archivable', 'The "Other" subintent can never be archived.');
+    return;
+  }
+  res.status(200).json(result.subintent);
+};
+
+export const unarchiveSubintentHandler: RequestHandler = async (req, res) => {
+  const params = SubintentIdParams.safeParse(req.params);
+  if (!params.success) {
+    sendError(res, 422, 'invalid_request', 'A valid subintent id is required.');
+    return;
+  }
+  const result = await unarchiveSubintent(req.agent!, params.data.id);
+  if (!result.ok) {
+    if (result.reason === 'not_found') {
+      sendError(res, 404, 'not_found', 'Subintent not found.');
+      return;
+    }
+    if (result.reason === 'intent_archived') {
+      sendError(res, 409, 'not_archivable', 'Unarchive the parent intent first.');
+      return;
+    }
+    sendError(res, 409, 'not_archivable', 'This subintent is not archived.');
     return;
   }
   res.status(200).json(result.subintent);

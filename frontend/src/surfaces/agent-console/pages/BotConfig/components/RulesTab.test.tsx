@@ -72,6 +72,33 @@ describe('RulesTab', () => {
     expect(lockedSwitch).toBeDisabled();
   });
 
+  it('never lists no_invented_facts, even when present in config', () => {
+    const queryClient = new QueryClient();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RulesTab
+          token="t"
+          config={{
+            ...CONFIG,
+            rules: [
+              {
+                key: 'no_invented_facts',
+                text: 'Never invent a fact.',
+                enabled: true,
+                locked: true,
+                source: 'builtin',
+                enforcement: 'code',
+              },
+              ...CONFIG.rules,
+            ],
+          }}
+        />
+      </QueryClientProvider>,
+    );
+    expect(screen.queryByText('Never invent a fact.')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('switch')).toHaveLength(CONFIG.rules.length);
+  });
+
   it('toggling an unlocked rule stages the change without saving until confirmed', async () => {
     const saveSpy = vi.spyOn(agentApi, 'saveBotConfig').mockResolvedValue(CONFIG);
     renderTab();

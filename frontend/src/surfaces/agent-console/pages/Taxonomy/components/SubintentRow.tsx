@@ -6,6 +6,7 @@ import {
   mergeSubintent,
   moveSubintent,
   renameSubintent,
+  unarchiveSubintent,
 } from '../../../api/agentApi.ts';
 import { isAdmin, type StoredAgentSession } from '../../../lib/agentSession.ts';
 import { Badge } from '../../../components/ui/badge.tsx';
@@ -74,6 +75,11 @@ export function SubintentRow({
     },
   });
 
+  const unarchive = useMutation({
+    mutationFn: () => unarchiveSubintent(token, subintent.id),
+    onSuccess: () => void invalidate(),
+  });
+
   const move = useMutation({
     mutationFn: (intentId: string) => moveSubintent(token, subintent.id, intentId),
     onSuccess: () => void invalidate(),
@@ -92,6 +98,10 @@ export function SubintentRow({
   const mergeTargets = allSubintents.filter((s) => s.archivedAt === null && s.id !== subintent.id);
   const disabledTitle = isOther
     ? 'The "Other" subintent can never be archived, merged, or moved.'
+    : undefined;
+  const parentArchived = parentIntent.archivedAt !== null;
+  const unarchiveDisabledReason = parentArchived
+    ? 'Unarchive the parent intent first.'
     : undefined;
 
   return (
@@ -203,13 +213,29 @@ export function SubintentRow({
             </span>
           </div>
         )}
+        {admin && !editing && subintent.archivedAt !== null && (
+          <div className="ml-auto flex items-center gap-1">
+            <span title={unarchiveDisabledReason}>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => unarchive.mutate()}
+                disabled={parentArchived || unarchive.isPending}
+              >
+                Unarchive
+              </Button>
+            </span>
+          </div>
+        )}
       </div>
-      {(archive.isError || move.isError || merge.isError || rename.isError) && (
+      {(archive.isError || move.isError || merge.isError || rename.isError || unarchive.isError) && (
         <p className="pl-0 text-xs text-red-600">
           {archive.error?.message ??
             move.error?.message ??
             merge.error?.message ??
-            rename.error?.message}
+            rename.error?.message ??
+            unarchive.error?.message}
         </p>
       )}
       <ConfirmDialog

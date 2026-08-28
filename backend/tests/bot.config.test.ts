@@ -158,6 +158,19 @@ describe('DEFAULT_BOT_PROMPT', () => {
     expect(DEFAULT_BOT_RULES).toContain('three short sentences');
     expect(DEFAULT_BOT_RULES).toContain('never drop or merge a step to fit');
   });
+
+  /**
+   * Regression guard for player_declared_resolved. The prompt must instruct the
+   * model to call the tool only on an unprompted, unambiguous player statement,
+   * and must explicitly carve out thanks/agreement — otherwise a "thanks, that
+   * makes sense" reads to the model as resolution and the banner fires on an
+   * ordinary acknowledgement instead of only on an actual close request.
+   */
+  it('instructs the model to call player_declared_resolved only on an unprompted, unambiguous statement, never on thanks or agreement alone', () => {
+    expect(DEFAULT_BOT_PROMPT).toContain('player_declared_resolved');
+    expect(DEFAULT_BOT_PROMPT).toContain('quoting back the exact words');
+    expect(DEFAULT_BOT_PROMPT.toLowerCase()).toContain('ok thanks');
+  });
 });
 
 describe('DEFAULT_BOT_RULES', () => {
@@ -431,7 +444,7 @@ describe('saveBotConfig', () => {
     ).rejects.toThrow(InvalidRulesPayload);
   });
 
-  it('rejects a payload missing any other builtin key, even an unlocked one', async () => {
+  it('rejects a payload missing any builtin key, not just a locked one', async () => {
     const withoutBuiltin = buildBaselineRules().filter((r) => r.key !== 'no_regreet');
     await expect(
       withWorkspace(workspaceId, (tx) =>

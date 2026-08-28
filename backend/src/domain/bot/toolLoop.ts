@@ -8,6 +8,7 @@ import { isGrounded, MIN_GROUNDED_FRACTION, scoreGrounding } from './grounding.t
 import {
   ANSWER_FROM_ARTICLE_TOOL_NAME,
   CONFIRM_RESOLUTION_TOOL_NAME,
+  PLAYER_DECLARED_RESOLVED_TOOL_NAME,
   resolveClassifyIndex,
   searchArticles,
   toolsForPhase,
@@ -98,6 +99,14 @@ export const toolLoopDecider: BotDecider = async (input) => {
         // that is what "aligned to their problem" means — but not the terms of an
         // article it did not cite.
         const playerWords = messages.filter((m) => m.role === 'user').map((m) => m.content);
+        // The real latest player message, from history — not `messages`, which by
+        // this point also carries the synthetic state-block/context lines
+        // buildMessages injects as role 'user' (see contextAssembly.ts). Grounding
+        // player_declared_resolved against those would let the tool fire on text
+        // the player never actually typed.
+        const lastPlayerMessage = input.history
+          .filter((m) => m.author_type === 'player')
+          .at(-1)?.body;
         let searchCallCount = 0;
         let toolCallCount = 0;
         const conversationMessages: ChatMessage[] = [...messages];
@@ -294,6 +303,59 @@ export const toolLoopDecider: BotDecider = async (input) => {
                     reason: 'article_rejected',
                     subintentId: classifiedSubintentId,
                   };
+            }
+
+            if (call.name === PLAYER_DECLARED_RESOLVED_TOOL_NAME) {
+              const quotedText = call.args.quoted_text;
+              if (typeof quotedText !== 'string')
+                throw new InvalidResponseError(
+                  `${PLAYER_DECLARED_RESOLVED_TOOL_NAME} missing quoted_text`,
+                );
+
+              const trimmed = quotedText.trim();
+              // The server-enforced half of the guard — never trust the prompt
+              // alone. A call whose quoted_text is not a real, verbatim substring
+              // of what the player actually just typed cannot move confirm_phase,
+              // exactly as an ungrounded answer_from_article cannot post. Case-
+              // insensitive only: this is checking provenance (did the player
+              // really write this), not wording accuracy.
+              const grounded =
+                trimmed.length > 0 &&
+                lastPlayerMessage !== undefined &&
+                lastPlayerMessage.toLowerCase().includes(trimmed.toLowerCase());
+
+              if (!grounded) {
+                logger.warn(
+                  'bot.grounding',
+                  'player_declared_resolved rejected — quoted_text not found verbatim in the player\'s latest message',
+                  {
+                    workspaceId: input.workspaceId,
+                    conversationId: input.conversationId,
+                    quotedText,
+                  },
+                );
+                conversationMessages.push({
+                  role: 'assistant',
+                  content: `[${PLAYER_DECLARED_RESOLVED_TOOL_NAME}("${quotedText}")]`,
+                });
+                conversationMessages.push({
+                  role: 'user',
+                  content:
+                    '[rejected: quoted_text must be an exact, verbatim quote from the words the player just sent you. Only call this tool again if they have actually and unambiguously said the issue is resolved or the ticket should be closed — otherwise keep answering normally.]',
+                });
+                continue;
+              }
+
+              logger.info('bot.grounding', 'player declared resolution — asking to confirm', {
+                workspaceId: input.workspaceId,
+                conversationId: input.conversationId,
+                quotedText: trimmed,
+              });
+              return {
+                kind: 'confirm_player_resolution',
+                subintentId: classifiedSubintentId,
+                quotedText: trimmed,
+              };
             }
 
             if (call.name === 'handoff') {

@@ -10,6 +10,8 @@ import {
   moveSubintentHandler,
   renameIntentHandler,
   renameSubintentHandler,
+  unarchiveIntentHandler,
+  unarchiveSubintentHandler,
 } from '../controllers/taxonomyController.ts';
 
 export const taxonomyRouter = Router();
@@ -17,8 +19,10 @@ taxonomyRouter.get('/intents', listIntentsHandler);
 taxonomyRouter.post('/intents', requireAdminRole, createIntentHandler);
 taxonomyRouter.patch('/intents/:id', requireAdminRole, renameIntentHandler);
 taxonomyRouter.post('/intents/:id/archive', requireAdminRole, archiveIntentHandler);
+taxonomyRouter.post('/intents/:id/unarchive', requireAdminRole, unarchiveIntentHandler);
 taxonomyRouter.post('/intents/:id/subintents', requireAdminRole, createSubintentHandler);
 taxonomyRouter.patch('/subintents/:id', requireAdminRole, renameSubintentHandler);
 taxonomyRouter.post('/subintents/:id/archive', requireAdminRole, archiveSubintentHandler);
+taxonomyRouter.post('/subintents/:id/unarchive', requireAdminRole, unarchiveSubintentHandler);
 taxonomyRouter.post('/subintents/:id/move', requireAdminRole, moveSubintentHandler);
 taxonomyRouter.post('/subintents/:id/merge', requireAdminRole, mergeSubintentHandler);

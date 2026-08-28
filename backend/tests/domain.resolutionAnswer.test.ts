@@ -55,7 +55,7 @@ async function eventsFor(conversationId: string) {
 
 async function setConfirmPhase(
   conversationId: string,
-  phase: 'none' | 'bot_article' | 'agent_ask',
+  phase: 'none' | 'bot_article' | 'agent_ask' | 'player_stated',
 ) {
   await ownerPool.query(`update conversation set confirm_phase = $2 where id = $1`, [
     conversationId,
@@ -388,5 +388,72 @@ describe('applyResolutionAnswer — inactivity_ask', () => {
       tx.select().from(resolutionCycle).where(eq(resolutionCycle.conversationId, conversationId)),
     );
     expect(cycle!.resolutionKind).toBe('bot');
+  });
+});
+
+describe('applyResolutionAnswer — player_stated', () => {
+  it('resolves as player_stated on Yes, attributed to the player rather than the bot or an agent', async () => {
+    const workspaceId = await seedWorkspace({ slug: 'demo-game' });
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({
+      workspaceId,
+      playerId,
+      status: 'bot_active',
+      confirmPhase: 'player_stated',
+    });
+    await seedResolutionCycle({ workspaceId, conversationId, inactivityDueAt: new Date() });
+
+    const outcome = await withWorkspace(workspaceId, (tx) =>
+      applyResolutionAnswer(tx, { workspaceId, conversationId, playerId, sessionId: null }, true),
+    );
+    expect(outcome.kind).toBe('resolved');
+    if (outcome.kind === 'resolved') expect(outcome.source).toBe('player_stated');
+
+    const row = await conversationRow(conversationId);
+    expect(row.status).toBe('resolved');
+    expect(row.confirm_phase).toBe('none');
+    expect(row.resolution_source).toBe('player_stated');
+
+    expect(await messagesFor(conversationId)).toEqual([
+      { author_type: 'player', visibility: 'public', body: 'Yes, my issue is resolved.' },
+    ]);
+    expect(await eventsFor(conversationId)).toEqual([
+      { type: 'message_sent', payload: { seq: 1, author_type: 'player', visibility: 'public' } },
+      { type: 'conversation_resolved', payload: { source: 'player', confirmed_by: 'player' } },
+    ]);
+
+    const [cycle] = await withWorkspace(workspaceId, (tx) =>
+      tx.select().from(resolutionCycle).where(eq(resolutionCycle.conversationId, conversationId)),
+    );
+    expect(cycle!.resolutionKind).toBe('player_stated');
+    expect(cycle!.resolvedAt).not.toBeNull();
+  });
+
+  it('on No, clears the phase, touches no status, and posts the decline as the player — a false-positive banner costs one discardable tap', async () => {
+    const workspaceId = await seedWorkspace({ slug: 'demo-game' });
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({
+      workspaceId,
+      playerId,
+      status: 'bot_active',
+      confirmPhase: 'player_stated',
+    });
+
+    const outcome = await withWorkspace(workspaceId, (tx) =>
+      applyResolutionAnswer(tx, { workspaceId, conversationId, playerId, sessionId: null }, false),
+    );
+    expect(outcome.kind).toBe('declined');
+
+    const row = await conversationRow(conversationId);
+    expect(row.status).toBe('bot_active');
+    expect(row.confirm_phase).toBe('none');
+    expect(row.resolution_source).toBe(null);
+    expect(await messagesFor(conversationId)).toEqual([
+      { author_type: 'player', visibility: 'public', body: "No, I'm still having issues." },
+    ]);
+    expect(await eventsFor(conversationId)).toEqual([
+      { type: 'message_sent', payload: { seq: 1, author_type: 'player', visibility: 'public' } },
+      { type: 'resolution_check_declined', payload: { source: 'player' } },
+    ]);
   });
 });

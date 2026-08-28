@@ -10,6 +10,8 @@ import type {
   MoveSubintentResponse,
   RenameIntentResponse,
   RenameSubintentResponse,
+  UnarchiveIntentResponse,
+  UnarchiveSubintentResponse,
 } from '@support/types';
 import { article, conversation, intent, subintent } from '../../shared/db/schema/index.ts';
 import { withWorkspace } from '../../shared/db/withWorkspace.ts';
@@ -188,6 +190,39 @@ export async function archiveIntent(ctx: AgentContext, id: string): Promise<Arch
   });
 }
 
+export type UnarchiveIntentResult =
+  | { ok: true; intent: UnarchiveIntentResponse }
+  | { ok: false; reason: 'not_found' | 'not_archived' };
+
+export async function unarchiveIntent(
+  ctx: AgentContext,
+  id: string,
+): Promise<UnarchiveIntentResult> {
+  return withWorkspace(ctx.workspaceId, async (tx) => {
+    const [current] = await tx
+      .select({ id: intent.id, name: intent.name, archivedAt: intent.archivedAt })
+      .from(intent)
+      .where(eq(intent.id, id))
+      .limit(1);
+    if (!current) return { ok: false, reason: 'not_found' };
+    if (current.archivedAt === null) return { ok: false, reason: 'not_archived' };
+
+    const [row] = await tx
+      .update(intent)
+      .set({ archivedAt: null })
+      .where(eq(intent.id, id))
+      .returning({ id: intent.id, name: intent.name, archivedAt: intent.archivedAt });
+    await appendChangeLog(tx, {
+      workspaceId: ctx.workspaceId,
+      entityType: 'intent',
+      entityId: id,
+      actorId: ctx.agentId,
+      changes: [{ field: 'archived_at', before: current.archivedAt, after: row!.archivedAt }],
+    });
+    return { ok: true, intent: { id: row!.id, name: row!.name, archivedAt: null } };
+  });
+}
+
 export type RenameSubintentResult =
   | { ok: true; subintent: RenameSubintentResponse }
   | { ok: false; reason: 'not_found' | 'name_taken' };
@@ -302,6 +337,69 @@ export async function archiveSubintent(
     return {
       ok: true,
       subintent: { id: row!.id, name: row!.name, archivedAt: row!.archivedAt!.toISOString() },
+    };
+  });
+}
+
+export type UnarchiveSubintentResult =
+  | { ok: true; subintent: UnarchiveSubintentResponse }
+  | { ok: false; reason: 'not_found' | 'not_archived' | 'intent_archived' };
+
+export async function unarchiveSubintent(
+  ctx: AgentContext,
+  id: string,
+): Promise<UnarchiveSubintentResult> {
+  return withWorkspace(ctx.workspaceId, async (tx) => {
+    const [current] = await tx
+      .select({
+        id: subintent.id,
+        name: subintent.name,
+        intentId: subintent.intentId,
+        archivedAt: subintent.archivedAt,
+        mergedIntoId: subintent.mergedIntoId,
+      })
+      .from(subintent)
+      .where(eq(subintent.id, id))
+      .limit(1);
+    if (!current) return { ok: false, reason: 'not_found' };
+    if (current.archivedAt === null) return { ok: false, reason: 'not_archived' };
+
+    // A subintent must never be active under an archived intent — that's the
+    // exact invariant archiveIntent's has_active_subintents check protects.
+    const [parent] = await tx
+      .select({ archivedAt: intent.archivedAt })
+      .from(intent)
+      .where(eq(intent.id, current.intentId))
+      .limit(1);
+    if (parent?.archivedAt !== null) return { ok: false, reason: 'intent_archived' };
+
+    const [row] = await tx
+      .update(subintent)
+      // Clearing mergedIntoId too: a subintent unarchived out of a merge would
+      // otherwise be active while still claiming to be merged into another.
+      .set({ archivedAt: null, mergedIntoId: null })
+      .where(eq(subintent.id, id))
+      .returning({
+        id: subintent.id,
+        name: subintent.name,
+        archivedAt: subintent.archivedAt,
+        mergedIntoId: subintent.mergedIntoId,
+      });
+    await appendChangeLog(tx, {
+      workspaceId: ctx.workspaceId,
+      entityType: 'subintent',
+      entityId: id,
+      actorId: ctx.agentId,
+      changes: [
+        { field: 'archived_at', before: current.archivedAt, after: row!.archivedAt },
+        ...(current.mergedIntoId !== null
+          ? [{ field: 'merged_into_id', before: current.mergedIntoId, after: row!.mergedIntoId }]
+          : []),
+      ],
+    });
+    return {
+      ok: true,
+      subintent: { id: row!.id, name: row!.name, archivedAt: null, mergedIntoId: null },
     };
   });
 }

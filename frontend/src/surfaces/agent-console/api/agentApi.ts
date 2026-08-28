@@ -42,6 +42,8 @@ import type {
   RenameSubintentResponse,
   SaveBotConfigBodyValue,
   TagView,
+  UnarchiveIntentResponse,
+  UnarchiveSubintentResponse,
   UnescalateResponse,
   UpdateDeclaredFieldResponse,
 } from '@support/types';
@@ -421,6 +423,10 @@ export function archiveIntent(token: string, id: string): Promise<ArchiveIntentR
   return call(`/agent/intents/${id}/archive`, token, { method: 'POST' });
 }
 
+export function unarchiveIntent(token: string, id: string): Promise<UnarchiveIntentResponse> {
+  return call(`/agent/intents/${id}/unarchive`, token, { method: 'POST' });
+}
+
 export function fetchDeclaredFields(token: string): Promise<DeclaredFieldsResponse> {
   return call('/agent/declared-fields', token);
 }
@@ -477,6 +483,13 @@ export function renameSubintent(
 
 export function archiveSubintent(token: string, id: string): Promise<ArchiveSubintentResponse> {
   return call(`/agent/subintents/${id}/archive`, token, { method: 'POST' });
+}
+
+export function unarchiveSubintent(
+  token: string,
+  id: string,
+): Promise<UnarchiveSubintentResponse> {
+  return call(`/agent/subintents/${id}/unarchive`, token, { method: 'POST' });
 }
 
 export function moveSubintent(

@@ -26,6 +26,19 @@ export const CONFIRM_RESOLUTION_TOOL_NAME = 'confirm_resolution';
  */
 export const ANSWER_FROM_ARTICLE_TOOL_NAME = 'answer_from_article';
 
+/**
+ * Only fires the double-check banner — it never resolves anything itself. See
+ * applyBotTurn's `confirm_player_resolution` case: this sets `confirm_phase =
+ * 'player_stated'` and posts the bot's own "should I close this?" question, so
+ * even a wrong call costs the player one discardable No tap, never an
+ * unwanted resolve. `quoted_text` is required and is checked server-side
+ * (toolLoop.ts) against the player's actual latest message — a call whose
+ * `quoted_text` is not a verbatim substring of what the player just wrote is
+ * rejected before it can move `confirm_phase` at all, the same class of
+ * guard as `scoreGrounding` on `answer_from_article`.
+ */
+export const PLAYER_DECLARED_RESOLVED_TOOL_NAME = 'player_declared_resolved';
+
 const ALWAYS_AVAILABLE_TOOLS = [
   {
     type: 'function',
@@ -106,14 +119,35 @@ const CONFIRM_RESOLUTION_TOOL = {
   },
 } as const;
 
-export const TOOL_DEFS = [...ALWAYS_AVAILABLE_TOOLS, CONFIRM_RESOLUTION_TOOL];
+const PLAYER_DECLARED_RESOLVED_TOOL = {
+  type: 'function',
+  function: {
+    name: PLAYER_DECLARED_RESOLVED_TOOL_NAME,
+    description:
+      "Call this ONLY when the player's own latest message unprompted, unambiguously states their issue is now fixed, solved, or that they want this ticket closed — for example \"that fixed it, thanks\", \"this is resolved now\", \"please close this ticket\", \"you can close it\". This does not resolve the conversation by itself — it only asks the player to confirm. Do NOT call this for: thanks or acknowledgement of an answer alone (\"ok thanks\", \"got it\", \"cool\"), agreement to try a suggestion (\"I'll try that\", \"sure, I'll check\"), a new question, small talk, or anything ambiguous — in every one of those cases, keep answering or ask a clarifying question instead. `quoted_text` must be an exact, verbatim substring of the player's own latest message — the call is rejected and has no effect if it is not found verbatim in what they actually wrote.",
+    strict: true,
+    parameters: {
+      type: 'object',
+      properties: { quoted_text: { type: 'string' } },
+      required: ['quoted_text'],
+      additionalProperties: false,
+    },
+  },
+} as const;
+
+export const TOOL_DEFS = [
+  ...ALWAYS_AVAILABLE_TOOLS,
+  CONFIRM_RESOLUTION_TOOL,
+  PLAYER_DECLARED_RESOLVED_TOOL,
+];
 
 export type ToolToggle = { tool: string; enabled: boolean };
 
 /**
  * Declared in the same order ALWAYS_AVAILABLE_TOOLS already ships them, then
- * confirm_resolution — matches the doc's Tool gating section. `handoff` is
- * intentionally absent: always available, never configurable.
+ * confirm_resolution, then player_declared_resolved — matches the doc's Tool
+ * gating section. `handoff` is intentionally absent: always available, never
+ * configurable.
  */
 export const TOOL_CATALOG = [
   {
@@ -142,6 +176,13 @@ export const TOOL_CATALOG = [
     consequence:
       'Article answers are never confirmed by the player; bot_active exits only via handoff or the turn cap.',
   },
+  {
+    name: PLAYER_DECLARED_RESOLVED_TOOL_NAME,
+    lockable: true,
+    defaultEnabled: true,
+    consequence:
+      'The bot never notices a player declaring their own issue resolved — the player must wait for the bot to offer an article or for an agent to ask instead.',
+  },
 ] as const;
 
 /** "Version 1" — every toggleable tool enabled, matching today's always-on behavior. */
@@ -151,18 +192,25 @@ export function buildBaselineToolsConfig(): ToolToggle[] {
 
 /**
  * confirm_resolution is offered to the model only while confirm_phase =
- * 'bot_article' (spec 4 §3) AND it is enabled. `handoff`'s name is never
- * checked against `enabledTools` — it always passes the filter, so it stays
- * exactly where ALWAYS_AVAILABLE_TOOLS already puts it. Every other tool is
- * dropped only if its name isn't in `enabledTools`. Filter in place — never
- * reorder: a disabled tool is simply absent from the array sent to the model,
- * which is the entire determinism guarantee this function exists for.
+ * 'bot_article' (spec 4 §3) AND it is enabled. player_declared_resolved is
+ * offered only while confirm_phase = 'none' AND it is enabled — never
+ * alongside confirm_resolution (a second yes/no question can't stack on a
+ * first one that hasn't been answered yet), and never while some other phase
+ * (agent_ask, form, inactivity_ask) already has a question on the player's
+ * screen. `handoff`'s name is never checked against `enabledTools` — it always
+ * passes the filter, so it stays exactly where ALWAYS_AVAILABLE_TOOLS already
+ * puts it. Every other tool is dropped only if its name isn't in
+ * `enabledTools`. Filter in place — never reorder: a disabled tool is simply
+ * absent from the array sent to the model, which is the entire determinism
+ * guarantee this function exists for.
  */
 export function toolsForPhase(phase: ToolPhase, enabledTools: ReadonlySet<string>): unknown[] {
   const base =
     phase === 'bot_article'
       ? [...ALWAYS_AVAILABLE_TOOLS, CONFIRM_RESOLUTION_TOOL]
-      : [...ALWAYS_AVAILABLE_TOOLS];
+      : phase === 'none'
+        ? [...ALWAYS_AVAILABLE_TOOLS, PLAYER_DECLARED_RESOLVED_TOOL]
+        : [...ALWAYS_AVAILABLE_TOOLS];
   return base.filter((t) => t.function.name === 'handoff' || enabledTools.has(t.function.name));
 }
 

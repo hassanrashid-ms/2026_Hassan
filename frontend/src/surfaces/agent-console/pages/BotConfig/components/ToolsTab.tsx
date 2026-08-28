@@ -16,6 +16,8 @@ const CONSEQUENCE_COPY: Record<string, string> = {
     'Bot can search/classify but never answers itself — always hands off after searching.',
   confirm_resolution:
     'Article answers are never confirmed by the player; bot_active exits only via handoff or the turn cap.',
+  player_declared_resolved:
+    'The bot never notices a player declaring their own issue resolved — the player must wait for the bot to offer an article or for an agent to ask instead.',
 };
 
 const LIMIT_LABELS: Record<string, string> = {

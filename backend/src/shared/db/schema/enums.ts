@@ -49,12 +49,15 @@ export const articleVersionStatus = pgEnum('article_version_status', [
 ]);
 // `bot_article` is set by the bot's answer_from_article, `agent_ask` by
 // POST /agent/conversations/:id/ask-resolved, `inactivity_ask` by the inactivity
-// clock's stage 1 — all three mean a yes/no question is on the player's screen.
-// The clock gets its own value rather than reusing `agent_ask` so the answer can
-// be attributed to the right resolution kind: a Yes on `agent_ask` is
-// 'agent', a Yes on `inactivity_ask` is 'player_confirmed'. `form` means the
-// pinned form card is up instead: not a yes/no, and the reason the webview must
-// branch on the value rather than test it against 'none'.
+// clock's stage 1, `player_stated` by the bot's player_declared_resolved tool —
+// all four mean a yes/no question is on the player's screen. The clock gets its
+// own value rather than reusing `agent_ask` so the answer can be attributed to
+// the right resolution kind: a Yes on `agent_ask` is 'agent', a Yes on
+// `inactivity_ask` is 'player_confirmed', a Yes on `player_stated` is
+// 'player_stated' — the player declared it themselves, unprompted by either the
+// bot's own article-offer or a human/clock asking. `form` means the pinned form
+// card is up instead: not a yes/no, and the reason the webview must branch on
+// the value rather than test it against 'none'.
 // See docs/specs/2026-08-17-player-side-forms-design.md §2.4 and
 // docs/specs/2026-08-18-inactivity-clock-and-auto-close-design.md §2.
 export const confirmPhase = pgEnum('confirm_phase', [
@@ -63,18 +66,25 @@ export const confirmPhase = pgEnum('confirm_phase', [
   'agent_ask',
   'form',
   'inactivity_ask',
+  'player_stated',
 ]);
 /**
  * Also the type of `resolution_cycle.resolution_kind`, deliberately one
  * vocabulary rather than two enums that could drift. `player_confirmed` (the
- * player answered Yes to the clock's ask) and `timed_out` (nobody answered)
- * are separate values because metrics must report them separately.
+ * player answered Yes to the clock's ask), `player_stated` (the player
+ * declared it resolved unprompted, then confirmed the bot's double-check) and
+ * `timed_out` (nobody answered) are separate values because metrics must
+ * report them separately — conflating `player_stated` into `player_confirmed`
+ * would count "player asked us to close it" the same as "player let a 24h
+ * silence clock resolve it for them", which are opposite signals about how
+ * engaged the player was.
  */
 export const resolutionSource = pgEnum('resolution_source', [
   'bot',
   'agent',
   'player_confirmed',
   'timed_out',
+  'player_stated',
 ]);
 
 /**

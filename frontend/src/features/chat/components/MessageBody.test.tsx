@@ -41,10 +41,15 @@ describe('MessageBody', () => {
     expect(container.querySelector('strong')).toBeNull();
   });
 
-  it('renders a system body as literal text', async () => {
-    renderBody({ authorType: 'system', body: 'Did this **solve** it?' });
+  /**
+   * `system` bodies are server-composed (see completeFormAndHandoff's escapeMarkdown),
+   * never raw player text, so — unlike the `player` case above — markdown is safe here.
+   */
+  it('renders a system body as markdown', async () => {
+    const { container } = renderBody({ authorType: 'system', body: 'Did this **solve** it?' });
 
-    await waitFor(() => expect(screen.getByText('Did this **solve** it?')).toBeInTheDocument());
+    await waitFor(() => expect(container.querySelector('strong')?.textContent).toBe('solve'));
+    expect(container.textContent).not.toContain('**');
   });
 
   it('does not render raw HTML in a bot body as markup', async () => {

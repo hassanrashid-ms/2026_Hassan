@@ -45,7 +45,7 @@ async function eventsFor(conversationId: string) {
 
 async function setConfirmPhase(
   conversationId: string,
-  phase: 'none' | 'bot_article' | 'agent_ask',
+  phase: 'none' | 'bot_article' | 'agent_ask' | 'player_stated',
 ) {
   await ownerPool.query(`update conversation set confirm_phase = $2 where id = $1`, [
     conversationId,
@@ -129,6 +129,42 @@ describe('applyBotTurn — resolve and article lifecycle', () => {
       'message_sent',
     ]);
     expect(events[1].payload).toEqual({});
+  });
+});
+
+describe('applyBotTurn — confirm_player_resolution', () => {
+  it('posts the self-check message, sets confirm_phase to player_stated, writes player_resolution_offered, and reports phaseChanged', async () => {
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
+
+    const result = await withWorkspace(workspaceId, (tx) =>
+      applyBotTurn(
+        tx,
+        { workspaceId, conversationId },
+        { kind: 'confirm_player_resolution', subintentId: null, quotedText: 'that fixed it' },
+      ),
+    );
+
+    expect(result.phaseChanged).toBe('player_stated');
+    expect(result.statusChanged).toBe(false);
+
+    const row = await conversationRow(conversationId);
+    expect(row.confirm_phase).toBe('player_stated');
+    expect(row.status).toBe('bot_active');
+
+    const messages = await messagesFor(conversationId);
+    expect(messages).toEqual([
+      {
+        author_type: 'bot',
+        visibility: 'public',
+        body: "Just to confirm — you'd like me to mark this as resolved and close the ticket?",
+      },
+    ]);
+
+    const events = await eventsFor(conversationId);
+    expect(events.map((e) => e.type)).toEqual(['message_sent', 'player_resolution_offered']);
+    expect(events[1].payload).toEqual({ quoted_text: 'that fixed it' });
   });
 });
 

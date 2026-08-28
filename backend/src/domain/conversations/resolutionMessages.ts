@@ -27,3 +27,15 @@ export const RESOLUTION_CONFIRM_MESSAGE = 'Yes, my issue is resolved.';
  * the transcript records an answer to a known question, not free text.
  */
 export const RESOLUTION_DECLINE_MESSAGE = "No, I'm still having issues.";
+
+/**
+ * Posted by the bot itself when player_declared_resolved fires (applyBotTurn's
+ * `confirm_player_resolution` case), moving confirm_phase to 'player_stated'.
+ * The player just said, in their own words, that this is resolved — but the
+ * tool never resolves anything on its own, so this double-checks in the same
+ * fixed wording every time, same reasoning as RESOLUTION_CHECK_MESSAGE: the
+ * banner's Yes/No is only meaningful as an answer to a question the code
+ * controls, not free text the model could phrase differently turn to turn.
+ */
+export const RESOLUTION_SELF_CHECK_MESSAGE =
+  "Just to confirm — you'd like me to mark this as resolved and close the ticket?";

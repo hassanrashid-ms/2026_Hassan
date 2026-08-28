@@ -10,6 +10,7 @@ export const TOGGLEABLE_TOOL_NAMES = [
   'classify',
   'answer_from_article',
   'confirm_resolution',
+  'player_declared_resolved',
 ] as const;
 export type ToggleableToolName = (typeof TOGGLEABLE_TOOL_NAMES)[number];
 

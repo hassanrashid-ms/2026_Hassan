@@ -71,15 +71,16 @@ describe('GET /bot-config', () => {
 
     expect(res.body.is_provisioned).toBe(false);
     expect(res.body.prompt).toBe(DEFAULT_BOT_PROMPT);
-    expect(res.body.rules).toHaveLength(8);
+    expect(res.body.rules).toHaveLength(9);
     expect(
       res.body.rules.find((r: { key: string }) => r.key === 'no_invented_facts').enforcement,
     ).toBe('code');
-    expect(res.body.tools_config).toHaveLength(4);
+    expect(res.body.tools_config).toHaveLength(5);
     expect(res.body.enabled_tools.sort()).toEqual([
       'answer_from_article',
       'classify',
       'confirm_resolution',
+      'player_declared_resolved',
       'search_articles',
     ]);
     expect(res.body.system_prompt).toBe(

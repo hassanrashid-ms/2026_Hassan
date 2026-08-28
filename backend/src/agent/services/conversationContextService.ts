@@ -11,6 +11,7 @@ import type {
 } from '@support/types';
 import {
   agent,
+  attachment,
   conversation,
   declaredField,
   event,
@@ -26,6 +27,7 @@ import {
 import { withWorkspace } from '../../shared/db/withWorkspace.ts';
 import type { Tx } from '../../shared/db/withWorkspace.ts';
 import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts';
+import { presignGetObject } from '../../shared/storage/presign.ts';
 import { getConversationTags } from './tagsService.ts';
 
 /**
@@ -357,6 +359,55 @@ export function buildFormFieldViews(
 }
 
 /**
+ * `buildFormFieldViews` stays pure and DB-free for testability; this is the one
+ * place an `attachment`-type answer's `{ attachmentId }` gets turned into
+ * something the rail can render a preview from. A failed signing attempt or a
+ * missing row (the attachment predates the row somehow, or RLS hides it) just
+ * leaves that field's value alone rather than failing the whole rail — an
+ * un-previewable answer is still an answer.
+ */
+async function resolveAttachmentFieldValues(
+  tx: Tx,
+  rows: AgentFormFieldView[],
+): Promise<AgentFormFieldView[]> {
+  return Promise.all(
+    rows.map(async (row) => {
+      if (row.field_type !== 'attachment' || !row.answered) return row;
+      const attachmentId = (row.value as { attachmentId?: string } | null)?.attachmentId;
+      if (!attachmentId) return row;
+
+      const [source] = await tx
+        .select({
+          filename: attachment.filename,
+          mimeType: attachment.mimeType,
+          byteSize: attachment.byteSize,
+          storageKey: attachment.storageKey,
+        })
+        .from(attachment)
+        .where(eq(attachment.id, attachmentId))
+        .limit(1);
+      if (!source) return row;
+
+      try {
+        const url = await presignGetObject(source.storageKey);
+        return {
+          ...row,
+          value: {
+            attachmentId,
+            filename: source.filename,
+            mimeType: source.mimeType,
+            byteSize: source.byteSize,
+            url,
+          },
+        };
+      } catch {
+        return row;
+      }
+    }),
+  );
+}
+
+/**
  * The rail's form section, or null when this conversation was never offered a
  * form — the common case, and not an error. The frontend omits the section
  * entirely rather than opening onto nothing.
@@ -422,6 +473,7 @@ export async function getFormView(tx: Tx, conversationId: string): Promise<Agent
   for (const row of answerRows) latest.set(row.fieldKey, row);
 
   const { rows, answeredCount } = buildFormFieldViews(fields, [...latest.values()]);
+  const resolvedRows = await resolveAttachmentFieldValues(tx, rows);
 
   return {
     form_name: submission.formName,
@@ -429,6 +481,6 @@ export async function getFormView(tx: Tx, conversationId: string): Promise<Agent
     status: submission.status,
     field_count: fields.length,
     answered_count: answeredCount,
-    fields: rows,
+    fields: resolvedRows,
   };
 }

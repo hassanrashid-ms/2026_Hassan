@@ -67,6 +67,11 @@ const REOPENABLE_STATUSES = new Set(['resolved', 'closed']);
  * assignOnHandoff. Widened from a bare `=== 'agent'` when the inactivity clock
  * added its two kinds — without this, shipping the clock quietly started
  * dumping owned conversations into Unassigned.
+ *
+ * `player_stated` deliberately does NOT belong here: player_declared_resolved
+ * only fires from the bot's tool loop, which only runs while status is
+ * `bot_active` — no agent is ever assigned yet when this resolution happens,
+ * so it belongs with `bot`, back through assignOnHandoff on reopen.
  */
 const AGENT_OWNED_RESOLUTIONS = new Set(['agent', 'player_confirmed', 'timed_out']);
 

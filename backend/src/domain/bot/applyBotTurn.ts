@@ -5,6 +5,7 @@ import { botFailureNote, pickHandoffMessage, NO_AGENTS_ONLINE_MESSAGE } from './
 import { assignOnHandoff } from './assignOnHandoff.ts';
 import { postMessage, type PostedMessageRow } from '../conversations/postMessage.ts';
 import { closeResolutionCycle } from '../conversations/resolutionCycle.ts';
+import { RESOLUTION_SELF_CHECK_MESSAGE } from '../conversations/resolutionMessages.ts';
 import { applySubintentDefaultPriority } from '../conversations/index.ts';
 import { appendEvent } from '../../shared/events/appendEvent.ts';
 import type { Tx } from '../../shared/db/withWorkspace.ts';
@@ -28,11 +29,11 @@ export type ApplyBotTurnResult = {
   statusChanged: boolean;
   /**
    * Non-null only when this turn moved confirm_phase in a way a client must be
-   * told about out of band. Today that is exactly one case: the form offer,
-   * which changes no status and so triggers no other refetch on the agent side.
-   * Every other branch returns null deliberately — adding an emit to a path
-   * that never had one is a behaviour change, and the no-form handoff must stay
-   * byte-identical.
+   * told about out of band, without also changing `status` (which already
+   * triggers a refetch on its own). Two cases today: the form offer, and
+   * player_declared_resolved's confirm_player_resolution case. Every other
+   * branch returns null deliberately — adding an emit to a path that never had
+   * one is a behaviour change, and the no-form handoff must stay byte-identical.
    */
   phaseChanged: ConfirmPhaseValue | null;
 };
@@ -85,6 +86,31 @@ export async function applyBotTurn(
         });
       }
       return { posted: [posted], statusChanged: false, phaseChanged: null };
+    }
+
+    case 'confirm_player_resolution': {
+      if (decision.subintentId) await classifyIfUnset(tx, ctx, decision.subintentId);
+      const posted = await postMessage(tx, {
+        workspaceId: ctx.workspaceId,
+        conversationId: ctx.conversationId,
+        authorType: 'bot',
+        actorId: null,
+        body: RESOLUTION_SELF_CHECK_MESSAGE,
+        visibility: 'public',
+      });
+      await tx
+        .update(conversation)
+        .set({ confirmPhase: 'player_stated' })
+        .where(eq(conversation.id, ctx.conversationId));
+      await appendEvent(tx, {
+        workspaceId: ctx.workspaceId,
+        type: 'player_resolution_offered',
+        conversationId: ctx.conversationId,
+        actorId: null,
+        actorType: 'bot',
+        payload: { quoted_text: decision.quotedText },
+      });
+      return { posted: [posted], statusChanged: false, phaseChanged: 'player_stated' };
     }
 
     case 'resolve': {

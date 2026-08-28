@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   CONFIRM_RESOLUTION_TOOL_NAME,
+  PLAYER_DECLARED_RESOLVED_TOOL_NAME,
   TOOL_CATALOG,
   buildBaselineToolsConfig,
   toolsForPhase,
@@ -9,12 +10,13 @@ import {
 const ALL_TOGGLEABLE = new Set(TOOL_CATALOG.map((t) => t.name));
 
 describe('TOOL_CATALOG', () => {
-  it('lists exactly the 4 toggleable tools, excluding handoff, all default-enabled and lockable', () => {
+  it('lists exactly the 5 toggleable tools, excluding handoff, all default-enabled and lockable', () => {
     expect(TOOL_CATALOG.map((t) => t.name)).toEqual([
       'search_articles',
       'classify',
       'answer_from_article',
       CONFIRM_RESOLUTION_TOOL_NAME,
+      PLAYER_DECLARED_RESOLVED_TOOL_NAME,
     ]);
     expect(TOOL_CATALOG.every((t) => t.defaultEnabled && t.lockable)).toBe(true);
   });
@@ -70,5 +72,33 @@ describe('toolsForPhase (deterministic gating)', () => {
       (t) => (t as { function: { name: string } }).function.name,
     );
     expect(names).not.toContain(CONFIRM_RESOLUTION_TOOL_NAME);
+  });
+
+  it('offers player_declared_resolved only in phase none, never alongside confirm_resolution', () => {
+    const none = toolsForPhase('none', ALL_TOGGLEABLE).map(
+      (t) => (t as { function: { name: string } }).function.name,
+    );
+    expect(none).toEqual([
+      'search_articles',
+      'classify',
+      'answer_from_article',
+      'handoff',
+      PLAYER_DECLARED_RESOLVED_TOOL_NAME,
+    ]);
+
+    for (const phase of ['bot_article', 'agent_ask', 'form', 'inactivity_ask'] as const) {
+      const names = toolsForPhase(phase, ALL_TOGGLEABLE).map(
+        (t) => (t as { function: { name: string } }).function.name,
+      );
+      expect(names).not.toContain(PLAYER_DECLARED_RESOLVED_TOOL_NAME);
+    }
+  });
+
+  it('drops player_declared_resolved when disabled, even in phase none', () => {
+    const enabled = new Set(['search_articles', 'classify', 'answer_from_article']);
+    const names = toolsForPhase('none', enabled).map(
+      (t) => (t as { function: { name: string } }).function.name,
+    );
+    expect(names).not.toContain(PLAYER_DECLARED_RESOLVED_TOOL_NAME);
   });
 });

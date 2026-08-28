@@ -579,3 +579,141 @@ describe('toolLoopDecider', () => {
     expect(decision).toEqual({ kind: 'handoff', reason: 'article_rejected', subintentId: null });
   });
 });
+
+function playerMessage(body: string): BotTurnInput['history'][number] {
+  return {
+    id: 'm1',
+    seq: 1,
+    author_type: 'player',
+    body,
+    delivery_state: 'delivered',
+    read_at: null,
+    created_at: new Date().toISOString(),
+    article_id: null,
+    attachment: null,
+  };
+}
+
+describe('player_declared_resolved', () => {
+  it('a quoted_text that is a verbatim substring of the latest player message exits confirm_player_resolution', async () => {
+    const { workspaceId, conversationId } = await fixture();
+    mockCallModel.mockResolvedValueOnce({
+      toolCalls: [
+        {
+          id: 't',
+          name: 'player_declared_resolved',
+          arguments: '{"quoted_text":"that fixed it, please close this ticket"}',
+        },
+      ],
+      text: null,
+    });
+    const decision = await toolLoopDecider(
+      baseInput({
+        workspaceId,
+        conversationId,
+        confirmPhase: 'none',
+        history: [playerMessage('Thanks, that fixed it, please close this ticket!')],
+      }),
+    );
+    expect(decision).toEqual({
+      kind: 'confirm_player_resolution',
+      subintentId: null,
+      quotedText: 'that fixed it, please close this ticket',
+    });
+  });
+
+  it('is case-insensitive but still requires the quote to actually appear in what the player wrote', async () => {
+    const { workspaceId, conversationId } = await fixture();
+    mockCallModel.mockResolvedValueOnce({
+      toolCalls: [
+        { id: 't', name: 'player_declared_resolved', arguments: '{"quoted_text":"CLOSE THIS"}' },
+      ],
+      text: null,
+    });
+    const decision = await toolLoopDecider(
+      baseInput({
+        workspaceId,
+        conversationId,
+        confirmPhase: 'none',
+        history: [playerMessage('please close this now')],
+      }),
+    );
+    expect(decision).toEqual({
+      kind: 'confirm_player_resolution',
+      subintentId: null,
+      quotedText: 'CLOSE THIS',
+    });
+  });
+
+  /**
+   * The server-enforced half of the guard. A model that hallucinates or
+   * paraphrases what the player said, rather than quoting it verbatim, must
+   * not be able to move confirm_phase — this is what makes the guard more
+   * than a prompt request. The rejected call costs one loop iteration; the
+   * model is told why and given the chance to answer normally instead.
+   */
+  it('rejects a quoted_text not actually present in the player\'s latest message, and continues the turn', async () => {
+    const { workspaceId, conversationId } = await fixture();
+    mockCallModel
+      .mockResolvedValueOnce({
+        toolCalls: [
+          {
+            id: 't1',
+            name: 'player_declared_resolved',
+            arguments: '{"quoted_text":"this is totally resolved"}',
+          },
+        ],
+        text: null,
+      })
+      .mockResolvedValueOnce({ toolCalls: [], text: 'Sure, happy to help with anything else!' });
+
+    const decision = await toolLoopDecider(
+      baseInput({
+        workspaceId,
+        conversationId,
+        confirmPhase: 'none',
+        history: [playerMessage('ok thanks, thats good to know')],
+      }),
+    );
+    expect(decision).toEqual({
+      kind: 'answer',
+      reply: 'Sure, happy to help with anything else!',
+      subintentId: null,
+    });
+    expect(mockCallModel).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects when there is no player message in history at all', async () => {
+    const { workspaceId, conversationId } = await fixture();
+    mockCallModel
+      .mockResolvedValueOnce({
+        toolCalls: [
+          { id: 't1', name: 'player_declared_resolved', arguments: '{"quoted_text":"resolved"}' },
+        ],
+        text: null,
+      })
+      .mockResolvedValueOnce({ toolCalls: [], text: 'How can I help?' });
+
+    const decision = await toolLoopDecider(
+      baseInput({ workspaceId, conversationId, confirmPhase: 'none', history: [] }),
+    );
+    expect(decision).toEqual({ kind: 'answer', reply: 'How can I help?', subintentId: null });
+  });
+
+  it('throws InvalidResponseError-style unavailable on a missing quoted_text argument', async () => {
+    const { workspaceId, conversationId } = await fixture();
+    mockCallModel.mockResolvedValueOnce({
+      toolCalls: [{ id: 't', name: 'player_declared_resolved', arguments: '{}' }],
+      text: null,
+    });
+    const decision = await toolLoopDecider(
+      baseInput({
+        workspaceId,
+        conversationId,
+        confirmPhase: 'none',
+        history: [playerMessage('this is resolved')],
+      }),
+    );
+    expect(decision).toEqual({ kind: 'unavailable', reason: 'invalid_response' });
+  });
+});

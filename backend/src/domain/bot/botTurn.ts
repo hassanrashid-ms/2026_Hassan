@@ -40,7 +40,18 @@ type BotTurnOutcome =
   | { kind: 'answer'; reply: string; subintentId: string | null; articleId?: string }
   | { kind: 'resolve'; subintentId: string | null }
   | { kind: 'handoff'; reason: HandoffReason; subintentId: string | null }
-  | { kind: 'unavailable'; reason: UnavailableReason };
+  | { kind: 'unavailable'; reason: UnavailableReason }
+  /**
+   * The player_declared_resolved tool's outcome. Does NOT resolve anything by
+   * itself — applyBotTurn's case for this posts the bot's own double-check
+   * question and moves confirm_phase to 'player_stated', exactly the same
+   * two-step shape as `answer` with an articleId moving it to 'bot_article'.
+   * `quotedText` is the verbatim substring of the player's own message that
+   * the tool call was grounded against (toolLoop.ts) — carried through so the
+   * event written for it records what actually triggered it, not just that
+   * something did.
+   */
+  | { kind: 'confirm_player_resolution'; subintentId: string | null; quotedText: string };
 
 /**
  * `searches` rides on the decision rather than being written by the decider,

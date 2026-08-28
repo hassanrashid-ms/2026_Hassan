@@ -13,6 +13,14 @@ function stripView(rule: RuleEntryView) {
   return rest;
 }
 
+/**
+ * Never listed: enforced by `scoreGrounding` unconditionally, not gated by its
+ * `enabled` flag, so a toggle for it would be a lie an admin could click. Kept
+ * in the saved payload untouched — see HIDDEN_RULE_KEYS in
+ * backend/src/domain/bot/rulesCatalog.ts.
+ */
+const HIDDEN_RULE_KEY = 'no_invented_facts';
+
 export function RulesTab({ token, config }: { token: string; config: BotConfigView | undefined }) {
   const queryClient = useQueryClient();
   const [newRuleText, setNewRuleText] = useState('');
@@ -62,8 +70,9 @@ export function RulesTab({ token, config }: { token: string; config: BotConfigVi
     return !orig || JSON.stringify(stripView(orig)) !== JSON.stringify(stripView(r));
   }).length;
 
-  const activeCount = rules.filter((r) => r.enabled).length;
-  const lockedCount = rules.filter((r) => r.locked).length;
+  const visibleRules = rules.filter((r) => r.key !== HIDDEN_RULE_KEY);
+  const activeCount = visibleRules.filter((r) => r.enabled).length;
+  const lockedCount = visibleRules.filter((r) => r.locked).length;
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
@@ -71,7 +80,7 @@ export function RulesTab({ token, config }: { token: string; config: BotConfigVi
         {activeCount} active · {lockedCount} cannot be switched off
       </p>
       <ul className="flex flex-col gap-2">
-        {rules.map((rule) => (
+        {visibleRules.map((rule) => (
           <li
             key={rule.key}
             className="flex items-start gap-3 rounded-md border border-slate-200 p-2"

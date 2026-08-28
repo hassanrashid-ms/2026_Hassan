@@ -113,4 +113,54 @@ describe('SubintentRow', () => {
 
     await waitFor(() => expect(spy).toHaveBeenCalledWith('t', 's1'));
   });
+
+  it('shows Unarchive for an archived subintent and calls it when the parent intent is active', async () => {
+    const archived: IntentSubintentView = { ...refunds, archivedAt: '2026-01-01T00:00:00Z' };
+    const spy = vi.spyOn(agentApi, 'unarchiveSubintent').mockResolvedValue({
+      id: 's1',
+      name: 'Refunds',
+      archivedAt: null,
+      mergedIntoId: null,
+    });
+    renderWithClient(
+      <SubintentRow
+        token="t"
+        session={ADMIN_SESSION}
+        subintent={archived}
+        parentIntent={billing}
+        allIntents={[billing]}
+        allSubintents={allSubintents}
+      />,
+    );
+
+    const unarchiveButton = screen.getByText('Unarchive');
+    expect(unarchiveButton).not.toBeDisabled();
+
+    const user = userEvent.setup();
+    await user.click(unarchiveButton);
+
+    await waitFor(() => expect(spy).toHaveBeenCalledWith('t', 's1'));
+  });
+
+  it('disables Unarchive with an explanatory title while the parent intent is archived', () => {
+    const archived: IntentSubintentView = { ...refunds, archivedAt: '2026-01-01T00:00:00Z' };
+    const archivedIntent: IntentView = { ...billing, archivedAt: '2026-01-01T00:00:00Z' };
+    renderWithClient(
+      <SubintentRow
+        token="t"
+        session={ADMIN_SESSION}
+        subintent={archived}
+        parentIntent={archivedIntent}
+        allIntents={[archivedIntent]}
+        allSubintents={allSubintents}
+      />,
+    );
+
+    const unarchiveButton = screen.getByText('Unarchive');
+    expect(unarchiveButton).toBeDisabled();
+    expect(unarchiveButton.closest('span')).toHaveAttribute(
+      'title',
+      'Unarchive the parent intent first.',
+    );
+  });
 });

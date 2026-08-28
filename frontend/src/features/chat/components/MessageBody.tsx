@@ -25,10 +25,16 @@ const ArticleBody = lazy(() =>
  * because it omits rehype-raw, so raw HTML renders as literal text — a property
  * that was reasoned about for agent-authored article bodies. Pointing the renderer
  * at arbitrary player text would turn an incidental guarantee into one the system
- * depends on against an adversarial input source. `system` bodies are server copy
- * with no markdown in them, and get the same literal treatment.
+ * depends on against an adversarial input source.
+ *
+ * `system` bodies are server-composed (e.g. the form-submission summary), so the
+ * structural markdown in them (bold labels, bullets) is safe to render — but any
+ * player-supplied value interpolated into one of those bodies MUST be markdown-escaped
+ * by the composer before it reaches here (see formatFormAnswers on the backend).
+ * MessageBody has no way to tell escaped from unescaped, so that escaping is a
+ * contract with every producer of a `system` message body, not something enforced here.
  */
-const MARKDOWN_AUTHORS: ReadonlySet<ChatAuthorType> = new Set(['bot', 'agent']);
+const MARKDOWN_AUTHORS: ReadonlySet<ChatAuthorType> = new Set(['bot', 'agent', 'system']);
 
 export function MessageBody({
   authorType,
@@ -74,13 +80,32 @@ export function MessageBody({
       {hasTypedText && text}
       {attachment.url && !mediaErrored ? (
         isVideo ? (
-          <video
-            src={attachment.url}
-            controls
-            className="max-w-xs rounded-md"
-            onLoadedData={() => setMediaLoaded(true)}
-            onError={() => setMediaErrored(true)}
-          />
+          <div className="group relative w-64 max-w-full">
+            <video
+              src={attachment.url}
+              controls
+              className="w-full rounded-md"
+              onLoadedData={() => setMediaLoaded(true)}
+              onError={() => setMediaErrored(true)}
+            />
+            {/* A button in the corner, not an overlay across the whole video: the
+                native <video controls> bar needs its own clicks (play, seek,
+                volume) to keep working, so this can't cover the player the way
+                the image overlay below covers a plain <img>. */}
+            {onImageClick && mediaLoaded && (
+              <button
+                type="button"
+                aria-label="Expand video"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onImageClick(attachment);
+                }}
+                className="absolute top-2 right-2 z-10 flex size-8 items-center justify-center rounded-full bg-black/50 text-white opacity-0 outline-none transition-opacity duration-150 group-hover:opacity-100 hover:bg-black/70"
+              >
+                <Maximize2 className="size-4" />
+              </button>
+            )}
+          </div>
         ) : (
           <div
             className={`group relative h-64 w-64 max-w-full overflow-hidden rounded-md ${

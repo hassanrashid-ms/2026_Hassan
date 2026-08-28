@@ -28,7 +28,7 @@ export const DEFAULT_BOT_RULES_CATALOG: readonly CatalogRule[] = [
     key: 'no_invented_facts',
     text: 'Never invent a fact about the game, an account, a purchase, a refund, or a balance. If the articles do not say it, you do not know it.',
     defaultEnabled: true,
-    locked: false,
+    locked: true,
     enforcement: 'code',
   },
   {
@@ -42,21 +42,21 @@ export const DEFAULT_BOT_RULES_CATALOG: readonly CatalogRule[] = [
     key: 'search_before_financial_handoff',
     text: 'If the player reports a financial loss or a setback they did not cause, search before you hand off. A published article on the exact problem is faster than a queue, and answering from it costs the player nothing — they can still say it did not help, which hands them off. Never resolve or dismiss the complaint yourself.',
     defaultEnabled: true,
-    locked: false,
+    locked: true,
     enforcement: 'prompt',
   },
   {
     key: 'handoff_after_empty_search',
     text: 'If a search comes back with nothing that answers the question, hand off. A fast handoff is a good outcome, not a failure — but "fast" means after one search, not instead of one.',
     defaultEnabled: true,
-    locked: false,
+    locked: true,
     enforcement: 'prompt',
   },
   {
     key: 'no_promises',
     text: 'Never promise a compensation, a refund, a timeline, or an outcome. A human decides those.',
     defaultEnabled: true,
-    locked: false,
+    locked: true,
     enforcement: 'prompt',
   },
   {
@@ -70,15 +70,22 @@ export const DEFAULT_BOT_RULES_CATALOG: readonly CatalogRule[] = [
     key: 'language_and_length',
     text: "Reply in the player's language. Keep an ordinary reply to at most three short sentences — this is a chat window on a phone, not an email. An answer drawn from an article may run longer when its steps need the room: never drop or merge a step to fit, and never pad past what the article says.",
     defaultEnabled: true,
-    locked: false,
+    locked: true,
     enforcement: 'prompt',
   },
   {
     key: 'no_regreet',
     text: 'Do not greet the player again if the conversation is already underway.',
     defaultEnabled: true,
-    locked: false,
+    locked: true,
     enforcement: 'prompt',
+  },
+  {
+    key: 'player_declared_resolved_strict',
+    text: "Only call player_declared_resolved when the player's own words unambiguously say the issue is fixed or the ticket should be closed. Never call it for thanks, agreement to try something, or any ambiguous reply — those are not the same as the issue being over.",
+    defaultEnabled: true,
+    locked: true,
+    enforcement: 'code',
   },
 ] as const;
 
@@ -89,6 +96,15 @@ export const LOCKED_RULE_KEYS: ReadonlySet<string> = new Set(
 export const BUILTIN_RULE_KEYS: ReadonlySet<string> = new Set(
   DEFAULT_BOT_RULES_CATALOG.map((r) => r.key),
 );
+
+/**
+ * Rules no console UI should ever list. `no_invented_facts` is enforced by
+ * `scoreGrounding` unconditionally, not gated by its `enabled` flag — showing
+ * a toggle for it would just be a lie an admin could click. Still saved,
+ * validated and locked like any other builtin rule; only the console listing
+ * omits it.
+ */
+export const HIDDEN_RULE_KEYS: ReadonlySet<string> = new Set(['no_invented_facts']);
 
 /** enforcement is display-only and never stored — always re-derived from the catalog. */
 export function deriveEnforcement(entry: {
