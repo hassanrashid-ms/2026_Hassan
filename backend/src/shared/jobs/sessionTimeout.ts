@@ -1,13 +1,13 @@
-import { and, isNull, lt } from 'drizzle-orm'
-import { getEnv } from '../../env.ts'
-import { appendEvent } from '../events/appendEvent.ts'
-import { session, workspace } from '../db/schema/index.ts'
-import { withWorkspace, withoutWorkspace } from '../db/withWorkspace.ts'
+import { and, isNull, lt } from 'drizzle-orm';
+import { getEnv } from '../../env.ts';
+import { appendEvent } from '../events/appendEvent.ts';
+import { session, workspace } from '../db/schema/index.ts';
+import { withWorkspace, withoutWorkspace } from '../db/withWorkspace.ts';
 
 export type CloseStaleSessionsOptions = {
-  now?: Date
-  timeoutMinutes?: number
-}
+  now?: Date;
+  timeoutMinutes?: number;
+};
 
 /**
  * Closes sessions with no ended_at older than the timeout, marking them
@@ -23,22 +23,22 @@ export type CloseStaleSessionsOptions = {
  * would put a hole in the mechanism protecting the highest-risk requirement here.
  */
 export async function closeStaleSessions(options: CloseStaleSessionsOptions = {}): Promise<number> {
-  const now = options.now ?? new Date()
-  const timeoutMinutes = options.timeoutMinutes ?? getEnv().SESSION_TIMEOUT_MINUTES
-  const cutoff = new Date(now.getTime() - timeoutMinutes * 60_000)
+  const now = options.now ?? new Date();
+  const timeoutMinutes = options.timeoutMinutes ?? getEnv().SESSION_TIMEOUT_MINUTES;
+  const cutoff = new Date(now.getTime() - timeoutMinutes * 60_000);
 
   const workspaces = await withoutWorkspace(async (tx) =>
     tx.select({ id: workspace.id }).from(workspace).where(isNull(workspace.disabledAt)),
-  )
+  );
 
-  let closed = 0
+  let closed = 0;
   for (const ws of workspaces) {
     closed += await withWorkspace(ws.id, async (tx) => {
       const ended = await tx
         .update(session)
         .set({ endedAt: now, endedBy: 'timeout' })
         .where(and(isNull(session.endedAt), lt(session.startedAt, cutoff)))
-        .returning({ id: session.id, playerId: session.playerId, startedAt: session.startedAt })
+        .returning({ id: session.id, playerId: session.playerId, startedAt: session.startedAt });
 
       for (const row of ended) {
         await appendEvent(tx, {
@@ -52,11 +52,11 @@ export async function closeStaleSessions(options: CloseStaleSessionsOptions = {}
             duration_ms_derived: now.getTime() - row.startedAt.getTime(),
             timeout_minutes: timeoutMinutes,
           },
-        })
+        });
       }
-      return ended.length
-    })
+      return ended.length;
+    });
   }
 
-  return closed
+  return closed;
 }

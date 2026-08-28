@@ -5,16 +5,17 @@
 **Depends on:** [`2026-08-04-database-and-schema-design.md`](2026-08-04-database-and-schema-design.md),
 [`2026-08-04-sdk-wire-contract.md`](2026-08-04-sdk-wire-contract.md)
 **Supersedes (scope note):** the Step 5 line in the wire contract's build order —
-*"`POST /conversations`, `POST /messages`, the real chat UI, the agent inbox"* — this document is
+_"`POST /conversations`, `POST /messages`, the real chat UI, the agent inbox"_ — this document is
 that step, narrowed to the smallest slice that proves the loop end to end.
 
-This is the step the wire contract calls out as the payoff: *"player message → agent reply → player
-sees it."* Steps 1–4 (auth seam, the four `/sdk/*` endpoints, the web surface stub, `GET
+This is the step the wire contract calls out as the payoff: _"player message → agent reply → player
+sees it."_ Steps 1–4 (auth seam, the four `/sdk/*` endpoints, the web surface stub, `GET
 /sdk/unread`) are built. This is next.
 
 ## Scope
 
 **In:**
+
 - Player sends a message from the web support surface; a conversation is created or reopened.
 - Conversation lands in `open`, unassigned.
 - An agent claims it from an inbox and replies.
@@ -22,6 +23,7 @@ sees it."* Steps 1–4 (auth seam, the four `/sdk/*` endpoints, the web surface 
 - A minimal agent console: dev-picker login, inbox, conversation view.
 
 **Out (deferred to later slices):**
+
 - The bot. Every conversation in this slice skips `bot_active` and is created directly in `open` —
   the same path the status machine already defines for "bot errors/times out/disabled." No new
   status-machine rule is needed; this slice just always takes that branch.
@@ -37,7 +39,7 @@ sees it."* Steps 1–4 (auth seam, the four `/sdk/*` endpoints, the web surface 
 No schema changes. `conversation` and `message` already carry everything this slice needs
 (`status`, `assigned_agent_id`, `message_seq`, `author_type`, `visibility`, `delivery_state`).
 
-**Reopen is a status write, not a new row.** A player has at most one *live* conversation (no
+**Reopen is a status write, not a new row.** A player has at most one _live_ conversation (no
 separate `resolution_cycle` table exists yet — see `conversations.ts`'s own comment that it is
 deliberately minimal). Sending into a `resolved`/`closed` conversation flips it back to `open`,
 clears `assigned_agent_id` (back to the unassigned queue), and appends a `conversation_reopened`
@@ -61,16 +63,16 @@ All new endpoints route through one shared function, `postMessage(tx, {...})`, s
 lives in exactly one place. The player and agent routers differ only in which `authorType` they're
 allowed to write and which serializer they read back with.
 
-| Endpoint | Caller | Auth | What it does |
-|---|---|---|---|
-| `POST /surface/messages` `{ body }` | player | player JWT | find-or-create/reopen the player's conversation, `postMessage(authorType: 'player')`, emit to both socket rooms |
-| `GET /surface/messages?session_id=` | player | player JWT | `{ conversation_id: string \| null, messages: [] }` for the player's conversation, `toPlayerView` — `conversation_id: null` and an empty list if none exists yet. `session_id` is validated but **not** consulted, see the note below |
-| `POST /surface/messages/read` | player | player JWT | mark everything up to a given `seq` as `read` |
-| `GET /agent/conversations?status=unassigned\|mine` | agent | stub session | inbox rows: id, player, status, last message preview |
-| `POST /agent/conversations/:id/claim` | agent | stub session | `UPDATE ... SET assigned_agent_id = :agent WHERE id = :id AND assigned_agent_id IS NULL`; zero rows affected is "already claimed," not an error |
-| `GET /agent/conversations/:id/messages` | agent | stub session | full history, `toAgentView` |
-| `POST /agent/messages` `{ conversation_id, body }` | agent | stub session | `postMessage(authorType: 'agent')`; requires caller to be `assigned_agent_id` on that conversation |
-| `POST /agent/messages/read` | agent | stub session | mark everything up to a given `seq` as `read` |
+| Endpoint                                           | Caller | Auth         | What it does                                                                                                                                                                                                                          |
+| -------------------------------------------------- | ------ | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /surface/messages` `{ body }`                | player | player JWT   | find-or-create/reopen the player's conversation, `postMessage(authorType: 'player')`, emit to both socket rooms                                                                                                                       |
+| `GET /surface/messages?session_id=`                | player | player JWT   | `{ conversation_id: string \| null, messages: [] }` for the player's conversation, `toPlayerView` — `conversation_id: null` and an empty list if none exists yet. `session_id` is validated but **not** consulted, see the note below |
+| `POST /surface/messages/read`                      | player | player JWT   | mark everything up to a given `seq` as `read`                                                                                                                                                                                         |
+| `GET /agent/conversations?status=unassigned\|mine` | agent  | stub session | inbox rows: id, player, status, last message preview                                                                                                                                                                                  |
+| `POST /agent/conversations/:id/claim`              | agent  | stub session | `UPDATE ... SET assigned_agent_id = :agent WHERE id = :id AND assigned_agent_id IS NULL`; zero rows affected is "already claimed," not an error                                                                                       |
+| `GET /agent/conversations/:id/messages`            | agent  | stub session | full history, `toAgentView`                                                                                                                                                                                                           |
+| `POST /agent/messages` `{ conversation_id, body }` | agent  | stub session | `postMessage(authorType: 'agent')`; requires caller to be `assigned_agent_id` on that conversation                                                                                                                                    |
+| `POST /agent/messages/read`                        | agent  | stub session | mark everything up to a given `seq` as `read`                                                                                                                                                                                         |
 
 Module lives at `backend/src/agent/` (renamed from the already-scaffolded `agentside/`), mirroring
 `backend/src/surface/`'s router/controller/service split.
@@ -90,7 +92,7 @@ out of sync with the REST response shape, and means new unassigned conversations
 inbox live instead of on a poll.
 
 **REST is the write path; sockets are push-only.** `POST .../messages` returns the created message
-directly — that response *is* the send confirmation. The socket emit exists only to update *other*
+directly — that response _is_ the send confirmation. The socket emit exists only to update _other_
 participants live. A client that misses the socket event still sees the message on its next `GET
 .../messages`, matching the "push is best effort, fetch-on-open is the guaranteed path" rule
 `GET /sdk/unread` already established.
@@ -116,6 +118,7 @@ divergent path between the two buttons.
   per-message.
 
 **Agent console** (new, minimal):
+
 - `/login`: dev picker listing seeded agents; selecting one sets the stub session.
 - `/inbox`: two lists, Unassigned and Mine. Claim button per unassigned row.
 - `/conversations/:id`: same `ChatThread`/composer pair as the player side (serializer-agnostic —
@@ -126,6 +129,7 @@ the API calls and socket room differ between the two callers, which is what keep
 independently.
 
 **Deferred for this slice, brought in now as dependencies rather than rolled by hand:**
+
 - `react-virtuoso` — chat scroll anchoring is a two-day trap if hand-rolled.
 - TanStack Query (already the console's stack choice) — its mutation lifecycle plus
   `Idempotency-Key` gives `sending → sent` almost for free.
@@ -148,7 +152,7 @@ independently.
   **Do not reintroduce a session gate on a read path that RLS already scopes.**
 - **Claim race**: zero rows updated is a normal response (`{ claimed: false }`), not an error — the
   UI shows "already claimed" and refreshes the inbox row.
-- **Reply to an unassigned or someone-else's conversation** is a 403 (this one *is* a real
+- **Reply to an unassigned or someone-else's conversation** is a 403 (this one _is_ a real
   permission failure, not a tenancy question) — enforced at the API, not hidden in the UI.
 - **Socket disconnect** is invisible to correctness: the REST send path doesn't depend on the
   socket being up, and `GET .../messages` is always the source of truth on reconnect/reload.
@@ -172,4 +176,3 @@ independently.
 - Message ordering: concurrent sends into the same conversation never produce a duplicate `seq`
   (unique index already enforces this at the DB level; the test proves the app doesn't retry in a
   way that violates it).
-

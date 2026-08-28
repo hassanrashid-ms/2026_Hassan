@@ -8,7 +8,7 @@
 
 `workspace` and `agent` are the only two tables in the product with no `workspace_id`, so
 Row-Level Security cannot protect them — there is no tenant column to scope on. That is correct by
-design: a workspace row *defines* a tenant, and an agent is one login per person, global across
+design: a workspace row _defines_ a tenant, and an agent is one login per person, global across
 workspaces, with the role held per workspace in `workspace_member`.
 
 But the original grant was `GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public`, which
@@ -37,7 +37,7 @@ REVOKE INSERT, UPDATE ON workspace FROM support_app;
 -- agent deliberately keeps INSERT and UPDATE
 ```
 
-**`workspace` — read-only to the application.** The request path only ever *reads* it: the auth
+**`workspace` — read-only to the application.** The request path only ever _reads_ it: the auth
 endpoint looks up a workspace by slug to verify a secret, and the player-token middleware looks one
 up by id to cross-check the `X-Support-Workspace` header. Nothing in the request path has a
 legitimate reason to write a workspace row. Creating and configuring workspaces is admin-console

@@ -1,8 +1,8 @@
-import type { RequestHandler } from 'express'
-import { SessionEndBody, SessionStartBody } from '@support/types'
-import { sendError } from '../../errors.ts'
-import { logger } from '../../shared/logging/logger.ts'
-import { endSession, startSession } from '../services/sessionsService.ts'
+import type { RequestHandler } from 'express';
+import { SessionEndBody, SessionStartBody } from '@support/types';
+import { sendError } from '../../errors.ts';
+import { logger } from '../../shared/logging/logger.ts';
+import { endSession, startSession } from '../services/sessionsService.ts';
 
 /**
  * Non-blocking on the SDK side, so this can land after the web app has already
@@ -11,28 +11,28 @@ import { endSession, startSession } from '../services/sessionsService.ts'
  * visible — no repair step, no ordering requirement.
  */
 export const sessionsStart: RequestHandler = async (req, res) => {
-  const player = req.player!
+  const player = req.player!;
 
   logger.info('sdk/sessions/start', '▶ received', {
     session_id: req.body?.session_id,
-    player_id:  player.externalPlayerId,
-    workspace:  player.workspaceId,
+    player_id: player.externalPlayerId,
+    workspace: player.workspaceId,
     entry_point: req.body?.entry_point,
     has_snapshot: req.body?.snapshot != null,
-  })
+  });
 
-  const parsed = SessionStartBody.safeParse(req.body)
+  const parsed = SessionStartBody.safeParse(req.body);
   if (!parsed.success) {
     // The only 4xx this endpoint has: without a usable session_id there is no
     // primary key to write against. Everything else about the body is recoverable.
-    logger.warn('sdk/sessions/start', '✗ invalid body', parsed.error.flatten())
-    sendError(res, 422, 'invalid_request', 'session_id must be a uuid.')
-    return
+    logger.warn('sdk/sessions/start', '✗ invalid body', parsed.error.flatten());
+    sendError(res, 422, 'invalid_request', 'session_id must be a uuid.');
+    return;
   }
 
-  await startSession(player, parsed.data)
-  res.status(200).json({ ok: true })
-}
+  await startSession(player, parsed.data);
+  res.status(200).json({ ok: true });
+};
 
 /**
  * If this never arrives the session simply has no ended_at. Two mitigations exist and
@@ -41,14 +41,14 @@ export const sessionsStart: RequestHandler = async (req, res) => {
  * silently shrink the denominator.
  */
 export const sessionsEnd: RequestHandler = async (req, res) => {
-  const player = req.player!
+  const player = req.player!;
 
-  const parsed = SessionEndBody.safeParse(req.body)
+  const parsed = SessionEndBody.safeParse(req.body);
   if (!parsed.success) {
-    sendError(res, 422, 'invalid_request', 'session_id must be a uuid.')
-    return
+    sendError(res, 422, 'invalid_request', 'session_id must be a uuid.');
+    return;
   }
 
-  await endSession(player, parsed.data)
-  res.status(200).json({ ok: true })
-}
+  await endSession(player, parsed.data);
+  res.status(200).json({ ok: true });
+};

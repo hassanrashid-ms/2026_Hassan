@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { useSyncExternalStore } from 'react';
 
 /**
  * Which articles this player has opened during this webview session.
@@ -13,34 +13,34 @@ import { useSyncExternalStore } from 'react'
  * days later should see a clean list, and `article_read` is already recorded
  * server-side for anyone who needs the durable answer.
  */
-const readIds = new Set<string>()
-const listeners = new Set<() => void>()
+const readIds = new Set<string>();
+const listeners = new Set<() => void>();
 
 /** Recreated on every mutation so useSyncExternalStore's identity check fires. */
-let snapshot: readonly string[] = []
+let snapshot: readonly string[] = [];
 
 function subscribe(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => listeners.delete(listener)
+  listeners.add(listener);
+  return () => listeners.delete(listener);
 }
 
 function getSnapshot(): readonly string[] {
-  return snapshot
+  return snapshot;
 }
 
 export function markArticleRead(articleId: string): void {
-  if (readIds.has(articleId)) return
-  readIds.add(articleId)
-  snapshot = [...readIds]
-  for (const listener of listeners) listener()
+  if (readIds.has(articleId)) return;
+  readIds.add(articleId);
+  snapshot = [...readIds];
+  for (const listener of listeners) listener();
 }
 
 export function hasReadArticle(articleId: string): boolean {
-  return readIds.has(articleId)
+  return readIds.has(articleId);
 }
 
 /** Subscribe a component to the set. Returns a membership predicate. */
 export function useReadArticles(): (articleId: string) => boolean {
-  const ids = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
-  return (articleId: string) => ids.includes(articleId)
+  const ids = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  return (articleId: string) => ids.includes(articleId);
 }

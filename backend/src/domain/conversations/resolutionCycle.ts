@@ -1,19 +1,23 @@
-import { and, desc, eq, isNull, sql } from 'drizzle-orm'
-import { resolutionCycle } from '../../shared/db/schema/index.ts'
-import type { Tx } from '../../shared/db/withWorkspace.ts'
-
-/**
- * Both stages of the clock use the same window: 24h of silence before the ask,
- * 24h more before the timeout. A constant in one file — a per-workspace setting
- * would be a schema change and nobody has asked for one.
- */
-export const INACTIVITY_WINDOW_HOURS = 24
+import { and, desc, eq, isNull, sql } from 'drizzle-orm';
+import { resolutionCycle, workspace } from '../../shared/db/schema/index.ts';
+import type { Tx } from '../../shared/db/withWorkspace.ts';
 
 /** The four terminal outcomes a cycle can record. Mirrors the resolution_source enum. */
-export type ResolutionKind = 'bot' | 'agent' | 'player_confirmed' | 'timed_out'
+export type ResolutionKind = 'bot' | 'agent' | 'player_confirmed' | 'timed_out';
 
-export function nextInactivityDueAt(from: Date): Date {
-  return new Date(from.getTime() + INACTIVITY_WINDOW_HOURS * 3_600_000)
+/** Both stages of the clock use the same window: N hours of silence before the ask, N more before the timeout. */
+export function nextInactivityDueAt(from: Date, windowHours: number): Date {
+  return new Date(from.getTime() + windowHours * 3_600_000);
+}
+
+async function inactivityWindowHours(tx: Tx, workspaceId: string): Promise<number> {
+  const [row] = await tx
+    .select({ inactivityWindowHours: workspace.inactivityWindowHours })
+    .from(workspace)
+    .where(eq(workspace.id, workspaceId));
+
+  if (!row) throw new Error(`inactivityWindowHours: no workspace ${workspaceId}`);
+  return row.inactivityWindowHours;
 }
 
 /**
@@ -32,16 +36,16 @@ export async function openResolutionCycle(
   const [prev] = await tx
     .select({ maxNo: sql<number | null>`max(${resolutionCycle.cycleNo})` })
     .from(resolutionCycle)
-    .where(eq(resolutionCycle.conversationId, args.conversationId))
+    .where(eq(resolutionCycle.conversationId, args.conversationId));
 
-  const cycleNo = Number(prev?.maxNo ?? 0) + 1
+  const cycleNo = Number(prev?.maxNo ?? 0) + 1;
   const [created] = await tx
     .insert(resolutionCycle)
     .values({ workspaceId: args.workspaceId, conversationId: args.conversationId, cycleNo })
-    .returning({ id: resolutionCycle.id, cycleNo: resolutionCycle.cycleNo })
+    .returning({ id: resolutionCycle.id, cycleNo: resolutionCycle.cycleNo });
 
-  if (!created) throw new Error('openResolutionCycle: insert returned nothing')
-  return created
+  if (!created) throw new Error('openResolutionCycle: insert returned nothing');
+  return created;
 }
 
 /**
@@ -49,24 +53,55 @@ export async function openResolutionCycle(
  * `resolved_at IS NULL` filter is what makes every one of these a no-op on a
  * conversation with nothing running — no caller has to check first.
  */
-export async function touchInactivityClock(tx: Tx, args: { conversationId: string; now: Date }): Promise<void> {
+export async function touchInactivityClock(
+  tx: Tx,
+  args: { conversationId: string; now: Date },
+): Promise<void> {
+  const [open] = await tx
+    .select({ workspaceId: resolutionCycle.workspaceId })
+    .from(resolutionCycle)
+    .where(
+      and(
+        eq(resolutionCycle.conversationId, args.conversationId),
+        isNull(resolutionCycle.resolvedAt),
+      ),
+    );
+  if (!open) return;
+
+  const windowHours = await inactivityWindowHours(tx, open.workspaceId);
   await tx
     .update(resolutionCycle)
-    .set({ inactivityDueAt: nextInactivityDueAt(args.now) })
-    .where(and(eq(resolutionCycle.conversationId, args.conversationId), isNull(resolutionCycle.resolvedAt)))
+    .set({ inactivityDueAt: nextInactivityDueAt(args.now, windowHours) })
+    .where(
+      and(
+        eq(resolutionCycle.conversationId, args.conversationId),
+        isNull(resolutionCycle.resolvedAt),
+      ),
+    );
 }
 
 /** On escalated: NULL so the worker skips it entirely rather than filtering on status alone. */
-export async function pauseInactivityClock(tx: Tx, args: { conversationId: string }): Promise<void> {
+export async function pauseInactivityClock(
+  tx: Tx,
+  args: { conversationId: string },
+): Promise<void> {
   await tx
     .update(resolutionCycle)
     .set({ inactivityDueAt: null })
-    .where(and(eq(resolutionCycle.conversationId, args.conversationId), isNull(resolutionCycle.resolvedAt)))
+    .where(
+      and(
+        eq(resolutionCycle.conversationId, args.conversationId),
+        isNull(resolutionCycle.resolvedAt),
+      ),
+    );
 }
 
 /** On unescalated: a fresh full window, not the remainder of the one that was paused. */
-export async function resumeInactivityClock(tx: Tx, args: { conversationId: string; now: Date }): Promise<void> {
-  await touchInactivityClock(tx, args)
+export async function resumeInactivityClock(
+  tx: Tx,
+  args: { conversationId: string; now: Date },
+): Promise<void> {
+  await touchInactivityClock(tx, args);
 }
 
 export async function closeResolutionCycle(
@@ -76,7 +111,12 @@ export async function closeResolutionCycle(
   await tx
     .update(resolutionCycle)
     .set({ resolvedAt: args.now, resolutionKind: args.kind, inactivityDueAt: null })
-    .where(and(eq(resolutionCycle.conversationId, args.conversationId), isNull(resolutionCycle.resolvedAt)))
+    .where(
+      and(
+        eq(resolutionCycle.conversationId, args.conversationId),
+        isNull(resolutionCycle.resolvedAt),
+      ),
+    );
 }
 
 /**
@@ -85,18 +125,21 @@ export async function closeResolutionCycle(
  * Write-once: a cycle already stamped keeps its original timestamp, because the
  * first close is the one that happened.
  */
-export async function stampCycleClosed(tx: Tx, args: { conversationId: string; now: Date }): Promise<void> {
+export async function stampCycleClosed(
+  tx: Tx,
+  args: { conversationId: string; now: Date },
+): Promise<void> {
   const [latest] = await tx
     .select({ id: resolutionCycle.id })
     .from(resolutionCycle)
     .where(eq(resolutionCycle.conversationId, args.conversationId))
     .orderBy(desc(resolutionCycle.cycleNo))
-    .limit(1)
+    .limit(1);
 
-  if (!latest) return
+  if (!latest) return;
 
   await tx
     .update(resolutionCycle)
     .set({ closedAt: args.now })
-    .where(and(eq(resolutionCycle.id, latest.id), isNull(resolutionCycle.closedAt)))
+    .where(and(eq(resolutionCycle.id, latest.id), isNull(resolutionCycle.closedAt)));
 }

@@ -1,6 +1,6 @@
-import * as React from 'react'
-import * as ScrollAreaPrimitive from '@radix-ui/react-scroll-area'
-import { cn } from '@/surfaces/webview/lib/cn'
+import * as React from 'react';
+import * as ScrollAreaPrimitive from '@radix-ui/react-scroll-area';
+import { cn } from '@/surfaces/webview/lib/cn';
 
 // Divergence from stock shadcn: scrollbar thumb uses bg-muted/30 (a token + opacity
 // modifier) instead of a nonexistent bg-border variable.
@@ -17,7 +17,7 @@ function ScrollArea({
       <ScrollBar />
       <ScrollAreaPrimitive.Corner />
     </ScrollAreaPrimitive.Root>
-  )
+  );
 }
 
 function ScrollBar({
@@ -38,7 +38,7 @@ function ScrollBar({
     >
       <ScrollAreaPrimitive.ScrollAreaThumb className="relative flex-1 rounded-full bg-muted/30" />
     </ScrollAreaPrimitive.ScrollAreaScrollbar>
-  )
+  );
 }
 
-export { ScrollArea, ScrollBar }
+export { ScrollArea, ScrollBar };

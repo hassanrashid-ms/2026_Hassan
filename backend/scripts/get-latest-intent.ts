@@ -8,7 +8,7 @@ async function main() {
   const env = getEnv();
   const pgClient = new Client({ connectionString: env.MIGRATION_DATABASE_URL });
   await pgClient.connect();
-  
+
   try {
     const res = await pgClient.query(`
       SELECT 
@@ -22,7 +22,7 @@ async function main() {
       ORDER BY c.created_at DESC
       LIMIT 1;
     `);
-    
+
     if (res.rows.length === 0) {
       console.log('No conversations found.');
     } else {

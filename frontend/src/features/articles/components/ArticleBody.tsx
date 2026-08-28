@@ -1,7 +1,8 @@
-import { useState } from 'react'
-import Markdown, { type Components } from 'react-markdown'
-import remarkGfm from 'remark-gfm'
-import { post } from '@/services/bridgeService'
+import { useState } from 'react';
+import Markdown, { defaultUrlTransform, type Components } from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import type { ArticleAttachmentView } from '@support/types';
+import { post } from '@/services/bridgeService';
 
 /*
  * Agents author bodies in a WYSIWYG markdown editor. Players used to get the raw
@@ -27,22 +28,34 @@ import { post } from '@/services/bridgeService'
  * hosts rot, so a failed load degrades to the alt text as a caption rather than
  * leaving a broken-image glyph in the middle of a help article.
  */
-function ArticleImage({ src, alt }: { src?: string; alt?: string }) {
-  const [failed, setFailed] = useState(false)
+function ArticleImage({
+  src,
+  alt,
+  attachments,
+}: {
+  src?: string;
+  alt?: string;
+  attachments: ArticleAttachmentView[];
+}) {
+  const [failed, setFailed] = useState(false);
 
-  if (failed) {
-    return alt ? <span className="mb-3 block text-sm text-muted italic">{alt}</span> : null
+  const resolvedSrc = src?.startsWith('attachment:')
+    ? (attachments.find((a) => a.id === src.slice('attachment:'.length))?.url ?? undefined)
+    : src;
+
+  if (failed || !resolvedSrc) {
+    return alt ? <span className="mb-3 block text-sm text-muted italic">{alt}</span> : null;
   }
 
   return (
     <img
-      src={src}
+      src={resolvedSrc}
       alt={alt ?? ''}
       loading="lazy"
       onError={() => setFailed(true)}
-      className="mb-3 h-auto max-w-full rounded-card"
+      className="mb-3 max-h-96 max-w-full rounded-card object-contain"
     />
-  )
+  );
 }
 
 /*
@@ -55,30 +68,66 @@ function ArticleImage({ src, alt }: { src?: string; alt?: string }) {
  * message in ChatThread, styled `bg-accent text-accent-fg` — would otherwise
  * get `text-text`'s dark body colour laid directly over that dark bg.
  */
-function getComponents(dark: boolean): Components {
-  const body = dark ? 'text-accent-fg' : 'text-text'
-  const quote = dark ? 'text-accent-fg/80' : 'text-muted'
-  const rule = dark ? 'border-accent-fg/30' : 'border-accent-soft'
-  const codeBg = dark ? 'bg-accent-fg/10' : 'bg-surface'
-  const link = dark ? 'text-accent-fg' : 'text-accent'
+function getComponents(dark: boolean, attachments: ArticleAttachmentView[]): Components {
+  const body = dark ? 'text-accent-fg' : 'text-text';
+  const quote = dark ? 'text-accent-fg/80' : 'text-muted';
+  const rule = dark ? 'border-accent-fg/30' : 'border-accent-soft';
+  const codeBg = dark ? 'bg-accent-fg/10' : 'bg-surface';
+  const link = dark ? 'text-accent-fg' : 'text-accent';
 
   return {
-    h1: ({ children }) => <h1 className={`mt-6 mb-2 text-2xl leading-snug font-semibold ${body} first:mt-0`}>{children}</h1>,
-    h2: ({ children }) => <h2 className={`mt-6 mb-2 text-xl leading-snug font-semibold ${body} first:mt-0`}>{children}</h2>,
-    h3: ({ children }) => <h3 className={`mt-5 mb-2 text-lg leading-snug font-semibold ${body} first:mt-0`}>{children}</h3>,
-    p: ({ children }) => <p className={`mb-3 text-base leading-relaxed ${body} last:mb-0`}>{children}</p>,
-    ul: ({ children }) => <ul className={`mb-3 list-disc space-y-1 pl-5 text-base leading-relaxed ${body}`}>{children}</ul>,
-    ol: ({ children }) => <ol className={`mb-3 list-decimal space-y-1 pl-5 text-base leading-relaxed ${body}`}>{children}</ol>,
+    h1: ({ children }) => (
+      <h1 className={`mt-6 mb-2 text-2xl leading-snug font-semibold ${body} first:mt-0`}>
+        {children}
+      </h1>
+    ),
+    h2: ({ children }) => (
+      <h2 className={`mt-6 mb-2 text-xl leading-snug font-semibold ${body} first:mt-0`}>
+        {children}
+      </h2>
+    ),
+    h3: ({ children }) => (
+      <h3 className={`mt-5 mb-2 text-lg leading-snug font-semibold ${body} first:mt-0`}>
+        {children}
+      </h3>
+    ),
+    p: ({ children }) => (
+      <p className={`mb-3 text-base leading-relaxed ${body} last:mb-0`}>{children}</p>
+    ),
+    ul: ({ children }) => (
+      <ul className={`mb-3 list-disc space-y-1 pl-5 text-base leading-relaxed ${body}`}>
+        {children}
+      </ul>
+    ),
+    ol: ({ children }) => (
+      <ol className={`mb-3 list-decimal space-y-1 pl-5 text-base leading-relaxed ${body}`}>
+        {children}
+      </ol>
+    ),
     li: ({ children }) => <li className="pl-0.5">{children}</li>,
     blockquote: ({ children }) => (
-      <blockquote className={`mb-3 border-l-2 ${rule} pl-3 text-base leading-relaxed ${quote}`}>{children}</blockquote>
+      <blockquote className={`mb-3 border-l-2 ${rule} pl-3 text-base leading-relaxed ${quote}`}>
+        {children}
+      </blockquote>
     ),
     hr: () => <hr className={`my-5 border-0 border-t ${rule}`} />,
-    code: ({ children }) => <code className={`rounded ${codeBg} px-1 py-0.5 font-mono text-[0.9em] ${body}`}>{children}</code>,
+    code: ({ children }) => (
+      <code className={`rounded ${codeBg} px-1 py-0.5 font-mono text-[0.9em] ${body}`}>
+        {children}
+      </code>
+    ),
     // A fenced block is a <pre> wrapping the <code> above; the block scrolls
     // within itself rather than making the drawer scroll sideways.
-    pre: ({ children }) => <pre className={`mb-3 overflow-x-auto rounded-card ${codeBg} p-3 text-sm`}>{children}</pre>,
-    img: ({ src, alt }) => <ArticleImage src={typeof src === 'string' ? src : undefined} alt={alt} />,
+    pre: ({ children }) => (
+      <pre className={`mb-3 overflow-x-auto rounded-card ${codeBg} p-3 text-sm`}>{children}</pre>
+    ),
+    img: ({ src, alt }) => (
+      <ArticleImage
+        src={typeof src === 'string' ? src : undefined}
+        alt={alt}
+        attachments={attachments}
+      />
+    ),
     // The wrapper, not the table, is what scrolls.
     table: ({ children }) => (
       <div className="mb-3 overflow-x-auto">
@@ -86,7 +135,9 @@ function getComponents(dark: boolean): Components {
       </div>
     ),
     th: ({ children }) => (
-      <th className={`border-b ${rule} px-2 py-1.5 text-left font-semibold whitespace-nowrap`}>{children}</th>
+      <th className={`border-b ${rule} px-2 py-1.5 text-left font-semibold whitespace-nowrap`}>
+        {children}
+      </th>
     ),
     td: ({ children }) => <td className={`border-b ${rule} px-2 py-1.5 align-top`}>{children}</td>,
     /*
@@ -105,23 +156,45 @@ function getComponents(dark: boolean): Components {
         rel="noopener noreferrer"
         className={`${link} underline underline-offset-2`}
         onClick={(event) => {
-          if (!href || !window.SupportBridge) return
-          event.preventDefault()
-          post({ type: 'open_url', url: href })
+          if (!href || !window.SupportBridge) return;
+          event.preventDefault();
+          post({ type: 'open_url', url: href });
         }}
       >
         {children}
       </a>
     ),
-  }
+  };
 }
 
-export function ArticleBody({ markdown, dark = false }: { markdown: string; dark?: boolean }) {
+/*
+ * react-markdown's default URL sanitizer only allows a fixed protocol
+ * allowlist (http/https/mailto/etc.) and blanks anything else — which
+ * includes our `attachment:` handles. Pass those through unchanged; every
+ * other URL still goes through the default sanitizer.
+ */
+function urlTransform(url: string): string {
+  return url.startsWith('attachment:') ? url : defaultUrlTransform(url);
+}
+
+export function ArticleBody({
+  markdown,
+  dark = false,
+  attachments = [],
+}: {
+  markdown: string;
+  dark?: boolean;
+  attachments?: ArticleAttachmentView[];
+}) {
   return (
     <div className={`text-base leading-relaxed ${dark ? 'text-accent-fg' : 'text-text'}`}>
-      <Markdown remarkPlugins={[remarkGfm]} components={getComponents(dark)}>
+      <Markdown
+        remarkPlugins={[remarkGfm]}
+        components={getComponents(dark, attachments)}
+        urlTransform={urlTransform}
+      >
         {markdown}
       </Markdown>
     </div>
-  )
+  );
 }

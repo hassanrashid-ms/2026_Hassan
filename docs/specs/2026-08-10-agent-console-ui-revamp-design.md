@@ -30,19 +30,21 @@ No backend or API changes. This is purely a frontend restructure and restyle; `a
 Single page: `pages/Inbox/Inbox.tsx`.
 
 **Left rail** — `pages/Inbox/components/ConversationList.tsx`:
+
 - shadcn `Tabs`: **Unassigned** / **Mine** (matches `fetchInbox(token, 'unassigned' | 'mine')`).
 - Each row (`ConversationRow.tsx`): player's `external_player_id`, a status `Badge` color-coded per `ConversationStatusValue` (`new`, `bot_active`, `open`, `awaiting_player`, `escalated`, `resolved`, `closed`), truncated `last_message_preview`, relative `last_message_at`.
 - Selected row is visually highlighted and drives the URL (`/inbox/:conversationId`).
 - Claim button appears on hover for unassigned rows; reuses the existing `claimConversation` mutation and `conversation:changed` socket invalidation, unchanged in behavior.
 
 **Right panel** — `pages/Inbox/components/ThreadPanel.tsx`:
+
 - Empty state ("Select a conversation") when no conversation is selected.
 - Otherwise renders the existing `ChatThread` / `Composer` from `features/chat`, restyled with shadcn primitives. Header shows player id + status badge.
 - Existing socket logic (`join_conversation` / `message:new` / mark-as-read) moves into this component unchanged.
-- **Every counterpart bubble is labelled with who spoke.** `ChatThread` sided a bubble on `authorType === currentAuthorType`, which makes *own* and *not own* the only two states — so in the agent console a **bot** reply and a **player** message rendered as the same bubble on the same side, and an agent could only tell them apart by reading the words and guessing. Bot bubbles now carry a `Bot` label and a dashed, muted treatment. Both counterparts are labelled rather than just the bot: labelling one makes the other's identity depend on an absence, which is exactly the inference that was going wrong. The agent's own messages stay unlabelled — the side they sit on already says it. `data-author` carries the raw `authorType` for tests.
-- **Side is "whose side of the conversation", not "who typed it".** The bot answers on support's behalf, so to an agent it belongs on their own side; rendering it opposite the agent's replies misrepresents who the player is talking to. `onOwnSide = isOwn || (isBot && currentAuthorType === 'agent')` drives alignment, kept separate from `isOwn`, which still means *I typed this* and remains the sole gate on the read receipt — the agent must not be shown a receipt for a message they did not send. The condition is on the reader, not the message: to a player the bot stays the counterparty.
+- **Every counterpart bubble is labelled with who spoke.** `ChatThread` sided a bubble on `authorType === currentAuthorType`, which makes _own_ and _not own_ the only two states — so in the agent console a **bot** reply and a **player** message rendered as the same bubble on the same side, and an agent could only tell them apart by reading the words and guessing. Bot bubbles now carry a `Bot` label and a dashed, muted treatment. Both counterparts are labelled rather than just the bot: labelling one makes the other's identity depend on an absence, which is exactly the inference that was going wrong. The agent's own messages stay unlabelled — the side they sit on already says it. `data-author` carries the raw `authorType` for tests.
+- **Side is "whose side of the conversation", not "who typed it".** The bot answers on support's behalf, so to an agent it belongs on their own side; rendering it opposite the agent's replies misrepresents who the player is talking to. `onOwnSide = isOwn || (isBot && currentAuthorType === 'agent')` drives alignment, kept separate from `isOwn`, which still means _I typed this_ and remains the sole gate on the read receipt — the agent must not be shown a receipt for a message they did not send. The condition is on the reader, not the message: to a player the bot stays the counterparty.
 - **Player bubbles are labelled with the player's `external_player_id`**, passed down as `playerLabel` from `ThreadPanel` (which already shows it in the header) — a `player` row has no display name, so the external id is the only identity there is. Rendered `normal-case` rather than the uppercase used for the `Bot` / `Agent` labels, because an id is data and may be case-sensitive. Falls back to the generic `Player` when the caller has not resolved one yet, so a bubble is never left unlabelled mid-load.
-- The player-facing webview (`surfaces/webview/components/chat/ChatBubbles.tsx`) has the same structural gap — bot and human agent both render as "not the player" — but whether a player is *told* they are talking to a bot is a product decision, not a UI defect, so it is deliberately left alone here.
+- The player-facing webview (`surfaces/webview/components/chat/ChatBubbles.tsx`) has the same structural gap — bot and human agent both render as "not the player" — but whether a player is _told_ they are talking to a bot is a product decision, not a UI defect, so it is deliberately left alone here.
 
 **Responsive behavior:** below a breakpoint, selecting a conversation replaces the list with a full-screen thread (with a back affordance) since side-by-side doesn't fit narrow viewports.
 
@@ -51,10 +53,12 @@ Single page: `pages/Inbox/Inbox.tsx`.
 Single page: `pages/KnowledgeBase/KnowledgeBase.tsx`.
 
 **Left rail:**
+
 - `CategorySidebar.tsx` — intents/subintents tree (unchanged data/behavior), add-category input.
 - `ArticleTable.tsx` — shadcn `Table` of articles (title, state `Badge`, updated date), "+ New" button.
 
 **Editor:** `ArticleEditorSheet.tsx` — a shadcn `Sheet` sliding in from the right, replacing the current inline editor column. Contains:
+
 - Title `Input`, Keywords `Input`, Category `Select` — same fields, same validation as today.
 - Body: **MDXEditor** WYSIWYG in place of the plain `textarea`. Toolbar covers headings, bold/italic, lists, links, code blocks, blockquote. MDXEditor reads and writes markdown source directly, so the `body: string` field and its contract with the backend are unchanged — the article body was already stored as markdown text; this just gives agents a rich editing surface over the same string instead of a raw textarea.
 - Actions (Create Draft / Save / Publish / Archive) as `Button`s. Enablement logic (`canEditFields`, `canPublish` from `articleForm.ts`) is unchanged — it moves into `pages/KnowledgeBase/` alongside its test file but the functions themselves aren't touched.

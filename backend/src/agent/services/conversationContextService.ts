@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, sql } from 'drizzle-orm'
+import { and, asc, count, desc, eq, sql } from 'drizzle-orm';
 import type {
   AgentConversationContextResponse,
   AgentConversationDetail,
@@ -8,7 +8,7 @@ import type {
   AgentTicketSummary,
   FormField,
   FormFieldType,
-} from '@support/types'
+} from '@support/types';
 import {
   agent,
   conversation,
@@ -22,10 +22,11 @@ import {
   player,
   playerStateSnapshot,
   subintent,
-} from '../../shared/db/schema/index.ts'
-import { withWorkspace } from '../../shared/db/withWorkspace.ts'
-import type { Tx } from '../../shared/db/withWorkspace.ts'
-import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts'
+} from '../../shared/db/schema/index.ts';
+import { withWorkspace } from '../../shared/db/withWorkspace.ts';
+import type { Tx } from '../../shared/db/withWorkspace.ts';
+import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts';
+import { getConversationTags } from './tagsService.ts';
 
 /**
  * One conversation's header row, by id.
@@ -44,12 +45,14 @@ export async function getConversationDetail(
         id: conversation.id,
         number: conversation.number,
         status: conversation.status,
+        priority: conversation.priority,
         resolutionSource: conversation.resolutionSource,
         createdAt: conversation.createdAt,
         playerId: player.id,
         externalPlayerId: player.externalId,
         intentName: intent.name,
         subintentName: subintent.name,
+        subintentId: subintent.id,
         assignedAgentId: agent.id,
         assignedAgentName: agent.displayName,
       })
@@ -59,18 +62,23 @@ export async function getConversationDetail(
       .leftJoin(intent, eq(intent.id, subintent.intentId))
       .leftJoin(agent, eq(agent.id, conversation.assignedAgentId))
       .where(eq(conversation.id, conversationId))
-      .limit(1)
+      .limit(1);
 
-    if (!row) return null
+    if (!row) return null;
 
     return {
       id: row.id,
       number: row.number,
       player: { id: row.playerId, external_player_id: row.externalPlayerId },
       status: row.status,
+      priority: row.priority,
       subintent:
         row.subintentName && row.intentName
-          ? { intent_name: row.intentName, subintent_name: row.subintentName }
+          ? {
+              intent_name: row.intentName,
+              subintent_name: row.subintentName,
+              subintent_id: row.subintentId,
+            }
           : null,
       assigned_agent:
         row.assignedAgentId && row.assignedAgentName
@@ -79,8 +87,8 @@ export async function getConversationDetail(
       resolution_source: row.resolutionSource,
       resolved_by_agent_name: row.resolutionSource === 'agent' ? row.assignedAgentName : null,
       created_at: row.createdAt.toISOString(),
-    }
-  })
+    };
+  });
 }
 
 /**
@@ -100,7 +108,7 @@ export async function getPlayerStateView(
   workspaceId: string,
   sessionId: string | null,
 ): Promise<AgentPlayerStateView> {
-  if (!sessionId) return { status: 'no_session' }
+  if (!sessionId) return { status: 'no_session' };
 
   const [snapshot] = await tx
     .select({
@@ -112,10 +120,10 @@ export async function getPlayerStateView(
     })
     .from(playerStateSnapshot)
     .where(eq(playerStateSnapshot.sessionId, sessionId))
-    .limit(1)
+    .limit(1);
 
-  if (!snapshot) return { status: 'not_captured' }
-  if (snapshot.isMissing) return { status: 'missing' }
+  if (!snapshot) return { status: 'not_captured' };
+  if (snapshot.isMissing) return { status: 'missing' };
 
   // Ordered by when the field was declared, so the seed order the game sees in
   // its own config is the order the agent reads down the panel.
@@ -123,22 +131,27 @@ export async function getPlayerStateView(
     .select({ key: declaredField.key, label: declaredField.label, type: declaredField.type })
     .from(declaredField)
     .where(eq(declaredField.workspaceId, workspaceId))
-    .orderBy(asc(declaredField.declaredAt), asc(declaredField.key))
+    .orderBy(asc(declaredField.declaredAt), asc(declaredField.key));
 
-  const blob = snapshot.declared
-  const declared: { key: string; label: string; type: (typeof fields)[number]['type']; value: unknown }[] = []
-  const seen = new Set<string>()
+  const blob = snapshot.declared;
+  const declared: {
+    key: string;
+    label: string;
+    type: (typeof fields)[number]['type'];
+    value: unknown;
+  }[] = [];
+  const seen = new Set<string>();
   for (const field of fields) {
-    if (!(field.key in blob)) continue
-    seen.add(field.key)
-    declared.push({ key: field.key, label: field.label, type: field.type, value: blob[field.key] })
+    if (!(field.key in blob)) continue;
+    seen.add(field.key);
+    declared.push({ key: field.key, label: field.label, type: field.type, value: blob[field.key] });
   }
   // A key in the blob with no declared_field row cannot normally occur —
   // nothing is ever deleted — but appending beats dropping: a value the agent
   // can see is worth more than a tidy list.
   for (const key of Object.keys(blob)) {
-    if (seen.has(key)) continue
-    declared.push({ key, label: key, type: 'string', value: blob[key] })
+    if (seen.has(key)) continue;
+    declared.push({ key, label: key, type: 'string', value: blob[key] });
   }
 
   return {
@@ -147,16 +160,16 @@ export async function getPlayerStateView(
     raw: snapshot.raw,
     degraded_reason: snapshot.degradedReason,
     captured_at: snapshot.capturedAt.toISOString(),
-  }
+  };
 }
 
-const TICKET_CAP = 20
+const TICKET_CAP = 20;
 
 export type TicketHistory = {
-  tickets: AgentTicketSummary[]
-  totalTickets: number
-  totalReopened: number
-}
+  tickets: AgentTicketSummary[];
+  totalTickets: number;
+  totalReopened: number;
+};
 
 /**
  * This player's conversations in this workspace, newest first, including the
@@ -185,6 +198,7 @@ export async function getTicketHistory(
       resolutionSource: conversation.resolutionSource,
       intentName: intent.name,
       subintentName: subintent.name,
+      subintentId: subintent.id,
       assignedAgentName: agent.displayName,
       totalCount: sql<number>`count(*) over ()`.mapWith(Number),
     })
@@ -194,23 +208,23 @@ export async function getTicketHistory(
     .leftJoin(agent, eq(agent.id, conversation.assignedAgentId))
     .where(eq(conversation.playerId, args.playerId))
     .orderBy(desc(conversation.createdAt))
-    .limit(TICKET_CAP)
+    .limit(TICKET_CAP);
 
   const reopens = await tx
     .select({ conversationId: event.conversationId, reopens: count() })
     .from(event)
     .innerJoin(conversation, eq(conversation.id, event.conversationId))
     .where(and(eq(event.type, 'conversation_reopened'), eq(conversation.playerId, args.playerId)))
-    .groupBy(event.conversationId)
+    .groupBy(event.conversationId);
 
-  const reopenById = new Map<string, number>()
-  let totalReopened = 0
+  const reopenById = new Map<string, number>();
+  let totalReopened = 0;
   for (const row of reopens) {
-    if (!row.conversationId) continue
-    reopenById.set(row.conversationId, row.reopens)
+    if (!row.conversationId) continue;
+    reopenById.set(row.conversationId, row.reopens);
     // Per-row counts cover the current ticket too, so its own reopens show; the
     // summary total stays on the earlier tickets only, matching total_tickets.
-    if (row.conversationId !== args.currentConversationId) totalReopened += row.reopens
+    if (row.conversationId !== args.currentConversationId) totalReopened += row.reopens;
   }
 
   const tickets: AgentTicketSummary[] = rows.map((row) => ({
@@ -220,18 +234,22 @@ export async function getTicketHistory(
     status: row.status,
     subintent:
       row.subintentName && row.intentName
-        ? { intent_name: row.intentName, subintent_name: row.subintentName }
+        ? {
+            intent_name: row.intentName,
+            subintent_name: row.subintentName,
+            subintent_id: row.subintentId,
+          }
         : null,
     resolution_source: row.resolutionSource,
     resolved_by_agent_name: row.resolutionSource === 'agent' ? row.assignedAgentName : null,
     reopen_count: reopenById.get(row.id) ?? 0,
-  }))
+  }));
 
   // total_tickets still means "earlier tickets": the current one is always in
   // the window count now, so subtract it.
-  const totalTickets = Math.max(0, (rows[0]?.totalCount ?? 0) - 1)
+  const totalTickets = Math.max(0, (rows[0]?.totalCount ?? 0) - 1);
 
-  return { tickets, totalTickets, totalReopened }
+  return { tickets, totalTickets, totalReopened };
 }
 
 /**
@@ -256,16 +274,17 @@ export async function getConversationContext(
       .from(conversation)
       .innerJoin(player, eq(player.id, conversation.playerId))
       .where(eq(conversation.id, conversationId))
-      .limit(1)
+      .limit(1);
 
-    if (!current) return null
+    if (!current) return null;
 
-    const playerState = await getPlayerStateView(tx, ctx.workspaceId, current.sessionId)
+    const playerState = await getPlayerStateView(tx, ctx.workspaceId, current.sessionId);
     const history = await getTicketHistory(tx, {
       playerId: current.playerId,
       currentConversationId: conversationId,
-    })
-    const formView = await getFormView(tx, conversationId)
+    });
+    const formView = await getFormView(tx, conversationId);
+    const tags = await getConversationTags(tx, conversationId);
 
     return {
       player_state: playerState,
@@ -276,12 +295,13 @@ export async function getConversationContext(
         first_contact_at: current.firstSeenAt.toISOString(),
       },
       form: formView,
-    }
-  })
+      tags,
+    };
+  });
 }
 
 /** One field's current answer: the row with the greatest `created_at` for its key. */
-export type LatestAnswer = { fieldKey: string; fieldType: FormFieldType; value: unknown }
+export type LatestAnswer = { fieldKey: string; fieldType: FormFieldType; value: unknown };
 
 /**
  * The submission's snapshotted field list folded together with its current
@@ -296,16 +316,16 @@ export function buildFormFieldViews(
   fields: FormField[],
   answers: LatestAnswer[],
 ): { rows: AgentFormFieldView[]; answeredCount: number } {
-  const byKey = new Map(answers.map((answer) => [answer.fieldKey, answer]))
-  const rows: AgentFormFieldView[] = []
-  let answeredCount = 0
+  const byKey = new Map(answers.map((answer) => [answer.fieldKey, answer]));
+  const rows: AgentFormFieldView[] = [];
+  let answeredCount = 0;
 
   // Sorted here rather than trusted from the jsonb array: this list is read as
   // the order the questions were asked in, and a mis-ordered row misreads.
-  const ordered = [...fields].sort((a, b) => a.position - b.position)
+  const ordered = [...fields].sort((a, b) => a.position - b.position);
   for (const field of ordered) {
-    const answer = byKey.get(field.key)
-    if (answer) answeredCount += 1
+    const answer = byKey.get(field.key);
+    if (answer) answeredCount += 1;
     rows.push({
       key: field.key,
       label: field.label,
@@ -313,16 +333,16 @@ export function buildFormFieldViews(
       field_type: answer ? answer.fieldType : field.type,
       value: answer ? answer.value : null,
       answered: answer !== undefined,
-    })
+    });
   }
 
   // An answer whose key is not in the version cannot normally occur — the answer
   // route validates against this same version — but appending beats dropping,
   // the same call getPlayerStateView makes for an undeclared blob key. It does
   // not count toward answered_count: the denominator is the questions asked.
-  const known = new Set(ordered.map((field) => field.key))
+  const known = new Set(ordered.map((field) => field.key));
   for (const answer of answers) {
-    if (known.has(answer.fieldKey)) continue
+    if (known.has(answer.fieldKey)) continue;
     rows.push({
       key: answer.fieldKey,
       label: answer.fieldKey,
@@ -330,10 +350,10 @@ export function buildFormFieldViews(
       field_type: answer.fieldType,
       value: answer.value,
       answered: true,
-    })
+    });
   }
 
-  return { rows, answeredCount }
+  return { rows, answeredCount };
 }
 
 /**
@@ -369,19 +389,21 @@ export async function getFormView(tx: Tx, conversationId: string): Promise<Agent
     // there is at most one today. Newest-first with limit 1 so a future second
     // form shows the current one rather than an arbitrary row.
     .orderBy(desc(formSubmission.startedAt))
-    .limit(1)
+    .limit(1);
 
-  if (!submission) return null
+  if (!submission) return null;
 
   const [version] = await tx
     .select({ fields: formVersion.fields })
     .from(formVersion)
-    .where(and(eq(formVersion.formId, submission.formId), eq(formVersion.version, submission.version)))
-    .limit(1)
+    .where(
+      and(eq(formVersion.formId, submission.formId), eq(formVersion.version, submission.version)),
+    )
+    .limit(1);
 
   // FK (form_id, form_version) -> form_version (form_id, version) makes the
   // miss impossible; an empty list beats a throw if the constraint ever slips.
-  const fields = version?.fields ?? []
+  const fields = version?.fields ?? [];
 
   const answerRows = await tx
     .select({
@@ -391,15 +413,15 @@ export async function getFormView(tx: Tx, conversationId: string): Promise<Agent
     })
     .from(formAnswer)
     .where(eq(formAnswer.formSubmissionId, submission.id))
-    .orderBy(asc(formAnswer.createdAt), asc(formAnswer.id))
+    .orderBy(asc(formAnswer.createdAt), asc(formAnswer.id));
 
   // Oldest first, so the last write for a key wins — which is the read rule:
   // the current answer is the row with the greatest created_at. Older rows stay
   // queryable; revision history in a rail nobody asked for is noise.
-  const latest = new Map<string, LatestAnswer>()
-  for (const row of answerRows) latest.set(row.fieldKey, row)
+  const latest = new Map<string, LatestAnswer>();
+  for (const row of answerRows) latest.set(row.fieldKey, row);
 
-  const { rows, answeredCount } = buildFormFieldViews(fields, [...latest.values()])
+  const { rows, answeredCount } = buildFormFieldViews(fields, [...latest.values()]);
 
   return {
     form_name: submission.formName,
@@ -408,5 +430,5 @@ export async function getFormView(tx: Tx, conversationId: string): Promise<Agent
     field_count: fields.length,
     answered_count: answeredCount,
     fields: rows,
-  }
+  };
 }

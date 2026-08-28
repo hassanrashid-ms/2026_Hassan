@@ -1,13 +1,22 @@
-import type { FormField, FormFieldType } from '@support/types'
+import type { FormField, FormFieldType } from '@support/types';
 
 /**
- * The five types the builder offers. `attachment` and `time` are declared in
- * `FORM_FIELD_TYPES` (`@support/types`) but must never appear in this picker —
- * `attachment` is declared-but-inert until the attachment table exists, `time`
- * is declared and unused, per the forms-builder-admin design doc.
+ * The six types the builder offers. `time` is declared in `FORM_FIELD_TYPES`
+ * (`@support/types`) but must never appear in this picker — it is declared
+ * and unused, per the forms-builder-admin design doc. `attachment` is
+ * agent-console-selectable but has no upload UI here: the field only asks a
+ * player for a photo, and only the player-facing webview implements picking
+ * and sending one.
  */
-export const BUILDER_FIELD_TYPES = ['short_text', 'long_text', 'number', 'date', 'choice'] as const
-export type BuilderFieldType = (typeof BUILDER_FIELD_TYPES)[number]
+export const BUILDER_FIELD_TYPES = [
+  'short_text',
+  'long_text',
+  'number',
+  'date',
+  'choice',
+  'attachment',
+] as const;
+export type BuilderFieldType = (typeof BUILDER_FIELD_TYPES)[number];
 
 export const FIELD_TYPE_LABELS: Record<BuilderFieldType, string> = {
   short_text: 'Short text',
@@ -15,7 +24,8 @@ export const FIELD_TYPE_LABELS: Record<BuilderFieldType, string> = {
   number: 'Number',
   date: 'Date',
   choice: 'Choice',
-}
+  attachment: 'Attachment (photo)',
+};
 
 /**
  * Client-side mirror of `formFieldsSchema`'s `superRefine` (`@support/types`,
@@ -27,39 +37,41 @@ export const FIELD_TYPE_LABELS: Record<BuilderFieldType, string> = {
  * schema already expresses. The server is still the source of truth.
  */
 export function validateFields(fields: FormField[]): string[] {
-  const errors: string[] = []
-  const seenKeys = new Set<string>()
-  const seenPositions = new Set<number>()
+  const errors: string[] = [];
+  const seenKeys = new Set<string>();
+  const seenPositions = new Set<number>();
 
   for (const field of fields) {
     if (seenKeys.has(field.key)) {
-      errors.push(`Duplicate field key "${field.key}".`)
+      errors.push(`Duplicate field key "${field.key}".`);
     }
-    seenKeys.add(field.key)
+    seenKeys.add(field.key);
 
     if (seenPositions.has(field.position)) {
-      errors.push(`Duplicate field position ${field.position}.`)
+      errors.push(`Duplicate field position ${field.position}.`);
     }
-    seenPositions.add(field.position)
+    seenPositions.add(field.position);
 
     if (field.type === 'choice' && (field.options === undefined || field.options.length < 2)) {
-      errors.push(`"${field.label || field.key}" is a choice field and needs at least 2 options.`)
+      errors.push(`"${field.label || field.key}" is a choice field and needs at least 2 options.`);
     }
     if (field.type !== 'choice' && field.options !== undefined) {
-      errors.push(`"${field.label || field.key}" is a ${field.type} field and must not carry options.`)
+      errors.push(
+        `"${field.label || field.key}" is a ${field.type} field and must not carry options.`,
+      );
     }
   }
 
-  return errors
+  return errors;
 }
 
 export function isBuilderFieldType(type: FormFieldType): type is BuilderFieldType {
-  return (BUILDER_FIELD_TYPES as readonly FormFieldType[]).includes(type)
+  return (BUILDER_FIELD_TYPES as readonly FormFieldType[]).includes(type);
 }
 
 /** Publish-time rule mirrored from `publishedFormFieldsSchema`: no fields, nothing to publish. */
 export function canPublish(fields: FormField[]): boolean {
-  return fields.length > 0 && validateFields(fields).length === 0
+  return fields.length > 0 && validateFields(fields).length === 0;
 }
 
 /**
@@ -69,37 +81,39 @@ export function canPublish(fields: FormField[]): boolean {
  * still archived, matching `resolveSubintentForm`'s "archived = no form" rule).
  */
 export function formStatusLabel(form: {
-  archivedAt: string | null
-  publishedVersion: number | null
-  hasDraft: boolean
+  archivedAt: string | null;
+  publishedVersion: number | null;
+  hasDraft: boolean;
 }): string {
-  if (form.archivedAt !== null) return 'Archived'
+  if (form.archivedAt !== null) return 'Archived';
   if (form.publishedVersion !== null) {
-    return form.hasDraft ? `Published v${form.publishedVersion} · draft pending` : `Published v${form.publishedVersion}`
+    return form.hasDraft
+      ? `Published v${form.publishedVersion} · draft pending`
+      : `Published v${form.publishedVersion}`;
   }
-  return 'Draft'
+  return 'Draft';
 }
 
 /** Badge colour for `formStatusLabel`'s four states — archived reads neutral, a clean publish reads success, a pending draft on top of a live publish reads as a warning worth a second look. */
 export function formStatusVariant(form: {
-  archivedAt: string | null
-  publishedVersion: number | null
-  hasDraft: boolean
+  archivedAt: string | null;
+  publishedVersion: number | null;
+  hasDraft: boolean;
 }): 'secondary' | 'success' | 'outline' | 'warning' {
-  if (form.archivedAt !== null) return 'outline'
-  if (form.publishedVersion === null) return 'secondary'
-  return form.hasDraft ? 'warning' : 'success'
+  if (form.archivedAt !== null) return 'outline';
+  if (form.publishedVersion === null) return 'secondary';
+  return form.hasDraft ? 'warning' : 'success';
 }
 
 /** Renumbers `position` to a dense 0..n-1 sequence matching array order — used after add/remove/move. */
 export function renumberPositions(fields: FormField[]): FormField[] {
-  return fields.map((field, index) => ({ ...field, position: index }))
+  return fields.map((field, index) => ({ ...field, position: index }));
 }
 
 /** One past the highest existing position — the slot a newly added field lands in. */
 export function nextPosition(fields: FormField[]): number {
-  if (fields.length === 0) return 0
-  return Math.max(...fields.map((f) => f.position)) + 1
+  if (fields.length === 0) return 0;
+  return Math.max(...fields.map((f) => f.position)) + 1;
 }
 
 /** Derives a stable `key` from a label: lower-case, underscores, deduped against existing keys. */
@@ -109,9 +123,9 @@ export function slugifyKey(label: string, existingKeys: readonly string[]): stri
       .trim()
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '_')
-      .replace(/^_+|_+$/g, '') || 'field'
-  if (!existingKeys.includes(base)) return base
-  let n = 2
-  while (existingKeys.includes(`${base}_${n}`)) n += 1
-  return `${base}_${n}`
+      .replace(/^_+|_+$/g, '') || 'field';
+  if (!existingKeys.includes(base)) return base;
+  let n = 2;
+  while (existingKeys.includes(`${base}_${n}`)) n += 1;
+  return `${base}_${n}`;
 }

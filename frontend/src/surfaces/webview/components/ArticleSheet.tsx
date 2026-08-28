@@ -1,13 +1,19 @@
-import { lazy, Suspense, useEffect } from 'react'
-import { Badge } from '@/surfaces/webview/components/ui/badge'
-import { ScrollArea } from '@/surfaces/webview/components/ui/scroll-area'
-import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from '@/surfaces/webview/components/ui/drawer'
-import { Skeleton } from '@/surfaces/webview/components/ui/skeleton'
-import { useSupport } from '@/surfaces/webview/components/SupportContext'
-import { hasReadArticle, markArticleRead } from '@/surfaces/webview/hooks/useReadArticles'
-import { useArticleDetail } from '@/surfaces/webview/hooks/useArticleDetail'
-import { reportArticleRead } from '@/surfaces/webview/api/surfaceApi'
-import { post } from '@/services/bridgeService'
+import { lazy, Suspense, useEffect } from 'react';
+import { Badge } from '@/surfaces/webview/components/ui/badge';
+import { ScrollArea } from '@/surfaces/webview/components/ui/scroll-area';
+import {
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerHeader,
+  DrawerTitle,
+} from '@/surfaces/webview/components/ui/drawer';
+import { Skeleton } from '@/surfaces/webview/components/ui/skeleton';
+import { useSupport } from '@/surfaces/webview/components/SupportContext';
+import { hasReadArticle, markArticleRead } from '@/surfaces/webview/hooks/useReadArticles';
+import { useArticleDetail } from '@/surfaces/webview/hooks/useArticleDetail';
+import { reportArticleRead } from '@/surfaces/webview/api/surfaceApi';
+import { post } from '@/services/bridgeService';
 /*
  * Loaded on demand, not with the home screen.
  *
@@ -21,7 +27,7 @@ import { post } from '@/services/bridgeService'
  */
 const ArticleBody = lazy(() =>
   import('@/features/articles/components/ArticleBody').then((m) => ({ default: m.ArticleBody })),
-)
+);
 
 /** Matches the pending-article skeleton below, so the swap is invisible. */
 function BodySkeleton() {
@@ -32,19 +38,19 @@ function BodySkeleton() {
       <Skeleton className="h-4 w-4/5 bg-muted/15" />
       <Skeleton className="h-4 w-2/3 bg-muted/15" />
     </div>
-  )
+  );
 }
 
 type ArticleSheetProps = {
   /** null closes the sheet. Driven by the route so Android back closes it. */
-  articleId: string | null
-  onClose: () => void
-}
+  articleId: string | null;
+  onClose: () => void;
+};
 
 export function ArticleSheet({ articleId, onClose }: ArticleSheetProps) {
-  const { boot } = useSupport()
+  const { boot } = useSupport();
 
-  const article = useArticleDetail(articleId)
+  const article = useArticleDetail(articleId);
 
   /*
    * Exactly once per article per session, as today: the module store is the guard,
@@ -52,12 +58,12 @@ export function ArticleSheet({ articleId, onClose }: ArticleSheetProps) {
    * reading it on home — does not emit a second read.
    */
   useEffect(() => {
-    if (!boot || articleId === null) return
-    if (hasReadArticle(articleId)) return
-    markArticleRead(articleId)
-    void reportArticleRead(boot.token, boot.sessionId, articleId).catch(() => {})
-    post({ type: 'article_read', id: articleId })
-  }, [boot, articleId])
+    if (!boot || articleId === null) return;
+    if (hasReadArticle(articleId)) return;
+    markArticleRead(articleId);
+    void reportArticleRead(boot.token, boot.sessionId, articleId).catch(() => {});
+    post({ type: 'article_read', id: articleId });
+  }, [boot, articleId]);
 
   return (
     <Drawer open={articleId !== null} onOpenChange={(open) => !open && onClose()}>
@@ -91,10 +97,12 @@ export function ArticleSheet({ articleId, onClose }: ArticleSheetProps) {
           <div className="px-4 pb-10">
             {article.data ? (
               <Suspense fallback={<BodySkeleton />}>
-                <ArticleBody markdown={article.data.body} />
+                <ArticleBody markdown={article.data.body} attachments={article.data.attachments} />
               </Suspense>
             ) : article.isError ? (
-              <p className="text-base text-muted">This article could not be loaded. Close and try another.</p>
+              <p className="text-base text-muted">
+                This article could not be loaded. Close and try another.
+              </p>
             ) : (
               <BodySkeleton />
             )}
@@ -102,5 +110,5 @@ export function ArticleSheet({ articleId, onClose }: ArticleSheetProps) {
         </ScrollArea>
       </DrawerContent>
     </Drawer>
-  )
+  );
 }

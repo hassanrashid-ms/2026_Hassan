@@ -36,12 +36,28 @@
         replaces it on mount. No path gate is needed any more: this document is
         only ever served for the player surface.
       -->
-      <div aria-hidden style="display:flex;flex-direction:column;height:100dvh;width:100%;overflow:hidden;background:#ffffff">
-        <div style="height:38%;min-height:11rem;background:linear-gradient(to bottom right,#7c3aed,#5b21b6)"></div>
-        <div style="display:flex;flex-direction:column;gap:0.75rem;padding:1.25rem 1rem">
-          <div style="height:3.5rem;border-radius:1rem;background:#f5f3fd"></div>
-          <div style="height:3.5rem;border-radius:1rem;background:#f5f3fd"></div>
-          <div style="height:3.5rem;width:80%;border-radius:1rem;background:#f5f3fd"></div>
+      <div
+        aria-hidden
+        style="
+          display: flex;
+          flex-direction: column;
+          height: 100dvh;
+          width: 100%;
+          overflow: hidden;
+          background: #ffffff;
+        "
+      >
+        <div
+          style="
+            height: 38%;
+            min-height: 11rem;
+            background: linear-gradient(to bottom right, #7c3aed, #5b21b6);
+          "
+        ></div>
+        <div style="display: flex; flex-direction: column; gap: 0.75rem; padding: 1.25rem 1rem">
+          <div style="height: 3.5rem; border-radius: 1rem; background: #f5f3fd"></div>
+          <div style="height: 3.5rem; border-radius: 1rem; background: #f5f3fd"></div>
+          <div style="height: 3.5rem; width: 80%; border-radius: 1rem; background: #f5f3fd"></div>
         </div>
       </div>
     </div>
@@ -74,26 +90,26 @@
       (function () {
         var send = function () {
           try {
-            window.SupportBridge.post({ type: 'surface_ready' })
+            window.SupportBridge.post({ type: 'surface_ready' });
           } catch (e) {
             /* No bridge: a plain browser. Nothing to reveal, nothing to do. */
           }
-        }
+        };
         // The SDK injects the bridge on page load, which may land before or after
         // this script — hence both the check and the event. Listened for on window
         // and document because the SDK dispatches on both and neither bubbles.
         if (window.SupportBridge) {
-          send()
+          send();
         } else {
           var once = function () {
-            window.removeEventListener('supportbridgeready', once)
-            document.removeEventListener('supportbridgeready', once)
-            send()
-          }
-          window.addEventListener('supportbridgeready', once)
-          document.addEventListener('supportbridgeready', once)
+            window.removeEventListener('supportbridgeready', once);
+            document.removeEventListener('supportbridgeready', once);
+            send();
+          };
+          window.addEventListener('supportbridgeready', once);
+          document.addEventListener('supportbridgeready', once);
         }
-      })()
+      })();
     </script>
     <script type="module" src="/src/surfaces/webview/main.tsx"></script>
   </body>

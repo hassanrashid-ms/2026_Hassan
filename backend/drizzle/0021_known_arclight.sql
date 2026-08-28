@@ -1,0 +1,2 @@
+CREATE TYPE "public"."declared_field_status" AS ENUM('active', 'inactive', 'archived');--> statement-breakpoint
+ALTER TABLE "declared_field" ADD COLUMN "status" "declared_field_status" DEFAULT 'active' NOT NULL;

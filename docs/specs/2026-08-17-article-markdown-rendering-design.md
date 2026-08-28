@@ -87,7 +87,7 @@ bridge. The SDK opens it in the system browser, leaving both the game and the su
 
 **This makes the project span two repos.** The SDK-side handler is in scope (see "SDK changes").
 
-**Exception — no bridge present:** if `window.SupportBridge` is absent, the component does *not*
+**Exception — no bridge present:** if `window.SupportBridge` is absent, the component does _not_
 `preventDefault`, and the anchor behaves normally with `target="_blank" rel="noopener noreferrer"`.
 A plain desktop browser is a supported development mode per `bridgeService`'s own comment, and links
 should work there rather than being dead.
@@ -149,12 +149,12 @@ touching a single call site.
 
 `components` map:
 
-| Node | Behaviour |
-|---|---|
-| `a` | `preventDefault` + `post({ type: 'open_url', url })` when the bridge exists; normal `target="_blank" rel="noopener noreferrer"` anchor when it does not (D3). |
-| `img` | `<img>` with the agent's URL, `loading="lazy"`, `max-w-full h-auto`; on error, swaps to the alt text styled as a muted caption. **This is project B's seam.** |
-| `table` | Wrapped in an `overflow-x-auto` container. |
-| `h1`–`h3`, `p`, `ul`/`ol`, `blockquote`, `code` | Explicit Tailwind classes on theme tokens (D5). |
+| Node                                            | Behaviour                                                                                                                                                     |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `a`                                             | `preventDefault` + `post({ type: 'open_url', url })` when the bridge exists; normal `target="_blank" rel="noopener noreferrer"` anchor when it does not (D3). |
+| `img`                                           | `<img>` with the agent's URL, `loading="lazy"`, `max-w-full h-auto`; on error, swaps to the alt text styled as a muted caption. **This is project B's seam.** |
+| `table`                                         | Wrapped in an `overflow-x-auto` container.                                                                                                                    |
+| `h1`–`h3`, `p`, `ul`/`ol`, `blockquote`, `code` | Explicit Tailwind classes on theme tokens (D5).                                                                                                               |
 
 ### Call site
 
@@ -190,13 +190,13 @@ gree/unity-webview `#if` that wraps the surface class.
 
 ## Failure modes
 
-| Failure | Behaviour |
-|---|---|
+| Failure                                                       | Behaviour                                                                                                                           |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | Broken/slow external image (likeliest real failure, given D2) | `loading="lazy"`; `onError` swaps the broken-image glyph for alt text as a muted caption. Degrades to a caption, not a broken icon. |
-| Raw HTML in a body | Renders as literal text. No `rehype-raw`, so no path from content to executing markup. |
-| Malformed markdown | `react-markdown` does not throw on bad input; worst case is literal text. No error boundary needed. |
-| Link tap on an SDK build predating `open_url` | Ignored by `OnMessage`'s `default:` branch — a dead tap. Accepted (D3). |
-| No bridge (desktop dev) | Anchor behaves normally, opening a new tab (D3). |
+| Raw HTML in a body                                            | Renders as literal text. No `rehype-raw`, so no path from content to executing markup.                                              |
+| Malformed markdown                                            | `react-markdown` does not throw on bad input; worst case is literal text. No error boundary needed.                                 |
+| Link tap on an SDK build predating `open_url`                 | Ignored by `OnMessage`'s `default:` branch — a dead tap. Accepted (D3).                                                             |
+| No bridge (desktop dev)                                       | Anchor behaves normally, opening a new tab (D3).                                                                                    |
 
 ---
 
@@ -230,5 +230,5 @@ When article media ships, the changes are contained:
 2. A `video` renderer is added to the same map — which requires B to also decide how a video is
    expressed in markdown, since markdown has no syntax for one.
 3. Media position is already preserved for free: media lives inline in the markdown body, so an
-   agent's placement *is* the stored order. `article_attachment` rows carry storage and metadata;
+   agent's placement _is_ the stored order. `article_attachment` rows carry storage and metadata;
    they never carry position.

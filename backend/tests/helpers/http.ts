@@ -1,6 +1,6 @@
-import http from 'node:http'
-import type { Express } from 'express'
-import request from 'supertest'
+import http from 'node:http';
+import type { Express } from 'express';
+import request from 'supertest';
 
 /**
  * One listening server per app, instead of one per request.
@@ -21,26 +21,26 @@ import request from 'supertest'
  * Test files import this as `request`, so the ~109 `request(app)` call sites are
  * unchanged: only the import swaps.
  */
-const servers = new Map<Express, http.Server>()
+const servers = new Map<Express, http.Server>();
 
 export function req(target: Express | string): ReturnType<typeof request> {
   // A URL string addresses a server the test already started and owns.
-  if (typeof target === 'string') return request(target)
+  if (typeof target === 'string') return request(target);
 
-  let server = servers.get(target)
+  let server = servers.get(target);
   if (!server) {
-    server = http.createServer(target)
-    server.listen(0)
-    servers.set(target, server)
+    server = http.createServer(target);
+    server.listen(0);
+    servers.set(target, server);
   }
-  return request(server)
+  return request(server);
 }
 
 /** Registered globally in tests/setup.ts — an open server would hang the worker. */
 export async function closeTestServers(): Promise<void> {
-  const open = [...servers.values()]
-  servers.clear()
+  const open = [...servers.values()];
+  servers.clear();
   await Promise.all(
     open.map((server) => new Promise<void>((resolve) => server.close(() => resolve()))),
-  )
+  );
 }

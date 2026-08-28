@@ -1,9 +1,9 @@
-import type { Express } from 'express'
-import request from 'supertest'
-import { createApp } from '../../src/app.ts'
-import { signPlayerToken, type PlayerClaims } from '../../src/shared/auth/playerToken.ts'
+import type { Express } from 'express';
+import request from 'supertest';
+import { createApp } from '../../src/app.ts';
+import { signPlayerToken, type PlayerClaims } from '../../src/shared/auth/playerToken.ts';
 
-export const app = createApp()
+export const app = createApp();
 
 /**
  * A supertest agent bound to a given app instance. Declared per the brief's
@@ -12,9 +12,9 @@ export const app = createApp()
  * expected first caller.
  */
 export function agentFor(target: Express = app): ReturnType<typeof request.agent> {
-  return request.agent(target)
+  return request.agent(target);
 }
 
 export async function mintToken(claims: PlayerClaims, ttlSeconds = 900): Promise<string> {
-  return signPlayerToken(claims, ttlSeconds)
+  return signPlayerToken(claims, ttlSeconds);
 }

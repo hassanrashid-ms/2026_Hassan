@@ -1,5 +1,5 @@
 // backend/src/domain/bot/messages.ts
-import type { UnavailableReason } from './botTurn.ts'
+import type { UnavailableReason } from './botTurn.ts';
 
 /**
  * The player-facing handoff lines. Server-owned, never model output: the bot's
@@ -21,7 +21,7 @@ export const HANDOFF_PLAYER_MESSAGES = [
   'Connecting you with a member of our support team.',
   "Our support team will take it from here — they'll reply in this chat.",
   "I'm handing this over to a human on our support team.",
-] as const
+] as const;
 
 /**
  * Random rather than round-robin: a counter would have to live somewhere, and
@@ -34,10 +34,19 @@ export const HANDOFF_PLAYER_MESSAGES = [
  * fine, but two separate handoffs must each draw again.
  */
 export function pickHandoffMessage(): string {
-  return HANDOFF_PLAYER_MESSAGES[Math.floor(Math.random() * HANDOFF_PLAYER_MESSAGES.length)]!
+  return HANDOFF_PLAYER_MESSAGES[Math.floor(Math.random() * HANDOFF_PLAYER_MESSAGES.length)]!;
 }
 
 /** The agent-only note for an `unavailable` outcome whose reason is not silent. */
 export function botFailureNote(reason: UnavailableReason): string {
-  return `Bot could not respond (\`${reason}\`). Handed off unclassified.`
+  return `Bot could not respond (\`${reason}\`). Handed off unclassified.`;
 }
+
+/**
+ * Posted publicly, in addition to the handoff line above, whenever
+ * `assignOnHandoff` finds nobody online — unlike `HANDOFF_PLAYER_MESSAGES`,
+ * this one names the actual state, since "a human is coming" would otherwise
+ * be a promise nobody is there yet to keep.
+ */
+export const NO_AGENTS_ONLINE_MESSAGE =
+  "None of our agents are online right now, sorry for the inconvenience — you'll be contacted by us soon.";

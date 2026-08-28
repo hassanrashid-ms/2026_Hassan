@@ -4,8 +4,8 @@
 > (recommended) or superpowers:executing-plans to implement this plan task-by-task — **with one
 > deviation from the default**: do **not** dispatch a review/validator subagent after each task.
 > Each task's own implementer runs that task's own verification (`pnpm --filter @support/api
-> typecheck` + that task's new/extended vitest file for backend tasks; `pnpm --filter @support/web
-> typecheck && pnpm --filter @support/web build` for frontend tasks) as its own exit check, then
+typecheck` + that task's new/extended vitest file for backend tasks; `pnpm --filter @support/web
+typecheck && pnpm --filter @support/web build` for frontend tasks) as its own exit check, then
 > stops — no second agent re-reviews it. Validation instead happens mechanically at the **Batch
 > Checkpoint** after Batch 1, and once more at **Final Validation**. Tasks within Batch 1 touch
 > disjoint files by design and may be dispatched to parallel subagents; Task 1 (Batch 0) must
@@ -86,9 +86,11 @@ imports anything another Batch-1 task creates; all four import only from Task 1'
 **Batch:** 0 (sequential prerequisite for everything else)
 
 **Files:**
+
 - Modify: `packages/types/src/chat.ts`
 
 **Interfaces:**
+
 - Produces: `SendAgentMessageBody` gains `visibility: z.enum(['public', 'internal']).default('public')`.
   `PlayerMessagesResponse` gains an optional `status?: ConversationStatusValue` (optional, not
   required — see Step 3 rationale; a conversation-less player has no status to report, and the
@@ -107,7 +109,7 @@ In `packages/types/src/chat.ts`, change:
 export const SendAgentMessageBody = z.object({
   conversation_id: z.uuid(),
   body: z.string().min(1).max(4000),
-})
+});
 ```
 
 to:
@@ -117,7 +119,7 @@ export const SendAgentMessageBody = z.object({
   conversation_id: z.uuid(),
   body: z.string().min(1).max(4000),
   visibility: z.enum(['public', 'internal']).default('public'),
-})
+});
 ```
 
 - [ ] **Step 2: Add `status` to `PlayerMessagesResponse`**
@@ -125,17 +127,20 @@ export const SendAgentMessageBody = z.object({
 Change:
 
 ```ts
-export type PlayerMessagesResponse = { conversation_id: string | null; messages: PlayerMessageView[] }
+export type PlayerMessagesResponse = {
+  conversation_id: string | null;
+  messages: PlayerMessageView[];
+};
 ```
 
 to:
 
 ```ts
 export type PlayerMessagesResponse = {
-  conversation_id: string | null
-  messages: PlayerMessageView[]
-  status?: ConversationStatusValue
-}
+  conversation_id: string | null;
+  messages: PlayerMessageView[];
+  status?: ConversationStatusValue;
+};
 ```
 
 - [ ] **Step 3: Typecheck**
@@ -144,7 +149,7 @@ Run: `pnpm --filter @support/types typecheck` (or `pnpm typecheck` if that packa
 dedicated script — check `packages/types/package.json`).
 Expected: passes with no errors. `SendAgentMessageBody`'s inferred type now includes
 `visibility: 'public' | 'internal'` (never optional at the type level, thanks to `.default(...)`
-making it optional only on the *input* side of `z.infer`'s companion `z.input`, but always present
+making it optional only on the _input_ side of `z.infer`'s companion `z.input`, but always present
 on the parsed output `z.infer<typeof SendAgentMessageBody>` that `sendAgentMessage` consumes).
 
 - [ ] **Step 4: Commit**
@@ -161,16 +166,18 @@ git commit -m "feat(types): add visibility to SendAgentMessageBody, status to Pl
 **Batch:** 1 (parallel — depends only on Task 1)
 
 **Files:**
+
 - Modify: `backend/src/agent/services/messagesService.ts`
 - Modify: `backend/src/domain/conversations/postMessage.ts`
 - Test: `backend/tests/agent.messages.test.ts` (extend)
 - Create: `backend/tests/realtime.internalNote.test.ts`
 
 **Interfaces:**
+
 - Consumes: `SendAgentMessageBody` (Task 1, now carries `visibility`), `postMessage(tx, input:
-  PostMessageInput)` (existing, already accepts `visibility?: 'public' | 'internal'`),
+PostMessageInput)` (existing, already accepts `visibility?: 'public' | 'internal'`),
   `appendEvent(tx, input: EventInput)` (existing), `emitInboxChanged(io, workspaceId,
-  conversationId, status)` (existing), `withWorkspace`.
+conversationId, status)` (existing), `withWorkspace`.
 - Produces: `sendAgentMessage` now writes `message.visibility`, appends `visibility` to the
   `message_sent` event payload, and — for a public reply from `open` only — flips
   `conversation.status` to `awaiting_player`, appends `conversation_awaiting_player`, and emits
@@ -185,91 +192,97 @@ In `backend/tests/agent.messages.test.ts`, add a new `describe` block below the 
 ```ts
 describe('POST /agent/messages — internal notes and status transition', () => {
   it('an internal note stores visibility internal and leaves status unchanged even from open', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
-    await ownerPool.query(`update conversation set status = 'open' where id = $1`, [conversationId])
-    const { token } = await setupAssignedAgent(workspaceId, conversationId)
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
+    await ownerPool.query(`update conversation set status = 'open' where id = $1`, [
+      conversationId,
+    ]);
+    const { token } = await setupAssignedAgent(workspaceId, conversationId);
 
     const res = await request(app)
       .post('/messages')
       .set('Authorization', `Bearer ${token}`)
       .send({ conversation_id: conversationId, body: 'internal note', visibility: 'internal' })
-      .expect(200)
-    expect(res.body.message).toMatchObject({ visibility: 'internal' })
+      .expect(200);
+    expect(res.body.message).toMatchObject({ visibility: 'internal' });
 
     const { rows } = await ownerPool.query<{ status: string }>(
       `select status from conversation where id = $1`,
       [conversationId],
-    )
-    expect(rows[0]!.status).toBe('open')
-  })
+    );
+    expect(rows[0]!.status).toBe('open');
+  });
 
   it('a public reply from open flips status to awaiting_player and appends conversation_awaiting_player', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
-    await ownerPool.query(`update conversation set status = 'open' where id = $1`, [conversationId])
-    const { token } = await setupAssignedAgent(workspaceId, conversationId)
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
+    await ownerPool.query(`update conversation set status = 'open' where id = $1`, [
+      conversationId,
+    ]);
+    const { token } = await setupAssignedAgent(workspaceId, conversationId);
 
     await request(app)
       .post('/messages')
       .set('Authorization', `Bearer ${token}`)
       .send({ conversation_id: conversationId, body: 'here is the fix' })
-      .expect(200)
+      .expect(200);
 
     const { rows } = await ownerPool.query<{ status: string }>(
       `select status from conversation where id = $1`,
       [conversationId],
-    )
-    expect(rows[0]!.status).toBe('awaiting_player')
+    );
+    expect(rows[0]!.status).toBe('awaiting_player');
 
     const { rows: events } = await ownerPool.query<{ type: string }>(
       `select type from event where conversation_id = $1 and type = 'conversation_awaiting_player'`,
       [conversationId],
-    )
-    expect(events).toHaveLength(1)
-  })
+    );
+    expect(events).toHaveLength(1);
+  });
 
   it('a public reply from a status other than open leaves status unchanged', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
-    await ownerPool.query(`update conversation set status = 'awaiting_player' where id = $1`, [conversationId])
-    const { token } = await setupAssignedAgent(workspaceId, conversationId)
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
+    await ownerPool.query(`update conversation set status = 'awaiting_player' where id = $1`, [
+      conversationId,
+    ]);
+    const { token } = await setupAssignedAgent(workspaceId, conversationId);
 
     await request(app)
       .post('/messages')
       .set('Authorization', `Bearer ${token}`)
       .send({ conversation_id: conversationId, body: 'still here' })
-      .expect(200)
+      .expect(200);
 
     const { rows } = await ownerPool.query<{ status: string }>(
       `select status from conversation where id = $1`,
       [conversationId],
-    )
-    expect(rows[0]!.status).toBe('awaiting_player')
-  })
+    );
+    expect(rows[0]!.status).toBe('awaiting_player');
+  });
 
   it('message_sent event payload includes visibility', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
-    const { token } = await setupAssignedAgent(workspaceId, conversationId)
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
+    const { token } = await setupAssignedAgent(workspaceId, conversationId);
 
     await request(app)
       .post('/messages')
       .set('Authorization', `Bearer ${token}`)
       .send({ conversation_id: conversationId, body: 'note', visibility: 'internal' })
-      .expect(200)
+      .expect(200);
 
     const { rows } = await ownerPool.query<{ payload: { visibility?: string } }>(
       `select payload from event where conversation_id = $1 and type = 'message_sent'`,
       [conversationId],
-    )
-    expect(rows[0]!.payload.visibility).toBe('internal')
-  })
-})
+    );
+    expect(rows[0]!.payload.visibility).toBe('internal');
+  });
+});
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -285,21 +298,25 @@ payload has no `visibility` key.
 In `backend/src/domain/conversations/postMessage.ts`, change the `appendEvent` call's payload:
 
 ```ts
-  await appendEvent(tx, {
-    workspaceId: input.workspaceId,
-    type: 'message_sent',
-    conversationId: input.conversationId,
-    actorId: input.actorId,
-    actorType: input.authorType,
-    payload: { seq: bumped.seq, author_type: input.authorType, visibility: input.visibility ?? 'public' },
-  })
+await appendEvent(tx, {
+  workspaceId: input.workspaceId,
+  type: 'message_sent',
+  conversationId: input.conversationId,
+  actorId: input.actorId,
+  actorType: input.authorType,
+  payload: {
+    seq: bumped.seq,
+    author_type: input.authorType,
+    visibility: input.visibility ?? 'public',
+  },
+});
 ```
 
 In `backend/src/agent/services/messagesService.ts`, add the two missing imports:
 
 ```ts
-import { appendEvent } from '../../shared/events/appendEvent.ts'
-import { emitInboxChanged, emitMessageToRooms } from '../../shared/realtime/emit.ts'
+import { appendEvent } from '../../shared/events/appendEvent.ts';
+import { emitInboxChanged, emitMessageToRooms } from '../../shared/realtime/emit.ts';
 ```
 
 (replacing the existing single-symbol `import { emitMessageToRooms } from '../../shared/realtime/emit.ts'`)
@@ -313,13 +330,17 @@ export async function sendAgentMessage(
 ): Promise<SendAgentMessageResult> {
   const result = await withWorkspace(ctx.workspaceId, async (tx) => {
     const [found] = await tx
-      .select({ id: conversation.id, assignedAgentId: conversation.assignedAgentId, status: conversation.status })
+      .select({
+        id: conversation.id,
+        assignedAgentId: conversation.assignedAgentId,
+        status: conversation.status,
+      })
       .from(conversation)
       .where(eq(conversation.id, body.conversation_id))
-      .limit(1)
+      .limit(1);
 
-    if (!found) return { outcome: 'not_found' } as const
-    if (found.assignedAgentId !== ctx.agentId) return { outcome: 'forbidden' } as const
+    if (!found) return { outcome: 'not_found' } as const;
+    if (found.assignedAgentId !== ctx.agentId) return { outcome: 'forbidden' } as const;
 
     const posted = await postMessage(tx, {
       workspaceId: ctx.workspaceId,
@@ -329,33 +350,36 @@ export async function sendAgentMessage(
       authorAgentId: ctx.agentId,
       body: body.body,
       visibility: body.visibility,
-    })
+    });
 
-    let inboxStatus: 'awaiting_player' | null = null
+    let inboxStatus: 'awaiting_player' | null = null;
     if (body.visibility !== 'internal' && found.status === 'open') {
-      await tx.update(conversation).set({ status: 'awaiting_player' }).where(eq(conversation.id, found.id))
+      await tx
+        .update(conversation)
+        .set({ status: 'awaiting_player' })
+        .where(eq(conversation.id, found.id));
       await appendEvent(tx, {
         workspaceId: ctx.workspaceId,
         type: 'conversation_awaiting_player',
         conversationId: found.id,
         actorId: ctx.agentId,
         actorType: 'agent',
-      })
-      inboxStatus = 'awaiting_player'
+      });
+      inboxStatus = 'awaiting_player';
     }
 
-    return { outcome: 'ok', posted, inboxStatus } as const
-  })
+    return { outcome: 'ok', posted, inboxStatus } as const;
+  });
 
-  if (result.outcome !== 'ok') return result
+  if (result.outcome !== 'ok') return result;
 
-  const agentView = toAgentView(result.posted)
-  const playerView = toPlayerView(result.posted)
-  emitMessageToRooms(getIo(), body.conversation_id, playerView, agentView)
+  const agentView = toAgentView(result.posted);
+  const playerView = toPlayerView(result.posted);
+  emitMessageToRooms(getIo(), body.conversation_id, playerView, agentView);
   if (result.inboxStatus) {
-    emitInboxChanged(getIo(), ctx.workspaceId, body.conversation_id, result.inboxStatus)
+    emitInboxChanged(getIo(), ctx.workspaceId, body.conversation_id, result.inboxStatus);
   }
-  return { outcome: 'ok', message: agentView }
+  return { outcome: 'ok', message: agentView };
 }
 ```
 
@@ -376,80 +400,94 @@ git commit -m "feat(agent): pass visibility into postMessage, auto-transition op
 Create `backend/tests/realtime.internalNote.test.ts`:
 
 ```ts
-import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest'
-import request from 'supertest'
-import { closeDb } from '../src/shared/db/client.ts'
-import { signAgentSession } from '../src/shared/auth/agentSession.ts'
-import { mintToken } from './helpers/app.ts'
-import { closeOwnerPool, ownerPool, seedConversation, seedPlayer, seedWorkspace, truncateAll } from './helpers/db.ts'
-import { connectClient, startRealtimeServer } from './helpers/realtime.ts'
+import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
+import request from 'supertest';
+import { closeDb } from '../src/shared/db/client.ts';
+import { signAgentSession } from '../src/shared/auth/agentSession.ts';
+import { mintToken } from './helpers/app.ts';
+import {
+  closeOwnerPool,
+  ownerPool,
+  seedConversation,
+  seedPlayer,
+  seedWorkspace,
+  truncateAll,
+} from './helpers/db.ts';
+import { connectClient, startRealtimeServer } from './helpers/realtime.ts';
 
-let server: Awaited<ReturnType<typeof startRealtimeServer>>
+let server: Awaited<ReturnType<typeof startRealtimeServer>>;
 
 beforeEach(async () => {
-  await truncateAll()
-  server = await startRealtimeServer()
-})
+  await truncateAll();
+  server = await startRealtimeServer();
+});
 
 afterEach(async () => {
-  await server.close()
-})
+  await server.close();
+});
 
 afterAll(async () => {
-  await closeDb()
-  await closeOwnerPool()
-})
+  await closeDb();
+  await closeOwnerPool();
+});
 
 function waitFor(socket: ReturnType<typeof connectClient>, event: string): Promise<void> {
-  return new Promise((resolve) => socket.on(event, () => resolve()))
+  return new Promise((resolve) => socket.on(event, () => resolve()));
 }
 
 describe('internal notes never reach the player room', () => {
   it('posting an internal note through sendAgentMessage end-to-end never emits to conv:{id}:player', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
 
     const { rows } = await ownerPool.query<{ id: string }>(
       `insert into agent (email, display_name) values ('agent-note@example.test', 'Agent Note') returning id`,
-    )
-    const agentId = rows[0]!.id
-    await ownerPool.query(`insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`, [
-      workspaceId,
+    );
+    const agentId = rows[0]!.id;
+    await ownerPool.query(
+      `insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`,
+      [workspaceId, agentId],
+    );
+    await ownerPool.query(`update conversation set assigned_agent_id = $2 where id = $1`, [
+      conversationId,
       agentId,
-    ])
-    await ownerPool.query(`update conversation set assigned_agent_id = $2 where id = $1`, [conversationId, agentId])
-    const agentToken = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId })
+    ]);
+    const agentToken = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId });
 
-    const playerToken = await mintToken({ workspace_id: workspaceId, player_id: playerId, external_player_id: 'p1' })
-    const playerSocket = connectClient(server.url, { token: playerToken, role: 'player' })
-    await waitFor(playerSocket, 'connect')
+    const playerToken = await mintToken({
+      workspace_id: workspaceId,
+      player_id: playerId,
+      external_player_id: 'p1',
+    });
+    const playerSocket = connectClient(server.url, { token: playerToken, role: 'player' });
+    await waitFor(playerSocket, 'connect');
     await new Promise<boolean>((resolve) =>
       playerSocket.emit('join_conversation', { conversation_id: conversationId }, resolve),
-    )
+    );
 
-    const playerReceived: unknown[] = []
-    playerSocket.on('message:new', (payload: unknown) => playerReceived.push(payload))
+    const playerReceived: unknown[] = [];
+    playerSocket.on('message:new', (payload: unknown) => playerReceived.push(payload));
 
     await request(server.url)
       .post('/agent/messages')
       .set('Authorization', `Bearer ${agentToken}`)
       .send({ conversation_id: conversationId, body: 'internal only', visibility: 'internal' })
-      .expect(200)
+      .expect(200);
 
-    await new Promise((resolve) => setTimeout(resolve, 150))
+    await new Promise((resolve) => setTimeout(resolve, 150));
 
-    expect(playerReceived).toEqual([])
-    playerSocket.close()
-  })
-})
+    expect(playerReceived).toEqual([]);
+    playerSocket.close();
+  });
+});
 ```
 
 - [ ] **Step 7: Run the new test file to verify it fails**
 
 Run: `pnpm --filter @support/api test realtime.internalNote.test.ts`
 Expected: FAIL — before Step 3's implementation this would actually already pass by accident
-(internal notes were never wired to change anything), so **confirm this step runs *after* Step 3's
+(internal notes were never wired to change anything), so **confirm this step runs _after_ Step 3's
 implementation is in place, against a deliberately broken `emitMessageToRooms` call** — the real
 regression this test guards is a future edit that emits the internal note's payload into
 `conv:{id}:player`. To genuinely see it fail once, temporarily change the `emitMessageToRooms` call
@@ -475,14 +513,16 @@ git commit -m "test(realtime): assert internal notes never emit to the player ro
 **Batch:** 1 (parallel — depends only on Task 1)
 
 **Files:**
+
 - Modify: `backend/src/surface/services/messagesService.ts`
 - Test: `backend/tests/surface.messages.test.ts` (extend)
 
 **Interfaces:**
+
 - Consumes: `PlayerMessagesResponse` (Task 1, now carries optional `status`), `conversation.status`
   column (existing, Drizzle schema, `ConversationStatusValue` union).
 - Produces: `getPlayerMessages` return type widens to `{ conversation_id: string | null; messages:
-  PlayerMessageView[]; status?: ConversationStatusValue } | null`. The no-conversation branch keeps
+PlayerMessageView[]; status?: ConversationStatusValue } | null`. The no-conversation branch keeps
   returning exactly `{ conversation_id: null, messages: [] }` (no `status` key at all) — this is a
   deliberate choice: the type is optional specifically so the pre-existing "no conversation yet"
   test (`toEqual({ conversation_id: null, messages: [] })`) keeps passing unchanged, since a
@@ -494,25 +534,25 @@ In `backend/tests/surface.messages.test.ts`, add inside the existing `describe('
 /surface/messages', ...)` block:
 
 ```ts
-  it('includes status and no internal-only fields', async () => {
-    const { workspaceId, playerId, token, sessionId } = await setup()
-    const conversationId = await seedConversation({ workspaceId, playerId })
-    await ownerPool.query(`update conversation set status = 'open' where id = $1`, [conversationId])
-    await ownerPool.query(
-      `insert into message (workspace_id, conversation_id, seq, author_type, body) values ($1, $2, 1, 'agent', 'hi')`,
-      [workspaceId, conversationId],
-    )
+it('includes status and no internal-only fields', async () => {
+  const { workspaceId, playerId, token, sessionId } = await setup();
+  const conversationId = await seedConversation({ workspaceId, playerId });
+  await ownerPool.query(`update conversation set status = 'open' where id = $1`, [conversationId]);
+  await ownerPool.query(
+    `insert into message (workspace_id, conversation_id, seq, author_type, body) values ($1, $2, 1, 'agent', 'hi')`,
+    [workspaceId, conversationId],
+  );
 
-    const res = await request(app)
-      .get('/surface/messages')
-      .query({ session_id: sessionId })
-      .set('Authorization', `Bearer ${token}`)
-      .expect(200)
+  const res = await request(app)
+    .get('/surface/messages')
+    .query({ session_id: sessionId })
+    .set('Authorization', `Bearer ${token}`)
+    .expect(200);
 
-    expect(res.body.status).toBe('open')
-    expect(res.body.messages[0]).not.toHaveProperty('visibility')
-    expect(res.body.messages[0]).not.toHaveProperty('author_agent_id')
-  })
+  expect(res.body.status).toBe('open');
+  expect(res.body.messages[0]).not.toHaveProperty('visibility');
+  expect(res.body.messages[0]).not.toHaveProperty('author_agent_id');
+});
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -527,7 +567,12 @@ In `backend/src/surface/services/messagesService.ts`, add `ConversationStatusVal
 import:
 
 ```ts
-import { MarkPlayerReadBody, SendMessageBody, type ConversationStatusValue, type PlayerMessageView } from '@support/types'
+import {
+  MarkPlayerReadBody,
+  SendMessageBody,
+  type ConversationStatusValue,
+  type PlayerMessageView,
+} from '@support/types';
 ```
 
 Change `getPlayerMessages`'s signature and body:
@@ -536,27 +581,35 @@ Change `getPlayerMessages`'s signature and body:
 export async function getPlayerMessages(
   ctx: PlayerContext,
   query: { session_id: string },
-): Promise<{ conversation_id: string | null; messages: PlayerMessageView[]; status?: ConversationStatusValue } | null> {
+): Promise<{
+  conversation_id: string | null;
+  messages: PlayerMessageView[];
+  status?: ConversationStatusValue;
+} | null> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
     const [ownedSession] = await tx
       .select({ id: session.id })
       .from(session)
       .where(and(eq(session.id, query.session_id), eq(session.playerId, ctx.playerId)))
-      .limit(1)
-    if (!ownedSession) return null
+      .limit(1);
+    if (!ownedSession) return null;
 
     const [found] = await tx
       .select({ id: conversation.id, status: conversation.status })
       .from(conversation)
       .where(eq(conversation.playerId, ctx.playerId))
       .orderBy(desc(conversation.createdAt))
-      .limit(1)
-    if (!found) return { conversation_id: null, messages: [] }
+      .limit(1);
+    if (!found) return { conversation_id: null, messages: [] };
 
-    const rows = await tx.select().from(message).where(eq(message.conversationId, found.id)).orderBy(message.seq)
-    const messages = rows.map(toPlayerView).filter((m): m is PlayerMessageView => m !== null)
-    return { conversation_id: found.id, messages, status: found.status }
-  })
+    const rows = await tx
+      .select()
+      .from(message)
+      .where(eq(message.conversationId, found.id))
+      .orderBy(message.seq);
+    const messages = rows.map(toPlayerView).filter((m): m is PlayerMessageView => m !== null);
+    return { conversation_id: found.id, messages, status: found.status };
+  });
 }
 ```
 
@@ -581,6 +634,7 @@ git commit -m "feat(surface): include conversation status in GET /surface/messag
 **Batch:** 1 (parallel — depends only on Task 1)
 
 **Files:**
+
 - Modify: `frontend/src/components/chat/types.ts`
 - Modify: `frontend/src/components/chat/ChatThread.tsx`
 - Modify: `frontend/src/components/chat/Composer.tsx`
@@ -589,10 +643,11 @@ git commit -m "feat(surface): include conversation status in GET /surface/messag
 - Modify: `frontend/src/styles.css`
 
 **Interfaces:**
+
 - Consumes: `AgentMessageView` (existing, already carries `visibility`).
 - Produces: `ChatMessage` gains optional `visibility?: 'public' | 'internal'`. `Composer` gains
   `onSend: (body: string, visibility?: 'public' | 'internal') => void` (widened from `(body:
-  string) => void`) and a new optional `allowVisibilityToggle?: boolean` prop — when omitted or
+string) => void`) and a new optional `allowVisibilityToggle?: boolean` prop — when omitted or
   `false`, no toggle renders and `onSend` is called with `visibility` always `undefined`,
   preserving the player surface's existing call site untouched. `sendAgentMessage` (agentApi.ts)
   gains an optional fourth `visibility?: 'public' | 'internal'` parameter.
@@ -607,25 +662,25 @@ In `frontend/src/components/chat/types.ts`, change:
 
 ```ts
 export type ChatMessage = {
-  id: string
-  authorType: ChatAuthorType
-  body: string
-  createdAt: string
-  deliveryState?: 'sending' | 'sent' | 'delivered' | 'read' | 'failed'
-}
+  id: string;
+  authorType: ChatAuthorType;
+  body: string;
+  createdAt: string;
+  deliveryState?: 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
+};
 ```
 
 to:
 
 ```ts
 export type ChatMessage = {
-  id: string
-  authorType: ChatAuthorType
-  body: string
-  createdAt: string
-  deliveryState?: 'sending' | 'sent' | 'delivered' | 'read' | 'failed'
-  visibility?: 'public' | 'internal'
-}
+  id: string;
+  authorType: ChatAuthorType;
+  body: string;
+  createdAt: string;
+  deliveryState?: 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
+  visibility?: 'public' | 'internal';
+};
 ```
 
 - [ ] **Step 2: Render internal notes with the amber class in `ChatThread`**
@@ -675,37 +730,45 @@ combinators of equal specificity to `.chat-message[data-own='...']`):
 Replace the full contents of `frontend/src/components/chat/Composer.tsx`:
 
 ```tsx
-import { useState } from 'react'
+import { useState } from 'react';
 
 type ComposerProps = {
-  onSend: (body: string, visibility?: 'public' | 'internal') => void
-  disabled?: boolean
+  onSend: (body: string, visibility?: 'public' | 'internal') => void;
+  disabled?: boolean;
   /** Only the agent console passes this. The player surface's Composer usage omits it, so
    *  onSend is always called with visibility undefined there — there is no code path for a
    *  player to send an internal note. */
-  allowVisibilityToggle?: boolean
-}
+  allowVisibilityToggle?: boolean;
+};
 
 export function Composer({ onSend, disabled, allowVisibilityToggle }: ComposerProps) {
-  const [value, setValue] = useState('')
-  const [visibility, setVisibility] = useState<'public' | 'internal'>('public')
+  const [value, setValue] = useState('');
+  const [visibility, setVisibility] = useState<'public' | 'internal'>('public');
 
   const submit = () => {
-    const trimmed = value.trim()
-    if (trimmed.length === 0) return
-    onSend(trimmed, allowVisibilityToggle ? visibility : undefined)
-    setValue('')
-    setVisibility('public')
-  }
+    const trimmed = value.trim();
+    if (trimmed.length === 0) return;
+    onSend(trimmed, allowVisibilityToggle ? visibility : undefined);
+    setValue('');
+    setVisibility('public');
+  };
 
   return (
     <div className="composer">
       {allowVisibilityToggle && (
         <div className="composer__visibility" role="radiogroup" aria-label="Message visibility">
-          <button type="button" aria-pressed={visibility === 'public'} onClick={() => setVisibility('public')}>
+          <button
+            type="button"
+            aria-pressed={visibility === 'public'}
+            onClick={() => setVisibility('public')}
+          >
             Public
           </button>
-          <button type="button" aria-pressed={visibility === 'internal'} onClick={() => setVisibility('internal')}>
+          <button
+            type="button"
+            aria-pressed={visibility === 'internal'}
+            onClick={() => setVisibility('internal')}
+          >
             Internal
           </button>
         </div>
@@ -716,17 +779,21 @@ export function Composer({ onSend, disabled, allowVisibilityToggle }: ComposerPr
         onChange={(event) => setValue(event.target.value)}
         onKeyDown={(event) => {
           if (event.key === 'Enter' && !event.shiftKey) {
-            event.preventDefault()
-            submit()
+            event.preventDefault();
+            submit();
           }
         }}
         placeholder="Type a message…"
       />
-      <button type="button" onClick={submit} disabled={disabled === true || value.trim().length === 0}>
+      <button
+        type="button"
+        onClick={submit}
+        disabled={disabled === true || value.trim().length === 0}
+      >
         Send
       </button>
     </div>
-  )
+  );
 }
 ```
 
@@ -735,8 +802,15 @@ export function Composer({ onSend, disabled, allowVisibilityToggle }: ComposerPr
 In `frontend/src/api/agentApi.ts`, change `sendAgentMessage`:
 
 ```ts
-export function sendAgentMessage(token: string, conversationId: string, body: string): Promise<{ message: unknown }> {
-  return apiCall(`/agent/messages`, token, { method: 'POST', body: JSON.stringify({ conversation_id: conversationId, body }) })
+export function sendAgentMessage(
+  token: string,
+  conversationId: string,
+  body: string,
+): Promise<{ message: unknown }> {
+  return apiCall(`/agent/messages`, token, {
+    method: 'POST',
+    body: JSON.stringify({ conversation_id: conversationId, body }),
+  });
 }
 ```
 
@@ -752,7 +826,7 @@ export function sendAgentMessage(
   return apiCall(`/agent/messages`, token, {
     method: 'POST',
     body: JSON.stringify({ conversation_id: conversationId, body, visibility }),
-  })
+  });
 }
 ```
 
@@ -760,7 +834,13 @@ In `frontend/src/pages/AgentConversation.tsx`, change the mapping function:
 
 ```tsx
 function toChatMessage(m: AgentMessageView): ChatMessage {
-  return { id: m.id, authorType: m.author_type, body: m.body, createdAt: m.created_at, deliveryState: m.delivery_state }
+  return {
+    id: m.id,
+    authorType: m.author_type,
+    body: m.body,
+    createdAt: m.created_at,
+    deliveryState: m.delivery_state,
+  };
 }
 ```
 
@@ -775,47 +855,47 @@ function toChatMessage(m: AgentMessageView): ChatMessage {
     createdAt: m.created_at,
     deliveryState: m.delivery_state,
     visibility: m.visibility,
-  }
+  };
 }
 ```
 
 and change the `send` mutation plus the `Composer` usage:
 
 ```tsx
-  const send = useMutation({
-    mutationFn: (body: string) => sendAgentMessage(session!.token, id!, body),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['conversation', id, 'messages'] })
-    },
-  })
+const send = useMutation({
+  mutationFn: (body: string) => sendAgentMessage(session!.token, id!, body),
+  onSuccess: () => {
+    void queryClient.invalidateQueries({ queryKey: ['conversation', id, 'messages'] });
+  },
+});
 ```
 
 to:
 
 ```tsx
-  const send = useMutation({
-    mutationFn: ({ body, visibility }: { body: string; visibility?: 'public' | 'internal' }) =>
-      sendAgentMessage(session!.token, id!, body, visibility),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['conversation', id, 'messages'] })
-    },
-  })
+const send = useMutation({
+  mutationFn: ({ body, visibility }: { body: string; visibility?: 'public' | 'internal' }) =>
+    sendAgentMessage(session!.token, id!, body, visibility),
+  onSuccess: () => {
+    void queryClient.invalidateQueries({ queryKey: ['conversation', id, 'messages'] });
+  },
+});
 ```
 
 and:
 
 ```tsx
-      <Composer onSend={(body) => send.mutate(body)} disabled={send.isPending} />
+<Composer onSend={(body) => send.mutate(body)} disabled={send.isPending} />
 ```
 
 to:
 
 ```tsx
-      <Composer
-        onSend={(body, visibility) => send.mutate({ body, visibility })}
-        disabled={send.isPending}
-        allowVisibilityToggle
-      />
+<Composer
+  onSend={(body, visibility) => send.mutate({ body, visibility })}
+  disabled={send.isPending}
+  allowVisibilityToggle
+/>
 ```
 
 - [ ] **Step 6: Typecheck and build**
@@ -837,9 +917,11 @@ git commit -m "feat(agent-console): Public/Internal composer toggle with amber i
 **Batch:** 1 (parallel — depends only on Task 1)
 
 **Files:**
+
 - Modify: `frontend/src/pages/SupportSurface.tsx`
 
 **Interfaces:**
+
 - Consumes: `PlayerMessagesResponse` (Task 1, `messagesQuery.data?.status`), the existing `send`
   mutation (`send.mutate(body: string)`, unchanged signature — this task calls it with a fixed
   string body, no new argument), the existing `Composer` (unchanged call site, no
@@ -856,38 +938,42 @@ already used elsewhere in this same file for the player-state availability copy.
 In `frontend/src/pages/SupportSurface.tsx`, change:
 
 ```tsx
-      {chatOpen && (
-        <section className="chat-panel">
-          <div className="chat-panel__thread">
-            <ChatThread messages={chatMessages} currentAuthorType="player" onRetry={onRetry} />
-          </div>
-          <Composer onSend={(body) => send.mutate(body)} disabled={send.isPending} />
-        </section>
-      )}
+{
+  chatOpen && (
+    <section className="chat-panel">
+      <div className="chat-panel__thread">
+        <ChatThread messages={chatMessages} currentAuthorType="player" onRetry={onRetry} />
+      </div>
+      <Composer onSend={(body) => send.mutate(body)} disabled={send.isPending} />
+    </section>
+  );
+}
 ```
 
 to:
 
 ```tsx
-      {chatOpen && (
-        <section className="chat-panel">
-          <div className="chat-panel__thread">
-            <ChatThread messages={chatMessages} currentAuthorType="player" onRetry={onRetry} />
-          </div>
-          {(messagesQuery.data?.status === 'resolved' || messagesQuery.data?.status === 'closed') && (
-            <div className="notice">
-              <p>Your ticket is resolved.</p>
-              <p>
-                Still facing issues?{' '}
-                <button type="button" onClick={() => send.mutate("I'm still facing issues.")}>
-                  Yes
-                </button>
-              </p>
-            </div>
-          )}
-          <Composer onSend={(body) => send.mutate(body)} disabled={send.isPending} />
-        </section>
+{
+  chatOpen && (
+    <section className="chat-panel">
+      <div className="chat-panel__thread">
+        <ChatThread messages={chatMessages} currentAuthorType="player" onRetry={onRetry} />
+      </div>
+      {(messagesQuery.data?.status === 'resolved' || messagesQuery.data?.status === 'closed') && (
+        <div className="notice">
+          <p>Your ticket is resolved.</p>
+          <p>
+            Still facing issues?{' '}
+            <button type="button" onClick={() => send.mutate("I'm still facing issues.")}>
+              Yes
+            </button>
+          </p>
+        </div>
       )}
+      <Composer onSend={(body) => send.mutate(body)} disabled={send.isPending} />
+    </section>
+  );
+}
 ```
 
 The banner disappears on its own once the refetch this component already wires (the `message:new`

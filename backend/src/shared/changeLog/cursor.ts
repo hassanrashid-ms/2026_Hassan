@@ -9,10 +9,10 @@
  * `id` is carried as a string: it is a bigserial, so a JS number cannot hold it
  * safely and a JS bigint cannot be JSON-serialised.
  */
-export type ChangeLogCursor = { changedAt: Date; id: string }
+export type ChangeLogCursor = { changedAt: Date; id: string };
 
 /** Digits only, and short enough that Postgres cannot overflow bigint on the cast. */
-const ID_PATTERN = /^\d{1,19}$/
+const ID_PATTERN = /^\d{1,19}$/;
 
 /**
  * base64url of `<iso>|<id>`. Opaque on purpose: the format is not part of the API
@@ -20,7 +20,9 @@ const ID_PATTERN = /^\d{1,19}$/
  * encryption — it hides nothing a caller could not already see in the response.
  */
 export function encodeChangeLogCursor(cursor: ChangeLogCursor): string {
-  return Buffer.from(`${cursor.changedAt.toISOString()}|${cursor.id}`, 'utf8').toString('base64url')
+  return Buffer.from(`${cursor.changedAt.toISOString()}|${cursor.id}`, 'utf8').toString(
+    'base64url',
+  );
 }
 
 /**
@@ -29,18 +31,18 @@ export function encodeChangeLogCursor(cursor: ChangeLogCursor): string {
  * throws would turn a stale bookmark into a 500.
  */
 export function decodeChangeLogCursor(raw: string): ChangeLogCursor | null {
-  if (raw.length === 0 || !/^[A-Za-z0-9_-]+$/.test(raw)) return null
+  if (raw.length === 0 || !/^[A-Za-z0-9_-]+$/.test(raw)) return null;
 
-  const decoded = Buffer.from(raw, 'base64url').toString('utf8')
-  const separator = decoded.indexOf('|')
-  if (separator === -1) return null
+  const decoded = Buffer.from(raw, 'base64url').toString('utf8');
+  const separator = decoded.indexOf('|');
+  if (separator === -1) return null;
 
-  const iso = decoded.slice(0, separator)
-  const id = decoded.slice(separator + 1)
-  if (!ID_PATTERN.test(id)) return null
+  const iso = decoded.slice(0, separator);
+  const id = decoded.slice(separator + 1);
+  if (!ID_PATTERN.test(id)) return null;
 
-  const changedAt = new Date(iso)
-  if (Number.isNaN(changedAt.getTime())) return null
+  const changedAt = new Date(iso);
+  if (Number.isNaN(changedAt.getTime())) return null;
 
-  return { changedAt, id }
+  return { changedAt, id };
 }

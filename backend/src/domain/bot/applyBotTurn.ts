@@ -1,24 +1,31 @@
-import { and, eq, isNull } from 'drizzle-orm'
-import type { BotTurnDecision } from './botTurn.ts'
-import { SILENT_UNAVAILABLE_REASONS } from './botTurn.ts'
-import { botFailureNote, pickHandoffMessage } from './messages.ts'
-import { assignOnHandoff } from './assignOnHandoff.ts'
-import { postMessage, type PostedMessageRow } from '../conversations/postMessage.ts'
-import { closeResolutionCycle } from '../conversations/resolutionCycle.ts'
-import { appendEvent } from '../../shared/events/appendEvent.ts'
-import type { Tx } from '../../shared/db/withWorkspace.ts'
-import { article, conversation, formSubmission, intent, subintent } from '../../shared/db/schema/index.ts'
-import { resolveSubintentForm } from '../forms/resolveSubintentForm.ts'
-import type { ConfirmPhaseValue } from '@support/types'
+import { and, eq, isNull } from 'drizzle-orm';
+import type { BotTurnDecision } from './botTurn.ts';
+import { SILENT_UNAVAILABLE_REASONS } from './botTurn.ts';
+import { botFailureNote, pickHandoffMessage, NO_AGENTS_ONLINE_MESSAGE } from './messages.ts';
+import { assignOnHandoff } from './assignOnHandoff.ts';
+import { postMessage, type PostedMessageRow } from '../conversations/postMessage.ts';
+import { closeResolutionCycle } from '../conversations/resolutionCycle.ts';
+import { applySubintentDefaultPriority } from '../conversations/index.ts';
+import { appendEvent } from '../../shared/events/appendEvent.ts';
+import type { Tx } from '../../shared/db/withWorkspace.ts';
+import {
+  article,
+  conversation,
+  formSubmission,
+  intent,
+  subintent,
+} from '../../shared/db/schema/index.ts';
+import { resolveSubintentForm } from '../forms/resolveSubintentForm.ts';
+import type { ConfirmPhaseValue } from '@support/types';
 
 export type ApplyBotTurnContext = {
-  workspaceId: string
-  conversationId: string
-}
+  workspaceId: string;
+  conversationId: string;
+};
 
 export type ApplyBotTurnResult = {
-  posted: PostedMessageRow[]
-  statusChanged: boolean
+  posted: PostedMessageRow[];
+  statusChanged: boolean;
   /**
    * Non-null only when this turn moved confirm_phase in a way a client must be
    * told about out of band. Today that is exactly one case: the form offer,
@@ -27,8 +34,8 @@ export type ApplyBotTurnResult = {
    * that never had one is a behaviour change, and the no-form handoff must stay
    * byte-identical.
    */
-  phaseChanged: ConfirmPhaseValue | null
-}
+  phaseChanged: ConfirmPhaseValue | null;
+};
 
 /**
  * The only writer of a bot-turn outcome. One transaction per call — the caller
@@ -36,12 +43,16 @@ export type ApplyBotTurnResult = {
  * lands) owns that transaction via `tx`. Socket emits never happen in here —
  * only after the caller's transaction commits.
  */
-export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: BotTurnDecision): Promise<ApplyBotTurnResult> {
-  await appendSearchEvents(tx, ctx, decision)
+export async function applyBotTurn(
+  tx: Tx,
+  ctx: ApplyBotTurnContext,
+  decision: BotTurnDecision,
+): Promise<ApplyBotTurnResult> {
+  await appendSearchEvents(tx, ctx, decision);
 
   switch (decision.kind) {
     case 'noop':
-      return { posted: [], statusChanged: false, phaseChanged: null }
+      return { posted: [], statusChanged: false, phaseChanged: null };
 
     case 'answer': {
       const posted = await postMessage(tx, {
@@ -52,14 +63,18 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
         body: decision.reply,
         articleId: decision.articleId ?? null,
         visibility: 'public',
-      })
-      if (decision.subintentId) await classifyIfUnset(tx, ctx, decision.subintentId)
+      });
+      if (decision.subintentId) await classifyIfUnset(tx, ctx, decision.subintentId);
       if (decision.articleId) {
         await tx
           .update(conversation)
           .set({ confirmPhase: 'bot_article' })
-          .where(eq(conversation.id, ctx.conversationId))
-        const [row] = await tx.select({ title: article.title }).from(article).where(eq(article.id, decision.articleId)).limit(1)
+          .where(eq(conversation.id, ctx.conversationId));
+        const [row] = await tx
+          .select({ title: article.title })
+          .from(article)
+          .where(eq(article.id, decision.articleId))
+          .limit(1);
         await appendEvent(tx, {
           workspaceId: ctx.workspaceId,
           type: 'bot_article_offered',
@@ -67,18 +82,22 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
           actorId: null,
           actorType: 'bot',
           payload: { article_id: decision.articleId, article_title: row?.title ?? null },
-        })
+        });
       }
-      return { posted: [posted], statusChanged: false, phaseChanged: null }
+      return { posted: [posted], statusChanged: false, phaseChanged: null };
     }
 
     case 'resolve': {
-      if (decision.subintentId) await classifyIfUnset(tx, ctx, decision.subintentId)
+      if (decision.subintentId) await classifyIfUnset(tx, ctx, decision.subintentId);
       await tx
         .update(conversation)
         .set({ status: 'resolved', confirmPhase: 'none', resolutionSource: 'bot' })
-        .where(eq(conversation.id, ctx.conversationId))
-      await closeResolutionCycle(tx, { conversationId: ctx.conversationId, kind: 'bot', now: new Date() })
+        .where(eq(conversation.id, ctx.conversationId));
+      await closeResolutionCycle(tx, {
+        conversationId: ctx.conversationId,
+        kind: 'bot',
+        now: new Date(),
+      });
       await appendEvent(tx, {
         workspaceId: ctx.workspaceId,
         type: 'conversation_resolved',
@@ -86,8 +105,8 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
         actorId: null,
         actorType: 'bot',
         payload: { source: 'bot', confirmed_by: 'player' },
-      })
-      return { posted: [], statusChanged: true, phaseChanged: null }
+      });
+      return { posted: [], statusChanged: true, phaseChanged: null };
     }
 
     case 'handoff': {
@@ -98,8 +117,8 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
         actorId: null,
         body: pickHandoffMessage(),
         visibility: 'public',
-      })
-      if (decision.subintentId) await classifyIfUnset(tx, ctx, decision.subintentId)
+      });
+      if (decision.subintentId) await classifyIfUnset(tx, ctx, decision.subintentId);
 
       // The offer branch. Everything after this block is today's behaviour,
       // untouched — a subintent with no published form falls straight through.
@@ -110,18 +129,18 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
       // two exclusions need no special case — `turn_cap` carries a null
       // subintent, and `unavailable` is a different decision kind entirely.
       if (decision.subintentId && decision.reason !== 'asked_for_person') {
-        const resolved = await resolveSubintentForm(tx, decision.subintentId)
+        const resolved = await resolveSubintentForm(tx, decision.subintentId);
         if (resolved) {
           await tx.insert(formSubmission).values({
             workspaceId: ctx.workspaceId,
             conversationId: ctx.conversationId,
             formId: resolved.formId,
             formVersion: resolved.version,
-          })
+          });
           await tx
             .update(conversation)
             .set({ confirmPhase: 'form' })
-            .where(eq(conversation.id, ctx.conversationId))
+            .where(eq(conversation.id, ctx.conversationId));
 
           // Written here rather than deferred to terminate: it records why the
           // handoff happened, which is a fact about this turn. A form the player
@@ -134,7 +153,7 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
               actorId: null,
               actorType: 'bot',
               payload: {},
-            })
+            });
           }
 
           // `handoff_reason` is here because `bot_handoff` still has to carry it
@@ -153,20 +172,20 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
               field_count: resolved.fields.length,
               handoff_reason: decision.reason,
             },
-          })
+          });
 
           // Status stays bot_active, no agent is assigned, and no bot_handoff is
           // written. completeFormAndHandoff does all three at terminate — that
           // gate is what keeps a half-filled ticket out of the queue.
-          return { posted: [posted], statusChanged: false, phaseChanged: 'form' }
+          return { posted: [posted], statusChanged: false, phaseChanged: 'form' };
         }
       }
 
-      const assignedAgentId = await assignOnHandoff(tx, ctx.workspaceId)
+      const assignedAgentId = await assignOnHandoff(tx, ctx.workspaceId);
       await tx
         .update(conversation)
         .set({ status: 'open', confirmPhase: 'none', assignedAgentId })
-        .where(eq(conversation.id, ctx.conversationId))
+        .where(eq(conversation.id, ctx.conversationId));
       if (decision.reason === 'article_rejected') {
         await appendEvent(tx, {
           workspaceId: ctx.workspaceId,
@@ -175,7 +194,7 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
           actorId: null,
           actorType: 'bot',
           payload: {},
-        })
+        });
       }
       await appendEvent(tx, {
         workspaceId: ctx.workspaceId,
@@ -186,8 +205,21 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
         // `null` is legitimate: assignOnHandoff returns null when no active
         // agent exists, and that is explicitly not an error.
         payload: { reason: decision.reason, assigned_agent_id: assignedAgentId },
-      })
-      return { posted: [posted], statusChanged: true, phaseChanged: null }
+      });
+      const finalPosted = [posted];
+      if (assignedAgentId === null) {
+        finalPosted.push(
+          await postMessage(tx, {
+            workspaceId: ctx.workspaceId,
+            conversationId: ctx.conversationId,
+            authorType: 'system',
+            actorId: null,
+            body: NO_AGENTS_ONLINE_MESSAGE,
+            visibility: 'public',
+          }),
+        );
+      }
+      return { posted: finalPosted, statusChanged: true, phaseChanged: null };
     }
 
     case 'unavailable': {
@@ -200,7 +232,7 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
           body: pickHandoffMessage(),
           visibility: 'public',
         }),
-      ]
+      ];
       if (!SILENT_UNAVAILABLE_REASONS.has(decision.reason)) {
         posted.push(
           await postMessage(tx, {
@@ -211,13 +243,13 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
             body: botFailureNote(decision.reason),
             visibility: 'internal',
           }),
-        )
+        );
       }
-      const assignedAgentId = await assignOnHandoff(tx, ctx.workspaceId)
+      const assignedAgentId = await assignOnHandoff(tx, ctx.workspaceId);
       await tx
         .update(conversation)
         .set({ status: 'open', confirmPhase: 'none', assignedAgentId })
-        .where(eq(conversation.id, ctx.conversationId))
+        .where(eq(conversation.id, ctx.conversationId));
       await appendEvent(tx, {
         workspaceId: ctx.workspaceId,
         type: 'bot_unavailable',
@@ -225,8 +257,20 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
         actorId: null,
         actorType: 'bot',
         payload: { reason: decision.reason },
-      })
-      return { posted, statusChanged: true, phaseChanged: null }
+      });
+      if (assignedAgentId === null) {
+        posted.push(
+          await postMessage(tx, {
+            workspaceId: ctx.workspaceId,
+            conversationId: ctx.conversationId,
+            authorType: 'system',
+            actorId: null,
+            body: NO_AGENTS_ONLINE_MESSAGE,
+            visibility: 'public',
+          }),
+        );
+      }
+      return { posted, statusChanged: true, phaseChanged: null };
     }
   }
 }
@@ -247,7 +291,11 @@ export async function applyBotTurn(tx: Tx, ctx: ApplyBotTurnContext, decision: B
  * before this transaction, and re-resolving the ids here would record what the
  * articles are called now rather than what the model was actually shown.
  */
-async function appendSearchEvents(tx: Tx, ctx: ApplyBotTurnContext, decision: BotTurnDecision): Promise<void> {
+async function appendSearchEvents(
+  tx: Tx,
+  ctx: ApplyBotTurnContext,
+  decision: BotTurnDecision,
+): Promise<void> {
   for (const search of decision.searches ?? []) {
     await appendEvent(tx, {
       workspaceId: ctx.workspaceId,
@@ -260,7 +308,7 @@ async function appendSearchEvents(tx: Tx, ctx: ApplyBotTurnContext, decision: Bo
         result_count: search.results.length,
         articles: search.results.map((r) => ({ article_id: r.id, article_title: r.title })),
       },
-    })
+    });
   }
 }
 
@@ -273,21 +321,29 @@ async function appendSearchEvents(tx: Tx, ctx: ApplyBotTurnContext, decision: Bo
  * conditions — `eq(...) && isNull(...)` would evaluate to the second operand
  * and silently drop the first, which would let this write run unconditionally.
  */
-async function classifyIfUnset(tx: Tx, ctx: ApplyBotTurnContext, subintentId: string): Promise<void> {
+async function classifyIfUnset(
+  tx: Tx,
+  ctx: ApplyBotTurnContext,
+  subintentId: string,
+): Promise<void> {
   const updated = await tx
     .update(conversation)
     .set({ subintentId, classificationSource: 'bot' })
     .where(and(eq(conversation.id, ctx.conversationId), isNull(conversation.subintentId)))
-    .returning({ id: conversation.id })
+    .returning({
+      id: conversation.id,
+      priority: conversation.priority,
+      priorityManuallySet: conversation.priorityManuallySet,
+    });
 
-  if (updated.length === 0) return
+  if (updated.length === 0) return;
 
   const [names] = await tx
     .select({ subintentName: subintent.name, intentName: intent.name })
     .from(subintent)
     .innerJoin(intent, eq(intent.id, subintent.intentId))
     .where(eq(subintent.id, subintentId))
-    .limit(1)
+    .limit(1);
 
   await appendEvent(tx, {
     workspaceId: ctx.workspaceId,
@@ -295,6 +351,20 @@ async function classifyIfUnset(tx: Tx, ctx: ApplyBotTurnContext, subintentId: st
     conversationId: ctx.conversationId,
     actorId: null,
     actorType: 'bot',
-    payload: { source: 'bot', subintent_name: names?.subintentName ?? null, intent_name: names?.intentName ?? null },
-  })
+    payload: {
+      source: 'bot',
+      subintent_name: names?.subintentName ?? null,
+      intent_name: names?.intentName ?? null,
+    },
+  });
+
+  await applySubintentDefaultPriority(tx, {
+    workspaceId: ctx.workspaceId,
+    conversationId: ctx.conversationId,
+    subintentId,
+    currentPriority: updated[0]!.priority,
+    priorityManuallySet: updated[0]!.priorityManuallySet,
+    actorId: null,
+    actorType: 'bot',
+  });
 }

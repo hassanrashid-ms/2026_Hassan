@@ -36,11 +36,11 @@ Global Constraints disagree, the constraints and the landed code are authoritati
 - **`BotTurnInput` lives in Part 1's `backend/src/domain/bot/botTurn.ts`, widened there by this plan** (`orchestrator.ts` imports and re-exports it). An earlier revision of this plan put the definition in `orchestrator.ts` on the grounds that `botTurn.ts` "depends on nothing" per the spec's Modules table — that does not work: `BotDecider` is declared in `botTurn.ts`, so a second `BotTurnInput` defined downstream would leave every decider's parameter typed as the narrow `{ workspaceId, conversationId }` and force a cast at the orchestrator's call site. The cost of widening in place is one type-only `import type { PlayerMessageView } from '@support/types'` in `botTurn.ts` — the shared wire-contract package, erased at compile time, no cycle — so that module is no longer literally dependency-free. The shape is unchanged:
   ```ts
   export type BotTurnInput = {
-    workspaceId: string
-    conversationId: string
-    subintentId: string | null
-    history: PlayerMessageView[]
-  }
+    workspaceId: string;
+    conversationId: string;
+    subintentId: string | null;
+    history: PlayerMessageView[];
+  };
   ```
 - **No LLM concerns, no turn budgets, no article-offer lifecycle, no form offering, no inactivity-resolution turn, no external alerting, no admin route, no `intent_corrected`.** All out of scope per the spec's own "Out of scope" section.
 - **The orchestrator never imports BullMQ.** `runBotTurn` must be callable directly from a test with no Redis (spec §Modules: "the job calls the orchestrator, never the reverse").
@@ -57,26 +57,28 @@ Global Constraints disagree, the constraints and the landed code are authoritati
 
 ## File Structure
 
-| File | Action | Responsibility |
-|---|---|---|
-| `backend/src/domain/bot/orchestrator.ts` | create | `runBotTurn(workspaceId, conversationId, decider)` — gather/guard/decide/apply/emit. Also exports `applyDecisionIfBotActive(workspaceId, conversationId, decision)`, the shared guarded apply+emit tail both `runBotTurn` and the worker's `failed` handler call. |
-| `backend/src/domain/bot/botTurn.ts` | modify | Part 1's module — `BotTurnInput` widened here with `subintentId` and `history` (see Global Constraints). |
-| `backend/src/shared/jobs/botTurns.ts` | create | `enqueueBotTurn(input)`, `registerBotTurnWorker(decider?)` — the only file that knows about BullMQ for bot turns. |
-| `backend/src/shared/jobs/queue.ts` | modify | `registerJobs()` also calls `registerBotTurnWorker()` and merges its `close()` into the returned one. |
-| `backend/src/surface/services/messagesService.ts` | modify | After commit, `if (result.shouldEnqueue) enqueueBotTurn({ workspaceId, conversationId, seq })`. |
-| `backend/tests/bot.orchestrator.test.ts` | create | `runBotTurn` gather/guard/decide/apply/emit, driven directly with a fake decider — no Redis. |
-| `backend/tests/jobs.botTurns.test.ts` | create | Queue/worker wiring: job calls the orchestrator with the right ids, retry-then-fail-once, `stubDecider` → `not_implemented` with no note, jobId dedup, distinct worker closed alongside `support-jobs`. |
-| `backend/tests/surface.messages.test.ts` | modify | Provisioned branch enqueues exactly one job with id `${conversationId}:${seq}`; reopen and `awaiting_player → open` enqueue nothing. |
+| File                                              | Action | Responsibility                                                                                                                                                                                                                                                    |
+| ------------------------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `backend/src/domain/bot/orchestrator.ts`          | create | `runBotTurn(workspaceId, conversationId, decider)` — gather/guard/decide/apply/emit. Also exports `applyDecisionIfBotActive(workspaceId, conversationId, decision)`, the shared guarded apply+emit tail both `runBotTurn` and the worker's `failed` handler call. |
+| `backend/src/domain/bot/botTurn.ts`               | modify | Part 1's module — `BotTurnInput` widened here with `subintentId` and `history` (see Global Constraints).                                                                                                                                                          |
+| `backend/src/shared/jobs/botTurns.ts`             | create | `enqueueBotTurn(input)`, `registerBotTurnWorker(decider?)` — the only file that knows about BullMQ for bot turns.                                                                                                                                                 |
+| `backend/src/shared/jobs/queue.ts`                | modify | `registerJobs()` also calls `registerBotTurnWorker()` and merges its `close()` into the returned one.                                                                                                                                                             |
+| `backend/src/surface/services/messagesService.ts` | modify | After commit, `if (result.shouldEnqueue) enqueueBotTurn({ workspaceId, conversationId, seq })`.                                                                                                                                                                   |
+| `backend/tests/bot.orchestrator.test.ts`          | create | `runBotTurn` gather/guard/decide/apply/emit, driven directly with a fake decider — no Redis.                                                                                                                                                                      |
+| `backend/tests/jobs.botTurns.test.ts`             | create | Queue/worker wiring: job calls the orchestrator with the right ids, retry-then-fail-once, `stubDecider` → `not_implemented` with no note, jobId dedup, distinct worker closed alongside `support-jobs`.                                                           |
+| `backend/tests/surface.messages.test.ts`          | modify | Provisioned branch enqueues exactly one job with id `${conversationId}:${seq}`; reopen and `awaiting_player → open` enqueue nothing.                                                                                                                              |
 
 ---
 
 ### Task 1: `runBotTurn` orchestrator
 
 **Files:**
+
 - Create: `backend/src/domain/bot/orchestrator.ts`
 - Test: `backend/tests/bot.orchestrator.test.ts`
 
 **Interfaces:**
+
 - Consumes (from Part 1, assumed to already exist): `BotTurnDecision`, `BotDecider`, `HandoffReason`, `UnavailableReason` from `../../src/domain/bot/botTurn.ts`; `applyBotTurn` from `../../src/domain/bot/applyBotTurn.ts`. Also consumes `toPlayerView`, `PostedMessageRow` from `../../src/domain/conversations/index.ts`; `withWorkspace`, `Tx` from `../../src/shared/db/withWorkspace.ts`; `conversation`, `message` from `../../src/shared/db/schema/index.ts`; `emitInboxChanged`, `emitMessageToRooms` from `../../src/shared/realtime/emit.ts`; `getIo` from `../../src/shared/realtime/socketServer.ts`; `toAgentView` from `../../src/domain/conversations/index.ts`.
 - Produces: the widened `BotTurnInput` in `botTurn.ts`, re-exported here (see Global Constraints), `runBotTurn(workspaceId: string, conversationId: string, decider: BotDecider): Promise<void>`, `applyDecisionIfBotActive(workspaceId: string, conversationId: string, decision: BotTurnDecision): Promise<{ applied: true; posted: PostedMessageRow[]; statusChanged: boolean } | { applied: false }>` — both used by Task 2's worker.
 
@@ -85,114 +87,140 @@ Global Constraints disagree, the constraints and the landed code are authoritati
 Create `backend/tests/bot.orchestrator.test.ts`:
 
 ```ts
-import { afterAll, beforeEach, describe, expect, it } from 'vitest'
-import { eq } from 'drizzle-orm'
-import { closeDb } from '../src/shared/db/client.ts'
-import { withWorkspace } from '../src/shared/db/withWorkspace.ts'
-import { conversation, event, message } from '../src/shared/db/schema/index.ts'
-import { runBotTurn } from '../src/domain/bot/orchestrator.ts'
-import type { BotTurnDecision, BotTurnInput } from '../src/domain/bot/botTurn.ts'
-import { closeOwnerPool, seedConversation, seedPlayer, seedWorkspace, truncateAll } from './helpers/db.ts'
+import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { eq } from 'drizzle-orm';
+import { closeDb } from '../src/shared/db/client.ts';
+import { withWorkspace } from '../src/shared/db/withWorkspace.ts';
+import { conversation, event, message } from '../src/shared/db/schema/index.ts';
+import { runBotTurn } from '../src/domain/bot/orchestrator.ts';
+import type { BotTurnDecision, BotTurnInput } from '../src/domain/bot/botTurn.ts';
+import {
+  closeOwnerPool,
+  seedConversation,
+  seedPlayer,
+  seedWorkspace,
+  truncateAll,
+} from './helpers/db.ts';
 
 afterAll(async () => {
-  await closeDb()
-  await closeOwnerPool()
-})
+  await closeDb();
+  await closeOwnerPool();
+});
 
-beforeEach(truncateAll)
+beforeEach(truncateAll);
 
 async function setConversationStatus(conversationId: string, status: string): Promise<void> {
-  await withWorkspace('', async () => {}).catch(() => {}) // no-op placeholder removed below
+  await withWorkspace('', async () => {}).catch(() => {}); // no-op placeholder removed below
 }
 
 describe('runBotTurn', () => {
   it('re-reads status and no-ops when the conversation left bot_active before the job ran', async () => {
-    const workspaceId = await seedWorkspace({ slug: 'demo-game' })
-    const playerId = await seedPlayer(workspaceId, 'UserId1')
-    const conversationId = await seedConversation({ workspaceId, playerId })
+    const workspaceId = await seedWorkspace({ slug: 'demo-game' });
+    const playerId = await seedPlayer(workspaceId, 'UserId1');
+    const conversationId = await seedConversation({ workspaceId, playerId });
     await withWorkspace(workspaceId, (tx) =>
       tx.update(conversation).set({ status: 'open' }).where(eq(conversation.id, conversationId)),
-    )
+    );
 
-    let deciderCalled = false
+    let deciderCalled = false;
     const decider = async (_input: BotTurnInput): Promise<BotTurnDecision> => {
-      deciderCalled = true
-      return { kind: 'answer', reply: 'hi', subintentId: null }
-    }
+      deciderCalled = true;
+      return { kind: 'answer', reply: 'hi', subintentId: null };
+    };
 
-    await runBotTurn(workspaceId, conversationId, decider)
+    await runBotTurn(workspaceId, conversationId, decider);
 
-    expect(deciderCalled).toBe(false)
-    const rows = await withWorkspace(workspaceId, (tx) => tx.select().from(message).where(eq(message.conversationId, conversationId)))
-    expect(rows).toHaveLength(0)
-    const events = await withWorkspace(workspaceId, (tx) => tx.select().from(event))
-    expect(events).toHaveLength(0)
-  })
+    expect(deciderCalled).toBe(false);
+    const rows = await withWorkspace(workspaceId, (tx) =>
+      tx.select().from(message).where(eq(message.conversationId, conversationId)),
+    );
+    expect(rows).toHaveLength(0);
+    const events = await withWorkspace(workspaceId, (tx) => tx.select().from(event));
+    expect(events).toHaveLength(0);
+  });
 
   it('gathers subintent_id and public history, passes them to the decider, and applies + emits the result', async () => {
-    const workspaceId = await seedWorkspace({ slug: 'demo-game' })
-    const playerId = await seedPlayer(workspaceId, 'UserId1')
-    const conversationId = await seedConversation({ workspaceId, playerId })
+    const workspaceId = await seedWorkspace({ slug: 'demo-game' });
+    const playerId = await seedPlayer(workspaceId, 'UserId1');
+    const conversationId = await seedConversation({ workspaceId, playerId });
 
-    let seenInput: BotTurnInput | null = null
+    let seenInput: BotTurnInput | null = null;
     const decider = async (input: BotTurnInput): Promise<BotTurnDecision> => {
-      seenInput = input
-      return { kind: 'unavailable', reason: 'error' }
-    }
+      seenInput = input;
+      return { kind: 'unavailable', reason: 'error' };
+    };
 
-    await runBotTurn(workspaceId, conversationId, decider)
+    await runBotTurn(workspaceId, conversationId, decider);
 
-    expect(seenInput).not.toBeNull()
-    expect(seenInput!.workspaceId).toBe(workspaceId)
-    expect(seenInput!.conversationId).toBe(conversationId)
-    expect(seenInput!.subintentId).toBeNull()
-    expect(seenInput!.history).toEqual([])
+    expect(seenInput).not.toBeNull();
+    expect(seenInput!.workspaceId).toBe(workspaceId);
+    expect(seenInput!.conversationId).toBe(conversationId);
+    expect(seenInput!.subintentId).toBeNull();
+    expect(seenInput!.history).toEqual([]);
 
     const rows = await withWorkspace(workspaceId, (tx) =>
       tx.select().from(conversation).where(eq(conversation.id, conversationId)),
-    )
-    expect(rows[0]!.status).toBe('open')
+    );
+    expect(rows[0]!.status).toBe('open');
 
-    const events = await withWorkspace(workspaceId, (tx) => tx.select().from(event).where(eq(event.type, 'bot_unavailable')))
-    expect(events).toHaveLength(1)
-  })
+    const events = await withWorkspace(workspaceId, (tx) =>
+      tx.select().from(event).where(eq(event.type, 'bot_unavailable')),
+    );
+    expect(events).toHaveLength(1);
+  });
 
   it('filters internal messages out of the history handed to the decider', async () => {
-    const workspaceId = await seedWorkspace({ slug: 'demo-game' })
-    const playerId = await seedPlayer(workspaceId, 'UserId1')
-    const conversationId = await seedConversation({ workspaceId, playerId })
-    const { seedMessage } = await import('./helpers/db.ts')
-    await seedMessage({ workspaceId, conversationId, seq: 1, authorType: 'player', visibility: 'public', body: 'hello' })
-    await seedMessage({ workspaceId, conversationId, seq: 2, authorType: 'agent', visibility: 'internal', body: 'secret note' })
+    const workspaceId = await seedWorkspace({ slug: 'demo-game' });
+    const playerId = await seedPlayer(workspaceId, 'UserId1');
+    const conversationId = await seedConversation({ workspaceId, playerId });
+    const { seedMessage } = await import('./helpers/db.ts');
+    await seedMessage({
+      workspaceId,
+      conversationId,
+      seq: 1,
+      authorType: 'player',
+      visibility: 'public',
+      body: 'hello',
+    });
+    await seedMessage({
+      workspaceId,
+      conversationId,
+      seq: 2,
+      authorType: 'agent',
+      visibility: 'internal',
+      body: 'secret note',
+    });
 
-    let seenInput: BotTurnInput | null = null
+    let seenInput: BotTurnInput | null = null;
     const decider = async (input: BotTurnInput): Promise<BotTurnDecision> => {
-      seenInput = input
-      return { kind: 'noop' }
-    }
+      seenInput = input;
+      return { kind: 'noop' };
+    };
 
-    await runBotTurn(workspaceId, conversationId, decider)
+    await runBotTurn(workspaceId, conversationId, decider);
 
-    expect(seenInput!.history.map((m) => m.body)).toEqual(['hello'])
-  })
+    expect(seenInput!.history.map((m) => m.body)).toEqual(['hello']);
+  });
 
   it('propagates a throw from the decider without applying anything', async () => {
-    const workspaceId = await seedWorkspace({ slug: 'demo-game' })
-    const playerId = await seedPlayer(workspaceId, 'UserId1')
-    const conversationId = await seedConversation({ workspaceId, playerId })
+    const workspaceId = await seedWorkspace({ slug: 'demo-game' });
+    const playerId = await seedPlayer(workspaceId, 'UserId1');
+    const conversationId = await seedConversation({ workspaceId, playerId });
 
     const decider = async (): Promise<BotTurnDecision> => {
-      throw new Error('decider blew up')
-    }
+      throw new Error('decider blew up');
+    };
 
-    await expect(runBotTurn(workspaceId, conversationId, decider)).rejects.toThrow('decider blew up')
+    await expect(runBotTurn(workspaceId, conversationId, decider)).rejects.toThrow(
+      'decider blew up',
+    );
 
     const rows = await withWorkspace(workspaceId, (tx) =>
       tx.select().from(conversation).where(eq(conversation.id, conversationId)),
-    )
-    expect(rows[0]!.status).toBe('bot_active')
-  })
-})
+    );
+    expect(rows[0]!.status).toBe('bot_active');
+  });
+});
 ```
 
 Delete the unused `setConversationStatus` placeholder function above before running — it was left in accidentally; the test body updates status inline with `withWorkspace` directly, as shown in the first `it`.
@@ -205,48 +233,60 @@ Expected: FAIL with "Cannot find module '../src/domain/bot/orchestrator.ts'" (or
 - [ ] **Step 3: Implement `orchestrator.ts`**
 
 ```ts
-import { eq } from 'drizzle-orm'
-import type { Server } from 'socket.io'
-import type { PlayerMessageView } from '@support/types'
-import { applyBotTurn } from './applyBotTurn.ts'
-import type { BotDecider, BotTurnDecision } from './botTurn.ts'
-import { toAgentView, toPlayerView, type PostedMessageRow } from '../conversations/index.ts'
-import { conversation, message } from '../../shared/db/schema/index.ts'
-import { withWorkspace, type Tx } from '../../shared/db/withWorkspace.ts'
-import { emitInboxChanged, emitMessageToRooms } from '../../shared/realtime/emit.ts'
-import { getIo } from '../../shared/realtime/socketServer.ts'
+import { eq } from 'drizzle-orm';
+import type { Server } from 'socket.io';
+import type { PlayerMessageView } from '@support/types';
+import { applyBotTurn } from './applyBotTurn.ts';
+import type { BotDecider, BotTurnDecision } from './botTurn.ts';
+import { toAgentView, toPlayerView, type PostedMessageRow } from '../conversations/index.ts';
+import { conversation, message } from '../../shared/db/schema/index.ts';
+import { withWorkspace, type Tx } from '../../shared/db/withWorkspace.ts';
+import { emitInboxChanged, emitMessageToRooms } from '../../shared/realtime/emit.ts';
+import { getIo } from '../../shared/realtime/socketServer.ts';
 
 export type BotTurnInput = {
-  workspaceId: string
-  conversationId: string
-  subintentId: string | null
-  history: PlayerMessageView[]
-}
+  workspaceId: string;
+  conversationId: string;
+  subintentId: string | null;
+  history: PlayerMessageView[];
+};
 
 type GatherResult = {
-  status: string
-  subintentId: string | null
-} | null
+  status: string;
+  subintentId: string | null;
+} | null;
 
-async function gather(tx: Tx, conversationId: string): Promise<{ conv: GatherResult; history: PlayerMessageView[] }> {
+async function gather(
+  tx: Tx,
+  conversationId: string,
+): Promise<{ conv: GatherResult; history: PlayerMessageView[] }> {
   const [conv] = await tx
     .select({ status: conversation.status, subintentId: conversation.subintentId })
     .from(conversation)
     .where(eq(conversation.id, conversationId))
-    .limit(1)
+    .limit(1);
 
-  const rows = await tx.select().from(message).where(eq(message.conversationId, conversationId)).orderBy(message.seq)
-  const history = rows.map(toPlayerView).filter((m): m is PlayerMessageView => m !== null)
+  const rows = await tx
+    .select()
+    .from(message)
+    .where(eq(message.conversationId, conversationId))
+    .orderBy(message.seq);
+  const history = rows.map(toPlayerView).filter((m): m is PlayerMessageView => m !== null);
 
-  return { conv: conv ?? null, history }
+  return { conv: conv ?? null, history };
 }
 
-function emitApplied(io: Server, workspaceId: string, conversationId: string, result: { posted: PostedMessageRow[]; statusChanged: boolean }): void {
+function emitApplied(
+  io: Server,
+  workspaceId: string,
+  conversationId: string,
+  result: { posted: PostedMessageRow[]; statusChanged: boolean },
+): void {
   for (const row of result.posted) {
-    emitMessageToRooms(io, conversationId, toPlayerView(row), toAgentView(row))
+    emitMessageToRooms(io, conversationId, toPlayerView(row), toAgentView(row));
   }
   if (result.statusChanged) {
-    emitInboxChanged(io, workspaceId, conversationId, 'open')
+    emitInboxChanged(io, workspaceId, conversationId, 'open');
   }
 }
 
@@ -260,9 +300,11 @@ export async function applyDecisionAndEmit(
   conversationId: string,
   decision: BotTurnDecision,
 ): Promise<{ posted: PostedMessageRow[]; statusChanged: boolean }> {
-  const result = await withWorkspace(workspaceId, (tx) => applyBotTurn(tx, { workspaceId, conversationId }, decision))
-  emitApplied(getIo(), workspaceId, conversationId, result)
-  return result
+  const result = await withWorkspace(workspaceId, (tx) =>
+    applyBotTurn(tx, { workspaceId, conversationId }, decision),
+  );
+  emitApplied(getIo(), workspaceId, conversationId, result);
+  return result;
 }
 
 /**
@@ -270,14 +312,23 @@ export async function applyDecisionAndEmit(
  * claimed or replied to the conversation in the window between enqueue and this job
  * running. A no-op is the safe outcome of that race — see spec §4.
  */
-export async function runBotTurn(workspaceId: string, conversationId: string, decider: BotDecider): Promise<void> {
-  const { conv, history } = await withWorkspace(workspaceId, (tx) => gather(tx, conversationId))
+export async function runBotTurn(
+  workspaceId: string,
+  conversationId: string,
+  decider: BotDecider,
+): Promise<void> {
+  const { conv, history } = await withWorkspace(workspaceId, (tx) => gather(tx, conversationId));
 
-  if (!conv || conv.status !== 'bot_active') return
+  if (!conv || conv.status !== 'bot_active') return;
 
-  const decision = await decider({ workspaceId, conversationId, subintentId: conv.subintentId, history })
+  const decision = await decider({
+    workspaceId,
+    conversationId,
+    subintentId: conv.subintentId,
+    history,
+  });
 
-  await applyDecisionAndEmit(workspaceId, conversationId, decision)
+  await applyDecisionAndEmit(workspaceId, conversationId, decision);
 }
 ```
 
@@ -298,11 +349,13 @@ git commit -m "feat: add runBotTurn orchestrator with gather/guard/decide/apply/
 ### Task 2: `bot-turns` BullMQ queue and worker
 
 **Files:**
+
 - Create: `backend/src/shared/jobs/botTurns.ts`
 - Modify: `backend/src/shared/jobs/queue.ts`
 - Test: `backend/tests/jobs.botTurns.test.ts`
 
 **Interfaces:**
+
 - Consumes: `runBotTurn`, `applyDecisionIfBotActive` from `../../domain/bot/orchestrator.ts` (Task 1); `stubDecider` from `../../domain/bot/botTurn.ts` (Part 1); `getEnv` from `../../env.ts`; `logger` from `../logging/logger.ts`.
 - Produces: `enqueueBotTurn(input: { workspaceId: string; conversationId: string; seq: number }): Promise<void>`, `registerBotTurnWorker(decider?: BotDecider): { close(): Promise<void> }` — both consumed by Task 3 (`messagesService.ts`) and by `queue.ts`.
 
@@ -311,132 +364,148 @@ git commit -m "feat: add runBotTurn orchestrator with gather/guard/decide/apply/
 Create `backend/tests/jobs.botTurns.test.ts`:
 
 ```ts
-import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { eq } from 'drizzle-orm'
-import { closeDb } from '../src/shared/db/client.ts'
-import { withWorkspace } from '../src/shared/db/withWorkspace.ts'
-import { conversation, event, message } from '../src/shared/db/schema/index.ts'
-import { enqueueBotTurn, registerBotTurnWorker } from '../src/shared/jobs/botTurns.ts'
-import type { BotDecider, BotTurnDecision } from '../src/domain/bot/botTurn.ts'
-import { closeOwnerPool, seedConversation, seedPlayer, seedWorkspace, truncateAll } from './helpers/db.ts'
+import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { eq } from 'drizzle-orm';
+import { closeDb } from '../src/shared/db/client.ts';
+import { withWorkspace } from '../src/shared/db/withWorkspace.ts';
+import { conversation, event, message } from '../src/shared/db/schema/index.ts';
+import { enqueueBotTurn, registerBotTurnWorker } from '../src/shared/jobs/botTurns.ts';
+import type { BotDecider, BotTurnDecision } from '../src/domain/bot/botTurn.ts';
+import {
+  closeOwnerPool,
+  seedConversation,
+  seedPlayer,
+  seedWorkspace,
+  truncateAll,
+} from './helpers/db.ts';
 
 afterAll(async () => {
-  await closeDb()
-  await closeOwnerPool()
-})
+  await closeDb();
+  await closeOwnerPool();
+});
 
-beforeEach(truncateAll)
+beforeEach(truncateAll);
 
-let activeWorker: { close: () => Promise<void> } | null = null
+let activeWorker: { close: () => Promise<void> } | null = null;
 
 afterEach(async () => {
   if (activeWorker) {
-    await activeWorker.close()
-    activeWorker = null
+    await activeWorker.close();
+    activeWorker = null;
   }
-})
+});
 
 async function waitFor(predicate: () => Promise<boolean>, timeoutMs = 5000): Promise<void> {
-  const start = Date.now()
+  const start = Date.now();
   while (Date.now() - start < timeoutMs) {
-    if (await predicate()) return
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    if (await predicate()) return;
+    await new Promise((resolve) => setTimeout(resolve, 50));
   }
-  throw new Error('waitFor timed out')
+  throw new Error('waitFor timed out');
 }
 
 describe('bot-turns queue and worker', () => {
   it('runs a job against the workspace and conversation it was enqueued for', async () => {
-    const workspaceId = await seedWorkspace({ slug: 'demo-game' })
-    const playerId = await seedPlayer(workspaceId, 'UserId1')
-    const conversationId = await seedConversation({ workspaceId, playerId })
+    const workspaceId = await seedWorkspace({ slug: 'demo-game' });
+    const playerId = await seedPlayer(workspaceId, 'UserId1');
+    const conversationId = await seedConversation({ workspaceId, playerId });
 
-    let seenWorkspaceId = ''
-    let seenConversationId = ''
+    let seenWorkspaceId = '';
+    let seenConversationId = '';
     const decider: BotDecider = async (input) => {
-      seenWorkspaceId = input.workspaceId
-      seenConversationId = input.conversationId
-      return { kind: 'unavailable', reason: 'error' }
-    }
-    activeWorker = registerBotTurnWorker(decider)
+      seenWorkspaceId = input.workspaceId;
+      seenConversationId = input.conversationId;
+      return { kind: 'unavailable', reason: 'error' };
+    };
+    activeWorker = registerBotTurnWorker(decider);
 
-    await enqueueBotTurn({ workspaceId, conversationId, seq: 1 })
+    await enqueueBotTurn({ workspaceId, conversationId, seq: 1 });
 
-    await waitFor(async () => seenConversationId === conversationId)
-    expect(seenWorkspaceId).toBe(workspaceId)
-  })
+    await waitFor(async () => seenConversationId === conversationId);
+    expect(seenWorkspaceId).toBe(workspaceId);
+  });
 
   it('retries a throwing decider to the attempt limit, then applies the error fallback exactly once', async () => {
-    const workspaceId = await seedWorkspace({ slug: 'demo-game' })
-    const playerId = await seedPlayer(workspaceId, 'UserId1')
-    const conversationId = await seedConversation({ workspaceId, playerId })
+    const workspaceId = await seedWorkspace({ slug: 'demo-game' });
+    const playerId = await seedPlayer(workspaceId, 'UserId1');
+    const conversationId = await seedConversation({ workspaceId, playerId });
 
-    let attempts = 0
+    let attempts = 0;
     const decider: BotDecider = async () => {
-      attempts += 1
-      throw new Error('decider blew up')
-    }
-    activeWorker = registerBotTurnWorker(decider)
+      attempts += 1;
+      throw new Error('decider blew up');
+    };
+    activeWorker = registerBotTurnWorker(decider);
 
-    await enqueueBotTurn({ workspaceId, conversationId, seq: 1 })
+    await enqueueBotTurn({ workspaceId, conversationId, seq: 1 });
 
     await waitFor(async () => {
-      const events = await withWorkspace(workspaceId, (tx) => tx.select().from(event).where(eq(event.type, 'bot_unavailable')))
-      return events.length === 1
-    }, 10_000)
+      const events = await withWorkspace(workspaceId, (tx) =>
+        tx.select().from(event).where(eq(event.type, 'bot_unavailable')),
+      );
+      return events.length === 1;
+    }, 10_000);
 
-    expect(attempts).toBe(2)
-    const events = await withWorkspace(workspaceId, (tx) => tx.select().from(event).where(eq(event.type, 'bot_unavailable')))
-    expect(events).toHaveLength(1)
-    expect(events[0]!.payload).toMatchObject({ reason: 'error' })
+    expect(attempts).toBe(2);
+    const events = await withWorkspace(workspaceId, (tx) =>
+      tx.select().from(event).where(eq(event.type, 'bot_unavailable')),
+    );
+    expect(events).toHaveLength(1);
+    expect(events[0]!.payload).toMatchObject({ reason: 'error' });
 
     const rows = await withWorkspace(workspaceId, (tx) =>
       tx.select().from(conversation).where(eq(conversation.id, conversationId)),
-    )
-    expect(rows[0]!.status).toBe('open')
-  })
+    );
+    expect(rows[0]!.status).toBe('open');
+  });
 
   it('the default worker uses stubDecider, producing bot_unavailable(not_implemented) with no internal note', async () => {
-    const workspaceId = await seedWorkspace({ slug: 'demo-game' })
-    const playerId = await seedPlayer(workspaceId, 'UserId1')
-    const conversationId = await seedConversation({ workspaceId, playerId })
+    const workspaceId = await seedWorkspace({ slug: 'demo-game' });
+    const playerId = await seedPlayer(workspaceId, 'UserId1');
+    const conversationId = await seedConversation({ workspaceId, playerId });
 
-    activeWorker = registerBotTurnWorker()
-    await enqueueBotTurn({ workspaceId, conversationId, seq: 1 })
+    activeWorker = registerBotTurnWorker();
+    await enqueueBotTurn({ workspaceId, conversationId, seq: 1 });
 
     await waitFor(async () => {
-      const events = await withWorkspace(workspaceId, (tx) => tx.select().from(event).where(eq(event.type, 'bot_unavailable')))
-      return events.length === 1
-    })
+      const events = await withWorkspace(workspaceId, (tx) =>
+        tx.select().from(event).where(eq(event.type, 'bot_unavailable')),
+      );
+      return events.length === 1;
+    });
 
-    const events = await withWorkspace(workspaceId, (tx) => tx.select().from(event).where(eq(event.type, 'bot_unavailable')))
-    expect(events[0]!.payload).toMatchObject({ reason: 'not_implemented' })
+    const events = await withWorkspace(workspaceId, (tx) =>
+      tx.select().from(event).where(eq(event.type, 'bot_unavailable')),
+    );
+    expect(events[0]!.payload).toMatchObject({ reason: 'not_implemented' });
 
-    const rows = await withWorkspace(workspaceId, (tx) => tx.select().from(message).where(eq(message.conversationId, conversationId)))
-    expect(rows.filter((r) => r.visibility === 'internal')).toHaveLength(0)
-    expect(rows.filter((r) => r.visibility === 'public')).toHaveLength(1)
-  })
+    const rows = await withWorkspace(workspaceId, (tx) =>
+      tx.select().from(message).where(eq(message.conversationId, conversationId)),
+    );
+    expect(rows.filter((r) => r.visibility === 'internal')).toHaveLength(0);
+    expect(rows.filter((r) => r.visibility === 'public')).toHaveLength(1);
+  });
 
   it('deduplicates two enqueues of the same conversationId:seq into one job', async () => {
-    const workspaceId = await seedWorkspace({ slug: 'demo-game' })
-    const playerId = await seedPlayer(workspaceId, 'UserId1')
-    const conversationId = await seedConversation({ workspaceId, playerId })
+    const workspaceId = await seedWorkspace({ slug: 'demo-game' });
+    const playerId = await seedPlayer(workspaceId, 'UserId1');
+    const conversationId = await seedConversation({ workspaceId, playerId });
 
-    let runCount = 0
+    let runCount = 0;
     const decider: BotDecider = async (): Promise<BotTurnDecision> => {
-      runCount += 1
-      return { kind: 'unavailable', reason: 'error' }
-    }
-    activeWorker = registerBotTurnWorker(decider)
+      runCount += 1;
+      return { kind: 'unavailable', reason: 'error' };
+    };
+    activeWorker = registerBotTurnWorker(decider);
 
-    await enqueueBotTurn({ workspaceId, conversationId, seq: 7 })
-    await enqueueBotTurn({ workspaceId, conversationId, seq: 7 })
+    await enqueueBotTurn({ workspaceId, conversationId, seq: 7 });
+    await enqueueBotTurn({ workspaceId, conversationId, seq: 7 });
 
-    await waitFor(async () => runCount >= 1)
-    await new Promise((resolve) => setTimeout(resolve, 300))
-    expect(runCount).toBe(1)
-  })
-})
+    await waitFor(async () => runCount >= 1);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(runCount).toBe(1);
+  });
+});
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -447,30 +516,30 @@ Expected: FAIL with "Cannot find module '../src/shared/jobs/botTurns.ts'".
 - [ ] **Step 3: Implement `botTurns.ts`**
 
 ```ts
-import { Queue, Worker } from 'bullmq'
-import IORedis from 'ioredis'
-import { getEnv } from '../../env.ts'
-import { logger } from '../logging/logger.ts'
-import { applyDecisionAndEmit, runBotTurn } from '../../domain/bot/orchestrator.ts'
-import { stubDecider, type BotDecider } from '../../domain/bot/botTurn.ts'
+import { Queue, Worker } from 'bullmq';
+import IORedis from 'ioredis';
+import { getEnv } from '../../env.ts';
+import { logger } from '../logging/logger.ts';
+import { applyDecisionAndEmit, runBotTurn } from '../../domain/bot/orchestrator.ts';
+import { stubDecider, type BotDecider } from '../../domain/bot/botTurn.ts';
 
-const QUEUE_NAME = 'bot-turns'
+const QUEUE_NAME = 'bot-turns';
 
-type BotTurnJobData = { workspaceId: string; conversationId: string; seq: number }
+type BotTurnJobData = { workspaceId: string; conversationId: string; seq: number };
 
 function connection(): IORedis {
-  return new IORedis(getEnv().REDIS_URL, { maxRetriesPerRequest: null })
+  return new IORedis(getEnv().REDIS_URL, { maxRetriesPerRequest: null });
 }
 
-let queueConnection: IORedis | undefined
-let queue: Queue<BotTurnJobData> | undefined
+let queueConnection: IORedis | undefined;
+let queue: Queue<BotTurnJobData> | undefined;
 
 function getQueue(): Queue<BotTurnJobData> {
   if (!queue) {
-    queueConnection = connection()
-    queue = new Queue<BotTurnJobData>(QUEUE_NAME, { connection: queueConnection })
+    queueConnection = connection();
+    queue = new Queue<BotTurnJobData>(QUEUE_NAME, { connection: queueConnection });
   }
-  return queue
+  return queue;
 }
 
 /**
@@ -487,10 +556,10 @@ export async function enqueueBotTurn(input: BotTurnJobData): Promise<void> {
       backoff: { type: 'exponential', delay: 1000 },
       removeOnComplete: 100,
       removeOnFail: 100,
-    })
+    });
   } catch (error) {
-    const err = error as Error
-    logger.error('jobs', `enqueueBotTurn failed: ${err.name} ${err.message}`)
+    const err = error as Error;
+    logger.error('jobs', `enqueueBotTurn failed: ${err.name} ${err.message}`);
   }
 }
 
@@ -498,42 +567,48 @@ export async function enqueueBotTurn(input: BotTurnJobData): Promise<void> {
  * `decider` defaults to `stubDecider` for production use; tests inject their own
  * to exercise retry and fallback behaviour without a real model.
  */
-export function registerBotTurnWorker(decider: BotDecider = stubDecider): { close: () => Promise<void> } {
-  const workerConnection = connection()
+export function registerBotTurnWorker(decider: BotDecider = stubDecider): {
+  close: () => Promise<void>;
+} {
+  const workerConnection = connection();
 
   const worker = new Worker<BotTurnJobData>(
     QUEUE_NAME,
     async (job) => {
-      await runBotTurn(job.data.workspaceId, job.data.conversationId, decider)
+      await runBotTurn(job.data.workspaceId, job.data.conversationId, decider);
     },
     { connection: workerConnection, concurrency: 5 },
-  )
+  );
 
   worker.on('failed', (job, error) => {
-    logger.error('jobs', `bot-turn failed: ${error.name} ${error.message}`)
-    if (!job) return
-    const attempts = job.opts.attempts ?? 1
-    if (job.attemptsMade < attempts) return
+    logger.error('jobs', `bot-turn failed: ${error.name} ${error.message}`);
+    if (!job) return;
+    const attempts = job.opts.attempts ?? 1;
+    if (job.attemptsMade < attempts) return;
     // Last attempt exhausted: the fallback must not itself depend on the thing
     // that just failed, so this calls applyDecisionAndEmit directly rather than
     // going through the decider again.
-    void applyDecisionAndEmit(job.data.workspaceId, job.data.conversationId, { kind: 'unavailable', reason: 'error' }).catch(
-      (fallbackError: Error) => {
-        logger.error('jobs', `bot-turn error fallback failed: ${fallbackError.name} ${fallbackError.message}`)
-      },
-    )
-  })
+    void applyDecisionAndEmit(job.data.workspaceId, job.data.conversationId, {
+      kind: 'unavailable',
+      reason: 'error',
+    }).catch((fallbackError: Error) => {
+      logger.error(
+        'jobs',
+        `bot-turn error fallback failed: ${fallbackError.name} ${fallbackError.message}`,
+      );
+    });
+  });
 
   return {
     close: async () => {
-      await worker.close()
-      await getQueue().close()
-      workerConnection.disconnect()
-      queueConnection?.disconnect()
-      queue = undefined
-      queueConnection = undefined
+      await worker.close();
+      await getQueue().close();
+      workerConnection.disconnect();
+      queueConnection?.disconnect();
+      queue = undefined;
+      queueConnection = undefined;
     },
-  }
+  };
 }
 ```
 
@@ -542,56 +617,56 @@ export function registerBotTurnWorker(decider: BotDecider = stubDecider): { clos
 Modify `backend/src/shared/jobs/queue.ts`:
 
 ```ts
-import { Queue, Worker } from 'bullmq'
-import IORedis from 'ioredis'
-import { getEnv } from '../../env.ts'
-import { logger } from '../logging/logger.ts'
-import { closeStaleSessions } from './sessionTimeout.ts'
-import { registerBotTurnWorker } from './botTurns.ts'
+import { Queue, Worker } from 'bullmq';
+import IORedis from 'ioredis';
+import { getEnv } from '../../env.ts';
+import { logger } from '../logging/logger.ts';
+import { closeStaleSessions } from './sessionTimeout.ts';
+import { registerBotTurnWorker } from './botTurns.ts';
 
-const QUEUE_NAME = 'support-jobs'
-const SESSION_TIMEOUT_JOB = 'session-timeout'
+const QUEUE_NAME = 'support-jobs';
+const SESSION_TIMEOUT_JOB = 'session-timeout';
 
 function connection(): IORedis {
-  return new IORedis(getEnv().REDIS_URL, { maxRetriesPerRequest: null })
+  return new IORedis(getEnv().REDIS_URL, { maxRetriesPerRequest: null });
 }
 
 export async function registerJobs(): Promise<{ close: () => Promise<void> }> {
-  const queueConnection = connection()
-  const workerConnection = connection()
+  const queueConnection = connection();
+  const workerConnection = connection();
 
-  const queue = new Queue(QUEUE_NAME, { connection: queueConnection })
+  const queue = new Queue(QUEUE_NAME, { connection: queueConnection });
   await queue.upsertJobScheduler(
     SESSION_TIMEOUT_JOB,
     { pattern: '*/5 * * * *' },
     { name: SESSION_TIMEOUT_JOB, opts: { removeOnComplete: 50, removeOnFail: 100 } },
-  )
+  );
 
   const worker = new Worker(
     QUEUE_NAME,
     async (job) => {
-      if (job.name !== SESSION_TIMEOUT_JOB) return
-      const closed = await closeStaleSessions()
-      if (closed > 0) logger.info('jobs', `closed ${closed} stale session(s)`)
+      if (job.name !== SESSION_TIMEOUT_JOB) return;
+      const closed = await closeStaleSessions();
+      if (closed > 0) logger.info('jobs', `closed ${closed} stale session(s)`);
     },
     { connection: workerConnection, concurrency: 1 },
-  )
+  );
 
   worker.on('failed', (job, error) => {
-    logger.error('jobs', `${job?.name ?? 'unknown'} failed: ${error.name} ${error.message}`)
-  })
+    logger.error('jobs', `${job?.name ?? 'unknown'} failed: ${error.name} ${error.message}`);
+  });
 
-  const botTurns = registerBotTurnWorker()
+  const botTurns = registerBotTurnWorker();
 
   return {
     close: async () => {
-      await worker.close()
-      await queue.close()
-      queueConnection.disconnect()
-      workerConnection.disconnect()
-      await botTurns.close()
+      await worker.close();
+      await queue.close();
+      queueConnection.disconnect();
+      workerConnection.disconnect();
+      await botTurns.close();
     },
-  }
+  };
 }
 ```
 
@@ -619,10 +694,12 @@ git commit -m "feat: add bot-turns BullMQ queue and worker with retry fallback"
 ### Task 3: Enqueue from `sendPlayerMessage`
 
 **Files:**
+
 - Modify: `backend/src/surface/services/messagesService.ts`
 - Test: `backend/tests/surface.messages.test.ts`
 
 **Interfaces:**
+
 - Consumes: `enqueueBotTurn` from `../../shared/jobs/botTurns.ts` (Task 2). Consumes `shouldEnqueue: boolean` and `seq: number`, both assumed already present on the object `withWorkspace`'s callback returns in the post-Part-1 version of this file (see Global Constraints' Interface Contract). If Part 1 lands with different field names, adjust the destructuring in Step 3 to match — the enqueue call itself does not change.
 
 - [ ] **Step 1: Write the failing tests**
@@ -630,61 +707,74 @@ git commit -m "feat: add bot-turns BullMQ queue and worker with retry fallback"
 Add to `backend/tests/surface.messages.test.ts` (alongside the existing suite — do not replace it; these are additive assertions on top of Part 1's not-provisioned tests):
 
 ```ts
-import { enqueueBotTurn } from '../src/shared/jobs/botTurns.ts'
+import { enqueueBotTurn } from '../src/shared/jobs/botTurns.ts';
 
-vi.mock('../src/shared/jobs/botTurns.ts', () => ({ enqueueBotTurn: vi.fn().mockResolvedValue(undefined) }))
+vi.mock('../src/shared/jobs/botTurns.ts', () => ({
+  enqueueBotTurn: vi.fn().mockResolvedValue(undefined),
+}));
 
 // ... inside the existing describe block, alongside the not-provisioned tests already
 // written for Part 1:
 
 it('enqueues exactly one bot-turn job with id conversationId:seq when the bot is provisioned', async () => {
-  const workspaceId = await seedWorkspace({ slug: 'demo-game' })
-  await seedBotConfig({ workspaceId, isProvisioned: true })
-  const token = await issuePlayerToken(workspaceId, 'UserId1')
+  const workspaceId = await seedWorkspace({ slug: 'demo-game' });
+  await seedBotConfig({ workspaceId, isProvisioned: true });
+  const token = await issuePlayerToken(workspaceId, 'UserId1');
 
   const response = await request(app)
     .post('/surface/messages')
     .set('Authorization', `Bearer ${token}`)
-    .send({ body: 'hello' })
-  expect(response.status).toBe(200)
+    .send({ body: 'hello' });
+  expect(response.status).toBe(200);
 
-  expect(enqueueBotTurn).toHaveBeenCalledTimes(1)
-  const call = vi.mocked(enqueueBotTurn).mock.calls[0]![0]
-  expect(call.workspaceId).toBe(workspaceId)
-  expect(call.conversationId).toBe(response.body.conversation_id)
-  expect(typeof call.seq).toBe('number')
-})
+  expect(enqueueBotTurn).toHaveBeenCalledTimes(1);
+  const call = vi.mocked(enqueueBotTurn).mock.calls[0]![0];
+  expect(call.workspaceId).toBe(workspaceId);
+  expect(call.conversationId).toBe(response.body.conversation_id);
+  expect(typeof call.seq).toBe('number');
+});
 
 it('does not enqueue on the reopen branch', async () => {
   // ...seed a resolved conversation for a returning player, as the existing
   // reopen test above this one already does, then send a message and assert
   // enqueueBotTurn was not called.
-  const workspaceId = await seedWorkspace({ slug: 'demo-game' })
-  await seedBotConfig({ workspaceId, isProvisioned: true })
-  const playerId = await seedPlayer(workspaceId, 'UserId1')
-  const conversationId = await seedConversation({ workspaceId, playerId })
-  await withWorkspace(workspaceId, (tx) => tx.update(conversation).set({ status: 'resolved' }).where(eq(conversation.id, conversationId)))
-  const token = await issuePlayerToken(workspaceId, 'UserId1')
+  const workspaceId = await seedWorkspace({ slug: 'demo-game' });
+  await seedBotConfig({ workspaceId, isProvisioned: true });
+  const playerId = await seedPlayer(workspaceId, 'UserId1');
+  const conversationId = await seedConversation({ workspaceId, playerId });
+  await withWorkspace(workspaceId, (tx) =>
+    tx.update(conversation).set({ status: 'resolved' }).where(eq(conversation.id, conversationId)),
+  );
+  const token = await issuePlayerToken(workspaceId, 'UserId1');
 
-  await request(app).post('/surface/messages').set('Authorization', `Bearer ${token}`).send({ body: 'hello again' })
+  await request(app)
+    .post('/surface/messages')
+    .set('Authorization', `Bearer ${token}`)
+    .send({ body: 'hello again' });
 
-  expect(enqueueBotTurn).not.toHaveBeenCalled()
-})
+  expect(enqueueBotTurn).not.toHaveBeenCalled();
+});
 
 it('does not enqueue on the awaiting_player -> open branch', async () => {
-  const workspaceId = await seedWorkspace({ slug: 'demo-game' })
-  await seedBotConfig({ workspaceId, isProvisioned: true })
-  const playerId = await seedPlayer(workspaceId, 'UserId1')
-  const conversationId = await seedConversation({ workspaceId, playerId })
+  const workspaceId = await seedWorkspace({ slug: 'demo-game' });
+  await seedBotConfig({ workspaceId, isProvisioned: true });
+  const playerId = await seedPlayer(workspaceId, 'UserId1');
+  const conversationId = await seedConversation({ workspaceId, playerId });
   await withWorkspace(workspaceId, (tx) =>
-    tx.update(conversation).set({ status: 'awaiting_player' }).where(eq(conversation.id, conversationId)),
-  )
-  const token = await issuePlayerToken(workspaceId, 'UserId1')
+    tx
+      .update(conversation)
+      .set({ status: 'awaiting_player' })
+      .where(eq(conversation.id, conversationId)),
+  );
+  const token = await issuePlayerToken(workspaceId, 'UserId1');
 
-  await request(app).post('/surface/messages').set('Authorization', `Bearer ${token}`).send({ body: 'answer' })
+  await request(app)
+    .post('/surface/messages')
+    .set('Authorization', `Bearer ${token}`)
+    .send({ body: 'answer' });
 
-  expect(enqueueBotTurn).not.toHaveBeenCalled()
-})
+  expect(enqueueBotTurn).not.toHaveBeenCalled();
+});
 ```
 
 Adjust the exact request-building helpers (`issuePlayerToken`, `app`, import paths for `eq`/`withWorkspace`/`conversation`/`seedConversation`/`seedPlayer`/`seedBotConfig`) to match whatever this file already imports for its existing tests — these three tests are meant to sit inside the existing `describe`/`beforeEach` structure, not stand alone.
@@ -699,21 +789,25 @@ Expected: FAIL — `enqueueBotTurn` is never called because `messagesService.ts`
 Modify `backend/src/surface/services/messagesService.ts` — add the import and the one post-commit line (everything else in the function is Part 1's, unchanged):
 
 ```ts
-import { enqueueBotTurn } from '../../shared/jobs/botTurns.ts'
+import { enqueueBotTurn } from '../../shared/jobs/botTurns.ts';
 ```
 
 ```ts
-  const playerView = toPlayerView(result.posted)
-  const agentView = toAgentView(result.posted)
-  emitMessageToRooms(getIo(), result.conversationId, playerView, agentView)
-  if (result.inboxStatus) {
-    emitInboxChanged(getIo(), ctx.workspaceId, result.conversationId, result.inboxStatus)
-  }
-  if (result.shouldEnqueue) {
-    await enqueueBotTurn({ workspaceId: ctx.workspaceId, conversationId: result.conversationId, seq: result.posted.seq })
-  }
+const playerView = toPlayerView(result.posted);
+const agentView = toAgentView(result.posted);
+emitMessageToRooms(getIo(), result.conversationId, playerView, agentView);
+if (result.inboxStatus) {
+  emitInboxChanged(getIo(), ctx.workspaceId, result.conversationId, result.inboxStatus);
+}
+if (result.shouldEnqueue) {
+  await enqueueBotTurn({
+    workspaceId: ctx.workspaceId,
+    conversationId: result.conversationId,
+    seq: result.posted.seq,
+  });
+}
 
-  return { conversation_id: result.conversationId, message: playerView }
+return { conversation_id: result.conversationId, message: playerView };
 ```
 
 If Part 1's actual return shape from the `withWorkspace` callback names the flag or the seq field differently, destructure accordingly — the call to `enqueueBotTurn` itself is exactly this shape regardless.
@@ -740,6 +834,7 @@ git commit -m "feat: enqueue a bot turn after sendPlayerMessage commits"
 ## Self-Review
 
 **Spec coverage:**
+
 - §10 dedicated queue, `concurrency: 5`, separate from `support-jobs`, registered/closed from the same entry point → Task 2.
 - §10 retries: 2 attempts, exponential backoff, `failed` fires every attempt but only acts on the last → Task 2.
 - §10 job id `${conversationId}:${seq}`, dedup → Task 2 (test 4).

@@ -5,7 +5,7 @@
  * The agent path posts it; the bot phrases its own ask inside the reply that
  * accompanies answer_from_article, and shares only the banner.
  */
-export const RESOLUTION_CHECK_MESSAGE = 'Did this solve it?'
+export const RESOLUTION_CHECK_MESSAGE = 'Did this solve it?';
 
 /**
  * The answer a Yes on the agent's ask posts on the player's behalf. Paired with
@@ -17,7 +17,7 @@ export const RESOLUTION_CHECK_MESSAGE = 'Did this solve it?'
  * `resolve`, which the model's own confirm_resolution tool also reaches — the
  * two must keep writing exactly the same rows.
  */
-export const RESOLUTION_CONFIRM_MESSAGE = 'Yes, my issue is resolved.'
+export const RESOLUTION_CONFIRM_MESSAGE = 'Yes, my issue is resolved.';
 
 /**
  * The answer a No on the agent's ask posts on the player's behalf. Tapping No
@@ -26,4 +26,4 @@ export const RESOLUTION_CONFIRM_MESSAGE = 'Yes, my issue is resolved.'
  * never answered. A fixed constant for the same reason the question is one —
  * the transcript records an answer to a known question, not free text.
  */
-export const RESOLUTION_DECLINE_MESSAGE = "No, I'm still having issues."
+export const RESOLUTION_DECLINE_MESSAGE = "No, I'm still having issues.";

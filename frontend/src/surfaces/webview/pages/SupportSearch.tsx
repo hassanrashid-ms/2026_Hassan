@@ -1,25 +1,23 @@
-import { useEffect, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { Search } from 'lucide-react'
-import { TopBar } from '@/surfaces/webview/components/TopBar'
-import { ArticleCard } from '@/surfaces/webview/components/ArticleCard'
-import { DebugDialog } from '@/surfaces/webview/components/DebugDialog'
-import { ArticleListSkeleton, EmptyState } from '@/surfaces/webview/components/StateScreens'
-import { useSupport } from '@/surfaces/webview/components/SupportContext'
-import { useReadArticles } from '@/surfaces/webview/hooks/useReadArticles'
-import { fetchArticles } from '@/surfaces/webview/api/surfaceApi'
+import { useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { Search } from 'lucide-react';
+import { TopBar } from '@/surfaces/webview/components/TopBar';
+import { ArticleCard } from '@/surfaces/webview/components/ArticleCard';
+import { ArticleListSkeleton, EmptyState } from '@/surfaces/webview/components/StateScreens';
+import { useSupport } from '@/surfaces/webview/components/SupportContext';
+import { useReadArticles } from '@/surfaces/webview/hooks/useReadArticles';
+import { fetchArticles } from '@/surfaces/webview/api/surfaceApi';
 
 /**
  * 800ms to match the previous surface behavior.
  */
-const DEBOUNCE_MS = 800
+const DEBOUNCE_MS = 800;
 
 export function SupportSearch() {
-  const navigate = useNavigate()
-  const { boot } = useSupport()
-  const isRead = useReadArticles()
-  const [debugOpen, setDebugOpen] = useState(false)
+  const navigate = useNavigate();
+  const { boot } = useSupport();
+  const isRead = useReadArticles();
 
   /*
    * The query lives in the URL, not in component state. Opening an article is a
@@ -28,24 +26,24 @@ export function SupportSearch() {
    * closing the article sheet — restores the results the player was looking at,
    * and TanStack serves them from cache without a refetch.
    */
-  const [params, setParams] = useSearchParams()
-  const query = params.get('q') ?? ''
-  const [debounced, setDebounced] = useState(query)
+  const [params, setParams] = useSearchParams();
+  const query = params.get('q') ?? '';
+  const [debounced, setDebounced] = useState(query);
 
   useEffect(() => {
-    const timer = setTimeout(() => setDebounced(query), DEBOUNCE_MS)
-    return () => clearTimeout(timer)
-  }, [query])
+    const timer = setTimeout(() => setDebounced(query), DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [query]);
 
-  const trimmed = debounced.trim()
+  const trimmed = debounced.trim();
 
   const results = useQuery({
     queryKey: ['surfaceArticles', boot?.token, trimmed, null],
     queryFn: () => fetchArticles(boot!.token, trimmed, undefined),
     enabled: boot !== null && trimmed.length > 0,
-  })
+  });
 
-  const articles = results.data?.articles
+  const articles = results.data?.articles;
 
   return (
     <>
@@ -53,7 +51,6 @@ export function SupportSearch() {
         variant="search"
         value={query}
         onValueChange={(value) => setParams(value ? { q: value } : {}, { replace: true })}
-        onOpenDebug={() => setDebugOpen(true)}
       />
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-2 pb-8">
@@ -70,7 +67,10 @@ export function SupportSearch() {
         ) : articles === undefined || articles.length === 0 ? (
           // No local-filter fallback. If the server found nothing, there is
           // nothing — a client-side match here would invent relevance.
-          <EmptyState title={`No results for “${trimmed}”`} body="Try a different word, or send us a message." />
+          <EmptyState
+            title={`No results for “${trimmed}”`}
+            body="Try a different word, or send us a message."
+          />
         ) : (
           <div className="flex flex-col gap-3">
             {/* API order is Weaviate's BM25 ranking. Never re-sorted here. */}
@@ -85,8 +85,6 @@ export function SupportSearch() {
           </div>
         )}
       </div>
-
-      <DebugDialog open={debugOpen} onOpenChange={setDebugOpen} />
     </>
-  )
+  );
 }

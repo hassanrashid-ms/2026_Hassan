@@ -1,37 +1,66 @@
-import { and, eq } from 'drizzle-orm'
-import IORedis from 'ioredis'
-import { createAdapter } from '@socket.io/redis-adapter'
-import { Server } from 'socket.io'
-import type { Server as HttpServer } from 'node:http'
-import { getEnv } from '../../env.ts'
-import { InvalidAgentSession, verifyAgentSession } from '../auth/agentSession.ts'
-import { InvalidPlayerToken, verifyPlayerToken } from '../auth/playerToken.ts'
-import { conversation } from '../db/schema/index.ts'
-import { withWorkspace } from '../db/withWorkspace.ts'
-import { agentRoom, inboxRoom, playerRoom } from './rooms.ts'
+import { and, eq } from 'drizzle-orm';
+import IORedis from 'ioredis';
+import { createAdapter } from '@socket.io/redis-adapter';
+import { Server } from 'socket.io';
+import type { Server as HttpServer } from 'node:http';
+import { getEnv } from '../../env.ts';
+import { InvalidAgentSession, verifyAgentSession } from '../auth/agentSession.ts';
+import { InvalidPlayerToken, verifyPlayerToken } from '../auth/playerToken.ts';
+import { conversation } from '../db/schema/index.ts';
+import { withWorkspace } from '../db/withWorkspace.ts';
+import { listActiveMembershipsForAgent, listAllWorkspaces } from '../db/workspaceMembership.ts';
+import { agentRoom, inboxRoom, playerRoom } from './rooms.ts';
+import { decrementPresence, flushStalePresence, incrementPresence } from './presence.ts';
+import { logger } from '../logging/logger.ts';
 
-export type PlayerSocketData = { role: 'player'; workspaceId: string; playerId: string }
-export type AgentSocketData = { role: 'agent'; workspaceId: string; agentId: string }
-export type SocketData = PlayerSocketData | AgentSocketData
+export type PlayerSocketData = { role: 'player'; workspaceId: string; playerId: string };
+export type AgentSocketData = { role: 'agent'; workspaceIds: string[]; agentId: string };
+export type SocketData = PlayerSocketData | AgentSocketData;
 
-let ioInstance: Server | undefined
-let redisClients: IORedis[] = []
+let ioInstance: Server | undefined;
+let redisClients: IORedis[] = [];
+// Set true at the start of closeSocketServer, before its adapter's Redis
+// clients are quit. Presence bookkeeping runs as fire-and-forget work off a
+// socket connect/disconnect and can still be in flight when the server closes
+// (this happens routinely in tests that close the server right after a
+// socket event); checking this flag before emitting on the now-closing
+// adapter avoids publishing over an already-quit Redis connection, which
+// ioredis surfaces as an unhandled rejection rather than a catchable error.
+let closing = false;
 
 function redisConnection(): IORedis {
-  const client = new IORedis(getEnv().REDIS_URL, { maxRetriesPerRequest: null })
-  redisClients.push(client)
-  return client
+  const client = new IORedis(getEnv().REDIS_URL, { maxRetriesPerRequest: null });
+  redisClients.push(client);
+  return client;
 }
 
 async function canJoinConversation(data: SocketData, conversationId: string): Promise<boolean> {
-  return withWorkspace(data.workspaceId, async (tx) => {
-    const where =
-      data.role === 'player'
-        ? and(eq(conversation.id, conversationId), eq(conversation.playerId, data.playerId))
-        : eq(conversation.id, conversationId)
-    const [found] = await tx.select({ id: conversation.id }).from(conversation).where(where).limit(1)
-    return found !== undefined
-  })
+  if (data.role === 'player') {
+    return withWorkspace(data.workspaceId, async (tx) => {
+      const [found] = await tx
+        .select({ id: conversation.id })
+        .from(conversation)
+        .where(and(eq(conversation.id, conversationId), eq(conversation.playerId, data.playerId)))
+        .limit(1);
+      return found !== undefined;
+    });
+  }
+  // An agent may belong to dozens of workspaces (same bound the design doc's
+  // p-limit rationale for Global Inbox relies on) — checked sequentially,
+  // short-circuiting on the first match, since which workspace this
+  // conversation actually lives in isn't known ahead of time.
+  for (const workspaceId of data.workspaceIds) {
+    const found = await withWorkspace(workspaceId, async (tx) => {
+      const [row] = await tx
+        .select({ id: conversation.id })
+        .from(conversation)
+        .where(eq(conversation.id, conversationId))
+        .limit(1);
+      return row !== undefined;
+    });
+    if (found) return true;
+  }
+  return false;
 }
 
 /**
@@ -39,70 +68,165 @@ async function canJoinConversation(data: SocketData, conversationId: string): Pr
  * JWT or agent-session token already used for REST, verified once here.
  */
 export function createSocketServer(httpServer: HttpServer): Server {
-  const pubClient = redisConnection()
-  const subClient = pubClient.duplicate()
+  closing = false;
+  const pubClient = redisConnection();
+  const subClient = pubClient.duplicate();
+
+  // Fire-and-forget, not awaited: this function's own contract is a
+  // synchronous Server return (every caller, tests included, relies on
+  // getIo() working immediately after this call), and a real client's
+  // WebSocket handshake takes long enough over the network that this always
+  // wins the race. See flushStalePresence's own doc for why this exists.
+  //
+  // Skipped under NODE_ENV=test: this codebase's test suite calls
+  // createSocketServer() dozens of times per run (once or more per test
+  // file) against the same real Redis instance dev uses, deliberately
+  // seeding presence for its own agents moments later — an unawaited global
+  // flush racing that setup would be a self-inflicted flake, and recovering
+  // from a prior *process's* abrupt death is meaningless in a test run that
+  // starts and tears down its own presence data every time regardless.
+  if (getEnv().NODE_ENV !== 'test') {
+    void flushStalePresence().catch((error) => {
+      logger.error(
+        'presence',
+        `startup flush failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    });
+  }
 
   const io = new Server(httpServer, {
     cors: { origin: getEnv().SURFACE_ORIGINS, methods: ['GET', 'POST'] },
     adapter: createAdapter(pubClient, subClient),
-  })
+  });
 
   io.use(async (socket, next) => {
-    const auth = socket.handshake.auth as { token?: unknown; role?: unknown }
+    const auth = socket.handshake.auth as {
+      token?: unknown;
+      role?: unknown;
+      workspaceId?: unknown;
+    };
     if (typeof auth.token !== 'string' || (auth.role !== 'player' && auth.role !== 'agent')) {
-      next(new Error('unauthorized'))
-      return
+      next(new Error('unauthorized'));
+      return;
     }
     try {
       if (auth.role === 'player') {
-        const claims = await verifyPlayerToken(auth.token)
-        socket.data = { role: 'player', workspaceId: claims.workspace_id, playerId: claims.player_id } satisfies PlayerSocketData
+        const claims = await verifyPlayerToken(auth.token);
+        socket.data = {
+          role: 'player',
+          workspaceId: claims.workspace_id,
+          playerId: claims.player_id,
+        } satisfies PlayerSocketData;
       } else {
-        const claims = await verifyAgentSession(auth.token)
-        socket.data = { role: 'agent', workspaceId: claims.workspace_id, agentId: claims.agent_id } satisfies AgentSocketData
+        const claims = await verifyAgentSession(auth.token);
+        const workspaceIds = claims.is_admin
+          ? (await listAllWorkspaces()).map((w) => w.workspaceId)
+          : (await listActiveMembershipsForAgent(claims.agent_id)).map((m) => m.workspaceId);
+        socket.data = {
+          role: 'agent',
+          workspaceIds,
+          agentId: claims.agent_id,
+        } satisfies AgentSocketData;
       }
-      next()
+      next();
     } catch (error) {
       if (error instanceof InvalidPlayerToken || error instanceof InvalidAgentSession) {
-        next(new Error('unauthorized'))
-        return
+        next(new Error('unauthorized'));
+        return;
       }
-      next(error instanceof Error ? error : new Error('unauthorized'))
+      next(error instanceof Error ? error : new Error('unauthorized'));
     }
-  })
+  });
 
   io.on('connection', (socket) => {
-    const data = socket.data as SocketData
+    const data = socket.data as SocketData;
     if (data.role === 'agent') {
-      socket.join(inboxRoom(data.workspaceId))
+      for (const workspaceId of data.workspaceIds) {
+        socket.join(inboxRoom(workspaceId));
+      }
+      // Reconnecting always lands back on online, never restores a prior
+      // away — a fresh session defaults to present.
+      void incrementPresence(data.agentId)
+        .then(({ wasFirstConnection }) => {
+          if (wasFirstConnection && !closing) {
+            for (const workspaceId of data.workspaceIds) {
+              io.to(inboxRoom(workspaceId)).emit('presence_changed', {
+                agentId: data.agentId,
+                status: 'online',
+              });
+            }
+          }
+        })
+        // Fire-and-forget: a socket connect must never crash on a Redis blip,
+        // and by the time this settles the process may already be mid-teardown
+        // (e.g. test suites closing the socket/Redis connections right after a
+        // socket disconnects) — surfacing that as an unhandled rejection is
+        // strictly worse than logging and moving on.
+        .catch((error) => {
+          logger.error(
+            'presence',
+            `incrementPresence failed for agent ${data.agentId}: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
+        });
+
+      socket.on('disconnect', () => {
+        void decrementPresence(data.agentId)
+          .then(({ wasLastConnection }) => {
+            if (wasLastConnection && !closing) {
+              for (const workspaceId of data.workspaceIds) {
+                io.to(inboxRoom(workspaceId)).emit('presence_changed', {
+                  agentId: data.agentId,
+                  status: 'offline',
+                });
+              }
+            }
+          })
+          .catch((error) => {
+            logger.error(
+              'presence',
+              `decrementPresence failed for agent ${data.agentId}: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+            );
+          });
+      });
     }
 
-    socket.on('join_conversation', (payload: { conversation_id?: unknown }, ack?: (ok: boolean) => void) => {
-      const conversationId = payload.conversation_id
-      if (typeof conversationId !== 'string') {
-        ack?.(false)
-        return
-      }
-      void canJoinConversation(data, conversationId).then((allowed) => {
-        if (allowed) socket.join(data.role === 'player' ? playerRoom(conversationId) : agentRoom(conversationId))
-        ack?.(allowed)
-      })
-    })
+    socket.on(
+      'join_conversation',
+      (payload: { conversation_id?: unknown }, ack?: (ok: boolean) => void) => {
+        const conversationId = payload.conversation_id;
+        if (typeof conversationId !== 'string') {
+          ack?.(false);
+          return;
+        }
+        void canJoinConversation(data, conversationId).then((allowed) => {
+          if (allowed)
+            socket.join(
+              data.role === 'player' ? playerRoom(conversationId) : agentRoom(conversationId),
+            );
+          ack?.(allowed);
+        });
+      },
+    );
 
     socket.on('leave_conversation', (payload: { conversation_id?: unknown }) => {
-      const conversationId = payload.conversation_id
-      if (typeof conversationId !== 'string') return
-      socket.leave(data.role === 'player' ? playerRoom(conversationId) : agentRoom(conversationId))
-    })
-  })
+      const conversationId = payload.conversation_id;
+      if (typeof conversationId !== 'string') return;
+      socket.leave(data.role === 'player' ? playerRoom(conversationId) : agentRoom(conversationId));
+    });
+  });
 
-  ioInstance = io
-  return io
+  ioInstance = io;
+  return io;
 }
 
 export function getIo(): Server {
-  if (!ioInstance) throw new Error('Socket server not initialised — call createSocketServer first.')
-  return ioInstance
+  if (!ioInstance)
+    throw new Error('Socket server not initialised — call createSocketServer first.');
+  return ioInstance;
 }
 
 /**
@@ -114,10 +238,11 @@ export function getIo(): Server {
  * rest of the run and destabilises unrelated later tests.
  */
 export async function closeSocketServer(): Promise<void> {
+  closing = true;
   if (ioInstance) {
-    await new Promise<void>((resolve) => ioInstance!.close(() => resolve()))
-    ioInstance = undefined
+    await new Promise<void>((resolve) => ioInstance!.close(() => resolve()));
+    ioInstance = undefined;
   }
-  await Promise.all(redisClients.map((client) => client.quit().catch(() => client.disconnect())))
-  redisClients = []
+  await Promise.all(redisClients.map((client) => client.quit().catch(() => client.disconnect())));
+  redisClients = [];
 }

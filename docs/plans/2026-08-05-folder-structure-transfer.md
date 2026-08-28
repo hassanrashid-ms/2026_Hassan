@@ -47,6 +47,7 @@ these — this is a directory/file reorganization only).
 ### Task 1: Backend shared/ move + agent/ scaffold
 
 **Files:**
+
 - Move: `backend/src/db/` → `backend/src/shared/db/` (all contents: `client.ts`, `schema/`,
   `seed.ts`, `setup.ts`, `sql/`, `withWorkspace.ts`)
 - Split-move: `backend/src/auth/` → two destinations:
@@ -106,7 +107,7 @@ ends up holding only `playerToken.ts`, `playerTokenRoute.ts`, `workspaceSecret.t
 
 Every file that moved from `backend/src/X/` to `backend/src/shared/X/` is now one directory
 deeper. Any import that previously read `../env.ts`, `../errors.ts`, or `'@support/types'` is
-unaffected in *specifier* but now needs one more `../`:
+unaffected in _specifier_ but now needs one more `../`:
 
 - `shared/db/client.ts`: `from '../env.ts'` → `from '../../env.ts'`
 - `shared/db/setup.ts`: `from '../env.ts'` → `from '../../env.ts'`
@@ -141,11 +142,13 @@ touch agent/models/.gitkeep agent/controllers/.gitkeep agent/services/.gitkeep a
 Change only this line:
 
 ```ts
-import { playerTokenRouter } from './auth/playerTokenRoute.ts'
+import { playerTokenRouter } from './auth/playerTokenRoute.ts';
 ```
+
 to:
+
 ```ts
-import { playerTokenRouter } from './shared/auth/playerTokenRoute.ts'
+import { playerTokenRouter } from './shared/auth/playerTokenRoute.ts';
 ```
 
 Leave the `sdkRouter` and `surfaceRouter` imports untouched — Task 2 keeps those import paths
@@ -162,30 +165,35 @@ only exercised through HTTP requests against `app.ts` — so no test import need
 `shared/middleware/`). Example (`auth.playerToken.test.ts`):
 
 ```ts
-import { closeDb } from '../src/db/client.ts'
-import { withWorkspace } from '../src/db/withWorkspace.ts'
-import { player } from '../src/db/schema/index.ts'
-import { generateWorkspaceSecret } from '../src/auth/workspaceSecret.ts'
-import { verifyPlayerToken } from '../src/auth/playerToken.ts'
+import { closeDb } from '../src/db/client.ts';
+import { withWorkspace } from '../src/db/withWorkspace.ts';
+import { player } from '../src/db/schema/index.ts';
+import { generateWorkspaceSecret } from '../src/auth/workspaceSecret.ts';
+import { verifyPlayerToken } from '../src/auth/playerToken.ts';
 ```
+
 becomes:
+
 ```ts
-import { closeDb } from '../src/shared/db/client.ts'
-import { withWorkspace } from '../src/shared/db/withWorkspace.ts'
-import { player } from '../src/shared/db/schema/index.ts'
-import { generateWorkspaceSecret } from '../src/shared/auth/workspaceSecret.ts'
-import { verifyPlayerToken } from '../src/shared/auth/playerToken.ts'
+import { closeDb } from '../src/shared/db/client.ts';
+import { withWorkspace } from '../src/shared/db/withWorkspace.ts';
+import { player } from '../src/shared/db/schema/index.ts';
+import { generateWorkspaceSecret } from '../src/shared/auth/workspaceSecret.ts';
+import { verifyPlayerToken } from '../src/shared/auth/playerToken.ts';
 ```
 
 And `helpers/app.ts` (one level deeper, `../../src/...`):
+
 ```ts
-import { createApp } from '../../src/app.ts'
-import { signPlayerToken, type PlayerClaims } from '../../src/auth/playerToken.ts'
+import { createApp } from '../../src/app.ts';
+import { signPlayerToken, type PlayerClaims } from '../../src/auth/playerToken.ts';
 ```
+
 becomes:
+
 ```ts
-import { createApp } from '../../src/app.ts'
-import { signPlayerToken, type PlayerClaims } from '../../src/shared/auth/playerToken.ts'
+import { createApp } from '../../src/app.ts';
+import { signPlayerToken, type PlayerClaims } from '../../src/shared/auth/playerToken.ts';
 ```
 
 Apply the same `../src/db` → `../src/shared/db`, `../src/auth` → `../src/shared/auth`,
@@ -205,6 +213,7 @@ git commit -m "refactor: move shared backend modules under shared/, scaffold age
 ### Task 2: Backend per-vertical split (sdk/, surface/)
 
 **Files:**
+
 - Create under `backend/src/sdk/`: `models/sessionModels.ts`, `controllers/sessionsController.ts`,
   `services/sessionsService.ts`, `routers/sessionsRouter.ts`, and the equivalent
   controller/service/router split for `incidents.ts` and `unread.ts` (their own model file only if
@@ -229,6 +238,7 @@ git commit -m "refactor: move shared backend modules under shared/, scaffold age
   type) rather than waiting for Task 1 to land.
 
 **Rules (from the spec, apply uniformly to every route in `sdk/` and `surface/`):**
+
 - **Router**: only `Router()` + `.use(middleware)` + `.get/.post(path, controllerFn)`. No logic,
   no imports beyond controllers and middleware.
 - **Controller**: Zod validation of `req.body`/`req.query`, calls exactly one service function,
@@ -247,24 +257,26 @@ Current `backend/src/sdk/sessionsStart.ts` combines Zod parsing, a `withWorkspac
 `res.json`. Split into:
 
 `backend/src/sdk/models/sessionModels.ts`:
-```ts
-import type { SessionStartBody as SessionStartBodyType } from '@support/types'
 
-export type StartSessionInput = SessionStartBodyType
+```ts
+import type { SessionStartBody as SessionStartBodyType } from '@support/types';
+
+export type StartSessionInput = SessionStartBodyType;
 ```
 
 `backend/src/sdk/services/sessionsService.ts`:
+
 ```ts
-import { and, eq, isNull } from 'drizzle-orm'
-import { coerceInstant } from '@support/types'
-import { appendEvent } from '../../shared/events/appendEvent.ts'
-import { playerStateSnapshot, session } from '../../shared/db/schema/index.ts'
-import { withWorkspace } from '../../shared/db/withWorkspace.ts'
-import { loadDeclaredKeys } from '../../shared/playerState/declaredKeys.ts'
-import { splitSnapshot } from '../../shared/playerState/split.ts'
-import { headerPayload } from '../headers.ts'
-import type { PlayerContext } from '../../shared/middleware/requirePlayerToken.ts'
-import type { StartSessionInput } from '../models/sessionModels.ts'
+import { and, eq, isNull } from 'drizzle-orm';
+import { coerceInstant } from '@support/types';
+import { appendEvent } from '../../shared/events/appendEvent.ts';
+import { playerStateSnapshot, session } from '../../shared/db/schema/index.ts';
+import { withWorkspace } from '../../shared/db/withWorkspace.ts';
+import { loadDeclaredKeys } from '../../shared/playerState/declaredKeys.ts';
+import { splitSnapshot } from '../../shared/playerState/split.ts';
+import { headerPayload } from '../headers.ts';
+import type { PlayerContext } from '../../shared/middleware/requirePlayerToken.ts';
+import type { StartSessionInput } from '../models/sessionModels.ts';
 
 // startSession/endSession bodies are copied verbatim from the current sessionsStart.ts /
 // sessionsEnd.ts withWorkspace callbacks — same statements, same order, same comments explaining
@@ -272,59 +284,61 @@ import type { StartSessionInput } from '../models/sessionModels.ts'
 // snapshot insert). Read the current file and move the callback body in unchanged; only the
 // import paths and the wrapping function signature are new.
 export async function startSession(player: PlayerContext, body: StartSessionInput) {
-  const now = new Date()
-  const startedAt = coerceInstant(body.started_at, now)
+  const now = new Date();
+  const startedAt = coerceInstant(body.started_at, now);
   await withWorkspace(player.workspaceId, async (tx) => {
     // ... exact body of the withWorkspace callback from current sessionsStart.ts, unchanged ...
-  })
+  });
 }
 
 export async function endSession(player: PlayerContext, body: /* SessionEndBody */ any) {
-  const now = new Date()
+  const now = new Date();
   await withWorkspace(player.workspaceId, async (tx) => {
     // ... exact body of the withWorkspace callback from current sessionsEnd.ts, unchanged ...
-  })
+  });
 }
 ```
 
 `backend/src/sdk/controllers/sessionsController.ts`:
+
 ```ts
-import type { RequestHandler } from 'express'
-import { SessionStartBody, SessionEndBody } from '@support/types'
-import { sendError } from '../../errors.ts'
-import { startSession, endSession } from '../services/sessionsService.ts'
+import type { RequestHandler } from 'express';
+import { SessionStartBody, SessionEndBody } from '@support/types';
+import { sendError } from '../../errors.ts';
+import { startSession, endSession } from '../services/sessionsService.ts';
 
 export const sessionsStart: RequestHandler = async (req, res) => {
-  const player = req.player!
-  const parsed = SessionStartBody.safeParse(req.body)
+  const player = req.player!;
+  const parsed = SessionStartBody.safeParse(req.body);
   if (!parsed.success) {
-    sendError(res, 422, 'invalid_request', 'session_id must be a uuid.')
-    return
+    sendError(res, 422, 'invalid_request', 'session_id must be a uuid.');
+    return;
   }
-  await startSession(player, parsed.data)
-  res.status(200).json({ ok: true })
-}
+  await startSession(player, parsed.data);
+  res.status(200).json({ ok: true });
+};
 
 export const sessionsEnd: RequestHandler = async (req, res) => {
-  const player = req.player!
-  const parsed = SessionEndBody.safeParse(req.body)
+  const player = req.player!;
+  const parsed = SessionEndBody.safeParse(req.body);
   if (!parsed.success) {
-    sendError(res, 422, 'invalid_request', 'session_id must be a uuid.')
-    return
+    sendError(res, 422, 'invalid_request', 'session_id must be a uuid.');
+    return;
   }
-  await endSession(player, parsed.data)
-  res.status(200).json({ ok: true })
-}
+  await endSession(player, parsed.data);
+  res.status(200).json({ ok: true });
+};
 ```
 
 `backend/src/sdk/routers/sessionsRouter.ts`:
-```ts
-import { Router } from 'express'
-import { sessionsStart, sessionsEnd } from '../controllers/sessionsController.ts'
 
-export const sessionsRouter = Router()
-sessionsRouter.post('/sessions/start', sessionsStart)
-sessionsRouter.post('/sessions/end', sessionsEnd)
+```ts
+import { Router } from 'express';
+import { sessionsStart, sessionsEnd } from '../controllers/sessionsController.ts';
+
+export const sessionsRouter = Router();
+sessionsRouter.post('/sessions/start', sessionsStart);
+sessionsRouter.post('/sessions/end', sessionsEnd);
 ```
 
 Preserve every `console.log`/`console.warn` call and its exact message and payload shape — they
@@ -333,8 +347,9 @@ them into whichever new file now contains that line of logic (parse-failure logs
 controller, transaction-step logs go in the service).
 
 Apply the identical pattern to:
+
 - `sdk/incidents.ts` → `sdk/services/incidentsService.ts` + `sdk/controllers/incidentsController.ts`
-  + `sdk/routers/incidentsRouter.ts`
+  - `sdk/routers/incidentsRouter.ts`
 - `sdk/unread.ts` → `sdk/services/unreadService.ts` + `sdk/controllers/unreadController.ts` +
   `sdk/routers/unreadRouter.ts`
 - `surface/articleRead.ts` → `surface/services/articleReadService.ts` +
@@ -353,48 +368,48 @@ cat backend/src/sdk/sessionsStart.ts backend/src/sdk/sessionsEnd.ts backend/src/
 ```
 
 - [ ] **Step 2: Create `sdk/models/`, `sdk/controllers/`, `sdk/services/`, `sdk/routers/` and split
-  sessions, incidents, unread per the pattern above**
+      sessions, incidents, unread per the pattern above**
 
 - [ ] **Step 3: Create `surface/controllers/`, `surface/services/`, `surface/routers/` and split
-  articleRead, bootstrap per the same pattern**
+      articleRead, bootstrap per the same pattern**
 
 - [ ] **Step 4: Rewrite `backend/src/sdk/router.ts` to aggregate from `routers/`**
 
 ```ts
-import { Router } from 'express'
-import { requirePlayerToken } from '../shared/middleware/requirePlayerToken.ts'
-import { requireSdkHeaders } from '../shared/middleware/requireSdkHeaders.ts'
-import { getEnv } from '../env.ts'
-import { sessionsRouter } from './routers/sessionsRouter.ts'
-import { incidentsRouter } from './routers/incidentsRouter.ts'
-import { unreadRouter } from './routers/unreadRouter.ts'
+import { Router } from 'express';
+import { requirePlayerToken } from '../shared/middleware/requirePlayerToken.ts';
+import { requireSdkHeaders } from '../shared/middleware/requireSdkHeaders.ts';
+import { getEnv } from '../env.ts';
+import { sessionsRouter } from './routers/sessionsRouter.ts';
+import { incidentsRouter } from './routers/incidentsRouter.ts';
+import { unreadRouter } from './routers/unreadRouter.ts';
 
-export const sdkRouter = Router()
-sdkRouter.use(requirePlayerToken, requireSdkHeaders)
+export const sdkRouter = Router();
+sdkRouter.use(requirePlayerToken, requireSdkHeaders);
 
 if (getEnv().NODE_ENV === 'test') {
   sdkRouter.get('/_whoami', (req, res) => {
-    res.json(req.player)
-  })
+    res.json(req.player);
+  });
 }
 
-sdkRouter.use(sessionsRouter)
-sdkRouter.use(incidentsRouter)
-sdkRouter.use(unreadRouter)
+sdkRouter.use(sessionsRouter);
+sdkRouter.use(incidentsRouter);
+sdkRouter.use(unreadRouter);
 ```
 
 - [ ] **Step 5: Rewrite `backend/src/surface/router.ts` to aggregate from `routers/`**
 
 ```ts
-import { Router } from 'express'
-import { requirePlayerToken } from '../shared/middleware/requirePlayerToken.ts'
-import { articleReadRouter } from './routers/articleReadRouter.ts'
-import { bootstrapRouter } from './routers/bootstrapRouter.ts'
+import { Router } from 'express';
+import { requirePlayerToken } from '../shared/middleware/requirePlayerToken.ts';
+import { articleReadRouter } from './routers/articleReadRouter.ts';
+import { bootstrapRouter } from './routers/bootstrapRouter.ts';
 
-export const surfaceRouter = Router()
-surfaceRouter.use(requirePlayerToken)
-surfaceRouter.use(bootstrapRouter)
-surfaceRouter.use(articleReadRouter)
+export const surfaceRouter = Router();
+surfaceRouter.use(requirePlayerToken);
+surfaceRouter.use(bootstrapRouter);
+surfaceRouter.use(articleReadRouter);
 ```
 
 - [ ] **Step 6: Delete the now-split original route files**
@@ -416,6 +431,7 @@ git commit -m "refactor: split sdk/ and surface/ routes into controller/service/
 ### Task 3: Frontend restructure
 
 **Files:**
+
 - Create: `frontend/src/pages/SupportSurface.tsx` (moved from `frontend/src/SupportSurface.tsx`,
   no code change beyond import paths)
 - Create: `frontend/src/api/surfaceApi.ts` (moved from `frontend/src/api.ts`, unchanged beyond its
@@ -439,29 +455,32 @@ touch components/.gitkeep lib/.gitkeep
 - [ ] **Step 2: Update `frontend/src/main.tsx`**
 
 ```ts
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import { SupportSurface } from './pages/SupportSurface.tsx'
-import './styles.css'
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import { SupportSurface } from './pages/SupportSurface.tsx';
+import './styles.css';
 ```
 
 - [ ] **Step 3: Update `frontend/src/pages/SupportSurface.tsx`**
 
 Change its three local imports (now one directory deeper) from:
+
 ```ts
-import { fetchBootstrap, reportArticleRead } from './api.ts'
-import { readBoot, scrubToken, type SurfaceBoot } from './boot.ts'
-import { post } from './bridge.ts'
+import { fetchBootstrap, reportArticleRead } from './api.ts';
+import { readBoot, scrubToken, type SurfaceBoot } from './boot.ts';
+import { post } from './bridge.ts';
 ```
+
 to:
+
 ```ts
-import { fetchBootstrap, reportArticleRead } from '../api/surfaceApi.ts'
-import { readBoot, scrubToken, type SurfaceBoot } from '../boot.ts'
-import { post } from '../services/bridgeService.ts'
+import { fetchBootstrap, reportArticleRead } from '../api/surfaceApi.ts';
+import { readBoot, scrubToken, type SurfaceBoot } from '../boot.ts';
+import { post } from '../services/bridgeService.ts';
 ```
 
 - [ ] **Step 4: Verify `api/surfaceApi.ts` and `services/bridgeService.ts` need no internal
-  import changes**
+      import changes**
 
 Both only import external packages (`@support/types`) or nothing — read each file to confirm
 before moving on; if either imports something else from `frontend/src/`, fix that path the same
@@ -485,15 +504,17 @@ git commit -m "refactor: move frontend into pages/api/services layout"
 ```bash
 pnpm typecheck
 ```
+
 Expected: no errors. Since there are no path aliases, any missed import from Tasks 1–3 surfaces
 here immediately.
 
 - [ ] **Step 2: Run the test suite** (needs Postgres up — `docker compose up -d` if not already
-  running)
+      running)
 
 ```bash
 pnpm test
 ```
+
 Expected: all suites pass, including the 7 backend test files edited in Task 1.
 
 - [ ] **Step 3: Verify the SDK seam end-to-end**
@@ -501,11 +522,12 @@ Expected: all suites pass, including the 7 backend test files edited in Task 1.
 ```bash
 SEED_SECRET=<your seed secret> ./scripts/verify-seam.sh
 ```
+
 Expected: pass — this is the one thing the spec says must not regress.
 
 - [ ] **Step 4: If anything fails, fix it in a follow-up commit scoped to the task that caused it**
-  (Task 1 for `shared/`-adjacent breakage, Task 2 for `sdk/`/`surface/`-adjacent breakage, Task 3
-  for frontend). Do not bundle unrelated fixes together.
+      (Task 1 for `shared/`-adjacent breakage, Task 2 for `sdk/`/`surface/`-adjacent breakage, Task 3
+      for frontend). Do not bundle unrelated fixes together.
 
 ---
 

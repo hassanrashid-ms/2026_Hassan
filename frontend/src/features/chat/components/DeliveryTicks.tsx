@@ -1,5 +1,5 @@
-import { Check } from 'lucide-react'
-import type { ChatDeliveryState } from '@support/types'
+import { Check } from 'lucide-react';
+import type { ChatDeliveryState } from '@support/types';
 
 /**
  * One grey tick: the server has the message. Two blue ticks: the other side read it.
@@ -16,13 +16,14 @@ export function DeliveryTicks({
   deliveryState,
   readClassName = 'text-sky-500',
 }: {
-  deliveryState?: ChatDeliveryState
-  readClassName?: string
+  deliveryState?: ChatDeliveryState;
+  readClassName?: string;
 }) {
-  if (deliveryState !== 'sent' && deliveryState !== 'delivered' && deliveryState !== 'read') return null
+  if (deliveryState !== 'sent' && deliveryState !== 'delivered' && deliveryState !== 'read')
+    return null;
 
   // 'delivered' is never written by any code path (see the spec's Out of scope).
-  const read = deliveryState === 'read'
+  const read = deliveryState === 'read';
 
   return (
     <span className={read ? readClassName : 'opacity-70'}>
@@ -33,5 +34,5 @@ export function DeliveryTicks({
       {/* Colour is never the only carrier of the signal. */}
       <span className="sr-only">{read ? 'Seen' : 'Sent'}</span>
     </span>
-  )
+  );
 }

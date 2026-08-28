@@ -1,7 +1,7 @@
-import { and, desc, eq, ne, sql } from 'drizzle-orm'
-import { conversation, message } from '../../shared/db/schema/index.ts'
-import { withWorkspace } from '../../shared/db/withWorkspace.ts'
-import type { PlayerContext } from '../../shared/middleware/requirePlayerToken.ts'
+import { and, desc, eq, ne, sql } from 'drizzle-orm';
+import { conversation, message } from '../../shared/db/schema/index.ts';
+import { withWorkspace } from '../../shared/db/withWorkspace.ts';
+import type { PlayerContext } from '../../shared/middleware/requirePlayerToken.ts';
 
 /**
  * Derived, never stored. Polled coarsely by the SDK — on foreground/resume only,
@@ -23,8 +23,8 @@ export async function getUnreadCount(player: PlayerContext): Promise<number> {
       .from(conversation)
       .where(eq(conversation.playerId, player.playerId))
       .orderBy(desc(conversation.createdAt))
-      .limit(1)
-    if (!current) return 0
+      .limit(1);
+    if (!current) return 0;
 
     const [row] = await tx
       .select({ count: sql<number>`count(*)::int` })
@@ -36,7 +36,7 @@ export async function getUnreadCount(player: PlayerContext): Promise<number> {
           ne(message.authorType, 'player'),
           ne(message.deliveryState, 'read'),
         ),
-      )
-    return row?.count ?? 0
-  })
+      );
+    return row?.count ?? 0;
+  });
 }

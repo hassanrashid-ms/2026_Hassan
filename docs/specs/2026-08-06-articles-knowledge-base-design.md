@@ -104,27 +104,27 @@ an article means transitioning `state` to `archived`, never deleting the row.
 
 ### Agent (console), behind `requireAgentSession`
 
-| Method | Path | Notes |
-|---|---|---|
-| GET | `/agent/intents` | List intents with nested subintents, for the category picker |
-| POST | `/agent/intents` | Create an intent inline. Admin-only, enforced server-side |
-| POST | `/agent/intents/:id/subintents` | Create a subintent under an intent. Admin-only |
-| GET | `/agent/articles` | List articles (all states) for this workspace |
-| GET | `/agent/articles/:id` | Fetch one article for editing |
-| POST | `/agent/articles` | Create a draft |
-| PATCH | `/agent/articles/:id` | Edit title/body/keywords/intent while in `draft` |
-| POST | `/agent/articles/:id/publish` | `draft` → `published`, stamps `published_by`/`published_at` |
-| POST | `/agent/articles/:id/archive` | Any state → `archived`. No delete route exists |
+| Method | Path                            | Notes                                                        |
+| ------ | ------------------------------- | ------------------------------------------------------------ |
+| GET    | `/agent/intents`                | List intents with nested subintents, for the category picker |
+| POST   | `/agent/intents`                | Create an intent inline. Admin-only, enforced server-side    |
+| POST   | `/agent/intents/:id/subintents` | Create a subintent under an intent. Admin-only               |
+| GET    | `/agent/articles`               | List articles (all states) for this workspace                |
+| GET    | `/agent/articles/:id`           | Fetch one article for editing                                |
+| POST   | `/agent/articles`               | Create a draft                                               |
+| PATCH  | `/agent/articles/:id`           | Edit title/body/keywords/intent while in `draft`             |
+| POST   | `/agent/articles/:id/publish`   | `draft` → `published`, stamps `published_by`/`published_at`  |
+| POST   | `/agent/articles/:id/archive`   | Any state → `archived`. No delete route exists               |
 
 Permission check ("Admin-only" above) happens in the controller, not just hidden in the console UI
 — per the existing non-negotiable that permission checks run at the API.
 
 ### Public surface, unauthenticated
 
-| Method | Path | Notes |
-|---|---|---|
-| GET | `/surface/articles` | `?intentId=` filter, `?q=` keyword search (`ILIKE` over title + body). `state = 'published'` only |
-| GET | `/surface/articles/:id` | Single published article. 404 if draft/archived or wrong workspace |
+| Method | Path                    | Notes                                                                                             |
+| ------ | ----------------------- | ------------------------------------------------------------------------------------------------- |
+| GET    | `/surface/articles`     | `?intentId=` filter, `?q=` keyword search (`ILIKE` over title + body). `state = 'published'` only |
+| GET    | `/surface/articles/:id` | Single published article. 404 if draft/archived or wrong workspace                                |
 
 RLS supplies the workspace predicate on every query above; the public routes still run inside a
 transaction with `app.workspace_id` set, resolved from the surface's existing workspace-routing

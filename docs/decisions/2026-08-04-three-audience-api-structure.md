@@ -29,11 +29,11 @@ explicit and impossible to mix up — not merely conventional.
 **Audience is a top-level routing boundary with its own token type, its own middleware and its own
 mount point.** Three of them:
 
-| Mount | Caller | Credential | Frozen? |
-|---|---|---|---|
-| `/sdk/*` | Unity SDK inside a shipped game | player JWT + `X-Support-*` header cross-check | **Yes — additive only, forever** |
-| `/surface/*` | the player web surface in a webview | player JWT only | No — ships with the web app |
-| `/console/*` | the agent and admin console | agent session (Google OAuth) + per-workspace role | No — ships with the console |
+| Mount        | Caller                              | Credential                                        | Frozen?                          |
+| ------------ | ----------------------------------- | ------------------------------------------------- | -------------------------------- |
+| `/sdk/*`     | Unity SDK inside a shipped game     | player JWT + `X-Support-*` header cross-check     | **Yes — additive only, forever** |
+| `/surface/*` | the player web surface in a webview | player JWT only                                   | No — ships with the web app      |
+| `/console/*` | the agent and admin console         | agent session (Google OAuth) + per-workspace role | No — ships with the console      |
 
 Only `/sdk/*` is frozen, because only it is consumed by builds sitting in app stores that cannot be
 recalled. The other two deploy together with their clients and may change freely.
@@ -81,7 +81,7 @@ cannot receive an internal-note event.
 
 **3. Business rules live in `domain/`, never in a router.** A conversation can be resolved by an
 agent, by a player confirming the bot's answer, or by the inactivity worker. All three must go through
-one function that writes the `resolution_cycle` row *and* the `conversation_resolved` event in one
+one function that writes the `resolution_cycle` row _and_ the `conversation_resolved` event in one
 transaction. Three routers each doing it their own way is how the mutable row and the event stream
 drift apart, and reporting reads the events.
 

@@ -11,8 +11,8 @@ tickets in the panel that already exists.
 
 The product spec (`Docs/Customer Support Tool - CRM v2.txt`, pages 11–12 and 30–31)
 draws this as two tabs beside the conversation. It is a rail here instead: the
-spec's own argument for the feature is that an agent should *"diagnose most issues
-without leaving the conversation view"*, and a tab is leaving it. The judgement
+spec's own argument for the feature is that an agent should _"diagnose most issues
+without leaving the conversation view"_, and a tab is leaving it. The judgement
 being supported — "third time this month" versus "first contact ever" — is a
 comparison against the transcript, so both must be readable at once.
 
@@ -43,26 +43,26 @@ Toggled from a button in the `ThreadPanel` header.
 Two stacked sections, both visible, no tabs within the rail.
 
 **Player state** — declared fields first, ordered and labelled as the API returns
-them, then a collapsed *"Everything else the game sent"* holding `raw`.
+them, then a collapsed _"Everything else the game sent"_ holding `raw`.
 
-`raw` is shown to every agent, collapsed by default. It is PII (CLAUDE.md: *"Treat
-`state.raw` as PII by default"*), honoured here by labelling and retention rather
+`raw` is shown to every agent, collapsed by default. It is PII (CLAUDE.md: _"Treat
+`state.raw` as PII by default"_), honoured here by labelling and retention rather
 than access control. Expanding it writes no event. If `raw` is `{}` the section is
 omitted entirely rather than opening onto nothing.
 
 The four `player_state` cases each get their own copy. Nothing is synthesised from
 a later session:
 
-| `status` | Copy |
-|---|---|
-| `no_session` | "No session was attached to this ticket" |
-| `not_captured` | "No player state was captured" |
-| `missing` | "The game returned no player data" |
+| `status`                       | Copy                                                                    |
+| ------------------------------ | ----------------------------------------------------------------------- |
+| `no_session`                   | "No session was attached to this ticket"                                |
+| `not_captured`                 | "No player state was captured"                                          |
+| `missing`                      | "The game returned no player data"                                      |
 | `captured` + `degraded_reason` | Fields render normally, with a note above them that capture was partial |
 
 **Tickets** — this player's other tickets, newest first, each showing its number,
-date, subintent and outcome. A summary line above: *"5 earlier tickets · 2 reopened
-· first contact 12 Apr 2026"*.
+date, subintent and outcome. A summary line above: _"5 earlier tickets · 2 reopened
+· first contact 12 Apr 2026"_.
 
 Called "tickets" throughout the UI, not "conversations" or "issues".
 
@@ -127,12 +127,12 @@ Four behaviours change:
    `open`/`awaiting_player`, so it is dead in this state; hiding it removes a
    disabled control that explains nothing.
 3. **`markAgentMessagesRead` skipped.** The load-bearing one. That effect fires on
-   every load (`ThreadPanel.tsx:158`) and `message.read_at` is *"set once, by the
-   first mark-read that matches this row. Never rewritten."* Glancing at a June
+   every load (`ThreadPanel.tsx:158`) and `message.read_at` is _"set once, by the
+   first mark-read that matches this row. Never rewritten."_ Glancing at a June
    ticket for context would permanently stamp read receipts the player is shown.
    Reading history must not write history.
-4. **A banner** at the top of the panel: *"Viewing an earlier ticket · #1039 ·
-   resolved 2 Jun 2026"*. Without it an agent lands on June's transcript and
+4. **A banner** at the top of the panel: _"Viewing an earlier ticket · #1039 ·
+   resolved 2 Jun 2026"_. Without it an agent lands on June's transcript and
    reasonably concludes the live ticket changed under them. Same slot and
    treatment as the existing amber "Waiting on the player" strip, so it reads as a
    panel-wide state rather than decoration.
@@ -143,17 +143,17 @@ stale.
 
 ## Files
 
-| Path | Change |
-|---|---|
-| `pages/Inbox/components/ContextRail.tsx` | new; container, owns the context query |
-| `pages/Inbox/components/context/PlayerStatePanel.tsx` | new |
-| `pages/Inbox/components/context/TicketList.tsx` | new |
-| `pages/Inbox/components/context/ticketOutcome.ts` | new; pure |
-| `pages/Inbox/components/ThreadPanel.tsx` | `readOnly`, banner, rail toggle |
-| `pages/Inbox/Inbox.tsx` | detail query, rail mount, open/closed state |
-| `components/ui/sheet.tsx` | `showOverlay?: boolean`, default `true` |
-| `../../features/chat/components/Composer.tsx` | `placeholder?: string` |
-| `api/agentApi.ts` | `fetchConversation`, `fetchConversationContext` |
+| Path                                                  | Change                                          |
+| ----------------------------------------------------- | ----------------------------------------------- |
+| `pages/Inbox/components/ContextRail.tsx`              | new; container, owns the context query          |
+| `pages/Inbox/components/context/PlayerStatePanel.tsx` | new                                             |
+| `pages/Inbox/components/context/TicketList.tsx`       | new                                             |
+| `pages/Inbox/components/context/ticketOutcome.ts`     | new; pure                                       |
+| `pages/Inbox/components/ThreadPanel.tsx`              | `readOnly`, banner, rail toggle                 |
+| `pages/Inbox/Inbox.tsx`                               | detail query, rail mount, open/closed state     |
+| `components/ui/sheet.tsx`                             | `showOverlay?: boolean`, default `true`         |
+| `../../features/chat/components/Composer.tsx`         | `placeholder?: string`                          |
+| `api/agentApi.ts`                                     | `fetchConversation`, `fetchConversationContext` |
 
 `Composer` is shared with the webview surface. Both new props are optional and
 defaulted, so that surface is untouched.

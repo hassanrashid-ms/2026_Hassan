@@ -6,10 +6,10 @@ services:
       POSTGRES_USER: support_owner
       POSTGRES_PASSWORD: support_owner
       POSTGRES_DB: support
-    ports: ["5432:5432"]
-    volumes: ["support-pgdata:/var/lib/postgresql/data"]
+    ports: ['5432:5432']
+    volumes: ['support-pgdata:/var/lib/postgresql/data']
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U support_owner -d support"]
+      test: ['CMD-SHELL', 'pg_isready -U support_owner -d support']
       interval: 5s
       timeout: 3s
       retries: 20
@@ -17,11 +17,31 @@ services:
   redis:
     image: redis:7-alpine
     container_name: support-redis
-    ports: ["6379:6379"]
-    command: ["redis-server", "--appendonly", "yes"]
-    volumes: ["support-redisdata:/data"]
+    ports: ['6379:6379']
+    command: ['redis-server', '--appendonly', 'yes']
+    volumes: ['support-redisdata:/data']
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  minio:
+    image: minio/minio
+    container_name: support-minio
+    environment:
+      MINIO_ROOT_USER: support_minio
+      MINIO_ROOT_PASSWORD: support_minio_password
+      # Open-source MinIO doesn't implement the S3 PutBucketCors API at all
+      # (bucket-level CORS is an AIStor/paid-only feature — confirmed against
+      # minio/minio#20995) so browser-facing CORS has to be set cluster-wide
+      # here instead of per-bucket by setup-minio-bucket.ts.
+      MINIO_API_CORS_ALLOW_ORIGIN: ${SURFACE_ORIGINS:-http://localhost:5173}
+    ports: ['9000:9000', '9001:9001']
+    command: ['server', '/data', '--console-address', ':9001']
+    volumes: ['support-miniodata:/data']
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:9000/minio/health/live']
       interval: 5s
       timeout: 3s
       retries: 20
@@ -29,3 +49,4 @@ services:
 volumes:
   support-pgdata:
   support-redisdata:
+  support-miniodata:

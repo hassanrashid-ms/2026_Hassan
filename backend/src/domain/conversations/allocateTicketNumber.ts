@@ -1,6 +1,6 @@
-import { eq, sql } from 'drizzle-orm'
-import { workspace } from '../../shared/db/schema/index.ts'
-import type { Tx } from '../../shared/db/withWorkspace.ts'
+import { eq, sql } from 'drizzle-orm';
+import { workspace } from '../../shared/db/schema/index.ts';
+import type { Tx } from '../../shared/db/withWorkspace.ts';
 
 /**
  * The one place that bumps `workspace.ticket_seq`. Always in the caller's
@@ -22,10 +22,10 @@ export async function allocateTicketNumber(tx: Tx, workspaceId: string): Promise
     .update(workspace)
     .set({ ticketSeq: sql`${workspace.ticketSeq} + 1` })
     .where(eq(workspace.id, workspaceId))
-    .returning({ number: workspace.ticketSeq })
+    .returning({ number: workspace.ticketSeq });
 
   if (!bumped) {
-    throw new Error(`allocateTicketNumber: workspace ${workspaceId} not found`)
+    throw new Error(`allocateTicketNumber: workspace ${workspaceId} not found`);
   }
-  return bumped.number
+  return bumped.number;
 }

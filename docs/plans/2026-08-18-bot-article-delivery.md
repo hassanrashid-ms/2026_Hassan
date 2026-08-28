@@ -4,7 +4,7 @@
 
 **Goal:** A bot message that cited an article renders as markdown and carries a "Read more" button to that article, in both the webview and the agent console.
 
-**Architecture:** One nullable `message.article_id` column carries the citation from `applyBotTurn` through `postMessage`, both serializers and the wire contract to the client, where a shared `MessageBody` component renders `bot`/`agent` bodies through the existing `ArticleBody` markdown renderer and each surface appends its own "Read more" affordance — a nested route in the webview, a new-tab anchor in the console. `answer_from_article` is unchanged: it still carries the answer text; the article becomes reachable *alongside* it.
+**Architecture:** One nullable `message.article_id` column carries the citation from `applyBotTurn` through `postMessage`, both serializers and the wire contract to the client, where a shared `MessageBody` component renders `bot`/`agent` bodies through the existing `ArticleBody` markdown renderer and each surface appends its own "Read more" affordance — a nested route in the webview, a new-tab anchor in the console. `answer_from_article` is unchanged: it still carries the answer text; the article becomes reachable _alongside_ it.
 
 **Tech Stack:** Express 5 + Zod + Drizzle (Postgres 17, RLS), Vitest, React + TanStack Query + react-router-dom, Tailwind v4 utilities, react-markdown (via `ArticleBody`).
 
@@ -29,28 +29,28 @@
 
 **Backend**
 
-| File | Change |
-|---|---|
-| `backend/src/shared/db/schema/conversations.ts` | `message.articleId` column, FK to `article` |
-| `backend/drizzle/0006_*.sql` | generated migration (commit it) |
+| File                                              | Change                                                                   |
+| ------------------------------------------------- | ------------------------------------------------------------------------ |
+| `backend/src/shared/db/schema/conversations.ts`   | `message.articleId` column, FK to `article`                              |
+| `backend/drizzle/0006_*.sql`                      | generated migration (commit it)                                          |
 | `backend/src/domain/conversations/postMessage.ts` | `PostMessageInput.articleId`, `PostedMessageRow.articleId`, insert value |
-| `backend/src/domain/conversations/serializers.ts` | both views emit `article_id` |
-| `packages/types/src/chat.ts` | `PlayerMessageView.article_id` (`AgentMessageView` inherits) |
-| `backend/src/docs/openapi.ts` | documented message schema carrying `article_id` |
-| `backend/src/domain/bot/applyBotTurn.ts` | `answer` branch passes `articleId` |
+| `backend/src/domain/conversations/serializers.ts` | both views emit `article_id`                                             |
+| `packages/types/src/chat.ts`                      | `PlayerMessageView.article_id` (`AgentMessageView` inherits)             |
+| `backend/src/docs/openapi.ts`                     | documented message schema carrying `article_id`                          |
+| `backend/src/domain/bot/applyBotTurn.ts`          | `answer` branch passes `articleId`                                       |
 
 **Frontend**
 
-| File | Change |
-|---|---|
-| `frontend/src/features/chat/components/types.ts` | `ChatMessage.articleId` |
-| `frontend/src/features/chat/components/MessageBody.tsx` | **new** — author-type-aware body renderer, owns the lazy `ArticleBody` import |
-| `frontend/src/surfaces/webview/components/chat/ChatBubbles.tsx` | `MessageBody`, thread-level `Suspense`, code/pre background fix, "Read more" `Link` |
-| `frontend/src/surfaces/webview/pages/SupportChat.tsx` | mapper carries `article_id`; renders `ArticleSheet` from the route param |
-| `frontend/src/surfaces/webview/main.tsx` | nested route `chat/articles/:id` |
-| `frontend/src/surfaces/agent-console/pages/Inbox/components/ThreadPanel.tsx` | mapper carries `article_id`; `MessageBody`; new-tab "Read more" anchor |
-| `frontend/src/routes/AppRoutes.tsx` | `articles/:id` route |
-| `frontend/src/surfaces/agent-console/pages/KnowledgeBase/KnowledgeBase.tsx` | seed selection from the route param, navigate back on close |
+| File                                                                         | Change                                                                              |
+| ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `frontend/src/features/chat/components/types.ts`                             | `ChatMessage.articleId`                                                             |
+| `frontend/src/features/chat/components/MessageBody.tsx`                      | **new** — author-type-aware body renderer, owns the lazy `ArticleBody` import       |
+| `frontend/src/surfaces/webview/components/chat/ChatBubbles.tsx`              | `MessageBody`, thread-level `Suspense`, code/pre background fix, "Read more" `Link` |
+| `frontend/src/surfaces/webview/pages/SupportChat.tsx`                        | mapper carries `article_id`; renders `ArticleSheet` from the route param            |
+| `frontend/src/surfaces/webview/main.tsx`                                     | nested route `chat/articles/:id`                                                    |
+| `frontend/src/surfaces/agent-console/pages/Inbox/components/ThreadPanel.tsx` | mapper carries `article_id`; `MessageBody`; new-tab "Read more" anchor              |
+| `frontend/src/routes/AppRoutes.tsx`                                          | `articles/:id` route                                                                |
+| `frontend/src/surfaces/agent-console/pages/KnowledgeBase/KnowledgeBase.tsx`  | seed selection from the route param, navigate back on close                         |
 
 `MessageBody.tsx` is the decomposition decision that matters: the author-type → renderer table and the lazy-import comment live in exactly one place, so neither surface can drift into markdown-rendering a player body.
 
@@ -83,12 +83,14 @@ T3's own test asserts the column, so T3 must not be dispatched before T1's migra
 ### Task 1: `message.article_id` column and `postMessage` plumbing
 
 **Files:**
+
 - Modify: `backend/src/shared/db/schema/conversations.ts` (the `message` table, around line 94)
 - Create: `backend/drizzle/0006_<generated_name>.sql` (via `pnpm db:generate` — do not hand-write)
 - Modify: `backend/src/domain/conversations/postMessage.ts`
 - Test: `backend/tests/domain.postMessage.test.ts`
 
 **Interfaces:**
+
 - Consumes: nothing.
 - Produces:
   - `PostMessageInput.articleId?: string | null`
@@ -100,39 +102,45 @@ T3's own test asserts the column, so T3 must not be dispatched before T1's migra
 Append to `backend/tests/domain.postMessage.test.ts`, inside the existing `describe('postMessage', ...)` block. Add `ownerPool`, `seedAgent` and `seedArticle` to the existing import from `./helpers/db.ts`.
 
 ```ts
-  it('persists article_id when given one, and leaves it null when not', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
-    const agentId = await seedAgent()
-    const articleId = await seedArticle({ workspaceId, createdBy: agentId })
+it('persists article_id when given one, and leaves it null when not', async () => {
+  const workspaceId = await seedWorkspace();
+  const playerId = await seedPlayer(workspaceId);
+  const conversationId = await seedConversation({ workspaceId, playerId });
+  const agentId = await seedAgent();
+  const articleId = await seedArticle({ workspaceId, createdBy: agentId });
 
-    const cited = await withWorkspace(workspaceId, (tx) =>
-      postMessage(tx, {
-        workspaceId,
-        conversationId,
-        authorType: 'bot',
-        actorId: null,
-        body: 'Refunds take 48 hours.',
-        articleId,
-      }),
-    )
-    const uncited = await withWorkspace(workspaceId, (tx) =>
-      postMessage(tx, { workspaceId, conversationId, authorType: 'bot', actorId: null, body: 'Anything else?' }),
-    )
+  const cited = await withWorkspace(workspaceId, (tx) =>
+    postMessage(tx, {
+      workspaceId,
+      conversationId,
+      authorType: 'bot',
+      actorId: null,
+      body: 'Refunds take 48 hours.',
+      articleId,
+    }),
+  );
+  const uncited = await withWorkspace(workspaceId, (tx) =>
+    postMessage(tx, {
+      workspaceId,
+      conversationId,
+      authorType: 'bot',
+      actorId: null,
+      body: 'Anything else?',
+    }),
+  );
 
-    // The returned row, not just the database: PostedMessageRow is what both
-    // serializers read, so a column that persisted but did not come back through
-    // .returning() would still reach the client as null.
-    expect(cited.articleId).toBe(articleId)
-    expect(uncited.articleId).toBeNull()
+  // The returned row, not just the database: PostedMessageRow is what both
+  // serializers read, so a column that persisted but did not come back through
+  // .returning() would still reach the client as null.
+  expect(cited.articleId).toBe(articleId);
+  expect(uncited.articleId).toBeNull();
 
-    const { rows } = await ownerPool.query(
-      `select article_id from message where conversation_id = $1 order by seq`,
-      [conversationId],
-    )
-    expect(rows).toEqual([{ article_id: articleId }, { article_id: null }])
-  })
+  const { rows } = await ownerPool.query(
+    `select article_id from message where conversation_id = $1 order by seq`,
+    [conversationId],
+  );
+  expect(rows).toEqual([{ article_id: articleId }, { article_id: null }]);
+});
 ```
 
 - [ ] **Step 2: Run it and watch it fail**
@@ -145,7 +153,7 @@ Expected: FAIL — TypeScript rejects `articleId` on `PostMessageInput`, or the 
 In `backend/src/shared/db/schema/conversations.ts`, add the import:
 
 ```ts
-import { article } from './articles.ts'
+import { article } from './articles.ts';
 ```
 
 and the column immediately after `body: text('body').notNull(),` in the `message` table:
@@ -192,7 +200,7 @@ In `backend/src/domain/conversations/postMessage.ts`, add to `PostMessageInput` 
 Add to `PostedMessageRow` after `body: string`:
 
 ```ts
-  articleId: string | null
+articleId: string | null;
 ```
 
 And in the `.insert(message).values({...})` call, after `body: input.body,`:
@@ -223,6 +231,7 @@ git commit -m "feat(db): carry article_id on message"
 ### Task 2: Wire contract — serializers, `@support/types`, OpenAPI
 
 **Files:**
+
 - Modify: `packages/types/src/chat.ts:43-52`
 - Modify: `backend/src/domain/conversations/serializers.ts`
 - Modify: `backend/src/docs/openapi.ts` (schema definitions block near the top; the `/agent/conversations/{id}/messages` GET at ~line 597)
@@ -231,6 +240,7 @@ git commit -m "feat(db): carry article_id on message"
 **Depends on:** Task 1 (`PostedMessageRow.articleId`).
 
 **Interfaces:**
+
 - Consumes: `PostedMessageRow.articleId: string | null` from Task 1.
 - Produces:
   - `PlayerMessageView.article_id: string | null` (and therefore `AgentMessageView.article_id`)
@@ -243,26 +253,26 @@ In `backend/tests/domain.serializers.test.ts`, add `articleId: null,` to the `ro
 ```ts
 describe('article_id on both views', () => {
   it('carries a cited article to the player', () => {
-    expect(toPlayerView(row({ authorType: 'bot', articleId: 'art-1' }))?.article_id).toBe('art-1')
-  })
+    expect(toPlayerView(row({ authorType: 'bot', articleId: 'art-1' }))?.article_id).toBe('art-1');
+  });
 
   it('carries a cited article to the agent', () => {
-    expect(toAgentView(row({ authorType: 'bot', articleId: 'art-1' })).article_id).toBe('art-1')
-  })
+    expect(toAgentView(row({ authorType: 'bot', articleId: 'art-1' })).article_id).toBe('art-1');
+  });
 
   it('is null on a message that cited nothing — which is every pre-existing message', () => {
-    expect(toPlayerView(row())?.article_id).toBeNull()
-    expect(toAgentView(row()).article_id).toBeNull()
-  })
+    expect(toPlayerView(row())?.article_id).toBeNull();
+    expect(toAgentView(row()).article_id).toBeNull();
+  });
 
   /**
    * The whitelist still decides the whole row, not per-field: an internal note
    * with an article on it must not leak the article either.
    */
   it('still returns null for an internal message, article or not', () => {
-    expect(toPlayerView(row({ visibility: 'internal', articleId: 'art-1' }))).toBeNull()
-  })
-})
+    expect(toPlayerView(row({ visibility: 'internal', articleId: 'art-1' }))).toBeNull();
+  });
+});
 ```
 
 - [ ] **Step 2: Run it and watch it fail**
@@ -275,12 +285,12 @@ Expected: FAIL — `article_id` does not exist on `PlayerMessageView`.
 In `packages/types/src/chat.ts`, inside `PlayerMessageView`, after `created_at: string`:
 
 ```ts
-  /**
-   * The article this bot answer was written from, or null. Additive — the frozen
-   * contract permits new response fields. Clients append their own "Read more"
-   * affordance from this; the model is never asked to write a link.
-   */
-  article_id: string | null
+/**
+ * The article this bot answer was written from, or null. Additive — the frozen
+ * contract permits new response fields. Clients append their own "Read more"
+ * affordance from this; the model is never asked to write a link.
+ */
+article_id: string | null;
 ```
 
 - [ ] **Step 4: Emit it from both serializers**
@@ -315,11 +325,11 @@ const AgentMessageViewSchema = z.object({
   delivery_state: z.enum(['sent', 'delivered', 'read']),
   read_at: z.string().nullable(),
   created_at: z.string(),
-  article_id: z
-    .uuid()
-    .nullable()
-    .openapi({ description: 'The article a bot answer was written from, or null. Clients render their own "Read more" from it.' }),
-})
+  article_id: z.uuid().nullable().openapi({
+    description:
+      'The article a bot answer was written from, or null. Clients render their own "Read more" from it.',
+  }),
+});
 ```
 
 Then replace the `responses` block of the `get /agent/conversations/{id}/messages` registration:
@@ -354,12 +364,14 @@ git commit -m "feat(api): expose message article_id on both message views"
 ### Task 3: `applyBotTurn` persists the cited article
 
 **Files:**
+
 - Modify: `backend/src/domain/bot/applyBotTurn.ts:45-71` (the `answer` branch)
 - Test: `backend/tests/bot.turnSeam.test.ts`
 
 **Depends on:** Task 1 (`PostMessageInput.articleId`, and the applied migration).
 
 **Interfaces:**
+
 - Consumes: `PostMessageInput.articleId` from Task 1.
 - Produces: no new exports. Behaviour: an `answer` decision with `decision.articleId` set writes it onto the message row; every other decision kind leaves `article_id` null.
 
@@ -372,77 +384,97 @@ async function articleIdsFor(conversationId: string) {
   const { rows } = await ownerPool.query(
     `select author_type, article_id from message where conversation_id = $1 order by seq`,
     [conversationId],
-  )
-  return rows
+  );
+  return rows;
 }
 ```
 
 Then add these two cases inside `describe('applyBotTurn', ...)`. `seedArticle` and `seedAgent` are already imported by this file's helper import list — add `seedArticle` if it is missing.
 
 ```ts
-  it('answer persists the cited article on the message it posted', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
-    const authorId = await seedAgent()
-    const articleId = await seedArticle({ workspaceId, createdBy: authorId, title: 'Refund timing' })
+it('answer persists the cited article on the message it posted', async () => {
+  const workspaceId = await seedWorkspace();
+  const playerId = await seedPlayer(workspaceId);
+  const conversationId = await seedConversation({ workspaceId, playerId });
+  const authorId = await seedAgent();
+  const articleId = await seedArticle({ workspaceId, createdBy: authorId, title: 'Refund timing' });
 
-    await withWorkspace(workspaceId, (tx) =>
-      applyBotTurn(
-        tx,
-        { workspaceId, conversationId },
-        { kind: 'answer', reply: 'Refunds take 48 hours.', articleId },
-      ),
-    )
+  await withWorkspace(workspaceId, (tx) =>
+    applyBotTurn(
+      tx,
+      { workspaceId, conversationId },
+      { kind: 'answer', reply: 'Refunds take 48 hours.', articleId },
+    ),
+  );
 
-    expect(await articleIdsFor(conversationId)).toEqual([{ author_type: 'bot', article_id: articleId }])
+  expect(await articleIdsFor(conversationId)).toEqual([
+    { author_type: 'bot', article_id: articleId },
+  ]);
 
-    // The event is the reporting record and stays exactly as it was — same type,
-    // same snapshotted title. Delivery did not replace it.
-    const events = await eventsFor(conversationId)
-    expect(events.map((e) => e.type)).toEqual(['message_sent', 'bot_article_offered'])
-    expect(events[1].payload).toMatchObject({ article_id: articleId, article_title: 'Refund timing' })
+  // The event is the reporting record and stays exactly as it was — same type,
+  // same snapshotted title. Delivery did not replace it.
+  const events = await eventsFor(conversationId);
+  expect(events.map((e) => e.type)).toEqual(['message_sent', 'bot_article_offered']);
+  expect(events[1].payload).toMatchObject({
+    article_id: articleId,
+    article_title: 'Refund timing',
+  });
 
-    // Unchanged: reading an article is not answering "did this help?".
-    expect((await conversationRow(conversationId)).status).toBe('bot_active')
-  })
+  // Unchanged: reading an article is not answering "did this help?".
+  expect((await conversationRow(conversationId)).status).toBe('bot_active');
+});
 
-  it('leaves article_id null on an answer that cited nothing', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
+it('leaves article_id null on an answer that cited nothing', async () => {
+  const workspaceId = await seedWorkspace();
+  const playerId = await seedPlayer(workspaceId);
+  const conversationId = await seedConversation({ workspaceId, playerId });
 
-    await withWorkspace(workspaceId, (tx) =>
-      applyBotTurn(tx, { workspaceId, conversationId }, { kind: 'answer', reply: 'Can you tell me more?' }),
-    )
+  await withWorkspace(workspaceId, (tx) =>
+    applyBotTurn(
+      tx,
+      { workspaceId, conversationId },
+      { kind: 'answer', reply: 'Can you tell me more?' },
+    ),
+  );
 
-    expect(await articleIdsFor(conversationId)).toEqual([{ author_type: 'bot', article_id: null }])
-  })
+  expect(await articleIdsFor(conversationId)).toEqual([{ author_type: 'bot', article_id: null }]);
+});
 ```
 
 And one case proving the other decision kinds never stamp it. `handoff` posts a player-facing message from `HANDOFF_PLAYER_MESSAGES`; `unavailable` posts `botFailureNote`. Both must land with a null article.
 
 ```ts
-  it('leaves article_id null on handoff and on unavailable', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const availableAgent = await seedAgent()
-    await seedWorkspaceMember({ workspaceId, agentId: availableAgent })
+it('leaves article_id null on handoff and on unavailable', async () => {
+  const workspaceId = await seedWorkspace();
+  const playerId = await seedPlayer(workspaceId);
+  const availableAgent = await seedAgent();
+  await seedWorkspaceMember({ workspaceId, agentId: availableAgent });
 
-    const handoffConversation = await seedConversation({ workspaceId, playerId })
-    await withWorkspace(workspaceId, (tx) =>
-      applyBotTurn(tx, { workspaceId, conversationId: handoffConversation }, { kind: 'handoff', reason: 'article_rejected' }),
-    )
+  const handoffConversation = await seedConversation({ workspaceId, playerId });
+  await withWorkspace(workspaceId, (tx) =>
+    applyBotTurn(
+      tx,
+      { workspaceId, conversationId: handoffConversation },
+      { kind: 'handoff', reason: 'article_rejected' },
+    ),
+  );
 
-    const unavailableConversation = await seedConversation({ workspaceId, playerId })
-    await withWorkspace(workspaceId, (tx) =>
-      applyBotTurn(tx, { workspaceId, conversationId: unavailableConversation }, { kind: 'unavailable', reason: 'provider_error' }),
-    )
+  const unavailableConversation = await seedConversation({ workspaceId, playerId });
+  await withWorkspace(workspaceId, (tx) =>
+    applyBotTurn(
+      tx,
+      { workspaceId, conversationId: unavailableConversation },
+      { kind: 'unavailable', reason: 'provider_error' },
+    ),
+  );
 
-    for (const row of [...(await articleIdsFor(handoffConversation)), ...(await articleIdsFor(unavailableConversation))]) {
-      expect(row.article_id).toBeNull()
-    }
-  })
+  for (const row of [
+    ...(await articleIdsFor(handoffConversation)),
+    ...(await articleIdsFor(unavailableConversation)),
+  ]) {
+    expect(row.article_id).toBeNull();
+  }
+});
 ```
 
 If `'provider_error'` is not a member of the `unavailable` reason union, use whichever member the existing `unavailable` tests in this file already use — do not widen the union.
@@ -484,6 +516,7 @@ git commit -m "feat(bot): persist the cited article on the answer message"
 ### Task 4: Shared `MessageBody` and `ChatMessage.articleId`
 
 **Files:**
+
 - Modify: `frontend/src/features/chat/components/types.ts`
 - Create: `frontend/src/features/chat/components/MessageBody.tsx`
 - Test: `frontend/src/features/chat/components/MessageBody.test.tsx`
@@ -491,6 +524,7 @@ git commit -m "feat(bot): persist the cited article on the answer message"
 **Depends on:** nothing. Dispatch in Wave A.
 
 **Interfaces:**
+
 - Consumes: `ArticleBody` from `@/features/articles/components/ArticleBody` (exists, unchanged).
 - Produces:
   - `ChatMessage.articleId?: string | null`
@@ -501,12 +535,12 @@ git commit -m "feat(bot): persist the cited article on the answer message"
 Create `frontend/src/features/chat/components/MessageBody.test.tsx`:
 
 ```tsx
-import { Suspense } from 'react'
-import { describe, expect, it } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
-import { MessageBody } from './MessageBody.tsx'
+import { Suspense } from 'react';
+import { describe, expect, it } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
+import { MessageBody } from './MessageBody.tsx';
 
-const MARKDOWN = 'Refunds take **48 hours**.\n\n1. Open Settings\n2. Tap Support'
+const MARKDOWN = 'Refunds take **48 hours**.\n\n1. Open Settings\n2. Tap Support';
 
 /** The boundary belongs to the thread in real callers; a test supplies its own. */
 function renderBody(props: { authorType: 'player' | 'agent' | 'bot' | 'system'; body: string }) {
@@ -514,23 +548,23 @@ function renderBody(props: { authorType: 'player' | 'agent' | 'bot' | 'system'; 
     <Suspense fallback={null}>
       <MessageBody {...props} />
     </Suspense>,
-  )
+  );
 }
 
 describe('MessageBody', () => {
   it('renders a bot body as markdown', async () => {
-    const { container } = renderBody({ authorType: 'bot', body: MARKDOWN })
+    const { container } = renderBody({ authorType: 'bot', body: MARKDOWN });
 
-    await waitFor(() => expect(container.querySelector('strong')?.textContent).toBe('48 hours'))
-    expect(container.querySelector('ol')).not.toBeNull()
-    expect(container.textContent).not.toContain('**')
-  })
+    await waitFor(() => expect(container.querySelector('strong')?.textContent).toBe('48 hours'));
+    expect(container.querySelector('ol')).not.toBeNull();
+    expect(container.textContent).not.toContain('**');
+  });
 
   it('renders an agent body as markdown, so pasted article steps read like the bot answer', async () => {
-    const { container } = renderBody({ authorType: 'agent', body: MARKDOWN })
+    const { container } = renderBody({ authorType: 'agent', body: MARKDOWN });
 
-    await waitFor(() => expect(container.querySelector('strong')?.textContent).toBe('48 hours'))
-  })
+    await waitFor(() => expect(container.querySelector('strong')?.textContent).toBe('48 hours'));
+  });
 
   /**
    * The security property, not a formatting preference: ArticleBody is safe only
@@ -538,25 +572,25 @@ describe('MessageBody', () => {
    * article bodies — not for an adversarial input source.
    */
   it('renders a player body as literal text, asterisks and all', async () => {
-    const { container } = renderBody({ authorType: 'player', body: 'my **game** crashed' })
+    const { container } = renderBody({ authorType: 'player', body: 'my **game** crashed' });
 
-    await waitFor(() => expect(screen.getByText('my **game** crashed')).toBeInTheDocument())
-    expect(container.querySelector('strong')).toBeNull()
-  })
+    await waitFor(() => expect(screen.getByText('my **game** crashed')).toBeInTheDocument());
+    expect(container.querySelector('strong')).toBeNull();
+  });
 
   it('renders a system body as literal text', async () => {
-    renderBody({ authorType: 'system', body: 'Did this **solve** it?' })
+    renderBody({ authorType: 'system', body: 'Did this **solve** it?' });
 
-    await waitFor(() => expect(screen.getByText('Did this **solve** it?')).toBeInTheDocument())
-  })
+    await waitFor(() => expect(screen.getByText('Did this **solve** it?')).toBeInTheDocument());
+  });
 
   it('does not render raw HTML in a bot body as markup', async () => {
-    const { container } = renderBody({ authorType: 'bot', body: '<img src=x onerror="alert(1)">' })
+    const { container } = renderBody({ authorType: 'bot', body: '<img src=x onerror="alert(1)">' });
 
-    await waitFor(() => expect(container.textContent).toContain('<img'))
-    expect(container.querySelector('img')).toBeNull()
-  })
-})
+    await waitFor(() => expect(container.textContent).toContain('<img'));
+    expect(container.querySelector('img')).toBeNull();
+  });
+});
 ```
 
 - [ ] **Step 2: Run it and watch it fail**
@@ -569,8 +603,8 @@ Expected: FAIL — cannot resolve `./MessageBody.tsx`.
 Create `frontend/src/features/chat/components/MessageBody.tsx`:
 
 ```tsx
-import { lazy } from 'react'
-import type { ChatAuthorType } from './types.ts'
+import { lazy } from 'react';
+import type { ChatAuthorType } from './types.ts';
 
 /*
  * Lazy, and lazy HERE rather than at each call site, so both surfaces share one
@@ -586,7 +620,7 @@ import type { ChatAuthorType } from './types.ts'
  */
 const ArticleBody = lazy(() =>
   import('@/features/articles/components/ArticleBody').then((m) => ({ default: m.ArticleBody })),
-)
+);
 
 /*
  * The whole rule, in one place so neither surface can drift.
@@ -598,11 +632,11 @@ const ArticleBody = lazy(() =>
  * depends on against an adversarial input source. `system` bodies are server copy
  * with no markdown in them, and get the same literal treatment.
  */
-const MARKDOWN_AUTHORS: ReadonlySet<ChatAuthorType> = new Set(['bot', 'agent'])
+const MARKDOWN_AUTHORS: ReadonlySet<ChatAuthorType> = new Set(['bot', 'agent']);
 
 export function MessageBody({ authorType, body }: { authorType: ChatAuthorType; body: string }) {
-  if (!MARKDOWN_AUTHORS.has(authorType)) return <>{body}</>
-  return <ArticleBody markdown={body} />
+  if (!MARKDOWN_AUTHORS.has(authorType)) return <>{body}</>;
+  return <ArticleBody markdown={body} />;
 }
 ```
 
@@ -641,12 +675,14 @@ git commit -m "feat(chat): shared author-aware message body renderer"
 ### Task 5: Webview bubbles — markdown and "Read more"
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/webview/components/chat/ChatBubbles.tsx`
 - Test: `frontend/src/surfaces/webview/components/chat/ChatBubbles.test.tsx` (create)
 
 **Depends on:** Task 4.
 
 **Interfaces:**
+
 - Consumes: `MessageBody`, `ChatMessage.articleId` from Task 4.
 - Produces: a bot/agent bubble whose body is markdown, and — when `articleId` is set — a `Read more` link to `/embed/support/chat/articles/${articleId}`. Task 6 creates that route.
 
@@ -655,30 +691,46 @@ git commit -m "feat(chat): shared author-aware message body renderer"
 Create `frontend/src/surfaces/webview/components/chat/ChatBubbles.test.tsx`. The `beforeAll` block is copied verbatim from `frontend/src/features/chat/components/ChatThread.test.tsx` — jsdom lays out nothing, so without it Virtuoso measures a zero-height viewport and mounts no items:
 
 ```tsx
-import { beforeAll, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
-import { ChatBubbles } from './ChatBubbles.tsx'
-import type { ChatMessage } from '@/features/chat/components/types'
+import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+import { ChatBubbles } from './ChatBubbles.tsx';
+import type { ChatMessage } from '@/features/chat/components/types';
 
 beforeAll(() => {
-  Object.defineProperty(HTMLElement.prototype, 'offsetHeight', { configurable: true, value: 600 })
-  Object.defineProperty(HTMLElement.prototype, 'offsetWidth', { configurable: true, value: 600 })
-  Object.defineProperty(HTMLElement.prototype, 'offsetParent', { configurable: true, get: () => document.body })
+  Object.defineProperty(HTMLElement.prototype, 'offsetHeight', { configurable: true, value: 600 });
+  Object.defineProperty(HTMLElement.prototype, 'offsetWidth', { configurable: true, value: 600 });
+  Object.defineProperty(HTMLElement.prototype, 'offsetParent', {
+    configurable: true,
+    get: () => document.body,
+  });
   Element.prototype.getBoundingClientRect = () =>
-    ({ width: 600, height: 600, top: 0, left: 0, right: 600, bottom: 600, x: 0, y: 0, toJSON() {} }) as DOMRect
+    ({
+      width: 600,
+      height: 600,
+      top: 0,
+      left: 0,
+      right: 600,
+      bottom: 600,
+      x: 0,
+      y: 0,
+      toJSON() {},
+    }) as DOMRect;
   globalThis.ResizeObserver = class {
-    callback: ResizeObserverCallback
+    callback: ResizeObserverCallback;
     constructor(callback: ResizeObserverCallback) {
-      this.callback = callback
+      this.callback = callback;
     }
     observe(target: Element) {
-      this.callback([{ target, contentRect: target.getBoundingClientRect() } as ResizeObserverEntry], this as unknown as ResizeObserver)
+      this.callback(
+        [{ target, contentRect: target.getBoundingClientRect() } as ResizeObserverEntry],
+        this as unknown as ResizeObserver,
+      );
     }
     unobserve() {}
     disconnect() {}
-  } as unknown as typeof ResizeObserver
-})
+  } as unknown as typeof ResizeObserver;
+});
 
 function message(overrides: Partial<ChatMessage> = {}): ChatMessage {
   return {
@@ -688,7 +740,7 @@ function message(overrides: Partial<ChatMessage> = {}): ChatMessage {
     createdAt: '2026-08-18T10:00:00.000Z',
     deliveryState: 'sent',
     ...overrides,
-  }
+  };
 }
 
 function renderBubbles(messages: ChatMessage[]) {
@@ -696,47 +748,49 @@ function renderBubbles(messages: ChatMessage[]) {
     <MemoryRouter initialEntries={['/embed/support/chat']}>
       <ChatBubbles messages={messages} onRetry={vi.fn()} />
     </MemoryRouter>,
-  )
+  );
 }
 
 describe('ChatBubbles markdown', () => {
   it('renders a bot body as markdown', async () => {
-    const { container } = renderBubbles([message({ body: 'Refunds take **48 hours**.' })])
+    const { container } = renderBubbles([message({ body: 'Refunds take **48 hours**.' })]);
 
-    await waitFor(() => expect(container.querySelector('strong')?.textContent).toBe('48 hours'))
-    expect(container.textContent).not.toContain('**')
-  })
+    await waitFor(() => expect(container.querySelector('strong')?.textContent).toBe('48 hours'));
+    expect(container.textContent).not.toContain('**');
+  });
 
   it('renders a player body literally — asterisks stay asterisks', async () => {
-    const { container } = renderBubbles([message({ authorType: 'player', body: 'my **game** crashed' })])
+    const { container } = renderBubbles([
+      message({ authorType: 'player', body: 'my **game** crashed' }),
+    ]);
 
-    await waitFor(() => expect(screen.getByText('my **game** crashed')).toBeInTheDocument())
-    expect(container.querySelector('strong')).toBeNull()
-  })
-})
+    await waitFor(() => expect(screen.getByText('my **game** crashed')).toBeInTheDocument());
+    expect(container.querySelector('strong')).toBeNull();
+  });
+});
 
 describe('ChatBubbles read-more', () => {
   it('links to the article when the message cited one', async () => {
-    renderBubbles([message({ articleId: 'art-1' })])
+    renderBubbles([message({ articleId: 'art-1' })]);
 
-    const link = await screen.findByRole('link', { name: 'Read more' })
-    expect(link).toHaveAttribute('href', '/embed/support/chat/articles/art-1')
-  })
+    const link = await screen.findByRole('link', { name: 'Read more' });
+    expect(link).toHaveAttribute('href', '/embed/support/chat/articles/art-1');
+  });
 
   it('renders no button when the message cited nothing — every pre-existing message', async () => {
-    renderBubbles([message()])
+    renderBubbles([message()]);
 
-    await waitFor(() => expect(screen.getByText('hello')).toBeInTheDocument())
-    expect(screen.queryByRole('link', { name: 'Read more' })).not.toBeInTheDocument()
-  })
+    await waitFor(() => expect(screen.getByText('hello')).toBeInTheDocument());
+    expect(screen.queryByRole('link', { name: 'Read more' })).not.toBeInTheDocument();
+  });
 
   it('renders no button on a player bubble even if one somehow carried an id', async () => {
-    renderBubbles([message({ authorType: 'player', body: 'thanks', articleId: 'art-1' })])
+    renderBubbles([message({ authorType: 'player', body: 'thanks', articleId: 'art-1' })]);
 
-    await waitFor(() => expect(screen.getByText('thanks')).toBeInTheDocument())
-    expect(screen.queryByRole('link', { name: 'Read more' })).not.toBeInTheDocument()
-  })
-})
+    await waitFor(() => expect(screen.getByText('thanks')).toBeInTheDocument());
+    expect(screen.queryByRole('link', { name: 'Read more' })).not.toBeInTheDocument();
+  });
+});
 ```
 
 - [ ] **Step 2: Run it and watch it fail**
@@ -749,9 +803,9 @@ Expected: FAIL — the bot body renders `**48 hours**` literally and no link exi
 In `ChatBubbles.tsx`, add to the imports:
 
 ```tsx
-import { Suspense } from 'react'
-import { Link } from 'react-router-dom'
-import { MessageBody } from '@/features/chat/components/MessageBody'
+import { Suspense } from 'react';
+import { Link } from 'react-router-dom';
+import { MessageBody } from '@/features/chat/components/MessageBody';
 ```
 
 Wrap the `<Virtuoso .../>` element — not the outer `div`, which owns the jump button's positioning context — in a boundary:
@@ -791,7 +845,8 @@ In `ChatBubble`, replace `{message.body}` with `<MessageBody authorType={message
 Inside `ChatBubble`, immediately after the bubble `div` closes and before the timestamp row, add:
 
 ```tsx
-        {/*
+{
+  /*
           Client-appended, always — never model output. A prompt that asks for the
           link produces prose describing a link, which is the same failure mode
           CLAUDE.md documents for `handoff` and `answer_from_article`.
@@ -799,15 +854,18 @@ Inside `ChatBubble`, immediately after the bubble `div` closes and before the ti
           A nested route, not the shared /embed/support/articles/:id: that one
           renders SupportHome, which would unmount a live chat and break the
           hardware back button.
-        */}
-        {!own && message.articleId && (
-          <Link
-            to={`/embed/support/chat/articles/${message.articleId}`}
-            className="inline-flex min-h-9 items-center rounded-card bg-accent-soft px-3 py-1.5 text-sm font-semibold text-accent"
-          >
-            Read more
-          </Link>
-        )}
+        */
+}
+{
+  !own && message.articleId && (
+    <Link
+      to={`/embed/support/chat/articles/${message.articleId}`}
+      className="inline-flex min-h-9 items-center rounded-card bg-accent-soft px-3 py-1.5 text-sm font-semibold text-accent"
+    >
+      Read more
+    </Link>
+  );
+}
 ```
 
 `!own` is the guard that keeps this off a player bubble, matching `MessageBody`'s author rule rather than restating it.
@@ -841,6 +899,7 @@ git commit -m "feat(webview): render bot answers as markdown with a Read more li
 ### Task 6: Webview article route and mapper
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/webview/main.tsx`
 - Modify: `frontend/src/surfaces/webview/pages/SupportChat.tsx`
 - Test: `frontend/src/surfaces/webview/pages/SupportChat.test.tsx`
@@ -848,6 +907,7 @@ git commit -m "feat(webview): render bot answers as markdown with a Read more li
 **Depends on:** Task 2 (`PlayerMessageView.article_id`), Task 4 (`ChatMessage.articleId`).
 
 **Interfaces:**
+
 - Consumes: `article_id` on the player message view; `ChatMessage.articleId`; the existing `ArticleSheet({ articleId, onClose })` and `useCloseOverlay(fallback)` — both unchanged.
 - Produces: route `/embed/support/chat/articles/:id`, which mounts the same lazy `SupportChat` with the article sheet open over the live thread.
 
@@ -856,21 +916,21 @@ git commit -m "feat(webview): render bot answers as markdown with a Read more li
 Add to `frontend/src/surfaces/webview/pages/SupportChat.test.tsx`. Extend the existing mocks: add `import { Route, Routes } from 'react-router-dom'`, `import { fetchArticleDetail } from '@/surfaces/webview/api/surfaceApi'`, and `vi.mock('@/surfaces/webview/api/surfaceApi')` beside the existing `vi.mock` calls. In the existing `beforeEach`, add:
 
 ```ts
-  vi.mocked(fetchArticleDetail).mockResolvedValue({
-    id: 'art-1',
-    title: 'Refund timing',
-    body: 'Refunds take **48 hours**.',
-    keywords: [],
-    intent_id: null,
-    published_at: null,
-  })
+vi.mocked(fetchArticleDetail).mockResolvedValue({
+  id: 'art-1',
+  title: 'Refund timing',
+  body: 'Refunds take **48 hours**.',
+  keywords: [],
+  intent_id: null,
+  published_at: null,
+});
 ```
 
 Add a route-aware render helper next to `renderChat`, mounting `SupportChat` under a real `Route` so `useParams` resolves:
 
 ```tsx
 function renderChatAt(path: string) {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[path]}>
@@ -882,7 +942,7 @@ function renderChatAt(path: string) {
         </SupportContextProvider>
       </MemoryRouter>
     </QueryClientProvider>,
-  )
+  );
 }
 ```
 
@@ -906,36 +966,36 @@ describe('SupportChat article delivery', () => {
           },
         ],
       }),
-    )
+    );
 
-    renderChatAt('/embed/support/chat')
+    renderChatAt('/embed/support/chat');
 
-    const link = await screen.findByRole('link', { name: 'Read more' })
-    expect(link).toHaveAttribute('href', '/embed/support/chat/articles/art-1')
-  })
+    const link = await screen.findByRole('link', { name: 'Read more' });
+    expect(link).toHaveAttribute('href', '/embed/support/chat/articles/art-1');
+  });
 
   it('opens the article sheet over the thread when mounted at the nested route', async () => {
-    vi.mocked(fetchPlayerMessages).mockResolvedValue(messages({}))
+    vi.mocked(fetchPlayerMessages).mockResolvedValue(messages({}));
 
-    renderChatAt('/embed/support/chat/articles/art-1')
+    renderChatAt('/embed/support/chat/articles/art-1');
 
     // The sheet is open...
-    expect(await screen.findByText('Refund timing')).toBeInTheDocument()
+    expect(await screen.findByText('Refund timing')).toBeInTheDocument();
     // ...and the thread underneath it never unmounted: the player's own message
     // is still on screen, which is what a route that rendered SupportHome would
     // have destroyed along with the socket.
-    expect(screen.getByText('my game crashed')).toBeInTheDocument()
-  })
+    expect(screen.getByText('my game crashed')).toBeInTheDocument();
+  });
 
   it('leaves the sheet closed on the plain chat route', async () => {
-    vi.mocked(fetchPlayerMessages).mockResolvedValue(messages({}))
+    vi.mocked(fetchPlayerMessages).mockResolvedValue(messages({}));
 
-    renderChatAt('/embed/support/chat')
+    renderChatAt('/embed/support/chat');
 
-    await waitFor(() => expect(screen.getByText('my game crashed')).toBeInTheDocument())
-    expect(screen.queryByText('Refund timing')).not.toBeInTheDocument()
-  })
-})
+    await waitFor(() => expect(screen.getByText('my game crashed')).toBeInTheDocument());
+    expect(screen.queryByText('Refund timing')).not.toBeInTheDocument();
+  });
+});
 ```
 
 - [ ] **Step 2: Run and watch it fail**
@@ -949,13 +1009,13 @@ In `SupportChat.tsx`, extend `toChatMessage`'s parameter type and body:
 
 ```tsx
 function toChatMessage(m: {
-  id: string
-  author_type: ChatMessage['authorType']
-  body: string
-  created_at: string
-  delivery_state: NonNullable<ChatMessage['deliveryState']>
-  read_at: string | null
-  article_id: string | null
+  id: string;
+  author_type: ChatMessage['authorType'];
+  body: string;
+  created_at: string;
+  delivery_state: NonNullable<ChatMessage['deliveryState']>;
+  read_at: string | null;
+  article_id: string | null;
 }): ChatMessage {
   return {
     id: m.id,
@@ -965,7 +1025,7 @@ function toChatMessage(m: {
     deliveryState: m.delivery_state,
     readAt: m.read_at,
     articleId: m.article_id,
-  }
+  };
 }
 ```
 
@@ -974,32 +1034,34 @@ function toChatMessage(m: {
 Add to `SupportChat.tsx`'s imports:
 
 ```tsx
-import { useParams } from 'react-router-dom'
-import { ArticleSheet } from '@/surfaces/webview/components/ArticleSheet'
-import { useCloseOverlay } from '@/surfaces/webview/hooks/useCloseOverlay'
+import { useParams } from 'react-router-dom';
+import { ArticleSheet } from '@/surfaces/webview/components/ArticleSheet';
+import { useCloseOverlay } from '@/surfaces/webview/hooks/useCloseOverlay';
 ```
 
 Inside the component, next to the existing hooks:
 
 ```tsx
-  /*
-   * The article sheet is a route, not state, so Android's back button closes it —
-   * and it is a route NESTED under chat so that opening it never unmounts this
-   * screen. The socket stays connected, the thread keeps its scroll position, and
-   * a bot or agent message arriving mid-read still lands.
-   */
-  const { id: articleId } = useParams<{ id: string }>()
-  const closeArticle = useCloseOverlay('/embed/support/chat')
+/*
+ * The article sheet is a route, not state, so Android's back button closes it —
+ * and it is a route NESTED under chat so that opening it never unmounts this
+ * screen. The socket stays connected, the thread keeps its scroll position, and
+ * a bot or agent message arriving mid-read still lands.
+ */
+const { id: articleId } = useParams<{ id: string }>();
+const closeArticle = useCloseOverlay('/embed/support/chat');
 ```
 
 And render it just before the closing `</>` of the main return, after `<DebugDialog ... />`:
 
 ```tsx
-      {/* ArticleSheet fires its own once-per-session reportArticleRead and
+{
+  /* ArticleSheet fires its own once-per-session reportArticleRead and
           `article_read` bridge post. Correct: a player reading from a bot answer
           did read the article, and this is simply a third entry point to that
-          signal. */}
-      <ArticleSheet articleId={articleId ?? null} onClose={closeArticle} />
+          signal. */
+}
+<ArticleSheet articleId={articleId ?? null} onClose={closeArticle} />;
 ```
 
 Add the same element to the `unreachable` early-return branch **only if** the deep link should survive a backend outage — it should not: without the API there is no article to fetch, and `ArticleSheet` already renders its own failure copy. Leave that branch alone.
@@ -1009,23 +1071,23 @@ Add the same element to the `unreachable` early-return branch **only if** the de
 In `frontend/src/surfaces/webview/main.tsx`, replace the single `chat` route with a nested pair:
 
 ```tsx
-            <Route
-              path="chat"
-              element={
-                <Suspense fallback={null}>
-                  <SupportChat />
-                </Suspense>
-              }
-            >
-              {/*
+<Route
+  path="chat"
+  element={
+    <Suspense fallback={null}>
+      <SupportChat />
+    </Suspense>
+  }
+>
+  {/*
                 Nested under chat, and rendering the SAME SupportChat element, so
                 the sheet opens over a thread that never unmounted. Reusing
                 /embed/support/articles/:id would render SupportHome instead —
                 killing the socket and leaving the hardware back button stepping
                 through local state that no longer exists.
               */}
-              <Route path="articles/:id" element={null} />
-            </Route>
+  <Route path="articles/:id" element={null} />
+</Route>
 ```
 
 `element={null}` on the child is deliberate: `SupportChat` renders no `<Outlet />`, and the child exists only so the URL matches and `useParams` resolves inside the parent. If React Router logs a warning about it, use `<Route path="articles/:id" element={<Suspense fallback={null}><SupportChat /></Suspense>} />` as a sibling of `chat` instead — a sibling remounts `SupportChat`, so verify the "thread never unmounted" test still passes before choosing it.
@@ -1052,6 +1114,7 @@ git commit -m "feat(webview): open the cited article over a live chat"
 ### Task 7: Agent console thread — markdown and "Read more"
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/agent-console/pages/Inbox/components/ThreadPanel.tsx` (`toChatMessage` at ~line 20)
 - Modify: `frontend/src/features/chat/components/ChatThread.tsx`
 - Test: `frontend/src/surfaces/agent-console/pages/Inbox/components/ThreadPanel.test.tsx`
@@ -1060,6 +1123,7 @@ git commit -m "feat(webview): open the cited article over a live chat"
 **Depends on:** Task 2 (`AgentMessageView.article_id`), Task 4 (`MessageBody`, `ChatMessage.articleId`).
 
 **Interfaces:**
+
 - Consumes: `MessageBody`, `ChatMessage.articleId`, `AgentMessageView.article_id`.
 - Produces: `ChatThread` renders bot/agent bodies as markdown and appends a new-tab `Read more` anchor to `/articles/:id`. Task 8 creates that route; the anchor is a plain `href` with `target="_blank"`, so it does not depend on Task 8 to render or to be tested.
 
@@ -1073,40 +1137,54 @@ In `frontend/src/features/chat/components/ChatThread.test.tsx`, add:
 describe('ChatThread article delivery', () => {
   it('renders a bot body as markdown', async () => {
     const { container } = render(
-      <ChatThread messages={[message({ authorType: 'bot', body: 'Refunds take **48 hours**.' })]} currentAuthorType="agent" />,
-    )
+      <ChatThread
+        messages={[message({ authorType: 'bot', body: 'Refunds take **48 hours**.' })]}
+        currentAuthorType="agent"
+      />,
+    );
 
-    await waitFor(() => expect(container.querySelector('strong')?.textContent).toBe('48 hours'))
-    expect(container.textContent).not.toContain('**')
-  })
+    await waitFor(() => expect(container.querySelector('strong')?.textContent).toBe('48 hours'));
+    expect(container.textContent).not.toContain('**');
+  });
 
   it('renders a player body literally', async () => {
     const { container } = render(
-      <ChatThread messages={[message({ authorType: 'player', body: 'my **game** crashed' })]} currentAuthorType="agent" />,
-    )
+      <ChatThread
+        messages={[message({ authorType: 'player', body: 'my **game** crashed' })]}
+        currentAuthorType="agent"
+      />,
+    );
 
-    await waitFor(() => expect(screen.getByText('my **game** crashed')).toBeInTheDocument())
-    expect(container.querySelector('strong')).toBeNull()
-  })
+    await waitFor(() => expect(screen.getByText('my **game** crashed')).toBeInTheDocument());
+    expect(container.querySelector('strong')).toBeNull();
+  });
 
   it('opens the cited article in a new tab, so the conversation stays on screen', async () => {
     render(
-      <ChatThread messages={[message({ authorType: 'bot', body: 'answer', articleId: 'art-1' })]} currentAuthorType="agent" />,
-    )
+      <ChatThread
+        messages={[message({ authorType: 'bot', body: 'answer', articleId: 'art-1' })]}
+        currentAuthorType="agent"
+      />,
+    );
 
-    const link = await screen.findByRole('link', { name: 'Read more' })
-    expect(link).toHaveAttribute('href', '/articles/art-1')
-    expect(link).toHaveAttribute('target', '_blank')
-    expect(link).toHaveAttribute('rel', 'noopener noreferrer')
-  })
+    const link = await screen.findByRole('link', { name: 'Read more' });
+    expect(link).toHaveAttribute('href', '/articles/art-1');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  });
 
   it('renders no button when nothing was cited', async () => {
-    render(<ChatThread messages={[message({ authorType: 'bot', body: 'answer' })]} currentAuthorType="agent" />)
+    render(
+      <ChatThread
+        messages={[message({ authorType: 'bot', body: 'answer' })]}
+        currentAuthorType="agent"
+      />,
+    );
 
-    await waitFor(() => expect(screen.getByText('answer')).toBeInTheDocument())
-    expect(screen.queryByRole('link', { name: 'Read more' })).not.toBeInTheDocument()
-  })
-})
+    await waitFor(() => expect(screen.getByText('answer')).toBeInTheDocument());
+    expect(screen.queryByRole('link', { name: 'Read more' })).not.toBeInTheDocument();
+  });
+});
 ```
 
 Add `waitFor` and `screen` to that file's `@testing-library/react` import if absent.
@@ -1114,16 +1192,18 @@ Add `waitFor` and `screen` to that file's `@testing-library/react` import if abs
 In `ThreadPanel.test.tsx`, add `article_id: null` to the `agentMessage()` factory defaults, and one mapper test:
 
 ```tsx
-  it('carries article_id from the wire through to a Read more link', async () => {
-    vi.mocked(fetchConversationMessages).mockResolvedValue({
-      messages: [agentMessage({ author_type: 'bot', body: 'Refunds take 48 hours.', article_id: 'art-1' })],
-    })
+it('carries article_id from the wire through to a Read more link', async () => {
+  vi.mocked(fetchConversationMessages).mockResolvedValue({
+    messages: [
+      agentMessage({ author_type: 'bot', body: 'Refunds take 48 hours.', article_id: 'art-1' }),
+    ],
+  });
 
-    renderThread()
+  renderThread();
 
-    const link = await screen.findByRole('link', { name: 'Read more' })
-    expect(link).toHaveAttribute('href', '/articles/art-1')
-  })
+  const link = await screen.findByRole('link', { name: 'Read more' });
+  expect(link).toHaveAttribute('href', '/articles/art-1');
+});
 ```
 
 Use whatever render helper the file already defines in place of `renderThread()` and match its existing prop set.
@@ -1146,8 +1226,8 @@ In `ThreadPanel.tsx`, add to `toChatMessage`'s returned object:
 Add to `ChatThread.tsx`'s imports:
 
 ```tsx
-import { Suspense } from 'react'
-import { MessageBody } from './MessageBody.tsx'
+import { Suspense } from 'react';
+import { MessageBody } from './MessageBody.tsx';
 ```
 
 Wrap the `<Virtuoso .../>` element in `<Suspense fallback={null}>` — one boundary for the thread, same reasoning as the webview: MessageBody's `ArticleBody` is lazy, and a per-bubble boundary would flash a fallback on every message as the list scrolls.
@@ -1155,17 +1235,19 @@ Wrap the `<Virtuoso .../>` element in `<Suspense fallback={null}>` — one bound
 Replace the body paragraph:
 
 ```tsx
-                <p className="m-0">{chatMessage.body}</p>
+<p className="m-0">{chatMessage.body}</p>
 ```
 
 with:
 
 ```tsx
-                {/* `agent` renders as markdown too, so article steps an agent
-                    pasted read exactly like the bot's own answer. */}
-                <div className="m-0">
-                  <MessageBody authorType={chatMessage.authorType} body={chatMessage.body} />
-                </div>
+{
+  /* `agent` renders as markdown too, so article steps an agent
+                    pasted read exactly like the bot's own answer. */
+}
+<div className="m-0">
+  <MessageBody authorType={chatMessage.authorType} body={chatMessage.body} />
+</div>;
 ```
 
 Leave the `system` branch above untouched — it returns early and stays literal text.
@@ -1177,22 +1259,26 @@ No background fix is needed here: this bubble is `bg-accent-soft` / `bg-muted/10
 In `ChatThread.tsx`, immediately after the `<time>` element inside the bubble:
 
 ```tsx
-                {/*
+{
+  /*
                   A plain anchor in a new tab, not in-app navigation: routing the
                   console to the article would hijack the conversation the agent
                   is reading. Client-appended from articleId — the model is never
                   asked to write a link.
-                */}
-                {chatMessage.articleId && (
-                  <a
-                    href={`/articles/${chatMessage.articleId}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-1 inline-flex items-center rounded-md border border-muted/30 px-2 py-0.5 text-xs font-medium underline underline-offset-2"
-                  >
-                    Read more
-                  </a>
-                )}
+                */
+}
+{
+  chatMessage.articleId && (
+    <a
+      href={`/articles/${chatMessage.articleId}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="mt-1 inline-flex items-center rounded-md border border-muted/30 px-2 py-0.5 text-xs font-medium underline underline-offset-2"
+    >
+      Read more
+    </a>
+  );
+}
 ```
 
 `articleId` is only ever non-null on a `bot` message, so no author guard is needed — but if a future path sets it on a player message, `MessageBody` still refuses to render that body as markdown, which is the property that matters.
@@ -1219,6 +1305,7 @@ git commit -m "feat(console): render bot answers as markdown with a Read more li
 ### Task 8: Agent console `/articles/:id` route
 
 **Files:**
+
 - Modify: `frontend/src/routes/AppRoutes.tsx`
 - Modify: `frontend/src/surfaces/agent-console/pages/KnowledgeBase/KnowledgeBase.tsx`
 - Test: `frontend/src/surfaces/agent-console/pages/KnowledgeBase/KnowledgeBase.test.tsx` (create)
@@ -1226,6 +1313,7 @@ git commit -m "feat(console): render bot answers as markdown with a Read more li
 **Depends on:** nothing. Dispatch in Wave A.
 
 **Interfaces:**
+
 - Consumes: the existing `ArticleEditorSheet({ token, articleId, open, onOpenChange, onCreated })` — unchanged.
 - Produces: route `/articles/:id` under `AgentConsoleShell`, mounting `KnowledgeBase` with the sheet already open on that article. Task 7's anchor targets it.
 
@@ -1236,21 +1324,21 @@ git commit -m "feat(console): render bot answers as markdown with a Read more li
 Create `frontend/src/surfaces/agent-console/pages/KnowledgeBase/KnowledgeBase.test.tsx`. Mock whatever module `loadAgentSession`, `CategorySidebar`, `ArticleTable` and `ArticleEditorSheet` reach for data — read the four files first and mock only their API modules, not the components themselves:
 
 ```tsx
-import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { KnowledgeBase } from './KnowledgeBase.tsx'
-import { loadAgentSession } from '../../lib/agentSession.ts'
+import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { KnowledgeBase } from './KnowledgeBase.tsx';
+import { loadAgentSession } from '../../lib/agentSession.ts';
 
-vi.mock('../../lib/agentSession.ts')
+vi.mock('../../lib/agentSession.ts');
 
 beforeEach(() => {
-  vi.mocked(loadAgentSession).mockReturnValue({ token: 't' } as never)
-})
+  vi.mocked(loadAgentSession).mockReturnValue({ token: 't' } as never);
+});
 
 function renderAt(path: string) {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[path]}>
@@ -1260,22 +1348,22 @@ function renderAt(path: string) {
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
-  )
+  );
 }
 
 describe('KnowledgeBase route-driven selection', () => {
   it('opens the sheet on the article named by the route', async () => {
-    renderAt('/articles/art-1')
+    renderAt('/articles/art-1');
 
-    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument())
-  })
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+  });
 
   it('leaves the sheet closed on the plain list route', async () => {
-    renderAt('/articles')
+    renderAt('/articles');
 
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
-  })
-})
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+});
 ```
 
 If `ArticleEditorSheet` does not expose `role="dialog"` in jsdom, assert on its heading text or on a mocked API call for `art-1` instead — read the component and pick an assertion that reflects "the sheet is open on this article", not an implementation detail.
@@ -1290,15 +1378,15 @@ Expected: FAIL — no dialog on the `:id` route; selection lives only in local s
 Rewrite `KnowledgeBase.tsx` to seed both pieces of state from the param and navigate back to the list on close:
 
 ```tsx
-import { useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
-import { loadAgentSession } from '../../lib/agentSession.ts'
-import { CategorySidebar } from './components/CategorySidebar.tsx'
-import { ArticleTable } from './components/ArticleTable.tsx'
-import { ArticleEditorSheet } from './components/ArticleEditorSheet.tsx'
+import { useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { loadAgentSession } from '../../lib/agentSession.ts';
+import { CategorySidebar } from './components/CategorySidebar.tsx';
+import { ArticleTable } from './components/ArticleTable.tsx';
+import { ArticleEditorSheet } from './components/ArticleEditorSheet.tsx';
 
 export function KnowledgeBase() {
-  const session = loadAgentSession()
+  const session = loadAgentSession();
   /*
    * Route param seeds selection so /articles/:id is a real deep link — that is
    * what a conversation's "Read more" opens, in its own tab, and it is also what
@@ -1306,12 +1394,12 @@ export function KnowledgeBase() {
    * as before: it sets state and does not touch the URL, so nothing about the
    * list's own behaviour changes.
    */
-  const { id: routeArticleId } = useParams<{ id: string }>()
-  const navigate = useNavigate()
-  const [selectedId, setSelectedId] = useState<string | null>(routeArticleId ?? null)
-  const [sheetOpen, setSheetOpen] = useState(routeArticleId !== undefined)
+  const { id: routeArticleId } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const [selectedId, setSelectedId] = useState<string | null>(routeArticleId ?? null);
+  const [sheetOpen, setSheetOpen] = useState(routeArticleId !== undefined);
 
-  if (!session) return null
+  if (!session) return null;
 
   return (
     <div className="flex h-full min-h-0">
@@ -1323,12 +1411,12 @@ export function KnowledgeBase() {
           token={session.token}
           selectedId={selectedId}
           onSelect={(id) => {
-            setSelectedId(id)
-            setSheetOpen(true)
+            setSelectedId(id);
+            setSheetOpen(true);
           }}
           onNew={() => {
-            setSelectedId(null)
-            setSheetOpen(true)
+            setSelectedId(null);
+            setSheetOpen(true);
           }}
         />
       </div>
@@ -1337,19 +1425,19 @@ export function KnowledgeBase() {
         articleId={selectedId}
         open={sheetOpen}
         onOpenChange={(open) => {
-          setSheetOpen(open)
+          setSheetOpen(open);
           if (!open) {
-            setSelectedId(null)
+            setSelectedId(null);
             // Closing a deep-linked sheet must also leave the deep link, or the
             // URL still names an article that is no longer on screen — and a
             // reload would reopen it.
-            if (routeArticleId) navigate('/articles', { replace: true })
+            if (routeArticleId) navigate('/articles', { replace: true });
           }
         }}
         onCreated={(id) => setSelectedId(id)}
       />
     </div>
-  )
+  );
 }
 ```
 
@@ -1358,7 +1446,7 @@ export function KnowledgeBase() {
 In `frontend/src/routes/AppRoutes.tsx`, add below the existing `articles` route, mirroring how `inbox/:conversationId` sits beside `inbox`:
 
 ```tsx
-        <Route path="articles/:id" element={<KnowledgeBase />} />
+<Route path="articles/:id" element={<KnowledgeBase />} />
 ```
 
 - [ ] **Step 5: Run the test**
@@ -1394,7 +1482,7 @@ git commit -m "feat(console): deep-linkable /articles/:id"
 Named here so nobody adds them "while they're in there":
 
 - A `message.article_title` column, or any snapshotted label for the button.
-- Server-side filtering of buttons by published status. An unpublished article 404s at the player endpoint and `ArticleSheet` already degrades to *"This article could not be loaded. Close and try another."* — a join on every thread fetch to prevent a handled failure is the wrong trade.
+- Server-side filtering of buttons by published status. An unpublished article 404s at the player endpoint and `ArticleSheet` already degrades to _"This article could not be loaded. Close and try another."_ — a join on every thread fetch to prevent a handled failure is the wrong trade.
 - Any change to `bot_article_offered`, `confirm_phase`, `confirm_resolution`, or the `bot_article_rejected` → `handoff('article_rejected')` wiring.
 - A read-only mode on `ArticleEditorSheet` (see Task 8's accepted wart).
 - Any index on `message.article_id`.

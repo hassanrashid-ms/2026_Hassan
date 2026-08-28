@@ -1,19 +1,27 @@
-import { sql } from 'drizzle-orm'
-import { customType, integer, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
-import { agentStatus, workspaceRole } from './enums.ts'
+import { sql } from 'drizzle-orm';
+import {
+  boolean,
+  customType,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
+import { agentStatus, workspaceRole } from './enums.ts';
 
 /** Case-insensitive email, per the schema spec. Requires the citext extension. */
-const citext = customType<{ data: string }>({ dataType: () => 'citext' })
+const citext = customType<{ data: string }>({ dataType: () => 'citext' });
 
-const tz = { withTimezone: true, mode: 'date' } as const
+const tz = { withTimezone: true, mode: 'date' } as const;
 
 /** One of only two unscoped tables. No RLS policy, no workspace_id. */
 export const workspace = pgTable('workspace', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
   slug: text('slug').notNull().unique(),
-  /** sha256 of the random half of the workspace secret. See auth/workspaceSecret.ts. */
-  secretHash: text('secret_hash').notNull(),
+  // secretHash removed — see workspaceSecret below.
   /**
    * The per-workspace ticket counter. Bumped inside the conversation-insert
    * transaction by allocateTicketNumber(), exactly as message_seq is bumped by
@@ -28,10 +36,16 @@ export const workspace = pgTable('workspace', {
    * column rather than an env var so one noisy tenant can be tuned alone.
    */
   autoCloseDays: integer('auto_close_days').notNull().default(7),
+  /** Cap on live tickets assignOnHandoff will place on one agent before skipping them. */
+  maxAssignedTickets: integer('max_assigned_tickets').notNull().default(5),
+  /** Hours of silence before a player is asked to confirm resolution. */
+  inactivityWindowHours: integer('inactivity_window_hours').notNull().default(24),
+  /** Minutes a form submission waits before sweepAbandonedForms auto-hands it off. */
+  formTimeoutMinutes: integer('form_timeout_minutes').notNull().default(30),
   /** Set to refuse token minting without deleting anything. */
   disabledAt: timestamp('disabled_at', tz),
   createdAt: timestamp('created_at', tz).notNull().defaultNow(),
-})
+});
 
 /**
  * The other unscoped table: one login per person, global across workspaces.
@@ -47,8 +61,16 @@ export const agent = pgTable('agent', {
   googleSubject: text('google_subject').unique(),
   displayName: text('display_name').notNull(),
   status: agentStatus('status').notNull().default('active'),
+  /** When the current on_leave period started. Null unless status is on_leave. */
+  onLeaveSince: timestamp('on_leave_since', tz),
+  /** Planned return date for the current on_leave period. Null = indefinite. */
+  onLeaveUntil: timestamp('on_leave_until', tz),
+  /** Global: grants access to every workspace. Only a super admin may toggle this. See requireAdminRole. */
+  isAdmin: boolean('is_admin').notNull().default(false),
+  /** Global: may toggle isAdmin/isSuperAdmin on any agent. */
+  isSuperAdmin: boolean('is_super_admin').notNull().default(false),
   createdAt: timestamp('created_at', tz).notNull().defaultNow(),
-})
+});
 
 /** The hinge: a global agent holds a per-workspace role. */
 export const workspaceMember = pgTable(
@@ -66,4 +88,22 @@ export const workspaceMember = pgTable(
     createdAt: timestamp('created_at', tz).notNull().defaultNow(),
   },
   (t) => [uniqueIndex('workspace_member_workspace_agent_uk').on(t.workspaceId, t.agentId)],
-)
+);
+
+/**
+ * Replaces the single `workspace.secret_hash`. Rotation inserts a new row rather
+ * than overwriting one, so the previous secret can keep working for a grace
+ * window while a game studio redeploys with the new one. See auth/workspaceSecret.ts.
+ */
+export const workspaceSecret = pgTable('workspace_secret', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  workspaceId: uuid('workspace_id')
+    .notNull()
+    .references(() => workspace.id, { onDelete: 'restrict' }),
+  secretHash: text('secret_hash').notNull(),
+  createdAt: timestamp('created_at', tz).notNull().defaultNow(),
+  /** Null = no expiry (the current active secret). Set on rotation for the row it replaces. */
+  expiresAt: timestamp('expires_at', tz),
+  /** Set only if an admin manually revokes ahead of expiry. */
+  revokedAt: timestamp('revoked_at', tz),
+});

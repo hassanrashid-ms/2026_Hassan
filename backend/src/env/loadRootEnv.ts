@@ -1,7 +1,7 @@
-import { existsSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { config as loadDotenv } from 'dotenv'
+import { existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { config as loadDotenv } from 'dotenv';
 
 /**
  * Loads the repo-root `.env` regardless of which package's directory called it or
@@ -21,13 +21,15 @@ import { config as loadDotenv } from 'dotenv'
  * `process.env`, so calling this unconditionally is safe.
  */
 export function loadRootEnv(fromUrl: string): void {
-  let dir = dirname(fileURLToPath(fromUrl))
+  let dir = dirname(fileURLToPath(fromUrl));
   while (!existsSync(join(dir, 'pnpm-workspace.yaml'))) {
-    const parent = dirname(dir)
+    const parent = dirname(dir);
     if (parent === dir) {
-      throw new Error('loadRootEnv: reached the filesystem root without finding pnpm-workspace.yaml')
+      throw new Error(
+        'loadRootEnv: reached the filesystem root without finding pnpm-workspace.yaml',
+      );
     }
-    dir = parent
+    dir = parent;
   }
-  loadDotenv({ path: join(dir, '.env') })
+  loadDotenv({ path: join(dir, '.env') });
 }

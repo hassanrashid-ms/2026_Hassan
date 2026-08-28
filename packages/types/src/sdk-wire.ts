@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import { z } from 'zod';
 
 /** Lowercase, because Node lowercases incoming header names. */
 export const SDK_HEADERS = {
@@ -6,10 +6,10 @@ export const SDK_HEADERS = {
   workspace: 'x-support-workspace',
   sdkVersion: 'x-support-sdk',
   clientVersion: 'x-support-client-version',
-} as const
+} as const;
 
-const MAX_FUTURE_SKEW_MS = 24 * 60 * 60 * 1000
-const EARLIEST_PLAUSIBLE_MS = Date.UTC(2020, 0, 1)
+const MAX_FUTURE_SKEW_MS = 24 * 60 * 60 * 1000;
+const EARLIEST_PLAUSIBLE_MS = Date.UTC(2020, 0, 1);
 
 /**
  * Device clocks lie. A timestamp that is unparseable, more than 24h in the future,
@@ -17,17 +17,17 @@ const EARLIEST_PLAUSIBLE_MS = Date.UTC(2020, 0, 1)
  * request is still a real visit and must still be recorded.
  */
 export function coerceInstant(input: unknown, fallback: Date = new Date()): Date {
-  if (typeof input !== 'string' && !(input instanceof Date)) return fallback
-  const candidate = input instanceof Date ? input : new Date(input)
-  const ms = candidate.getTime()
-  if (Number.isNaN(ms)) return fallback
-  if (ms > fallback.getTime() + MAX_FUTURE_SKEW_MS) return fallback
-  if (ms < EARLIEST_PLAUSIBLE_MS) return fallback
-  return candidate
+  if (typeof input !== 'string' && !(input instanceof Date)) return fallback;
+  const candidate = input instanceof Date ? input : new Date(input);
+  const ms = candidate.getTime();
+  if (Number.isNaN(ms)) return fallback;
+  if (ms > fallback.getTime() + MAX_FUTURE_SKEW_MS) return fallback;
+  if (ms < EARLIEST_PLAUSIBLE_MS) return fallback;
+  return candidate;
 }
 
 /** Free text, never an enum, so a game can add an entry point with no server release. */
-const entryPoint = z.string().min(1).max(120).catch('unknown')
+const entryPoint = z.string().min(1).max(120).catch('unknown');
 
 /**
  * `snapshot` is z.unknown(): anything the SDK sends survives to the splitter, and
@@ -39,8 +39,8 @@ export const SessionStartBody = z.object({
   entry_point: entryPoint,
   started_at: z.unknown().optional(),
   snapshot: z.unknown().optional(),
-})
-export type SessionStartBody = z.infer<typeof SessionStartBody>
+});
+export type SessionStartBody = z.infer<typeof SessionStartBody>;
 
 /**
  * duration_ms, conversation_created and articles_read are recorded but not trusted —
@@ -61,8 +61,8 @@ export const SessionEndBody = z.object({
   duration_ms: z.number().int().nonnegative().nullable().catch(null),
   conversation_created: z.boolean().nullable().catch(null),
   articles_read: z.array(z.string().max(200)).max(500).catch([]),
-})
-export type SessionEndBody = z.infer<typeof SessionEndBody>
+});
+export type SessionEndBody = z.infer<typeof SessionEndBody>;
 
 /**
  * Always 200 if the body parses: an incident report that itself errors is worse
@@ -80,17 +80,24 @@ export const IncidentBody = z.object({
   // Validate the type first (falls back to '' only when it isn't a string at all),
   // then truncate — so an abusive detail keeps its first 2000 characters instead of
   // being wiped.
-  detail: z.string().catch('').transform((s) => s.slice(0, 2000)),
+  detail: z
+    .string()
+    .catch('')
+    .transform((s) => s.slice(0, 2000)),
   sdk_version: z.string().max(60).catch(''),
   client_version: z.string().max(60).catch(''),
-})
-export type IncidentBody = z.infer<typeof IncidentBody>
+});
+export type IncidentBody = z.infer<typeof IncidentBody>;
 
-export type UnreadResponse = { unread_count: number }
+export type UnreadResponse = { unread_count: number };
 
 export const PlayerTokenRequest = z.object({
-  external_player_id: z.string().min(1).max(128).regex(/^[A-Za-z0-9._:-]+$/),
-})
-export type PlayerTokenRequest = z.infer<typeof PlayerTokenRequest>
+  external_player_id: z
+    .string()
+    .min(1)
+    .max(128)
+    .regex(/^[A-Za-z0-9._:-]+$/),
+});
+export type PlayerTokenRequest = z.infer<typeof PlayerTokenRequest>;
 
-export type PlayerTokenResponse = { token: string; expires_in: number }
+export type PlayerTokenResponse = { token: string; expires_in: number };

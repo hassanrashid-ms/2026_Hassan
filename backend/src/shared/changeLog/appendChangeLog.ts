@@ -1,23 +1,23 @@
-import { isDeepStrictEqual } from 'node:util'
-import type { Tx } from '../db/withWorkspace.ts'
-import { changeLog } from '../db/schema/index.ts'
+import { isDeepStrictEqual } from 'node:util';
+import type { Tx } from '../db/withWorkspace.ts';
+import { changeLog } from '../db/schema/index.ts';
 
 export type ChangeLogChange = {
   /** The COLUMN name, not the API field name. */
-  field: string
-  before: unknown
-  after: unknown
-}
+  field: string;
+  before: unknown;
+  after: unknown;
+};
 
 export type ChangeLogInput = {
-  workspaceId: string
-  entityType: string
+  workspaceId: string;
+  entityType: string;
   /** The audited row's uuid pk. For bot_config that is the workspace id itself. */
-  entityId: string
+  entityId: string;
   /** The authenticated agent. There is no system or bot actor. */
-  actorId: string
-  changes: readonly ChangeLogChange[]
-}
+  actorId: string;
+  changes: readonly ChangeLogChange[];
+};
 
 /**
  * jsonb has no `undefined`. Normalising here means a caller passing `undefined`
@@ -26,7 +26,7 @@ export type ChangeLogInput = {
  * treat `undefined` and `null` as the same absence, which they are.
  */
 function normalise(value: unknown): unknown {
-  return value === undefined ? null : value
+  return value === undefined ? null : value;
 }
 
 /**
@@ -51,9 +51,9 @@ export async function appendChangeLog(tx: Tx, input: ChangeLogInput): Promise<vo
       before: normalise(change.before),
       after: normalise(change.after),
     }))
-    .filter((change) => !isDeepStrictEqual(change.before, change.after))
+    .filter((change) => !isDeepStrictEqual(change.before, change.after));
 
-  if (changed.length === 0) return
+  if (changed.length === 0) return;
 
   await tx.insert(changeLog).values(
     changed.map((change) => ({
@@ -65,5 +65,5 @@ export async function appendChangeLog(tx: Tx, input: ChangeLogInput): Promise<vo
       afterValue: change.after,
       actorId: input.actorId,
     })),
-  )
+  );
 }

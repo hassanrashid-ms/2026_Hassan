@@ -57,6 +57,139 @@
       "when": 1787057121143,
       "tag": "0007_freezing_sharon_carter",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1787147364067,
+      "tag": "0008_bot_config_rules_and_tools",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1787165127347,
+      "tag": "0009_bot_config_finalize",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1787223134981,
+      "tag": "0010_peaceful_kree",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1787297585603,
+      "tag": "0011_tricky_ink",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1787297689300,
+      "tag": "0012_busy_blazing_skull",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1787297770376,
+      "tag": "0013_migrate_admin_role",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1787558703563,
+      "tag": "0014_simple_korath",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1787559653010,
+      "tag": "0015_charming_deathbird",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1787571587368,
+      "tag": "0016_typical_loa",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1787574944302,
+      "tag": "0017_opposite_mister_fear",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1787576302496,
+      "tag": "0018_gifted_beyonder",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1787638977569,
+      "tag": "0019_tranquil_giant_girl",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1787811836433,
+      "tag": "0020_parched_puff_adder",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1787816934893,
+      "tag": "0021_known_arclight",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1787826481128,
+      "tag": "0022_bot_config_version",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1787829745806,
+      "tag": "0023_backfill_bot_config_version",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1787896842659,
+      "tag": "0024_small_loners",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1787896842660,
+      "tag": "0025_article_version_append_only_trigger",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1787896842661,
+      "tag": "0026_backfill_article_version",
+      "breakpoints": true
     }
   ]
 }

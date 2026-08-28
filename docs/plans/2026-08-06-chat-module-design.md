@@ -72,7 +72,7 @@ React 19 + Vite (existing) · TanStack Query 5, `react-router-dom` 7, `react-vir
   `pnpm --filter @support/web typecheck && pnpm --filter @support/web build` (frontend tasks). A
   task may also run its own new test file with vitest as part of writing it — that's an ordinary
   part of TDD, not a validation step, and it's fine even though the shared Postgres test DB means
-  two tasks' test runs shouldn't be *literally* simultaneous. What must **not** happen is a second
+  two tasks' test runs shouldn't be _literally_ simultaneous. What must **not** happen is a second
   agent re-reviewing a first agent's finished task.
 - **Batch Checkpoint** (after every batch, see below): `pnpm typecheck` and `pnpm test` across the
   whole repo, plus `pnpm --filter @support/web build`. This is a mechanical command run, not an AI
@@ -104,6 +104,7 @@ another Batch-2 task's new files.
 **Batch:** 0 (sequential prerequisite for everything else)
 
 **Files:**
+
 - Rename: `backend/src/agentside/` → `backend/src/agent/` (git mv; drop the unused `models/`
   subfolder — this codebase's actual per-vertical layout is `routers/controllers/services` only,
   matching `surface/`, not the aspirational `models/` in the folder-structure-revamp doc)
@@ -116,6 +117,7 @@ another Batch-2 task's new files.
 - Test: `backend/tests/auth.agentSession.test.ts`
 
 **Interfaces:**
+
 - Produces: `signAgentSession(claims: { agent_id: string; workspace_id: string }, ttlSeconds?: number): Promise<string>`,
   `verifyAgentSession(token: string): Promise<{ agent_id: string; workspace_id: string }>`,
   `class InvalidAgentSession extends Error` — all from `backend/src/shared/auth/agentSession.ts`.
@@ -138,12 +140,12 @@ rmdir backend/src/agentside/models backend/src/agentside 2>/dev/null || true
 `backend/src/agent/router.ts`:
 
 ```ts
-import { Router } from 'express'
+import { Router } from 'express';
 
 // Sub-routers (auth, conversations, messages) are added by later tasks in this
 // plan. Kept as its own file, mirroring sdk/router.ts and surface/router.ts, so
 // those later tasks each add one `.use()` line rather than editing app.ts.
-export const agentRouter = Router()
+export const agentRouter = Router();
 ```
 
 - [ ] **Step 3: Mount it in `app.ts`**
@@ -151,14 +153,14 @@ export const agentRouter = Router()
 In `backend/src/app.ts`, add the import and mount line:
 
 ```ts
-import { agentRouter } from './agent/router.ts'
+import { agentRouter } from './agent/router.ts';
 ```
 
 ```ts
-  app.use('/auth', playerTokenRouter)
-  app.use('/sdk', sdkRouter)
-  app.use('/surface', surfaceRouter)
-  app.use('/agent', agentRouter)
+app.use('/auth', playerTokenRouter);
+app.use('/sdk', sdkRouter);
+app.use('/surface', surfaceRouter);
+app.use('/agent', agentRouter);
 ```
 
 - [ ] **Step 4: Run typecheck to confirm the rename and mount didn't break anything**
@@ -201,47 +203,51 @@ any commit, but `getEnv()` will throw on startup/test-run without it.
 `backend/tests/auth.agentSession.test.ts`:
 
 ```ts
-import { describe, expect, it } from 'vitest'
-import { InvalidAgentSession, signAgentSession, verifyAgentSession } from '../src/shared/auth/agentSession.ts'
+import { describe, expect, it } from 'vitest';
+import {
+  InvalidAgentSession,
+  signAgentSession,
+  verifyAgentSession,
+} from '../src/shared/auth/agentSession.ts';
 
 describe('agent session token', () => {
   it('round-trips valid claims', async () => {
-    const token = await signAgentSession({ agent_id: 'a1', workspace_id: 'w1' })
-    const claims = await verifyAgentSession(token)
-    expect(claims).toEqual({ agent_id: 'a1', workspace_id: 'w1' })
-  })
+    const token = await signAgentSession({ agent_id: 'a1', workspace_id: 'w1' });
+    const claims = await verifyAgentSession(token);
+    expect(claims).toEqual({ agent_id: 'a1', workspace_id: 'w1' });
+  });
 
   it('rejects an expired token', async () => {
-    const token = await signAgentSession({ agent_id: 'a1', workspace_id: 'w1' }, -1)
-    await expect(verifyAgentSession(token)).rejects.toThrow(InvalidAgentSession)
-  })
+    const token = await signAgentSession({ agent_id: 'a1', workspace_id: 'w1' }, -1);
+    await expect(verifyAgentSession(token)).rejects.toThrow(InvalidAgentSession);
+  });
 
   it('rejects a token signed with a different audience', async () => {
-    const { SignJWT } = await import('jose')
-    const key = new TextEncoder().encode(process.env.AGENT_SESSION_JWT_SECRET)
+    const { SignJWT } = await import('jose');
+    const key = new TextEncoder().encode(process.env.AGENT_SESSION_JWT_SECRET);
     const token = await new SignJWT({ agent_id: 'a1', workspace_id: 'w1' })
       .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
       .setIssuer('support-crm')
       .setAudience('some-other-audience')
       .setIssuedAt()
       .setExpirationTime('60s')
-      .sign(key)
-    await expect(verifyAgentSession(token)).rejects.toThrow(InvalidAgentSession)
-  })
+      .sign(key);
+    await expect(verifyAgentSession(token)).rejects.toThrow(InvalidAgentSession);
+  });
 
   it('rejects a token missing a required claim', async () => {
-    const { SignJWT } = await import('jose')
-    const key = new TextEncoder().encode(process.env.AGENT_SESSION_JWT_SECRET)
+    const { SignJWT } = await import('jose');
+    const key = new TextEncoder().encode(process.env.AGENT_SESSION_JWT_SECRET);
     const token = await new SignJWT({ agent_id: 'a1' })
       .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
       .setIssuer('support-crm')
       .setAudience('support-agent-dev')
       .setIssuedAt()
       .setExpirationTime('60s')
-      .sign(key)
-    await expect(verifyAgentSession(token)).rejects.toThrow(InvalidAgentSession)
-  })
-})
+      .sign(key);
+    await expect(verifyAgentSession(token)).rejects.toThrow(InvalidAgentSession);
+  });
+});
 ```
 
 - [ ] **Step 9: Run it to confirm it fails**
@@ -254,16 +260,16 @@ Expected: FAIL — `agentSession.ts` module not found
 `backend/src/shared/auth/agentSession.ts`:
 
 ```ts
-import { SignJWT, jwtVerify } from 'jose'
-import { getEnv } from '../../env.ts'
+import { SignJWT, jwtVerify } from 'jose';
+import { getEnv } from '../../env.ts';
 
-const ISSUER = 'support-crm'
-const AUDIENCE = 'support-agent-dev'
+const ISSUER = 'support-crm';
+const AUDIENCE = 'support-agent-dev';
 
-export type AgentSessionClaims = { agent_id: string; workspace_id: string }
+export type AgentSessionClaims = { agent_id: string; workspace_id: string };
 
 function key(): Uint8Array {
-  return new TextEncoder().encode(getEnv().AGENT_SESSION_JWT_SECRET)
+  return new TextEncoder().encode(getEnv().AGENT_SESSION_JWT_SECRET);
 }
 
 /**
@@ -282,28 +288,28 @@ export async function signAgentSession(
     .setAudience(AUDIENCE)
     .setIssuedAt()
     .setExpirationTime(`${ttlSeconds}s`)
-    .sign(key())
+    .sign(key());
 }
 
 export class InvalidAgentSession extends Error {}
 
 export async function verifyAgentSession(token: string): Promise<AgentSessionClaims> {
-  let payload: Record<string, unknown>
+  let payload: Record<string, unknown>;
   try {
-    ;({ payload } = await jwtVerify(token, key(), {
+    ({ payload } = await jwtVerify(token, key(), {
       issuer: ISSUER,
       audience: AUDIENCE,
       algorithms: ['HS256'],
-    }))
+    }));
   } catch (error) {
-    throw new InvalidAgentSession(error instanceof Error ? error.message : 'token rejected')
+    throw new InvalidAgentSession(error instanceof Error ? error.message : 'token rejected');
   }
 
-  const { agent_id, workspace_id } = payload
+  const { agent_id, workspace_id } = payload;
   if (typeof agent_id !== 'string' || typeof workspace_id !== 'string') {
-    throw new InvalidAgentSession('token is missing a required claim')
+    throw new InvalidAgentSession('token is missing a required claim');
   }
-  return { agent_id, workspace_id }
+  return { agent_id, workspace_id };
 }
 ```
 
@@ -339,6 +345,7 @@ four to separate subagents at once.
 **Batch:** 1
 
 **Files:**
+
 - Create: `packages/types/src/chat.ts`
 - Modify: `packages/types/src/index.ts`
 - Test: `packages/types/tests/chat.test.ts`
@@ -349,6 +356,7 @@ four to separate subagents at once.
 - Test: `backend/tests/domain.serializers.test.ts`
 
 **Interfaces:**
+
 - Produces (from `@support/types`, i.e. `packages/types/src/chat.ts`): Zod schemas
   `SendMessageBody`, `SendAgentMessageBody`, `MarkPlayerReadBody`, `MarkAgentReadBody`; types
   `ChatAuthorType`, `ChatDeliveryState`, `ConversationStatusValue`, `PlayerMessageView`,
@@ -368,36 +376,45 @@ four to separate subagents at once.
 `packages/types/tests/chat.test.ts`:
 
 ```ts
-import { describe, expect, it } from 'vitest'
-import { MarkAgentReadBody, MarkPlayerReadBody, SendAgentMessageBody, SendMessageBody } from '../src/chat.ts'
+import { describe, expect, it } from 'vitest';
+import {
+  MarkAgentReadBody,
+  MarkPlayerReadBody,
+  SendAgentMessageBody,
+  SendMessageBody,
+} from '../src/chat.ts';
 
 describe('chat request schemas', () => {
   it('SendMessageBody accepts a non-empty body', () => {
-    expect(SendMessageBody.safeParse({ body: 'hello' }).success).toBe(true)
-  })
+    expect(SendMessageBody.safeParse({ body: 'hello' }).success).toBe(true);
+  });
 
   it('SendMessageBody rejects an empty body', () => {
-    expect(SendMessageBody.safeParse({ body: '' }).success).toBe(false)
-  })
+    expect(SendMessageBody.safeParse({ body: '' }).success).toBe(false);
+  });
 
   it('SendAgentMessageBody requires a uuid conversation_id', () => {
-    expect(SendAgentMessageBody.safeParse({ conversation_id: 'not-a-uuid', body: 'hi' }).success).toBe(false)
     expect(
-      SendAgentMessageBody.safeParse({ conversation_id: '3f2504e0-4f89-11d3-9a0c-0305e82c3301', body: 'hi' })
-        .success,
-    ).toBe(true)
-  })
+      SendAgentMessageBody.safeParse({ conversation_id: 'not-a-uuid', body: 'hi' }).success,
+    ).toBe(false);
+    expect(
+      SendAgentMessageBody.safeParse({
+        conversation_id: '3f2504e0-4f89-11d3-9a0c-0305e82c3301',
+        body: 'hi',
+      }).success,
+    ).toBe(true);
+  });
 
   it('MarkPlayerReadBody requires a non-negative integer', () => {
-    expect(MarkPlayerReadBody.safeParse({ up_to_seq: -1 }).success).toBe(false)
-    expect(MarkPlayerReadBody.safeParse({ up_to_seq: 1.5 }).success).toBe(false)
-    expect(MarkPlayerReadBody.safeParse({ up_to_seq: 3 }).success).toBe(true)
-  })
+    expect(MarkPlayerReadBody.safeParse({ up_to_seq: -1 }).success).toBe(false);
+    expect(MarkPlayerReadBody.safeParse({ up_to_seq: 1.5 }).success).toBe(false);
+    expect(MarkPlayerReadBody.safeParse({ up_to_seq: 3 }).success).toBe(true);
+  });
 
   it('MarkAgentReadBody requires both fields', () => {
-    expect(MarkAgentReadBody.safeParse({ up_to_seq: 3 }).success).toBe(false)
-  })
-})
+    expect(MarkAgentReadBody.safeParse({ up_to_seq: 3 }).success).toBe(false);
+  });
+});
 ```
 
 - [ ] **Step 2: Run it to confirm it fails**
@@ -410,74 +427,71 @@ Expected: FAIL — `../src/chat.ts` not found
 `packages/types/src/chat.ts`:
 
 ```ts
-import { z } from 'zod'
+import { z } from 'zod';
 
 /**
  * NOT part of the frozen SDK contract — this ships with the server, same as
  * surface.ts. Shared between the surface (player) and agent verticals so both
  * sides of the chat loop agree on one shape.
  */
-export const SendMessageBody = z.object({ body: z.string().min(1).max(4000) })
+export const SendMessageBody = z.object({ body: z.string().min(1).max(4000) });
 
 export const SendAgentMessageBody = z.object({
   conversation_id: z.uuid(),
   body: z.string().min(1).max(4000),
-})
+});
 
-export const MarkPlayerReadBody = z.object({ up_to_seq: z.number().int().nonnegative() })
+export const MarkPlayerReadBody = z.object({ up_to_seq: z.number().int().nonnegative() });
 
 export const MarkAgentReadBody = z.object({
   conversation_id: z.uuid(),
   up_to_seq: z.number().int().nonnegative(),
-})
+});
 
-export type ChatAuthorType = 'player' | 'agent' | 'bot' | 'system'
-export type ChatDeliveryState = 'sending' | 'sent' | 'delivered' | 'read' | 'failed'
+export type ChatAuthorType = 'player' | 'agent' | 'bot' | 'system';
+export type ChatDeliveryState = 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
 export type ConversationStatusValue =
-  | 'new'
-  | 'bot_active'
-  | 'open'
-  | 'awaiting_player'
-  | 'escalated'
-  | 'resolved'
-  | 'closed'
+  'new' | 'bot_active' | 'open' | 'awaiting_player' | 'escalated' | 'resolved' | 'closed';
 
 export type PlayerMessageView = {
-  id: string
-  seq: number
-  author_type: ChatAuthorType
-  body: string
-  delivery_state: ChatDeliveryState
-  created_at: string
-}
+  id: string;
+  seq: number;
+  author_type: ChatAuthorType;
+  body: string;
+  delivery_state: ChatDeliveryState;
+  created_at: string;
+};
 
 /** Same fields as PlayerMessageView plus the two an agent may see and a player may not. */
 export type AgentMessageView = PlayerMessageView & {
-  author_agent_id: string | null
-  visibility: 'public' | 'internal'
-}
+  author_agent_id: string | null;
+  visibility: 'public' | 'internal';
+};
 
-export type PlayerMessagesResponse = { conversation_id: string | null; messages: PlayerMessageView[] }
-export type AgentMessagesResponse = { messages: AgentMessageView[] }
-export type ClaimResponse = { claimed: boolean }
+export type PlayerMessagesResponse = {
+  conversation_id: string | null;
+  messages: PlayerMessageView[];
+};
+export type AgentMessagesResponse = { messages: AgentMessageView[] };
+export type ClaimResponse = { claimed: boolean };
 
 export type AgentConversationSummary = {
-  id: string
-  player: { external_player_id: string }
-  status: ConversationStatusValue
-  last_message_preview: string | null
-  last_message_at: string | null
-}
-export type AgentConversationsResponse = { conversations: AgentConversationSummary[] }
+  id: string;
+  player: { external_player_id: string };
+  status: ConversationStatusValue;
+  last_message_preview: string | null;
+  last_message_at: string | null;
+};
+export type AgentConversationsResponse = { conversations: AgentConversationSummary[] };
 
 /** The inbox-room payload: id and new status only, never the full row. */
-export type ConversationChangedEvent = { conversation_id: string; status: ConversationStatusValue }
+export type ConversationChangedEvent = { conversation_id: string; status: ConversationStatusValue };
 ```
 
 `packages/types/src/index.ts` — add one line:
 
 ```ts
-export * from './chat.ts'
+export * from './chat.ts';
 ```
 
 - [ ] **Step 4: Run the test to confirm it passes**
@@ -490,9 +504,9 @@ Expected: PASS
 `backend/tests/domain.serializers.test.ts`:
 
 ```ts
-import { describe, expect, it } from 'vitest'
-import { toAgentView, toPlayerView } from '../src/domain/conversations/index.ts'
-import type { PostedMessageRow } from '../src/domain/conversations/index.ts'
+import { describe, expect, it } from 'vitest';
+import { toAgentView, toPlayerView } from '../src/domain/conversations/index.ts';
+import type { PostedMessageRow } from '../src/domain/conversations/index.ts';
 
 function row(overrides: Partial<PostedMessageRow> = {}): PostedMessageRow {
   return {
@@ -506,7 +520,7 @@ function row(overrides: Partial<PostedMessageRow> = {}): PostedMessageRow {
     deliveryState: 'sent',
     createdAt: new Date('2026-08-06T00:00:00Z'),
     ...overrides,
-  }
+  };
 }
 
 describe('toPlayerView', () => {
@@ -518,13 +532,13 @@ describe('toPlayerView', () => {
       body: 'hello',
       delivery_state: 'sent',
       created_at: '2026-08-06T00:00:00.000Z',
-    })
-  })
+    });
+  });
 
   it('returns null for an internal message, guarding the serializer split even though this slice never writes internal itself', () => {
-    expect(toPlayerView(row({ visibility: 'internal' }))).toBeNull()
-  })
-})
+    expect(toPlayerView(row({ visibility: 'internal' }))).toBeNull();
+  });
+});
 
 describe('toAgentView', () => {
   it('never returns null and includes visibility and author_agent_id', () => {
@@ -537,9 +551,9 @@ describe('toAgentView', () => {
       visibility: 'internal',
       delivery_state: 'sent',
       created_at: '2026-08-06T00:00:00.000Z',
-    })
-  })
-})
+    });
+  });
+});
 ```
 
 - [ ] **Step 6: Run it to confirm it fails**
@@ -552,24 +566,30 @@ Expected: FAIL — module not found
 `backend/tests/domain.postMessage.test.ts`:
 
 ```ts
-import { afterAll, beforeEach, describe, expect, it } from 'vitest'
-import { closeDb } from '../src/shared/db/client.ts'
-import { postMessage } from '../src/domain/conversations/index.ts'
-import { withWorkspace } from '../src/shared/db/withWorkspace.ts'
-import { closeOwnerPool, seedConversation, seedPlayer, seedWorkspace, truncateAll } from './helpers/db.ts'
+import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { closeDb } from '../src/shared/db/client.ts';
+import { postMessage } from '../src/domain/conversations/index.ts';
+import { withWorkspace } from '../src/shared/db/withWorkspace.ts';
+import {
+  closeOwnerPool,
+  seedConversation,
+  seedPlayer,
+  seedWorkspace,
+  truncateAll,
+} from './helpers/db.ts';
 
 afterAll(async () => {
-  await closeDb()
-  await closeOwnerPool()
-})
+  await closeDb();
+  await closeOwnerPool();
+});
 
-beforeEach(truncateAll)
+beforeEach(truncateAll);
 
 describe('postMessage', () => {
   it('bumps message_seq, inserts the message, and appends a message_sent event', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
 
     const posted = await withWorkspace(workspaceId, (tx) =>
       postMessage(tx, {
@@ -579,17 +599,17 @@ describe('postMessage', () => {
         actorId: playerId,
         body: 'hi there',
       }),
-    )
+    );
 
-    expect(posted.seq).toBe(1)
-    expect(posted.body).toBe('hi there')
-    expect(posted.deliveryState).toBe('sent')
-  })
+    expect(posted.seq).toBe(1);
+    expect(posted.body).toBe('hi there');
+    expect(posted.deliveryState).toBe('sent');
+  });
 
   it('never produces a duplicate seq under concurrent sends into the same conversation', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
 
     const results = await Promise.all(
       Array.from({ length: 5 }, (_unused, i) =>
@@ -603,12 +623,12 @@ describe('postMessage', () => {
           }),
         ),
       ),
-    )
+    );
 
-    const seqs = results.map((r) => r.seq).sort((a, b) => a - b)
-    expect(seqs).toEqual([1, 2, 3, 4, 5])
-  })
-})
+    const seqs = results.map((r) => r.seq).sort((a, b) => a - b);
+    expect(seqs).toEqual([1, 2, 3, 4, 5]);
+  });
+});
 ```
 
 - [ ] **Step 8: Run it to confirm it fails**
@@ -621,34 +641,34 @@ Expected: FAIL — module not found
 `backend/src/domain/conversations/postMessage.ts`:
 
 ```ts
-import { eq, sql } from 'drizzle-orm'
-import type { ChatAuthorType, ChatDeliveryState } from '@support/types'
-import { appendEvent } from '../../shared/events/appendEvent.ts'
-import { conversation, message } from '../../shared/db/schema/index.ts'
-import type { Tx } from '../../shared/db/withWorkspace.ts'
+import { eq, sql } from 'drizzle-orm';
+import type { ChatAuthorType, ChatDeliveryState } from '@support/types';
+import { appendEvent } from '../../shared/events/appendEvent.ts';
+import { conversation, message } from '../../shared/db/schema/index.ts';
+import type { Tx } from '../../shared/db/withWorkspace.ts';
 
 export type PostMessageInput = {
-  workspaceId: string
-  conversationId: string
-  authorType: ChatAuthorType
+  workspaceId: string;
+  conversationId: string;
+  authorType: ChatAuthorType;
   /** The player id or agent id behind this send — recorded on the event, not the message row. */
-  actorId: string
-  authorAgentId?: string | null
-  body: string
-  visibility?: 'public' | 'internal'
-}
+  actorId: string;
+  authorAgentId?: string | null;
+  body: string;
+  visibility?: 'public' | 'internal';
+};
 
 export type PostedMessageRow = {
-  id: string
-  conversationId: string
-  seq: number
-  authorType: ChatAuthorType
-  authorAgentId: string | null
-  body: string
-  visibility: 'public' | 'internal'
-  deliveryState: ChatDeliveryState
-  createdAt: Date
-}
+  id: string;
+  conversationId: string;
+  seq: number;
+  authorType: ChatAuthorType;
+  authorAgentId: string | null;
+  body: string;
+  visibility: 'public' | 'internal';
+  deliveryState: ChatDeliveryState;
+  createdAt: Date;
+};
 
 /**
  * The one place that bumps `message_seq`, inserts the message, and appends the
@@ -666,10 +686,10 @@ export async function postMessage(tx: Tx, input: PostMessageInput): Promise<Post
     .update(conversation)
     .set({ messageSeq: sql`${conversation.messageSeq} + 1` })
     .where(eq(conversation.id, input.conversationId))
-    .returning({ seq: conversation.messageSeq })
+    .returning({ seq: conversation.messageSeq });
 
   if (!bumped) {
-    throw new Error(`postMessage: conversation ${input.conversationId} not found`)
+    throw new Error(`postMessage: conversation ${input.conversationId} not found`);
   }
 
   const [inserted] = await tx
@@ -683,10 +703,10 @@ export async function postMessage(tx: Tx, input: PostMessageInput): Promise<Post
       body: input.body,
       visibility: input.visibility ?? 'public',
     })
-    .returning()
+    .returning();
 
   if (!inserted) {
-    throw new Error('postMessage: message insert returned nothing')
+    throw new Error('postMessage: message insert returned nothing');
   }
 
   await appendEvent(tx, {
@@ -696,9 +716,9 @@ export async function postMessage(tx: Tx, input: PostMessageInput): Promise<Post
     actorId: input.actorId,
     actorType: input.authorType,
     payload: { seq: bumped.seq, author_type: input.authorType },
-  })
+  });
 
-  return inserted
+  return inserted;
 }
 ```
 
@@ -707,8 +727,8 @@ export async function postMessage(tx: Tx, input: PostMessageInput): Promise<Post
 `backend/src/domain/conversations/serializers.ts`:
 
 ```ts
-import type { AgentMessageView, PlayerMessageView } from '@support/types'
-import type { PostedMessageRow } from './postMessage.ts'
+import type { AgentMessageView, PlayerMessageView } from '@support/types';
+import type { PostedMessageRow } from './postMessage.ts';
 
 /**
  * Explicit whitelist: returns null for any row whose visibility is not
@@ -718,7 +738,7 @@ import type { PostedMessageRow } from './postMessage.ts'
  * fetched whole and this function is the only place that decides.
  */
 export function toPlayerView(row: PostedMessageRow): PlayerMessageView | null {
-  if (row.visibility !== 'public') return null
+  if (row.visibility !== 'public') return null;
   return {
     id: row.id,
     seq: row.seq,
@@ -726,7 +746,7 @@ export function toPlayerView(row: PostedMessageRow): PlayerMessageView | null {
     body: row.body,
     delivery_state: row.deliveryState,
     created_at: row.createdAt.toISOString(),
-  }
+  };
 }
 
 /** Permissive: every field, every visibility. Only backend/src/agent/** may import this. */
@@ -740,15 +760,15 @@ export function toAgentView(row: PostedMessageRow): AgentMessageView {
     visibility: row.visibility,
     delivery_state: row.deliveryState,
     created_at: row.createdAt.toISOString(),
-  }
+  };
 }
 ```
 
 `backend/src/domain/conversations/index.ts`:
 
 ```ts
-export * from './postMessage.ts'
-export * from './serializers.ts'
+export * from './postMessage.ts';
+export * from './serializers.ts';
 ```
 
 - [ ] **Step 11: Run both domain tests to confirm they pass**
@@ -776,6 +796,7 @@ git commit -m "feat(domain): shared chat types, postMessage, toPlayerView/toAgen
 **Batch:** 1
 
 **Files:**
+
 - Modify: `backend/package.json` (add `socket.io`, `@socket.io/redis-adapter`; add
   `socket.io-client` as a devDependency for the in-process test)
 - Create: `backend/src/shared/realtime/rooms.ts`
@@ -786,6 +807,7 @@ git commit -m "feat(domain): shared chat types, postMessage, toPlayerView/toAgen
 - Test: `backend/tests/realtime.rooms.test.ts`
 
 **Interfaces:**
+
 - Produces: `playerRoom(conversationId): string`, `agentRoom(conversationId): string`,
   `inboxRoom(workspaceId): string` from `rooms.ts`. `createSocketServer(httpServer: http.Server): Server`
   and `getIo(): Server` from `socketServer.ts`. `emitMessageToRooms(io, conversationId, playerPayload: unknown, agentPayload: unknown): void`
@@ -819,9 +841,9 @@ Run: `pnpm install`
 `backend/src/shared/realtime/rooms.ts`:
 
 ```ts
-export const playerRoom = (conversationId: string): string => `conv:${conversationId}:player`
-export const agentRoom = (conversationId: string): string => `conv:${conversationId}:agents`
-export const inboxRoom = (workspaceId: string): string => `workspace:${workspaceId}:inbox`
+export const playerRoom = (conversationId: string): string => `conv:${conversationId}:player`;
+export const agentRoom = (conversationId: string): string => `conv:${conversationId}:agents`;
+export const inboxRoom = (workspaceId: string): string => `workspace:${workspaceId}:inbox`;
 ```
 
 - [ ] **Step 3: Write the emit helpers**
@@ -829,8 +851,8 @@ export const inboxRoom = (workspaceId: string): string => `workspace:${workspace
 `backend/src/shared/realtime/emit.ts`:
 
 ```ts
-import type { Server } from 'socket.io'
-import { agentRoom, inboxRoom, playerRoom } from './rooms.ts'
+import type { Server } from 'socket.io';
+import { agentRoom, inboxRoom, playerRoom } from './rooms.ts';
 
 /**
  * Payloads are `unknown` on purpose: this module is transport, not
@@ -844,15 +866,23 @@ export function emitMessageToRooms(
   playerPayload: unknown,
   agentPayload: unknown,
 ): void {
-  io.to(agentRoom(conversationId)).emit('message:new', agentPayload)
+  io.to(agentRoom(conversationId)).emit('message:new', agentPayload);
   if (playerPayload !== null) {
-    io.to(playerRoom(conversationId)).emit('message:new', playerPayload)
+    io.to(playerRoom(conversationId)).emit('message:new', playerPayload);
   }
 }
 
 /** id and new status only — never the full conversation row. */
-export function emitInboxChanged(io: Server, workspaceId: string, conversationId: string, status: string): void {
-  io.to(inboxRoom(workspaceId)).emit('conversation:changed', { conversation_id: conversationId, status })
+export function emitInboxChanged(
+  io: Server,
+  workspaceId: string,
+  conversationId: string,
+  status: string,
+): void {
+  io.to(inboxRoom(workspaceId)).emit('conversation:changed', {
+    conversation_id: conversationId,
+    status,
+  });
 }
 ```
 
@@ -861,26 +891,26 @@ export function emitInboxChanged(io: Server, workspaceId: string, conversationId
 `backend/src/shared/realtime/socketServer.ts`:
 
 ```ts
-import { and, eq } from 'drizzle-orm'
-import IORedis from 'ioredis'
-import { createAdapter } from '@socket.io/redis-adapter'
-import { Server } from 'socket.io'
-import type { Server as HttpServer } from 'node:http'
-import { getEnv } from '../../env.ts'
-import { InvalidAgentSession, verifyAgentSession } from '../auth/agentSession.ts'
-import { InvalidPlayerToken, verifyPlayerToken } from '../auth/playerToken.ts'
-import { conversation } from '../db/schema/index.ts'
-import { withWorkspace } from '../db/withWorkspace.ts'
-import { agentRoom, inboxRoom, playerRoom } from './rooms.ts'
+import { and, eq } from 'drizzle-orm';
+import IORedis from 'ioredis';
+import { createAdapter } from '@socket.io/redis-adapter';
+import { Server } from 'socket.io';
+import type { Server as HttpServer } from 'node:http';
+import { getEnv } from '../../env.ts';
+import { InvalidAgentSession, verifyAgentSession } from '../auth/agentSession.ts';
+import { InvalidPlayerToken, verifyPlayerToken } from '../auth/playerToken.ts';
+import { conversation } from '../db/schema/index.ts';
+import { withWorkspace } from '../db/withWorkspace.ts';
+import { agentRoom, inboxRoom, playerRoom } from './rooms.ts';
 
-export type PlayerSocketData = { role: 'player'; workspaceId: string; playerId: string }
-export type AgentSocketData = { role: 'agent'; workspaceId: string; agentId: string }
-export type SocketData = PlayerSocketData | AgentSocketData
+export type PlayerSocketData = { role: 'player'; workspaceId: string; playerId: string };
+export type AgentSocketData = { role: 'agent'; workspaceId: string; agentId: string };
+export type SocketData = PlayerSocketData | AgentSocketData;
 
-let ioInstance: Server | undefined
+let ioInstance: Server | undefined;
 
 function redisConnection(): IORedis {
-  return new IORedis(getEnv().REDIS_URL, { maxRetriesPerRequest: null })
+  return new IORedis(getEnv().REDIS_URL, { maxRetriesPerRequest: null });
 }
 
 async function canJoinConversation(data: SocketData, conversationId: string): Promise<boolean> {
@@ -888,10 +918,14 @@ async function canJoinConversation(data: SocketData, conversationId: string): Pr
     const where =
       data.role === 'player'
         ? and(eq(conversation.id, conversationId), eq(conversation.playerId, data.playerId))
-        : eq(conversation.id, conversationId)
-    const [found] = await tx.select({ id: conversation.id }).from(conversation).where(where).limit(1)
-    return found !== undefined
-  })
+        : eq(conversation.id, conversationId);
+    const [found] = await tx
+      .select({ id: conversation.id })
+      .from(conversation)
+      .where(where)
+      .limit(1);
+    return found !== undefined;
+  });
 }
 
 /**
@@ -899,70 +933,85 @@ async function canJoinConversation(data: SocketData, conversationId: string): Pr
  * JWT or agent-session token already used for REST, verified once here.
  */
 export function createSocketServer(httpServer: HttpServer): Server {
-  const pubClient = redisConnection()
-  const subClient = pubClient.duplicate()
+  const pubClient = redisConnection();
+  const subClient = pubClient.duplicate();
 
   const io = new Server(httpServer, {
     cors: { origin: getEnv().SURFACE_ORIGINS, methods: ['GET', 'POST'] },
     adapter: createAdapter(pubClient, subClient),
-  })
+  });
 
   io.use(async (socket, next) => {
-    const auth = socket.handshake.auth as { token?: unknown; role?: unknown }
+    const auth = socket.handshake.auth as { token?: unknown; role?: unknown };
     if (typeof auth.token !== 'string' || (auth.role !== 'player' && auth.role !== 'agent')) {
-      next(new Error('unauthorized'))
-      return
+      next(new Error('unauthorized'));
+      return;
     }
     try {
       if (auth.role === 'player') {
-        const claims = await verifyPlayerToken(auth.token)
-        socket.data = { role: 'player', workspaceId: claims.workspace_id, playerId: claims.player_id } satisfies PlayerSocketData
+        const claims = await verifyPlayerToken(auth.token);
+        socket.data = {
+          role: 'player',
+          workspaceId: claims.workspace_id,
+          playerId: claims.player_id,
+        } satisfies PlayerSocketData;
       } else {
-        const claims = await verifyAgentSession(auth.token)
-        socket.data = { role: 'agent', workspaceId: claims.workspace_id, agentId: claims.agent_id } satisfies AgentSocketData
+        const claims = await verifyAgentSession(auth.token);
+        socket.data = {
+          role: 'agent',
+          workspaceId: claims.workspace_id,
+          agentId: claims.agent_id,
+        } satisfies AgentSocketData;
       }
-      next()
+      next();
     } catch (error) {
       if (error instanceof InvalidPlayerToken || error instanceof InvalidAgentSession) {
-        next(new Error('unauthorized'))
-        return
+        next(new Error('unauthorized'));
+        return;
       }
-      next(error instanceof Error ? error : new Error('unauthorized'))
+      next(error instanceof Error ? error : new Error('unauthorized'));
     }
-  })
+  });
 
   io.on('connection', (socket) => {
-    const data = socket.data as SocketData
+    const data = socket.data as SocketData;
     if (data.role === 'agent') {
-      socket.join(inboxRoom(data.workspaceId))
+      socket.join(inboxRoom(data.workspaceId));
     }
 
-    socket.on('join_conversation', (payload: { conversation_id?: unknown }, ack?: (ok: boolean) => void) => {
-      const conversationId = payload.conversation_id
-      if (typeof conversationId !== 'string') {
-        ack?.(false)
-        return
-      }
-      void canJoinConversation(data, conversationId).then((allowed) => {
-        if (allowed) socket.join(data.role === 'player' ? playerRoom(conversationId) : agentRoom(conversationId))
-        ack?.(allowed)
-      })
-    })
+    socket.on(
+      'join_conversation',
+      (payload: { conversation_id?: unknown }, ack?: (ok: boolean) => void) => {
+        const conversationId = payload.conversation_id;
+        if (typeof conversationId !== 'string') {
+          ack?.(false);
+          return;
+        }
+        void canJoinConversation(data, conversationId).then((allowed) => {
+          if (allowed)
+            socket.join(
+              data.role === 'player' ? playerRoom(conversationId) : agentRoom(conversationId),
+            );
+          ack?.(allowed);
+        });
+      },
+    );
 
     socket.on('leave_conversation', (payload: { conversation_id?: unknown }) => {
-      const conversationId = payload.conversation_id
-      if (typeof conversationId !== 'string') return
-      socket.leave(data.role === 'player' ? playerRoom(conversationId) : agentRoom(conversationId))
-    })
-  })
+      const conversationId = payload.conversation_id;
+      if (typeof conversationId !== 'string') return;
+      socket.leave(data.role === 'player' ? playerRoom(conversationId) : agentRoom(conversationId));
+    });
+  });
 
-  ioInstance = io
-  return io
+  ioInstance = io;
+  return io;
 }
 
 export function getIo(): Server {
-  if (!ioInstance) throw new Error('Socket server not initialised — call createSocketServer first.')
-  return ioInstance
+  if (!ioInstance)
+    throw new Error('Socket server not initialised — call createSocketServer first.');
+  return ioInstance;
 }
 ```
 
@@ -971,17 +1020,17 @@ export function getIo(): Server {
 In `backend/src/server.ts`, add the import:
 
 ```ts
-const { createSocketServer } = await import('./shared/realtime/socketServer.ts')
+const { createSocketServer } = await import('./shared/realtime/socketServer.ts');
 ```
 
 and, right after the `server` is created:
 
 ```ts
-const port = getEnv().PORT
+const port = getEnv().PORT;
 const server = createApp().listen(port, () => {
-  console.log(`api listening on http://localhost:${port}`)
-})
-createSocketServer(server)
+  console.log(`api listening on http://localhost:${port}`);
+});
+createSocketServer(server);
 ```
 
 - [ ] **Step 6: Write the realtime test helper**
@@ -989,32 +1038,35 @@ createSocketServer(server)
 `backend/tests/helpers/realtime.ts`:
 
 ```ts
-import { createServer } from 'node:http'
-import { io as ioClient, type Socket } from 'socket.io-client'
-import { app } from './app.ts'
-import { createSocketServer } from '../../src/shared/realtime/socketServer.ts'
+import { createServer } from 'node:http';
+import { io as ioClient, type Socket } from 'socket.io-client';
+import { app } from './app.ts';
+import { createSocketServer } from '../../src/shared/realtime/socketServer.ts';
 
 export async function startRealtimeServer(): Promise<{ url: string; close: () => Promise<void> }> {
-  const httpServer = createServer(app)
-  createSocketServer(httpServer)
-  await new Promise<void>((resolve) => httpServer.listen(0, resolve))
+  const httpServer = createServer(app);
+  createSocketServer(httpServer);
+  await new Promise<void>((resolve) => httpServer.listen(0, resolve));
 
-  const address = httpServer.address()
+  const address = httpServer.address();
   if (address === null || typeof address === 'string') {
-    throw new Error('failed to bind an ephemeral port for the test realtime server')
+    throw new Error('failed to bind an ephemeral port for the test realtime server');
   }
 
   return {
     url: `http://localhost:${address.port}`,
     close: () =>
       new Promise<void>((resolve, reject) => {
-        httpServer.close((error) => (error ? reject(error) : resolve()))
+        httpServer.close((error) => (error ? reject(error) : resolve()));
       }),
-  }
+  };
 }
 
-export function connectClient(url: string, auth: { token: string; role: 'player' | 'agent' }): Socket {
-  return ioClient(url, { auth, transports: ['websocket'], forceNew: true })
+export function connectClient(
+  url: string,
+  auth: { token: string; role: 'player' | 'agent' },
+): Socket {
+  return ioClient(url, { auth, transports: ['websocket'], forceNew: true });
 }
 ```
 
@@ -1023,89 +1075,105 @@ export function connectClient(url: string, auth: { token: string; role: 'player'
 `backend/tests/realtime.rooms.test.ts`:
 
 ```ts
-import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { closeDb } from '../src/shared/db/client.ts'
-import { signAgentSession } from '../src/shared/auth/agentSession.ts'
-import { agentRoom, playerRoom } from '../src/shared/realtime/rooms.ts'
-import { getIo } from '../src/shared/realtime/socketServer.ts'
-import { mintToken } from './helpers/app.ts'
-import { closeOwnerPool, seedConversation, seedPlayer, seedWorkspace, truncateAll } from './helpers/db.ts'
-import { connectClient, startRealtimeServer } from './helpers/realtime.ts'
+import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { closeDb } from '../src/shared/db/client.ts';
+import { signAgentSession } from '../src/shared/auth/agentSession.ts';
+import { agentRoom, playerRoom } from '../src/shared/realtime/rooms.ts';
+import { getIo } from '../src/shared/realtime/socketServer.ts';
+import { mintToken } from './helpers/app.ts';
+import {
+  closeOwnerPool,
+  seedConversation,
+  seedPlayer,
+  seedWorkspace,
+  truncateAll,
+} from './helpers/db.ts';
+import { connectClient, startRealtimeServer } from './helpers/realtime.ts';
 
-let server: Awaited<ReturnType<typeof startRealtimeServer>>
+let server: Awaited<ReturnType<typeof startRealtimeServer>>;
 
 beforeEach(async () => {
-  await truncateAll()
-  server = await startRealtimeServer()
-})
+  await truncateAll();
+  server = await startRealtimeServer();
+});
 
 afterEach(async () => {
-  await server.close()
-})
+  await server.close();
+});
 
 afterAll(async () => {
-  await closeDb()
-  await closeOwnerPool()
-})
+  await closeDb();
+  await closeOwnerPool();
+});
 
 function waitFor(socket: ReturnType<typeof connectClient>, event: string): Promise<void> {
-  return new Promise((resolve) => socket.on(event, () => resolve()))
+  return new Promise((resolve) => socket.on(event, () => resolve()));
 }
 
 describe('socket rooms stay separated by audience', () => {
   it('an agent socket in conv:{id}:agents never receives an emit intended for conv:{id}:player, and vice versa', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
 
-    const playerToken = await mintToken({ workspace_id: workspaceId, player_id: playerId, external_player_id: 'p1' })
-    const agentToken = await signAgentSession({ agent_id: 'agent-1', workspace_id: workspaceId })
+    const playerToken = await mintToken({
+      workspace_id: workspaceId,
+      player_id: playerId,
+      external_player_id: 'p1',
+    });
+    const agentToken = await signAgentSession({ agent_id: 'agent-1', workspace_id: workspaceId });
 
-    const playerSocket = connectClient(server.url, { token: playerToken, role: 'player' })
-    const agentSocket = connectClient(server.url, { token: agentToken, role: 'agent' })
+    const playerSocket = connectClient(server.url, { token: playerToken, role: 'player' });
+    const agentSocket = connectClient(server.url, { token: agentToken, role: 'agent' });
 
-    await Promise.all([waitFor(playerSocket, 'connect'), waitFor(agentSocket, 'connect')])
+    await Promise.all([waitFor(playerSocket, 'connect'), waitFor(agentSocket, 'connect')]);
 
     const join = (socket: ReturnType<typeof connectClient>) =>
-      new Promise<boolean>((resolve) => socket.emit('join_conversation', { conversation_id: conversationId }, resolve))
+      new Promise<boolean>((resolve) =>
+        socket.emit('join_conversation', { conversation_id: conversationId }, resolve),
+      );
 
-    expect(await join(playerSocket)).toBe(true)
-    expect(await join(agentSocket)).toBe(true)
+    expect(await join(playerSocket)).toBe(true);
+    expect(await join(agentSocket)).toBe(true);
 
-    const playerReceived: unknown[] = []
-    const agentReceived: unknown[] = []
-    playerSocket.on('message:new', (payload: unknown) => playerReceived.push(payload))
-    agentSocket.on('message:new', (payload: unknown) => agentReceived.push(payload))
+    const playerReceived: unknown[] = [];
+    const agentReceived: unknown[] = [];
+    playerSocket.on('message:new', (payload: unknown) => playerReceived.push(payload));
+    agentSocket.on('message:new', (payload: unknown) => agentReceived.push(payload));
 
-    getIo().to(playerRoom(conversationId)).emit('message:new', { scope: 'player-only' })
-    getIo().to(agentRoom(conversationId)).emit('message:new', { scope: 'agent-only' })
+    getIo().to(playerRoom(conversationId)).emit('message:new', { scope: 'player-only' });
+    getIo().to(agentRoom(conversationId)).emit('message:new', { scope: 'agent-only' });
 
-    await new Promise((resolve) => setTimeout(resolve, 150))
+    await new Promise((resolve) => setTimeout(resolve, 150));
 
-    expect(playerReceived).toEqual([{ scope: 'player-only' }])
-    expect(agentReceived).toEqual([{ scope: 'agent-only' }])
+    expect(playerReceived).toEqual([{ scope: 'player-only' }]);
+    expect(agentReceived).toEqual([{ scope: 'agent-only' }]);
 
-    playerSocket.close()
-    agentSocket.close()
-  })
+    playerSocket.close();
+    agentSocket.close();
+  });
 
   it('a player cannot join a conversation that is not theirs', async () => {
-    const workspaceId = await seedWorkspace()
-    const ownerId = await seedPlayer(workspaceId, 'owner')
-    const otherId = await seedPlayer(workspaceId, 'other')
-    const conversationId = await seedConversation({ workspaceId, playerId: ownerId })
+    const workspaceId = await seedWorkspace();
+    const ownerId = await seedPlayer(workspaceId, 'owner');
+    const otherId = await seedPlayer(workspaceId, 'other');
+    const conversationId = await seedConversation({ workspaceId, playerId: ownerId });
 
-    const otherToken = await mintToken({ workspace_id: workspaceId, player_id: otherId, external_player_id: 'other' })
-    const socket = connectClient(server.url, { token: otherToken, role: 'player' })
-    await waitFor(socket, 'connect')
+    const otherToken = await mintToken({
+      workspace_id: workspaceId,
+      player_id: otherId,
+      external_player_id: 'other',
+    });
+    const socket = connectClient(server.url, { token: otherToken, role: 'player' });
+    await waitFor(socket, 'connect');
 
     const allowed = await new Promise<boolean>((resolve) =>
       socket.emit('join_conversation', { conversation_id: conversationId }, resolve),
-    )
-    expect(allowed).toBe(false)
-    socket.close()
-  })
-})
+    );
+    expect(allowed).toBe(false);
+    socket.close();
+  });
+});
 ```
 
 - [ ] **Step 8: Run it to confirm it fails**
@@ -1141,6 +1209,7 @@ git commit -m "feat(realtime): Socket.io server with redis adapter, audience-sep
 **Batch:** 1
 
 **Files:**
+
 - Create: `backend/src/shared/middleware/requireAgentSession.ts`
 - Create: `backend/src/agent/services/authService.ts`
 - Create: `backend/src/agent/controllers/authController.ts`
@@ -1151,6 +1220,7 @@ git commit -m "feat(realtime): Socket.io server with redis adapter, audience-sep
 - Test: `backend/tests/agent.auth.test.ts`
 
 **Interfaces:**
+
 - Produces: `requireAgentSession: RequestHandler` (sets `req.agent: AgentContext`) from
   `requireAgentSession.ts`; `type AgentContext = { agentId: string; workspaceId: string }`.
   `authRouter: Router` (mounted at `/auth/dev-agents`, `/auth/dev-login`, both **public** — the
@@ -1164,58 +1234,67 @@ git commit -m "feat(realtime): Socket.io server with redis adapter, audience-sep
 `backend/tests/agent.auth.test.ts`:
 
 ```ts
-import { afterAll, beforeEach, describe, expect, it } from 'vitest'
-import request from 'supertest'
-import { closeDb } from '../src/shared/db/client.ts'
-import { app } from './helpers/app.ts'
-import { closeOwnerPool, ownerPool, seedWorkspace, truncateAll } from './helpers/db.ts'
+import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import request from 'supertest';
+import { closeDb } from '../src/shared/db/client.ts';
+import { app } from './helpers/app.ts';
+import { closeOwnerPool, ownerPool, seedWorkspace, truncateAll } from './helpers/db.ts';
 
-async function seedAgentWithMembership(workspaceId: string, email: string, displayName: string): Promise<string> {
+async function seedAgentWithMembership(
+  workspaceId: string,
+  email: string,
+  displayName: string,
+): Promise<string> {
   const { rows } = await ownerPool.query<{ id: string }>(
     `insert into agent (email, display_name) values ($1, $2) returning id`,
     [email, displayName],
-  )
-  const agentId = rows[0]!.id
+  );
+  const agentId = rows[0]!.id;
   await ownerPool.query(
     `insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`,
     [workspaceId, agentId],
-  )
-  return agentId
+  );
+  return agentId;
 }
 
 afterAll(async () => {
-  await closeDb()
-  await closeOwnerPool()
-})
+  await closeDb();
+  await closeOwnerPool();
+});
 
-beforeEach(truncateAll)
+beforeEach(truncateAll);
 
 describe('agent dev auth', () => {
   it('GET /agent/auth/dev-agents lists agents with a workspace membership', async () => {
-    const workspaceId = await seedWorkspace()
-    const agentId = await seedAgentWithMembership(workspaceId, 'alex@example.test', 'Alex Agent')
+    const workspaceId = await seedWorkspace();
+    const agentId = await seedAgentWithMembership(workspaceId, 'alex@example.test', 'Alex Agent');
 
-    const res = await request(app).get('/agent/auth/dev-agents').expect(200)
-    expect(res.body.agents).toEqual([{ id: agentId, email: 'alex@example.test', display_name: 'Alex Agent' }])
-  })
+    const res = await request(app).get('/agent/auth/dev-agents').expect(200);
+    expect(res.body.agents).toEqual([
+      { id: agentId, email: 'alex@example.test', display_name: 'Alex Agent' },
+    ]);
+  });
 
   it('POST /agent/auth/dev-login mints a token that requireAgentSession accepts', async () => {
-    const workspaceId = await seedWorkspace()
-    const agentId = await seedAgentWithMembership(workspaceId, 'sam@example.test', 'Sam Agent')
+    const workspaceId = await seedWorkspace();
+    const agentId = await seedAgentWithMembership(workspaceId, 'sam@example.test', 'Sam Agent');
 
-    const res = await request(app).post('/agent/auth/dev-login').send({ agent_id: agentId }).expect(200)
-    expect(res.body.agent).toEqual({ id: agentId, display_name: 'Sam Agent' })
-    expect(res.body.workspace.id).toBe(workspaceId)
-    expect(typeof res.body.token).toBe('string')
-  })
+    const res = await request(app)
+      .post('/agent/auth/dev-login')
+      .send({ agent_id: agentId })
+      .expect(200);
+    expect(res.body.agent).toEqual({ id: agentId, display_name: 'Sam Agent' });
+    expect(res.body.workspace.id).toBe(workspaceId);
+    expect(typeof res.body.token).toBe('string');
+  });
 
   it('POST /agent/auth/dev-login 404s for an agent with no workspace membership', async () => {
     const { rows } = await ownerPool.query<{ id: string }>(
       `insert into agent (email, display_name) values ('nomember@example.test', 'No Member') returning id`,
-    )
-    await request(app).post('/agent/auth/dev-login').send({ agent_id: rows[0]!.id }).expect(404)
-  })
-})
+    );
+    await request(app).post('/agent/auth/dev-login').send({ agent_id: rows[0]!.id }).expect(404);
+  });
+});
 ```
 
 - [ ] **Step 2: Run it to confirm it fails**
@@ -1228,41 +1307,46 @@ Expected: FAIL — 404 on unmounted routes
 `backend/src/shared/middleware/requireAgentSession.ts`:
 
 ```ts
-import type { RequestHandler } from 'express'
-import { sendError } from '../../errors.ts'
-import { InvalidAgentSession, verifyAgentSession } from '../auth/agentSession.ts'
+import type { RequestHandler } from 'express';
+import { sendError } from '../../errors.ts';
+import { InvalidAgentSession, verifyAgentSession } from '../auth/agentSession.ts';
 
-export type AgentContext = { agentId: string; workspaceId: string }
+export type AgentContext = { agentId: string; workspaceId: string };
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
     interface Request {
-      agent?: AgentContext
+      agent?: AgentContext;
     }
   }
 }
 
 export const requireAgentSession: RequestHandler = async (req, res, next) => {
-  const header = req.header('authorization') ?? ''
-  const [scheme, ...rest] = header.split(' ')
+  const header = req.header('authorization') ?? '';
+  const [scheme, ...rest] = header.split(' ');
   if (scheme?.toLowerCase() !== 'bearer' || rest.length === 0) {
-    sendError(res, 401, 'unauthorized', 'Expected an Authorization: Bearer <agent_session_token> header.')
-    return
+    sendError(
+      res,
+      401,
+      'unauthorized',
+      'Expected an Authorization: Bearer <agent_session_token> header.',
+    );
+    return;
   }
 
   try {
-    const claims = await verifyAgentSession(rest.join(' ').trim())
-    req.agent = { agentId: claims.agent_id, workspaceId: claims.workspace_id }
-    next()
+    const claims = await verifyAgentSession(rest.join(' ').trim());
+    req.agent = { agentId: claims.agent_id, workspaceId: claims.workspace_id };
+    next();
   } catch (error) {
     if (error instanceof InvalidAgentSession) {
-      sendError(res, 401, 'unauthorized', 'Agent session is not valid.')
-      return
+      sendError(res, 401, 'unauthorized', 'Agent session is not valid.');
+      return;
     }
-    next(error)
+    next(error);
   }
-}
+};
 ```
 
 - [ ] **Step 4: Implement the dev-auth service**
@@ -1270,12 +1354,12 @@ export const requireAgentSession: RequestHandler = async (req, res, next) => {
 `backend/src/agent/services/authService.ts`:
 
 ```ts
-import { and, eq, isNull } from 'drizzle-orm'
-import { agent as agentTable, workspace, workspaceMember } from '../../shared/db/schema/index.ts'
-import { withoutWorkspace, withWorkspace } from '../../shared/db/withWorkspace.ts'
-import { signAgentSession } from '../../shared/auth/agentSession.ts'
+import { and, eq, isNull } from 'drizzle-orm';
+import { agent as agentTable, workspace, workspaceMember } from '../../shared/db/schema/index.ts';
+import { withoutWorkspace, withWorkspace } from '../../shared/db/withWorkspace.ts';
+import { signAgentSession } from '../../shared/auth/agentSession.ts';
 
-export type DevAgentOption = { id: string; email: string; display_name: string }
+export type DevAgentOption = { id: string; email: string; display_name: string };
 
 /**
  * `workspace_member` is RLS-scoped, so it can only be read inside
@@ -1287,9 +1371,11 @@ export type DevAgentOption = { id: string; email: string; display_name: string }
  * Google OAuth (docs/decisions/2026-08-04-agent-auth-google-oauth.md).
  */
 export async function listDevAgents(): Promise<DevAgentOption[]> {
-  const workspaces = await withoutWorkspace(async (tx) => tx.select({ id: workspace.id }).from(workspace))
+  const workspaces = await withoutWorkspace(async (tx) =>
+    tx.select({ id: workspace.id }).from(workspace),
+  );
 
-  const seen = new Map<string, DevAgentOption>()
+  const seen = new Map<string, DevAgentOption>();
   for (const ws of workspaces) {
     const rows = await withWorkspace(ws.id, async (tx) =>
       tx
@@ -1297,19 +1383,19 @@ export async function listDevAgents(): Promise<DevAgentOption[]> {
         .from(workspaceMember)
         .innerJoin(agentTable, eq(agentTable.id, workspaceMember.agentId))
         .where(isNull(workspaceMember.deactivatedAt)),
-    )
+    );
     for (const row of rows) {
-      seen.set(row.id, { id: row.id, email: row.email, display_name: row.displayName })
+      seen.set(row.id, { id: row.id, email: row.email, display_name: row.displayName });
     }
   }
-  return [...seen.values()]
+  return [...seen.values()];
 }
 
 export type DevLoginResult = {
-  token: string
-  agent: { id: string; display_name: string }
-  workspace: { id: string; slug: string }
-} | null
+  token: string;
+  agent: { id: string; display_name: string };
+  workspace: { id: string; slug: string };
+} | null;
 
 export async function devLogin(agentId: string): Promise<DevLoginResult> {
   const agentRow = await withoutWorkspace(async (tx) => {
@@ -1317,12 +1403,14 @@ export async function devLogin(agentId: string): Promise<DevLoginResult> {
       .select({ id: agentTable.id, displayName: agentTable.displayName })
       .from(agentTable)
       .where(eq(agentTable.id, agentId))
-      .limit(1)
-    return row ?? null
-  })
-  if (!agentRow) return null
+      .limit(1);
+    return row ?? null;
+  });
+  if (!agentRow) return null;
 
-  const workspaces = await withoutWorkspace(async (tx) => tx.select({ id: workspace.id, slug: workspace.slug }).from(workspace))
+  const workspaces = await withoutWorkspace(async (tx) =>
+    tx.select({ id: workspace.id, slug: workspace.slug }).from(workspace),
+  );
 
   for (const ws of workspaces) {
     const membership = await withWorkspace(ws.id, async (tx) => {
@@ -1330,19 +1418,19 @@ export async function devLogin(agentId: string): Promise<DevLoginResult> {
         .select({ id: workspaceMember.id })
         .from(workspaceMember)
         .where(and(eq(workspaceMember.agentId, agentId), isNull(workspaceMember.deactivatedAt)))
-        .limit(1)
-      return row ?? null
-    })
+        .limit(1);
+      return row ?? null;
+    });
     if (membership) {
-      const token = await signAgentSession({ agent_id: agentRow.id, workspace_id: ws.id })
+      const token = await signAgentSession({ agent_id: agentRow.id, workspace_id: ws.id });
       return {
         token,
         agent: { id: agentRow.id, display_name: agentRow.displayName },
         workspace: { id: ws.id, slug: ws.slug },
-      }
+      };
     }
   }
-  return null
+  return null;
 }
 ```
 
@@ -1351,44 +1439,44 @@ export async function devLogin(agentId: string): Promise<DevLoginResult> {
 `backend/src/agent/controllers/authController.ts`:
 
 ```ts
-import type { RequestHandler } from 'express'
-import { z } from 'zod'
-import { sendError } from '../../errors.ts'
-import { devLogin as devLoginService, listDevAgents } from '../services/authService.ts'
+import type { RequestHandler } from 'express';
+import { z } from 'zod';
+import { sendError } from '../../errors.ts';
+import { devLogin as devLoginService, listDevAgents } from '../services/authService.ts';
 
 // Kept local rather than in @support/types: this endpoint is a throwaway
 // dev-picker stand-in for Google OAuth, not a contract any other audience shares.
-const DevLoginBody = z.object({ agent_id: z.uuid() })
+const DevLoginBody = z.object({ agent_id: z.uuid() });
 
 export const devAgents: RequestHandler = async (_req, res) => {
-  const agents = await listDevAgents()
-  res.status(200).json({ agents })
-}
+  const agents = await listDevAgents();
+  res.status(200).json({ agents });
+};
 
 export const devLogin: RequestHandler = async (req, res) => {
-  const body = DevLoginBody.safeParse(req.body)
+  const body = DevLoginBody.safeParse(req.body);
   if (!body.success) {
-    sendError(res, 422, 'invalid_request', 'agent_id must be a uuid.')
-    return
+    sendError(res, 422, 'invalid_request', 'agent_id must be a uuid.');
+    return;
   }
-  const result = await devLoginService(body.data.agent_id)
+  const result = await devLoginService(body.data.agent_id);
   if (!result) {
-    sendError(res, 404, 'not_found', 'Agent not found or has no workspace membership.')
-    return
+    sendError(res, 404, 'not_found', 'Agent not found or has no workspace membership.');
+    return;
   }
-  res.status(200).json(result)
-}
+  res.status(200).json(result);
+};
 ```
 
 `backend/src/agent/routers/authRouter.ts`:
 
 ```ts
-import { Router } from 'express'
-import { devAgents, devLogin } from '../controllers/authController.ts'
+import { Router } from 'express';
+import { devAgents, devLogin } from '../controllers/authController.ts';
 
-export const authRouter = Router()
-authRouter.get('/auth/dev-agents', devAgents)
-authRouter.post('/auth/dev-login', devLogin)
+export const authRouter = Router();
+authRouter.get('/auth/dev-agents', devAgents);
+authRouter.post('/auth/dev-login', devLogin);
 ```
 
 - [ ] **Step 6: Mount the auth router and the session gate**
@@ -1396,18 +1484,18 @@ authRouter.post('/auth/dev-login', devLogin)
 `backend/src/agent/router.ts` — replace its contents:
 
 ```ts
-import { Router } from 'express'
-import { requireAgentSession } from '../shared/middleware/requireAgentSession.ts'
-import { authRouter } from './routers/authRouter.ts'
+import { Router } from 'express';
+import { requireAgentSession } from '../shared/middleware/requireAgentSession.ts';
+import { authRouter } from './routers/authRouter.ts';
 
-export const agentRouter = Router()
+export const agentRouter = Router();
 
 // Public: this IS the login flow, so it cannot require the session it mints.
-agentRouter.use(authRouter)
+agentRouter.use(authRouter);
 
 // Everything mounted after this line requires a valid agent session. Later
 // tasks in this plan add their routers below this line, not above it.
-agentRouter.use(requireAgentSession)
+agentRouter.use(requireAgentSession);
 ```
 
 - [ ] **Step 7: Seed two more demo agents**
@@ -1416,28 +1504,28 @@ In `backend/src/shared/db/seed.ts`, extend the `withoutWorkspace` block that cre
 it also creates two ordinary agents (needed so the dev picker has more than one option):
 
 ```ts
-  const { adminId } = await withoutWorkspace(async (tx) => {
-    const [admin] = await tx
-      .insert(agent)
-      .values({ email: ADMIN_EMAIL, displayName: 'Seed Admin' })
-      .onConflictDoUpdate({ target: agent.email, set: { displayName: 'Seed Admin' } })
-      .returning({ id: agent.id })
-    if (!admin) throw new Error('agent upsert returned nothing')
+const { adminId } = await withoutWorkspace(async (tx) => {
+  const [admin] = await tx
+    .insert(agent)
+    .values({ email: ADMIN_EMAIL, displayName: 'Seed Admin' })
+    .onConflictDoUpdate({ target: agent.email, set: { displayName: 'Seed Admin' } })
+    .returning({ id: agent.id });
+  if (!admin) throw new Error('agent upsert returned nothing');
 
-    const [alex] = await tx
-      .insert(agent)
-      .values({ email: 'alex@example.test', displayName: 'Alex Agent' })
-      .onConflictDoUpdate({ target: agent.email, set: { displayName: 'Alex Agent' } })
-      .returning({ id: agent.id })
-    const [sam] = await tx
-      .insert(agent)
-      .values({ email: 'sam@example.test', displayName: 'Sam Agent' })
-      .onConflictDoUpdate({ target: agent.email, set: { displayName: 'Sam Agent' } })
-      .returning({ id: agent.id })
-    if (!alex || !sam) throw new Error('agent upsert returned nothing')
+  const [alex] = await tx
+    .insert(agent)
+    .values({ email: 'alex@example.test', displayName: 'Alex Agent' })
+    .onConflictDoUpdate({ target: agent.email, set: { displayName: 'Alex Agent' } })
+    .returning({ id: agent.id });
+  const [sam] = await tx
+    .insert(agent)
+    .values({ email: 'sam@example.test', displayName: 'Sam Agent' })
+    .onConflictDoUpdate({ target: agent.email, set: { displayName: 'Sam Agent' } })
+    .returning({ id: agent.id });
+  if (!alex || !sam) throw new Error('agent upsert returned nothing');
 
-    return { adminId: admin.id, alexId: alex.id, samId: sam.id }
-  })
+  return { adminId: admin.id, alexId: alex.id, samId: sam.id };
+});
 ```
 
 And in the `withWorkspace` block below it, add their memberships alongside the admin's:
@@ -1485,6 +1573,7 @@ git commit -m "feat(agent): dev-picker login, requireAgentSession middleware, se
 **Batch:** 1
 
 **Files:**
+
 - Modify: `frontend/package.json` (add `react-router-dom`, `@tanstack/react-query`,
   `react-virtuoso`, `socket.io-client`)
 - Create: `frontend/src/routes.tsx`
@@ -1499,6 +1588,7 @@ git commit -m "feat(agent): dev-picker login, requireAgentSession middleware, se
 - Modify: `frontend/src/styles.css`
 
 **Interfaces:**
+
 - Produces: `ChatMessage` type (`{ id, authorType, body, createdAt, deliveryState? }`) from
   `components/chat/types.ts` — **deliberately local, not imported from `@support/types`**, per the
   spec's "serializer-agnostic" requirement for `ChatThread`. `ChatThread({ messages, currentAuthorType, onRetry? }): JSX.Element`
@@ -1524,7 +1614,7 @@ Run: `pnpm install`
 `frontend/src/components/chat/types.ts`:
 
 ```ts
-export type ChatAuthorType = 'player' | 'agent' | 'bot' | 'system'
+export type ChatAuthorType = 'player' | 'agent' | 'bot' | 'system';
 
 /**
  * Serializer-agnostic on purpose: this is not @support/types's PlayerMessageView
@@ -1533,12 +1623,12 @@ export type ChatAuthorType = 'player' | 'agent' | 'bot' | 'system'
  * agent console pages) knows which serializer's response it mapped from.
  */
 export type ChatMessage = {
-  id: string
-  authorType: ChatAuthorType
-  body: string
-  createdAt: string
-  deliveryState?: 'sending' | 'sent' | 'delivered' | 'read' | 'failed'
-}
+  id: string;
+  authorType: ChatAuthorType;
+  body: string;
+  createdAt: string;
+  deliveryState?: 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
+};
 ```
 
 - [ ] **Step 3: Write `ChatThread`**
@@ -1546,15 +1636,15 @@ export type ChatMessage = {
 `frontend/src/components/chat/ChatThread.tsx`:
 
 ```tsx
-import { Virtuoso } from 'react-virtuoso'
-import type { ChatAuthorType, ChatMessage } from './types.ts'
+import { Virtuoso } from 'react-virtuoso';
+import type { ChatAuthorType, ChatMessage } from './types.ts';
 
 type ChatThreadProps = {
-  messages: ChatMessage[]
-  currentAuthorType: ChatAuthorType
+  messages: ChatMessage[];
+  currentAuthorType: ChatAuthorType;
   /** Only ever called for a message with deliveryState 'failed'. Omit if the caller has no pending/optimistic sends to retry (e.g. the agent console, which never renders a 'sending' or 'failed' message). */
-  onRetry?: (message: ChatMessage) => void
-}
+  onRetry?: (message: ChatMessage) => void;
+};
 
 /**
  * followOutput="auto" sticks to the bottom on a new message but doesn't yank
@@ -1572,8 +1662,12 @@ export function ChatThread({ messages, currentAuthorType, onRetry }: ChatThreadP
           data-own={chatMessage.authorType === currentAuthorType}
         >
           <p>{chatMessage.body}</p>
-          <time dateTime={chatMessage.createdAt}>{new Date(chatMessage.createdAt).toLocaleTimeString()}</time>
-          {chatMessage.deliveryState === 'sending' && <span className="chat-message__status">Sending…</span>}
+          <time dateTime={chatMessage.createdAt}>
+            {new Date(chatMessage.createdAt).toLocaleTimeString()}
+          </time>
+          {chatMessage.deliveryState === 'sending' && (
+            <span className="chat-message__status">Sending…</span>
+          )}
           {chatMessage.deliveryState === 'failed' && (
             <span className="chat-message__status">
               Failed to send.{' '}
@@ -1585,7 +1679,7 @@ export function ChatThread({ messages, currentAuthorType, onRetry }: ChatThreadP
         </div>
       )}
     />
-  )
+  );
 }
 ```
 
@@ -1594,22 +1688,22 @@ export function ChatThread({ messages, currentAuthorType, onRetry }: ChatThreadP
 `frontend/src/components/chat/Composer.tsx`:
 
 ```tsx
-import { useState } from 'react'
+import { useState } from 'react';
 
 type ComposerProps = {
-  onSend: (body: string) => void
-  disabled?: boolean
-}
+  onSend: (body: string) => void;
+  disabled?: boolean;
+};
 
 export function Composer({ onSend, disabled }: ComposerProps) {
-  const [value, setValue] = useState('')
+  const [value, setValue] = useState('');
 
   const submit = () => {
-    const trimmed = value.trim()
-    if (trimmed.length === 0) return
-    onSend(trimmed)
-    setValue('')
-  }
+    const trimmed = value.trim();
+    if (trimmed.length === 0) return;
+    onSend(trimmed);
+    setValue('');
+  };
 
   return (
     <div className="composer">
@@ -1619,17 +1713,21 @@ export function Composer({ onSend, disabled }: ComposerProps) {
         onChange={(event) => setValue(event.target.value)}
         onKeyDown={(event) => {
           if (event.key === 'Enter' && !event.shiftKey) {
-            event.preventDefault()
-            submit()
+            event.preventDefault();
+            submit();
           }
         }}
         placeholder="Type a message…"
       />
-      <button type="button" onClick={submit} disabled={disabled === true || value.trim().length === 0}>
+      <button
+        type="button"
+        onClick={submit}
+        disabled={disabled === true || value.trim().length === 0}
+      >
         Send
       </button>
     </div>
-  )
+  );
 }
 ```
 
@@ -1638,14 +1736,14 @@ export function Composer({ onSend, disabled }: ComposerProps) {
 `frontend/src/lib/socket.ts`:
 
 ```ts
-import { io, type Socket } from 'socket.io-client'
+import { io, type Socket } from 'socket.io-client';
 
-const BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000'
+const BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000';
 
-export type SocketRole = 'player' | 'agent'
+export type SocketRole = 'player' | 'agent';
 
 export function createSocket(token: string, role: SocketRole): Socket {
-  return io(BASE, { auth: { token, role }, transports: ['websocket'] })
+  return io(BASE, { auth: { token, role }, transports: ['websocket'] });
 }
 ```
 
@@ -1655,7 +1753,7 @@ export function createSocket(token: string, role: SocketRole): Socket {
 
 ```tsx
 export function AgentLogin() {
-  return <main className="agent-login">Loading…</main>
+  return <main className="agent-login">Loading…</main>;
 }
 ```
 
@@ -1663,7 +1761,7 @@ export function AgentLogin() {
 
 ```tsx
 export function AgentInbox() {
-  return <main className="agent-inbox">Loading…</main>
+  return <main className="agent-inbox">Loading…</main>;
 }
 ```
 
@@ -1671,7 +1769,7 @@ export function AgentInbox() {
 
 ```tsx
 export function AgentConversation() {
-  return <main className="agent-conversation">Loading…</main>
+  return <main className="agent-conversation">Loading…</main>;
 }
 ```
 
@@ -1683,11 +1781,11 @@ touches them in the meantime.)
 `frontend/src/routes.tsx`:
 
 ```tsx
-import { Route, Routes } from 'react-router-dom'
-import { SupportSurface } from './pages/SupportSurface.tsx'
-import { AgentLogin } from './pages/AgentLogin.tsx'
-import { AgentInbox } from './pages/AgentInbox.tsx'
-import { AgentConversation } from './pages/AgentConversation.tsx'
+import { Route, Routes } from 'react-router-dom';
+import { SupportSurface } from './pages/SupportSurface.tsx';
+import { AgentLogin } from './pages/AgentLogin.tsx';
+import { AgentInbox } from './pages/AgentInbox.tsx';
+import { AgentConversation } from './pages/AgentConversation.tsx';
 
 export function AppRoutes() {
   return (
@@ -1697,7 +1795,7 @@ export function AppRoutes() {
       <Route path="/inbox" element={<AgentInbox />} />
       <Route path="/conversations/:id" element={<AgentConversation />} />
     </Routes>
-  )
+  );
 }
 ```
 
@@ -1706,17 +1804,17 @@ export function AppRoutes() {
 `frontend/src/main.tsx` — replace its contents:
 
 ```tsx
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { BrowserRouter } from 'react-router-dom'
-import { AppRoutes } from './routes.tsx'
-import './styles.css'
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { BrowserRouter } from 'react-router-dom';
+import { AppRoutes } from './routes.tsx';
+import './styles.css';
 
-const root = document.getElementById('root')
-if (!root) throw new Error('#root is missing from index.html')
+const root = document.getElementById('root');
+if (!root) throw new Error('#root is missing from index.html');
 
-const queryClient = new QueryClient()
+const queryClient = new QueryClient();
 
 createRoot(root).render(
   <StrictMode>
@@ -1726,7 +1824,7 @@ createRoot(root).render(
       </BrowserRouter>
     </QueryClientProvider>
   </StrictMode>,
-)
+);
 ```
 
 - [ ] **Step 9: Add minimal chat layout CSS**
@@ -1734,13 +1832,38 @@ createRoot(root).render(
 Append to `frontend/src/styles.css`:
 
 ```css
-.chat-message { padding: 0.5rem 0.75rem; margin: 0.25rem 0; border-radius: 0.5rem; max-width: 80%; }
-.chat-message[data-own='true'] { margin-left: auto; background: #dbeafe; }
-.chat-message[data-own='false'] { background: #f3f4f6; }
-.chat-message time { display: block; font-size: 0.75rem; opacity: 0.6; }
-.chat-message__status { font-size: 0.75rem; opacity: 0.7; }
-.composer { display: flex; gap: 0.5rem; padding: 0.5rem; }
-.composer textarea { flex: 1; resize: none; min-height: 2.5rem; }
+.chat-message {
+  padding: 0.5rem 0.75rem;
+  margin: 0.25rem 0;
+  border-radius: 0.5rem;
+  max-width: 80%;
+}
+.chat-message[data-own='true'] {
+  margin-left: auto;
+  background: #dbeafe;
+}
+.chat-message[data-own='false'] {
+  background: #f3f4f6;
+}
+.chat-message time {
+  display: block;
+  font-size: 0.75rem;
+  opacity: 0.6;
+}
+.chat-message__status {
+  font-size: 0.75rem;
+  opacity: 0.7;
+}
+.composer {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.5rem;
+}
+.composer textarea {
+  flex: 1;
+  resize: none;
+  min-height: 2.5rem;
+}
 ```
 
 - [ ] **Step 10: Run typecheck and build**
@@ -1788,6 +1911,7 @@ Batch-2 task's files. Dispatch all five to separate subagents at once.
 **Batch:** 2
 
 **Files:**
+
 - Create: `backend/src/surface/services/messagesService.ts`
 - Create: `backend/src/surface/controllers/messagesController.ts`
 - Create: `backend/src/surface/routers/messagesRouter.ts`
@@ -1795,6 +1919,7 @@ Batch-2 task's files. Dispatch all five to separate subagents at once.
 - Test: `backend/tests/surface.messages.test.ts`
 
 **Interfaces:**
+
 - Produces: `POST /surface/messages { body }` → `{ conversation_id, message: PlayerMessageView }`;
   `GET /surface/messages?session_id=` → `{ conversation_id: string | null; messages: PlayerMessageView[] }`
   (404 if `session_id` isn't the player's own session); `POST /surface/messages/read { up_to_seq }` → `{ ok: true }`.
@@ -1808,10 +1933,10 @@ Batch-2 task's files. Dispatch all five to separate subagents at once.
 `backend/tests/surface.messages.test.ts`:
 
 ```ts
-import { afterAll, beforeEach, describe, expect, it } from 'vitest'
-import request from 'supertest'
-import { closeDb } from '../src/shared/db/client.ts'
-import { app, mintToken } from './helpers/app.ts'
+import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import request from 'supertest';
+import { closeDb } from '../src/shared/db/client.ts';
+import { app, mintToken } from './helpers/app.ts';
 import {
   closeOwnerPool,
   ownerPool,
@@ -1820,109 +1945,126 @@ import {
   seedSession,
   seedWorkspace,
   truncateAll,
-} from './helpers/db.ts'
+} from './helpers/db.ts';
 
 afterAll(async () => {
-  await closeDb()
-  await closeOwnerPool()
-})
+  await closeDb();
+  await closeOwnerPool();
+});
 
-beforeEach(truncateAll)
+beforeEach(truncateAll);
 
 async function setup() {
-  const workspaceId = await seedWorkspace()
-  const playerId = await seedPlayer(workspaceId)
-  const sessionId = await seedSession({ workspaceId, playerId })
-  const token = await mintToken({ workspace_id: workspaceId, player_id: playerId, external_player_id: 'p1' })
-  return { workspaceId, playerId, sessionId, token }
+  const workspaceId = await seedWorkspace();
+  const playerId = await seedPlayer(workspaceId);
+  const sessionId = await seedSession({ workspaceId, playerId });
+  const token = await mintToken({
+    workspace_id: workspaceId,
+    player_id: playerId,
+    external_player_id: 'p1',
+  });
+  return { workspaceId, playerId, sessionId, token };
 }
 
 describe('POST /surface/messages', () => {
   it('creates the conversation on the first message', async () => {
-    const { token } = await setup()
+    const { token } = await setup();
     const res = await request(app)
       .post('/surface/messages')
       .set('Authorization', `Bearer ${token}`)
       .send({ body: 'hello' })
-      .expect(200)
-    expect(res.body.conversation_id).toBeDefined()
-    expect(res.body.message).toMatchObject({ author_type: 'player', body: 'hello', seq: 1 })
-  })
+      .expect(200);
+    expect(res.body.conversation_id).toBeDefined();
+    expect(res.body.message).toMatchObject({ author_type: 'player', body: 'hello', seq: 1 });
+  });
 
   it('rejects an empty body with 422', async () => {
-    const { token } = await setup()
-    await request(app).post('/surface/messages').set('Authorization', `Bearer ${token}`).send({ body: '' }).expect(422)
-  })
+    const { token } = await setup();
+    await request(app)
+      .post('/surface/messages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ body: '' })
+      .expect(422);
+  });
 
   it('reopens a resolved conversation and appends conversation_reopened', async () => {
-    const { workspaceId, playerId, token } = await setup()
-    const conversationId = await seedConversation({ workspaceId, playerId })
-    await ownerPool.query(`update conversation set status = 'resolved', assigned_agent_id = null where id = $1`, [
-      conversationId,
-    ])
+    const { workspaceId, playerId, token } = await setup();
+    const conversationId = await seedConversation({ workspaceId, playerId });
+    await ownerPool.query(
+      `update conversation set status = 'resolved', assigned_agent_id = null where id = $1`,
+      [conversationId],
+    );
     const agentRow = await ownerPool.query<{ id: string }>(
       `insert into agent (email, display_name) values ('a1@example.test', 'A1') returning id`,
-    )
+    );
     await ownerPool.query(`update conversation set assigned_agent_id = $2 where id = $1`, [
       conversationId,
       agentRow.rows[0]!.id,
-    ])
+    ]);
 
-    await request(app).post('/surface/messages').set('Authorization', `Bearer ${token}`).send({ body: 'still here' }).expect(200)
+    await request(app)
+      .post('/surface/messages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ body: 'still here' })
+      .expect(200);
 
     const { rows } = await ownerPool.query<{ status: string; assigned_agent_id: string | null }>(
       `select status, assigned_agent_id from conversation where id = $1`,
       [conversationId],
-    )
-    expect(rows[0]!.status).toBe('open')
-    expect(rows[0]!.assigned_agent_id).toBeNull()
+    );
+    expect(rows[0]!.status).toBe('open');
+    expect(rows[0]!.assigned_agent_id).toBeNull();
 
     const { rows: events } = await ownerPool.query<{ type: string }>(
       `select type from event where conversation_id = $1 and type = 'conversation_reopened'`,
       [conversationId],
-    )
-    expect(events).toHaveLength(1)
-  })
-})
+    );
+    expect(events).toHaveLength(1);
+  });
+});
 
 describe('GET /surface/messages', () => {
   it('returns conversation_id: null and an empty list when no conversation exists yet', async () => {
-    const { token, sessionId } = await setup()
+    const { token, sessionId } = await setup();
     const res = await request(app)
       .get('/surface/messages')
       .query({ session_id: sessionId })
       .set('Authorization', `Bearer ${token}`)
-      .expect(200)
-    expect(res.body).toEqual({ conversation_id: null, messages: [] })
-  })
+      .expect(200);
+    expect(res.body).toEqual({ conversation_id: null, messages: [] });
+  });
 
-  it('404s for a session_id that is not the caller\'s own', async () => {
-    const { token } = await setup()
+  it("404s for a session_id that is not the caller's own", async () => {
+    const { token } = await setup();
     await request(app)
       .get('/surface/messages')
       .query({ session_id: '3f2504e0-4f89-11d3-9a0c-0305e82c3301' })
       .set('Authorization', `Bearer ${token}`)
-      .expect(404)
-  })
-})
+      .expect(404);
+  });
+});
 
 describe('POST /surface/messages/read', () => {
   it('marks agent-authored messages up to seq as read', async () => {
-    const { workspaceId, playerId, token } = await setup()
-    const conversationId = await seedConversation({ workspaceId, playerId })
+    const { workspaceId, playerId, token } = await setup();
+    const conversationId = await seedConversation({ workspaceId, playerId });
     await ownerPool.query(
       `insert into message (workspace_id, conversation_id, seq, author_type, body) values ($1, $2, 1, 'agent', 'hi')`,
       [workspaceId, conversationId],
-    )
-    await request(app).post('/surface/messages/read').set('Authorization', `Bearer ${token}`).send({ up_to_seq: 1 }).expect(200)
+    );
+    await request(app)
+      .post('/surface/messages/read')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ up_to_seq: 1 })
+      .expect(200);
 
     const { rows } = await ownerPool.query<{ delivery_state: string }>(
       `select delivery_state from message where conversation_id = $1 and seq = 1`,
       [conversationId],
-    )
-    expect(rows[0]!.delivery_state).toBe('read')
-  })
-})
+    );
+    expect(rows[0]!.delivery_state).toBe('read');
+  });
+});
 ```
 
 - [ ] **Step 2: Run it to confirm it fails**
@@ -1935,17 +2077,21 @@ Expected: FAIL — 404 on unmounted routes
 `backend/src/surface/services/messagesService.ts`:
 
 ```ts
-import { and, desc, eq, lte, ne } from 'drizzle-orm'
-import type { MarkPlayerReadBody as MarkPlayerReadBodyType, PlayerMessageView, SendMessageBody as SendMessageBodyType } from '@support/types'
-import { postMessage, toAgentView, toPlayerView } from '../../domain/conversations/index.ts'
-import { appendEvent } from '../../shared/events/appendEvent.ts'
-import { conversation, message, session } from '../../shared/db/schema/index.ts'
-import { withWorkspace } from '../../shared/db/withWorkspace.ts'
-import { emitInboxChanged, emitMessageToRooms } from '../../shared/realtime/emit.ts'
-import { getIo } from '../../shared/realtime/socketServer.ts'
-import type { PlayerContext } from '../../shared/middleware/requirePlayerToken.ts'
+import { and, desc, eq, lte, ne } from 'drizzle-orm';
+import type {
+  MarkPlayerReadBody as MarkPlayerReadBodyType,
+  PlayerMessageView,
+  SendMessageBody as SendMessageBodyType,
+} from '@support/types';
+import { postMessage, toAgentView, toPlayerView } from '../../domain/conversations/index.ts';
+import { appendEvent } from '../../shared/events/appendEvent.ts';
+import { conversation, message, session } from '../../shared/db/schema/index.ts';
+import { withWorkspace } from '../../shared/db/withWorkspace.ts';
+import { emitInboxChanged, emitMessageToRooms } from '../../shared/realtime/emit.ts';
+import { getIo } from '../../shared/realtime/socketServer.ts';
+import type { PlayerContext } from '../../shared/middleware/requirePlayerToken.ts';
 
-const REOPENABLE_STATUSES = new Set(['resolved', 'closed'])
+const REOPENABLE_STATUSES = new Set(['resolved', 'closed']);
 
 export async function sendPlayerMessage(
   ctx: PlayerContext,
@@ -1957,13 +2103,13 @@ export async function sendPlayerMessage(
       .from(conversation)
       .where(eq(conversation.playerId, ctx.playerId))
       .orderBy(desc(conversation.createdAt))
-      .limit(1)
+      .limit(1);
 
-    let conversationId: string
+    let conversationId: string;
     // Set whenever the inbox needs to refetch: a brand-new conversation just
     // appeared in Unassigned, or a reopen just moved one back into it. Claiming
     // (Task 7) is the third trigger for the same event, from a different path.
-    let inboxStatus: string | null = null
+    let inboxStatus: string | null = null;
 
     if (!existing) {
       // Best-effort: attaches the player's most recent session so a future
@@ -1974,27 +2120,35 @@ export async function sendPlayerMessage(
         .from(session)
         .where(eq(session.playerId, ctx.playerId))
         .orderBy(desc(session.startedAt))
-        .limit(1)
+        .limit(1);
 
       const [created] = await tx
         .insert(conversation)
-        .values({ workspaceId: ctx.workspaceId, playerId: ctx.playerId, sessionId: latestSession?.id ?? null, status: 'open' })
-        .returning({ id: conversation.id })
-      if (!created) throw new Error('conversation insert returned nothing')
-      conversationId = created.id
-      inboxStatus = 'open'
+        .values({
+          workspaceId: ctx.workspaceId,
+          playerId: ctx.playerId,
+          sessionId: latestSession?.id ?? null,
+          status: 'open',
+        })
+        .returning({ id: conversation.id });
+      if (!created) throw new Error('conversation insert returned nothing');
+      conversationId = created.id;
+      inboxStatus = 'open';
     } else {
-      conversationId = existing.id
+      conversationId = existing.id;
       if (REOPENABLE_STATUSES.has(existing.status)) {
-        await tx.update(conversation).set({ status: 'open', assignedAgentId: null }).where(eq(conversation.id, conversationId))
+        await tx
+          .update(conversation)
+          .set({ status: 'open', assignedAgentId: null })
+          .where(eq(conversation.id, conversationId));
         await appendEvent(tx, {
           workspaceId: ctx.workspaceId,
           type: 'conversation_reopened',
           conversationId,
           actorId: ctx.playerId,
           actorType: 'player',
-        })
-        inboxStatus = 'open'
+        });
+        inboxStatus = 'open';
       }
     }
 
@@ -2004,19 +2158,19 @@ export async function sendPlayerMessage(
       authorType: 'player',
       actorId: ctx.playerId,
       body: body.body,
-    })
+    });
 
-    return { conversationId, posted, inboxStatus }
-  })
+    return { conversationId, posted, inboxStatus };
+  });
 
-  const playerView = toPlayerView(result.posted)
-  const agentView = toAgentView(result.posted)
-  emitMessageToRooms(getIo(), result.conversationId, playerView, agentView)
+  const playerView = toPlayerView(result.posted);
+  const agentView = toAgentView(result.posted);
+  emitMessageToRooms(getIo(), result.conversationId, playerView, agentView);
   if (result.inboxStatus) {
-    emitInboxChanged(getIo(), ctx.workspaceId, result.conversationId, result.inboxStatus)
+    emitInboxChanged(getIo(), ctx.workspaceId, result.conversationId, result.inboxStatus);
   }
 
-  return { conversation_id: result.conversationId, message: playerView }
+  return { conversation_id: result.conversationId, message: playerView };
 }
 
 export async function getPlayerMessages(
@@ -2028,27 +2182,38 @@ export async function getPlayerMessages(
       .select({ id: session.id })
       .from(session)
       .where(and(eq(session.id, query.session_id), eq(session.playerId, ctx.playerId)))
-      .limit(1)
-    if (!ownedSession) return null
+      .limit(1);
+    if (!ownedSession) return null;
 
     const [found] = await tx
       .select({ id: conversation.id })
       .from(conversation)
       .where(eq(conversation.playerId, ctx.playerId))
       .orderBy(desc(conversation.createdAt))
-      .limit(1)
-    if (!found) return { conversation_id: null, messages: [] }
+      .limit(1);
+    if (!found) return { conversation_id: null, messages: [] };
 
-    const rows = await tx.select().from(message).where(eq(message.conversationId, found.id)).orderBy(message.seq)
-    const messages = rows.map(toPlayerView).filter((m): m is PlayerMessageView => m !== null)
-    return { conversation_id: found.id, messages }
-  })
+    const rows = await tx
+      .select()
+      .from(message)
+      .where(eq(message.conversationId, found.id))
+      .orderBy(message.seq);
+    const messages = rows.map(toPlayerView).filter((m): m is PlayerMessageView => m !== null);
+    return { conversation_id: found.id, messages };
+  });
 }
 
-export async function markPlayerMessagesRead(ctx: PlayerContext, body: MarkPlayerReadBodyType): Promise<boolean> {
+export async function markPlayerMessagesRead(
+  ctx: PlayerContext,
+  body: MarkPlayerReadBodyType,
+): Promise<boolean> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
-    const [found] = await tx.select({ id: conversation.id }).from(conversation).where(eq(conversation.playerId, ctx.playerId)).limit(1)
-    if (!found) return false
+    const [found] = await tx
+      .select({ id: conversation.id })
+      .from(conversation)
+      .where(eq(conversation.playerId, ctx.playerId))
+      .limit(1);
+    if (!found) return false;
 
     await tx
       .update(message)
@@ -2060,9 +2225,9 @@ export async function markPlayerMessagesRead(ctx: PlayerContext, body: MarkPlaye
           ne(message.deliveryState, 'read'),
           lte(message.seq, body.up_to_seq),
         ),
-      )
-    return true
-  })
+      );
+    return true;
+  });
 }
 ```
 
@@ -2071,47 +2236,51 @@ export async function markPlayerMessagesRead(ctx: PlayerContext, body: MarkPlaye
 `backend/src/surface/controllers/messagesController.ts`:
 
 ```ts
-import type { RequestHandler } from 'express'
-import { BootstrapQuery, MarkPlayerReadBody, SendMessageBody } from '@support/types'
-import { sendError } from '../../errors.ts'
-import { getPlayerMessages, markPlayerMessagesRead, sendPlayerMessage } from '../services/messagesService.ts'
+import type { RequestHandler } from 'express';
+import { BootstrapQuery, MarkPlayerReadBody, SendMessageBody } from '@support/types';
+import { sendError } from '../../errors.ts';
+import {
+  getPlayerMessages,
+  markPlayerMessagesRead,
+  sendPlayerMessage,
+} from '../services/messagesService.ts';
 
 export const postMessageHandler: RequestHandler = async (req, res) => {
-  const ctx = req.player!
-  const body = SendMessageBody.safeParse(req.body)
+  const ctx = req.player!;
+  const body = SendMessageBody.safeParse(req.body);
   if (!body.success) {
-    sendError(res, 422, 'invalid_request', 'body must be a non-empty string.')
-    return
+    sendError(res, 422, 'invalid_request', 'body must be a non-empty string.');
+    return;
   }
-  const result = await sendPlayerMessage(ctx, body.data)
-  res.status(200).json(result)
-}
+  const result = await sendPlayerMessage(ctx, body.data);
+  res.status(200).json(result);
+};
 
 export const getMessagesHandler: RequestHandler = async (req, res) => {
-  const ctx = req.player!
-  const query = BootstrapQuery.safeParse(req.query)
+  const ctx = req.player!;
+  const query = BootstrapQuery.safeParse(req.query);
   if (!query.success) {
-    sendError(res, 422, 'invalid_request', 'session_id must be a uuid.')
-    return
+    sendError(res, 422, 'invalid_request', 'session_id must be a uuid.');
+    return;
   }
-  const result = await getPlayerMessages(ctx, query.data)
+  const result = await getPlayerMessages(ctx, query.data);
   if (!result) {
-    sendError(res, 404, 'not_found', 'Session not found.')
-    return
+    sendError(res, 404, 'not_found', 'Session not found.');
+    return;
   }
-  res.status(200).json(result)
-}
+  res.status(200).json(result);
+};
 
 export const markReadHandler: RequestHandler = async (req, res) => {
-  const ctx = req.player!
-  const body = MarkPlayerReadBody.safeParse(req.body)
+  const ctx = req.player!;
+  const body = MarkPlayerReadBody.safeParse(req.body);
   if (!body.success) {
-    sendError(res, 422, 'invalid_request', 'up_to_seq must be a non-negative integer.')
-    return
+    sendError(res, 422, 'invalid_request', 'up_to_seq must be a non-negative integer.');
+    return;
   }
-  await markPlayerMessagesRead(ctx, body.data)
-  res.status(200).json({ ok: true })
-}
+  await markPlayerMessagesRead(ctx, body.data);
+  res.status(200).json({ ok: true });
+};
 ```
 
 - [ ] **Step 5: Implement the router and mount it**
@@ -2119,25 +2288,29 @@ export const markReadHandler: RequestHandler = async (req, res) => {
 `backend/src/surface/routers/messagesRouter.ts`:
 
 ```ts
-import { Router } from 'express'
-import { getMessagesHandler, markReadHandler, postMessageHandler } from '../controllers/messagesController.ts'
+import { Router } from 'express';
+import {
+  getMessagesHandler,
+  markReadHandler,
+  postMessageHandler,
+} from '../controllers/messagesController.ts';
 
-export const messagesRouter = Router()
-messagesRouter.post('/messages', postMessageHandler)
-messagesRouter.get('/messages', getMessagesHandler)
-messagesRouter.post('/messages/read', markReadHandler)
+export const messagesRouter = Router();
+messagesRouter.post('/messages', postMessageHandler);
+messagesRouter.get('/messages', getMessagesHandler);
+messagesRouter.post('/messages/read', markReadHandler);
 ```
 
 In `backend/src/surface/router.ts`, add the import and mount line:
 
 ```ts
-import { messagesRouter } from './routers/messagesRouter.ts'
+import { messagesRouter } from './routers/messagesRouter.ts';
 ```
 
 ```ts
-surfaceRouter.use(bootstrapRouter)
-surfaceRouter.use(articleReadRouter)
-surfaceRouter.use(messagesRouter)
+surfaceRouter.use(bootstrapRouter);
+surfaceRouter.use(articleReadRouter);
+surfaceRouter.use(messagesRouter);
 ```
 
 - [ ] **Step 6: Run the test to confirm it passes**
@@ -2164,17 +2337,19 @@ git commit -m "feat(surface): POST/GET /surface/messages, POST /surface/messages
 **Batch:** 2
 
 **Files:**
+
 - Create: `backend/src/agent/services/conversationsService.ts`
 - Create: `backend/src/agent/controllers/conversationsController.ts`
 - Create: `backend/src/agent/routers/conversationsRouter.ts`
 - Test: `backend/tests/agent.conversations.test.ts`
 
-*(Does **not** touch `backend/src/agent/router.ts` — mounting `conversationsRouter` there happens
+_(Does **not** touch `backend/src/agent/router.ts` — mounting `conversationsRouter` there happens
 in the Batch 2 Checkpoint, after Task 8 has also landed, to avoid two parallel tasks editing the
 same file. The test below builds its own tiny standalone Express app for just this router, so this
-task's test run needs no mount at all — see Step 1.)*
+task's test run needs no mount at all — see Step 1.)_
 
 **Interfaces:**
+
 - Produces: `GET /agent/conversations?status=unassigned|mine` → `{ conversations: AgentConversationSummary[] }`;
   `POST /agent/conversations/:id/claim` → `{ claimed: boolean }`; `GET /agent/conversations/:id/messages` → `{ messages: AgentMessageView[] }` (404 if the conversation doesn't exist in the agent's workspace).
 - Consumes: Task 2's `toAgentView`; Task 3's `emitInboxChanged`, `getIo`; Task 4's
@@ -2185,14 +2360,14 @@ task's test run needs no mount at all — see Step 1.)*
 `backend/tests/agent.conversations.test.ts`:
 
 ```ts
-import express from 'express'
-import { afterAll, beforeEach, describe, expect, it } from 'vitest'
-import request from 'supertest'
-import { closeDb } from '../src/shared/db/client.ts'
-import { requireAgentSession } from '../src/shared/middleware/requireAgentSession.ts'
-import { errorMiddleware } from '../src/errors.ts'
-import { signAgentSession } from '../src/shared/auth/agentSession.ts'
-import { conversationsRouter } from '../src/agent/routers/conversationsRouter.ts'
+import express from 'express';
+import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import request from 'supertest';
+import { closeDb } from '../src/shared/db/client.ts';
+import { requireAgentSession } from '../src/shared/middleware/requireAgentSession.ts';
+import { errorMiddleware } from '../src/errors.ts';
+import { signAgentSession } from '../src/shared/auth/agentSession.ts';
+import { conversationsRouter } from '../src/agent/routers/conversationsRouter.ts';
 import {
   closeOwnerPool,
   ownerPool,
@@ -2201,124 +2376,134 @@ import {
   seedPlayer,
   seedWorkspace,
   truncateAll,
-} from './helpers/db.ts'
+} from './helpers/db.ts';
 
 // A standalone app carrying just this router, gated by the real
 // requireAgentSession middleware — not the shared app.ts, and it never
 // touches agent/router.ts. conversationsRouter isn't mounted there until the
 // Batch 2 Checkpoint, so this is the only way to exercise it before then, and
 // it keeps this task's test run from racing Task 8's over the same file.
-const app = express()
-app.use(express.json())
-app.use(requireAgentSession, conversationsRouter)
-app.use(errorMiddleware)
+const app = express();
+app.use(express.json());
+app.use(requireAgentSession, conversationsRouter);
+app.use(errorMiddleware);
 
 afterAll(async () => {
-  await closeDb()
-  await closeOwnerPool()
-})
+  await closeDb();
+  await closeOwnerPool();
+});
 
-beforeEach(truncateAll)
+beforeEach(truncateAll);
 
 async function setupAgent(workspaceId: string) {
   const { rows } = await ownerPool.query<{ id: string }>(
     `insert into agent (email, display_name) values ('agent1@example.test', 'Agent One') returning id`,
-  )
-  const agentId = rows[0]!.id
-  await ownerPool.query(`insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`, [
-    workspaceId,
-    agentId,
-  ])
-  const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId })
-  return { agentId, token }
+  );
+  const agentId = rows[0]!.id;
+  await ownerPool.query(
+    `insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`,
+    [workspaceId, agentId],
+  );
+  const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId });
+  return { agentId, token };
 }
 
 describe('GET /agent/conversations', () => {
   it('lists unassigned conversations with a last-message preview', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
-    await seedMessage({ workspaceId, conversationId, seq: 1, authorType: 'player', body: 'help please' })
-    const { token } = await setupAgent(workspaceId)
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
+    await seedMessage({
+      workspaceId,
+      conversationId,
+      seq: 1,
+      authorType: 'player',
+      body: 'help please',
+    });
+    const { token } = await setupAgent(workspaceId);
 
     const res = await request(app)
       .get('/conversations')
       .query({ status: 'unassigned' })
       .set('Authorization', `Bearer ${token}`)
-      .expect(200)
+      .expect(200);
 
-    expect(res.body.conversations).toHaveLength(1)
-    expect(res.body.conversations[0].last_message_preview).toBe('help please')
-  })
-})
+    expect(res.body.conversations).toHaveLength(1);
+    expect(res.body.conversations[0].last_message_preview).toBe('help please');
+  });
+});
 
 describe('POST /agent/conversations/:id/claim', () => {
   it('claims an unassigned conversation', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
-    const { token } = await setupAgent(workspaceId)
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
+    const { token } = await setupAgent(workspaceId);
 
     const res = await request(app)
       .post(`/conversations/${conversationId}/claim`)
       .set('Authorization', `Bearer ${token}`)
-      .expect(200)
-    expect(res.body).toEqual({ claimed: true })
-  })
+      .expect(200);
+    expect(res.body).toEqual({ claimed: true });
+  });
 
   it('a claim race: exactly one of two concurrent claims succeeds', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
-    const agentA = await setupAgent(workspaceId)
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
+    const agentA = await setupAgent(workspaceId);
     const { rows } = await ownerPool.query<{ id: string }>(
       `insert into agent (email, display_name) values ('agent2@example.test', 'Agent Two') returning id`,
-    )
-    await ownerPool.query(`insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`, [
-      workspaceId,
-      rows[0]!.id,
-    ])
-    const tokenB = await signAgentSession({ agent_id: rows[0]!.id, workspace_id: workspaceId })
+    );
+    await ownerPool.query(
+      `insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`,
+      [workspaceId, rows[0]!.id],
+    );
+    const tokenB = await signAgentSession({ agent_id: rows[0]!.id, workspace_id: workspaceId });
 
     const [resA, resB] = await Promise.all([
-      request(app).post(`/conversations/${conversationId}/claim`).set('Authorization', `Bearer ${agentA.token}`),
-      request(app).post(`/conversations/${conversationId}/claim`).set('Authorization', `Bearer ${tokenB}`),
-    ])
+      request(app)
+        .post(`/conversations/${conversationId}/claim`)
+        .set('Authorization', `Bearer ${agentA.token}`),
+      request(app)
+        .post(`/conversations/${conversationId}/claim`)
+        .set('Authorization', `Bearer ${tokenB}`),
+    ]);
 
-    const claimedFlags = [resA.body.claimed, resB.body.claimed].sort()
-    expect(claimedFlags).toEqual([false, true])
-  })
-})
+    const claimedFlags = [resA.body.claimed, resB.body.claimed].sort();
+    expect(claimedFlags).toEqual([false, true]);
+  });
+});
 
 describe('GET /agent/conversations/:id/messages', () => {
   it('returns the full history via toAgentView', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
-    await seedMessage({ workspaceId, conversationId, seq: 1, authorType: 'player', body: 'hi' })
-    const { token } = await setupAgent(workspaceId)
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
+    await seedMessage({ workspaceId, conversationId, seq: 1, authorType: 'player', body: 'hi' });
+    const { token } = await setupAgent(workspaceId);
 
     const res = await request(app)
       .get(`/conversations/${conversationId}/messages`)
       .set('Authorization', `Bearer ${token}`)
-      .expect(200)
-    expect(res.body.messages).toHaveLength(1)
-    expect(res.body.messages[0]).toMatchObject({ author_type: 'player', body: 'hi' })
-  })
+      .expect(200);
+    expect(res.body.messages).toHaveLength(1);
+    expect(res.body.messages[0]).toMatchObject({ author_type: 'player', body: 'hi' });
+  });
 
-  it('404s for a conversation outside the agent\'s workspace', async () => {
-    const workspaceA = await seedWorkspace()
-    const workspaceB = await seedWorkspace()
-    const playerB = await seedPlayer(workspaceB)
-    const conversationB = await seedConversation({ workspaceId: workspaceB, playerId: playerB })
-    const { token } = await setupAgent(workspaceA)
+  it("404s for a conversation outside the agent's workspace", async () => {
+    const workspaceA = await seedWorkspace();
+    const workspaceB = await seedWorkspace();
+    const playerB = await seedPlayer(workspaceB);
+    const conversationB = await seedConversation({ workspaceId: workspaceB, playerId: playerB });
+    const { token } = await setupAgent(workspaceA);
 
     await request(app)
       .get(`/conversations/${conversationB}/messages`)
       .set('Authorization', `Bearer ${token}`)
-      .expect(404)
-  })
-})
+      .expect(404);
+  });
+});
 ```
 
 - [ ] **Step 2: Run it to confirm it fails**
@@ -2331,35 +2516,46 @@ Expected: FAIL — `conversationsRouter.ts` not found
 `backend/src/agent/services/conversationsService.ts`:
 
 ```ts
-import { desc, eq, isNull } from 'drizzle-orm'
-import type { AgentConversationSummary, AgentMessageView } from '@support/types'
-import { toAgentView } from '../../domain/conversations/index.ts'
-import { conversation, message, player } from '../../shared/db/schema/index.ts'
-import { withWorkspace } from '../../shared/db/withWorkspace.ts'
-import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts'
+import { desc, eq, isNull } from 'drizzle-orm';
+import type { AgentConversationSummary, AgentMessageView } from '@support/types';
+import { toAgentView } from '../../domain/conversations/index.ts';
+import { conversation, message, player } from '../../shared/db/schema/index.ts';
+import { withWorkspace } from '../../shared/db/withWorkspace.ts';
+import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts';
 
-export type ConversationsFilter = 'unassigned' | 'mine'
+export type ConversationsFilter = 'unassigned' | 'mine';
 
-export async function listConversations(ctx: AgentContext, filter: ConversationsFilter): Promise<AgentConversationSummary[]> {
+export async function listConversations(
+  ctx: AgentContext,
+  filter: ConversationsFilter,
+): Promise<AgentConversationSummary[]> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
     const rows = await tx
-      .select({ id: conversation.id, status: conversation.status, externalPlayerId: player.externalId })
+      .select({
+        id: conversation.id,
+        status: conversation.status,
+        externalPlayerId: player.externalId,
+      })
       .from(conversation)
       .innerJoin(player, eq(player.id, conversation.playerId))
-      .where(filter === 'unassigned' ? isNull(conversation.assignedAgentId) : eq(conversation.assignedAgentId, ctx.agentId))
-      .orderBy(desc(conversation.createdAt))
+      .where(
+        filter === 'unassigned'
+          ? isNull(conversation.assignedAgentId)
+          : eq(conversation.assignedAgentId, ctx.agentId),
+      )
+      .orderBy(desc(conversation.createdAt));
 
     // One extra query per row for the last-message preview. Fine at this
     // slice's inbox size; a lateral join is the fix if the inbox ever grows
     // large enough for this to matter.
-    const summaries: AgentConversationSummary[] = []
+    const summaries: AgentConversationSummary[] = [];
     for (const row of rows) {
       const [last] = await tx
         .select({ body: message.body, createdAt: message.createdAt })
         .from(message)
         .where(eq(message.conversationId, row.id))
         .orderBy(desc(message.seq))
-        .limit(1)
+        .limit(1);
 
       summaries.push({
         id: row.id,
@@ -2367,35 +2563,49 @@ export async function listConversations(ctx: AgentContext, filter: Conversations
         status: row.status,
         last_message_preview: last?.body ?? null,
         last_message_at: last?.createdAt.toISOString() ?? null,
-      })
+      });
     }
-    return summaries
-  })
+    return summaries;
+  });
 }
 
-export type ClaimResult = { claimed: boolean; status: string | null }
+export type ClaimResult = { claimed: boolean; status: string | null };
 
-export async function claimConversation(ctx: AgentContext, conversationId: string): Promise<ClaimResult> {
+export async function claimConversation(
+  ctx: AgentContext,
+  conversationId: string,
+): Promise<ClaimResult> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
     const claimed = await tx
       .update(conversation)
       .set({ assignedAgentId: ctx.agentId })
       .where(eq(conversation.id, conversationId))
       .where(isNull(conversation.assignedAgentId))
-      .returning({ id: conversation.id, status: conversation.status })
-    const [row] = claimed
-    return row ? { claimed: true, status: row.status } : { claimed: false, status: null }
-  })
+      .returning({ id: conversation.id, status: conversation.status });
+    const [row] = claimed;
+    return row ? { claimed: true, status: row.status } : { claimed: false, status: null };
+  });
 }
 
-export async function getAgentConversationMessages(ctx: AgentContext, conversationId: string): Promise<AgentMessageView[] | null> {
+export async function getAgentConversationMessages(
+  ctx: AgentContext,
+  conversationId: string,
+): Promise<AgentMessageView[] | null> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
-    const [found] = await tx.select({ id: conversation.id }).from(conversation).where(eq(conversation.id, conversationId)).limit(1)
-    if (!found) return null
+    const [found] = await tx
+      .select({ id: conversation.id })
+      .from(conversation)
+      .where(eq(conversation.id, conversationId))
+      .limit(1);
+    if (!found) return null;
 
-    const rows = await tx.select().from(message).where(eq(message.conversationId, conversationId)).orderBy(message.seq)
-    return rows.map(toAgentView)
-  })
+    const rows = await tx
+      .select()
+      .from(message)
+      .where(eq(message.conversationId, conversationId))
+      .orderBy(message.seq);
+    return rows.map(toAgentView);
+  });
 }
 ```
 
@@ -2403,15 +2613,15 @@ Note: Drizzle's `.where()` cannot be chained twice — fix the claim query to co
 conditions with `and`:
 
 ```ts
-import { and, desc, eq, isNull } from 'drizzle-orm'
+import { and, desc, eq, isNull } from 'drizzle-orm';
 ```
 
 ```ts
-    const claimed = await tx
-      .update(conversation)
-      .set({ assignedAgentId: ctx.agentId })
-      .where(and(eq(conversation.id, conversationId), isNull(conversation.assignedAgentId)))
-      .returning({ id: conversation.id, status: conversation.status })
+const claimed = await tx
+  .update(conversation)
+  .set({ assignedAgentId: ctx.agentId })
+  .where(and(eq(conversation.id, conversationId), isNull(conversation.assignedAgentId)))
+  .returning({ id: conversation.id, status: conversation.status });
 ```
 
 - [ ] **Step 4: Implement the controller**
@@ -2419,55 +2629,59 @@ import { and, desc, eq, isNull } from 'drizzle-orm'
 `backend/src/agent/controllers/conversationsController.ts`:
 
 ```ts
-import type { RequestHandler } from 'express'
-import { z } from 'zod'
-import { sendError } from '../../errors.ts'
-import { getIo } from '../../shared/realtime/socketServer.ts'
-import { emitInboxChanged } from '../../shared/realtime/emit.ts'
-import { claimConversation, getAgentConversationMessages, listConversations } from '../services/conversationsService.ts'
+import type { RequestHandler } from 'express';
+import { z } from 'zod';
+import { sendError } from '../../errors.ts';
+import { getIo } from '../../shared/realtime/socketServer.ts';
+import { emitInboxChanged } from '../../shared/realtime/emit.ts';
+import {
+  claimConversation,
+  getAgentConversationMessages,
+  listConversations,
+} from '../services/conversationsService.ts';
 
-const ConversationsQuery = z.object({ status: z.enum(['unassigned', 'mine']) })
-const ConversationIdParams = z.object({ id: z.uuid() })
+const ConversationsQuery = z.object({ status: z.enum(['unassigned', 'mine']) });
+const ConversationIdParams = z.object({ id: z.uuid() });
 
 export const listConversationsHandler: RequestHandler = async (req, res) => {
-  const ctx = req.agent!
-  const query = ConversationsQuery.safeParse(req.query)
+  const ctx = req.agent!;
+  const query = ConversationsQuery.safeParse(req.query);
   if (!query.success) {
-    sendError(res, 422, 'invalid_request', 'status must be "unassigned" or "mine".')
-    return
+    sendError(res, 422, 'invalid_request', 'status must be "unassigned" or "mine".');
+    return;
   }
-  const conversations = await listConversations(ctx, query.data.status)
-  res.status(200).json({ conversations })
-}
+  const conversations = await listConversations(ctx, query.data.status);
+  res.status(200).json({ conversations });
+};
 
 export const claimConversationHandler: RequestHandler = async (req, res) => {
-  const ctx = req.agent!
-  const params = ConversationIdParams.safeParse(req.params)
+  const ctx = req.agent!;
+  const params = ConversationIdParams.safeParse(req.params);
   if (!params.success) {
-    sendError(res, 422, 'invalid_request', 'id must be a uuid.')
-    return
+    sendError(res, 422, 'invalid_request', 'id must be a uuid.');
+    return;
   }
-  const result = await claimConversation(ctx, params.data.id)
+  const result = await claimConversation(ctx, params.data.id);
   if (result.claimed && result.status) {
-    emitInboxChanged(getIo(), ctx.workspaceId, params.data.id, result.status)
+    emitInboxChanged(getIo(), ctx.workspaceId, params.data.id, result.status);
   }
-  res.status(200).json({ claimed: result.claimed })
-}
+  res.status(200).json({ claimed: result.claimed });
+};
 
 export const getConversationMessagesHandler: RequestHandler = async (req, res) => {
-  const ctx = req.agent!
-  const params = ConversationIdParams.safeParse(req.params)
+  const ctx = req.agent!;
+  const params = ConversationIdParams.safeParse(req.params);
   if (!params.success) {
-    sendError(res, 422, 'invalid_request', 'id must be a uuid.')
-    return
+    sendError(res, 422, 'invalid_request', 'id must be a uuid.');
+    return;
   }
-  const messages = await getAgentConversationMessages(ctx, params.data.id)
+  const messages = await getAgentConversationMessages(ctx, params.data.id);
   if (!messages) {
-    sendError(res, 404, 'not_found', 'Conversation not found.')
-    return
+    sendError(res, 404, 'not_found', 'Conversation not found.');
+    return;
   }
-  res.status(200).json({ messages })
-}
+  res.status(200).json({ messages });
+};
 ```
 
 - [ ] **Step 5: Implement the router**
@@ -2475,17 +2689,17 @@ export const getConversationMessagesHandler: RequestHandler = async (req, res) =
 `backend/src/agent/routers/conversationsRouter.ts`:
 
 ```ts
-import { Router } from 'express'
+import { Router } from 'express';
 import {
   claimConversationHandler,
   getConversationMessagesHandler,
   listConversationsHandler,
-} from '../controllers/conversationsController.ts'
+} from '../controllers/conversationsController.ts';
 
-export const conversationsRouter = Router()
-conversationsRouter.get('/conversations', listConversationsHandler)
-conversationsRouter.post('/conversations/:id/claim', claimConversationHandler)
-conversationsRouter.get('/conversations/:id/messages', getConversationMessagesHandler)
+export const conversationsRouter = Router();
+conversationsRouter.get('/conversations', listConversationsHandler);
+conversationsRouter.post('/conversations/:id/claim', claimConversationHandler);
+conversationsRouter.get('/conversations/:id/messages', getConversationMessagesHandler);
 ```
 
 (Not mounted into `agent/router.ts` yet — see the Batch 2 Checkpoint. The test above doesn't need
@@ -2517,16 +2731,18 @@ git commit -m "feat(agent): inbox list, claim, conversation messages (not yet mo
 **Batch:** 2
 
 **Files:**
+
 - Modify: `backend/src/errors.ts` (add `'forbidden'` to `ErrorCode`)
 - Create: `backend/src/agent/services/messagesService.ts`
 - Create: `backend/src/agent/controllers/messagesController.ts`
 - Create: `backend/src/agent/routers/messagesRouter.ts`
 - Test: `backend/tests/agent.messages.test.ts`
 
-*(Does **not** touch `backend/src/agent/router.ts` — same reasoning as Task 7: the test below
-builds its own standalone Express app around `messagesRouter` directly.)*
+_(Does **not** touch `backend/src/agent/router.ts` — same reasoning as Task 7: the test below
+builds its own standalone Express app around `messagesRouter` directly.)_
 
 **Interfaces:**
+
 - Produces: `POST /agent/messages { conversation_id, body }` → `{ message: AgentMessageView }` (404
   if the conversation doesn't exist in the agent's workspace; 403 if it exists but isn't assigned
   to this agent); `POST /agent/messages/read { conversation_id, up_to_seq }` → `{ ok: true }`.
@@ -2545,7 +2761,7 @@ export type ErrorCode =
   | 'not_found'
   | 'unparseable_body'
   | 'invalid_request'
-  | 'internal'
+  | 'internal';
 ```
 
 - [ ] **Step 2: Write the failing test**
@@ -2553,125 +2769,139 @@ export type ErrorCode =
 `backend/tests/agent.messages.test.ts`:
 
 ```ts
-import express from 'express'
-import { afterAll, beforeEach, describe, expect, it } from 'vitest'
-import request from 'supertest'
-import { closeDb } from '../src/shared/db/client.ts'
-import { requireAgentSession } from '../src/shared/middleware/requireAgentSession.ts'
-import { errorMiddleware } from '../src/errors.ts'
-import { signAgentSession } from '../src/shared/auth/agentSession.ts'
-import { messagesRouter } from '../src/agent/routers/messagesRouter.ts'
-import { closeOwnerPool, ownerPool, seedConversation, seedPlayer, seedWorkspace, truncateAll } from './helpers/db.ts'
+import express from 'express';
+import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import request from 'supertest';
+import { closeDb } from '../src/shared/db/client.ts';
+import { requireAgentSession } from '../src/shared/middleware/requireAgentSession.ts';
+import { errorMiddleware } from '../src/errors.ts';
+import { signAgentSession } from '../src/shared/auth/agentSession.ts';
+import { messagesRouter } from '../src/agent/routers/messagesRouter.ts';
+import {
+  closeOwnerPool,
+  ownerPool,
+  seedConversation,
+  seedPlayer,
+  seedWorkspace,
+  truncateAll,
+} from './helpers/db.ts';
 
 // Standalone app around just this router — see Task 7's test for why. Keeps
 // this task's test run from racing Task 7's over agent/router.ts.
-const app = express()
-app.use(express.json())
-app.use(requireAgentSession, messagesRouter)
-app.use(errorMiddleware)
+const app = express();
+app.use(express.json());
+app.use(requireAgentSession, messagesRouter);
+app.use(errorMiddleware);
 
 afterAll(async () => {
-  await closeDb()
-  await closeOwnerPool()
-})
+  await closeDb();
+  await closeOwnerPool();
+});
 
-beforeEach(truncateAll)
+beforeEach(truncateAll);
 
 async function setupAssignedAgent(workspaceId: string, conversationId: string) {
   const { rows } = await ownerPool.query<{ id: string }>(
     `insert into agent (email, display_name) values ('agent1@example.test', 'Agent One') returning id`,
-  )
-  const agentId = rows[0]!.id
-  await ownerPool.query(`insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`, [
-    workspaceId,
+  );
+  const agentId = rows[0]!.id;
+  await ownerPool.query(
+    `insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`,
+    [workspaceId, agentId],
+  );
+  await ownerPool.query(`update conversation set assigned_agent_id = $2 where id = $1`, [
+    conversationId,
     agentId,
-  ])
-  await ownerPool.query(`update conversation set assigned_agent_id = $2 where id = $1`, [conversationId, agentId])
-  const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId })
-  return { agentId, token }
+  ]);
+  const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId });
+  return { agentId, token };
 }
 
 describe('POST /agent/messages', () => {
   it('sends a message when the caller is the assigned agent', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
-    const { token } = await setupAssignedAgent(workspaceId, conversationId)
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
+    const { token } = await setupAssignedAgent(workspaceId, conversationId);
 
     const res = await request(app)
       .post('/messages')
       .set('Authorization', `Bearer ${token}`)
       .send({ conversation_id: conversationId, body: 'how can I help?' })
-      .expect(200)
-    expect(res.body.message).toMatchObject({ author_type: 'agent', body: 'how can I help?', seq: 1 })
-  })
+      .expect(200);
+    expect(res.body.message).toMatchObject({
+      author_type: 'agent',
+      body: 'how can I help?',
+      seq: 1,
+    });
+  });
 
   it('403s when the conversation is not assigned to the caller', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
     const { rows } = await ownerPool.query<{ id: string }>(
       `insert into agent (email, display_name) values ('agent2@example.test', 'Agent Two') returning id`,
-    )
-    await ownerPool.query(`insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`, [
-      workspaceId,
-      rows[0]!.id,
-    ])
-    const token = await signAgentSession({ agent_id: rows[0]!.id, workspace_id: workspaceId })
+    );
+    await ownerPool.query(
+      `insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`,
+      [workspaceId, rows[0]!.id],
+    );
+    const token = await signAgentSession({ agent_id: rows[0]!.id, workspace_id: workspaceId });
 
     await request(app)
       .post('/messages')
       .set('Authorization', `Bearer ${token}`)
       .send({ conversation_id: conversationId, body: 'hi' })
-      .expect(403)
-  })
+      .expect(403);
+  });
 
-  it('404s for a conversation outside the agent\'s workspace', async () => {
-    const workspaceA = await seedWorkspace()
-    const workspaceB = await seedWorkspace()
-    const playerB = await seedPlayer(workspaceB)
-    const conversationB = await seedConversation({ workspaceId: workspaceB, playerId: playerB })
+  it("404s for a conversation outside the agent's workspace", async () => {
+    const workspaceA = await seedWorkspace();
+    const workspaceB = await seedWorkspace();
+    const playerB = await seedPlayer(workspaceB);
+    const conversationB = await seedConversation({ workspaceId: workspaceB, playerId: playerB });
     const { rows } = await ownerPool.query<{ id: string }>(
       `insert into agent (email, display_name) values ('agentA@example.test', 'Agent A') returning id`,
-    )
-    await ownerPool.query(`insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`, [
-      workspaceA,
-      rows[0]!.id,
-    ])
-    const token = await signAgentSession({ agent_id: rows[0]!.id, workspace_id: workspaceA })
+    );
+    await ownerPool.query(
+      `insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`,
+      [workspaceA, rows[0]!.id],
+    );
+    const token = await signAgentSession({ agent_id: rows[0]!.id, workspace_id: workspaceA });
 
     await request(app)
       .post('/messages')
       .set('Authorization', `Bearer ${token}`)
       .send({ conversation_id: conversationB, body: 'hi' })
-      .expect(404)
-  })
-})
+      .expect(404);
+  });
+});
 
 describe('POST /agent/messages/read', () => {
   it('marks player-authored messages up to seq as read', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
     await ownerPool.query(
       `insert into message (workspace_id, conversation_id, seq, author_type, body) values ($1, $2, 1, 'player', 'help')`,
       [workspaceId, conversationId],
-    )
-    const { token } = await setupAssignedAgent(workspaceId, conversationId)
+    );
+    const { token } = await setupAssignedAgent(workspaceId, conversationId);
 
     await request(app)
       .post('/messages/read')
       .set('Authorization', `Bearer ${token}`)
       .send({ conversation_id: conversationId, up_to_seq: 1 })
-      .expect(200)
+      .expect(200);
 
     const { rows } = await ownerPool.query<{ delivery_state: string }>(
       `select delivery_state from message where conversation_id = $1 and seq = 1`,
       [conversationId],
-    )
-    expect(rows[0]!.delivery_state).toBe('read')
-  })
-})
+    );
+    expect(rows[0]!.delivery_state).toBe('read');
+  });
+});
 ```
 
 - [ ] **Step 3: Run it to confirm it fails**
@@ -2684,34 +2914,37 @@ Expected: FAIL — `messagesRouter.ts` not found
 `backend/src/agent/services/messagesService.ts`:
 
 ```ts
-import { and, eq, lte, ne } from 'drizzle-orm'
+import { and, eq, lte, ne } from 'drizzle-orm';
 import type {
   AgentMessageView,
   MarkAgentReadBody as MarkAgentReadBodyType,
   SendAgentMessageBody as SendAgentMessageBodyType,
-} from '@support/types'
-import { postMessage, toAgentView, toPlayerView } from '../../domain/conversations/index.ts'
-import { conversation, message } from '../../shared/db/schema/index.ts'
-import { withWorkspace } from '../../shared/db/withWorkspace.ts'
-import { emitMessageToRooms } from '../../shared/realtime/emit.ts'
-import { getIo } from '../../shared/realtime/socketServer.ts'
-import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts'
+} from '@support/types';
+import { postMessage, toAgentView, toPlayerView } from '../../domain/conversations/index.ts';
+import { conversation, message } from '../../shared/db/schema/index.ts';
+import { withWorkspace } from '../../shared/db/withWorkspace.ts';
+import { emitMessageToRooms } from '../../shared/realtime/emit.ts';
+import { getIo } from '../../shared/realtime/socketServer.ts';
+import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts';
 
 export type SendAgentMessageResult =
   | { outcome: 'ok'; message: AgentMessageView }
   | { outcome: 'forbidden' }
-  | { outcome: 'not_found' }
+  | { outcome: 'not_found' };
 
-export async function sendAgentMessage(ctx: AgentContext, body: SendAgentMessageBodyType): Promise<SendAgentMessageResult> {
+export async function sendAgentMessage(
+  ctx: AgentContext,
+  body: SendAgentMessageBodyType,
+): Promise<SendAgentMessageResult> {
   const result = await withWorkspace(ctx.workspaceId, async (tx) => {
     const [found] = await tx
       .select({ id: conversation.id, assignedAgentId: conversation.assignedAgentId })
       .from(conversation)
       .where(eq(conversation.id, body.conversation_id))
-      .limit(1)
+      .limit(1);
 
-    if (!found) return { outcome: 'not_found' } as const
-    if (found.assignedAgentId !== ctx.agentId) return { outcome: 'forbidden' } as const
+    if (!found) return { outcome: 'not_found' } as const;
+    if (found.assignedAgentId !== ctx.agentId) return { outcome: 'forbidden' } as const;
 
     const posted = await postMessage(tx, {
       workspaceId: ctx.workspaceId,
@@ -2720,22 +2953,29 @@ export async function sendAgentMessage(ctx: AgentContext, body: SendAgentMessage
       actorId: ctx.agentId,
       authorAgentId: ctx.agentId,
       body: body.body,
-    })
-    return { outcome: 'ok', posted } as const
-  })
+    });
+    return { outcome: 'ok', posted } as const;
+  });
 
-  if (result.outcome !== 'ok') return result
+  if (result.outcome !== 'ok') return result;
 
-  const agentView = toAgentView(result.posted)
-  const playerView = toPlayerView(result.posted)
-  emitMessageToRooms(getIo(), body.conversation_id, playerView, agentView)
-  return { outcome: 'ok', message: agentView }
+  const agentView = toAgentView(result.posted);
+  const playerView = toPlayerView(result.posted);
+  emitMessageToRooms(getIo(), body.conversation_id, playerView, agentView);
+  return { outcome: 'ok', message: agentView };
 }
 
-export async function markAgentMessagesRead(ctx: AgentContext, body: MarkAgentReadBodyType): Promise<boolean> {
+export async function markAgentMessagesRead(
+  ctx: AgentContext,
+  body: MarkAgentReadBodyType,
+): Promise<boolean> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
-    const [found] = await tx.select({ id: conversation.id }).from(conversation).where(eq(conversation.id, body.conversation_id)).limit(1)
-    if (!found) return false
+    const [found] = await tx
+      .select({ id: conversation.id })
+      .from(conversation)
+      .where(eq(conversation.id, body.conversation_id))
+      .limit(1);
+    if (!found) return false;
 
     await tx
       .update(message)
@@ -2747,9 +2987,9 @@ export async function markAgentMessagesRead(ctx: AgentContext, body: MarkAgentRe
           ne(message.deliveryState, 'read'),
           lte(message.seq, body.up_to_seq),
         ),
-      )
-    return true
-  })
+      );
+    return true;
+  });
 }
 ```
 
@@ -2758,40 +2998,50 @@ export async function markAgentMessagesRead(ctx: AgentContext, body: MarkAgentRe
 `backend/src/agent/controllers/messagesController.ts`:
 
 ```ts
-import type { RequestHandler } from 'express'
-import { MarkAgentReadBody, SendAgentMessageBody } from '@support/types'
-import { sendError } from '../../errors.ts'
-import { markAgentMessagesRead, sendAgentMessage } from '../services/messagesService.ts'
+import type { RequestHandler } from 'express';
+import { MarkAgentReadBody, SendAgentMessageBody } from '@support/types';
+import { sendError } from '../../errors.ts';
+import { markAgentMessagesRead, sendAgentMessage } from '../services/messagesService.ts';
 
 export const postAgentMessageHandler: RequestHandler = async (req, res) => {
-  const ctx = req.agent!
-  const body = SendAgentMessageBody.safeParse(req.body)
+  const ctx = req.agent!;
+  const body = SendAgentMessageBody.safeParse(req.body);
   if (!body.success) {
-    sendError(res, 422, 'invalid_request', 'conversation_id must be a uuid and body must be non-empty.')
-    return
+    sendError(
+      res,
+      422,
+      'invalid_request',
+      'conversation_id must be a uuid and body must be non-empty.',
+    );
+    return;
   }
-  const result = await sendAgentMessage(ctx, body.data)
+  const result = await sendAgentMessage(ctx, body.data);
   if (result.outcome === 'not_found') {
-    sendError(res, 404, 'not_found', 'Conversation not found.')
-    return
+    sendError(res, 404, 'not_found', 'Conversation not found.');
+    return;
   }
   if (result.outcome === 'forbidden') {
-    sendError(res, 403, 'forbidden', 'This conversation is not assigned to you.')
-    return
+    sendError(res, 403, 'forbidden', 'This conversation is not assigned to you.');
+    return;
   }
-  res.status(200).json({ message: result.message })
-}
+  res.status(200).json({ message: result.message });
+};
 
 export const markAgentReadHandler: RequestHandler = async (req, res) => {
-  const ctx = req.agent!
-  const body = MarkAgentReadBody.safeParse(req.body)
+  const ctx = req.agent!;
+  const body = MarkAgentReadBody.safeParse(req.body);
   if (!body.success) {
-    sendError(res, 422, 'invalid_request', 'conversation_id must be a uuid and up_to_seq must be a non-negative integer.')
-    return
+    sendError(
+      res,
+      422,
+      'invalid_request',
+      'conversation_id must be a uuid and up_to_seq must be a non-negative integer.',
+    );
+    return;
   }
-  await markAgentMessagesRead(ctx, body.data)
-  res.status(200).json({ ok: true })
-}
+  await markAgentMessagesRead(ctx, body.data);
+  res.status(200).json({ ok: true });
+};
 ```
 
 - [ ] **Step 6: Implement the router**
@@ -2799,12 +3049,15 @@ export const markAgentReadHandler: RequestHandler = async (req, res) => {
 `backend/src/agent/routers/messagesRouter.ts`:
 
 ```ts
-import { Router } from 'express'
-import { markAgentReadHandler, postAgentMessageHandler } from '../controllers/messagesController.ts'
+import { Router } from 'express';
+import {
+  markAgentReadHandler,
+  postAgentMessageHandler,
+} from '../controllers/messagesController.ts';
 
-export const messagesRouter = Router()
-messagesRouter.post('/messages', postAgentMessageHandler)
-messagesRouter.post('/messages/read', markAgentReadHandler)
+export const messagesRouter = Router();
+messagesRouter.post('/messages', postAgentMessageHandler);
+messagesRouter.post('/messages/read', markAgentReadHandler);
 ```
 
 (Not mounted into `agent/router.ts` yet — see the Batch 2 Checkpoint. The test above doesn't need
@@ -2836,6 +3089,7 @@ git commit -m "feat(agent): send/mark-read agent messages, 403 on unassigned rep
 **Batch:** 2
 
 **Files:**
+
 - Create: `frontend/src/api/httpClient.ts`
 - Modify: `frontend/src/api/surfaceApi.ts` (extract shared `apiCall` into `httpClient.ts`)
 - Create: `frontend/src/api/playerChatApi.ts`
@@ -2844,6 +3098,7 @@ git commit -m "feat(agent): send/mark-read agent messages, 403 on unassigned rep
 - Modify: `frontend/src/pages/SupportSurface.tsx`
 
 **Interfaces:**
+
 - Produces: `reconcilePending(serverMessages: ChatMessage[], pending: PendingMessage[]): ChatMessage[]`
   from `chatReconcile.ts` (pure function, unit-tested — the one piece of this task's UI logic that
   doesn't need a rendering harness to verify).
@@ -2857,36 +3112,47 @@ git commit -m "feat(agent): send/mark-read agent messages, 403 on unassigned rep
 `frontend/src/api/httpClient.ts`:
 
 ```ts
-const BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000'
+const BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000';
 
 export async function apiCall<T>(path: string, token: string, init: RequestInit = {}): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     ...init,
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...(init.headers ?? {}) },
-  })
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      ...(init.headers ?? {}),
+    },
+  });
   if (!res.ok) {
-    const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null
-    throw new Error(body?.error?.message ?? `Request failed with ${res.status}`)
+    const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
+    throw new Error(body?.error?.message ?? `Request failed with ${res.status}`);
   }
-  return (await res.json()) as T
+  return (await res.json()) as T;
 }
 ```
 
 `frontend/src/api/surfaceApi.ts` — replace its contents to use it:
 
 ```ts
-import type { BootstrapResponse } from '@support/types'
-import { apiCall } from './httpClient.ts'
+import type { BootstrapResponse } from '@support/types';
+import { apiCall } from './httpClient.ts';
 
 export function fetchBootstrap(token: string, sessionId: string): Promise<BootstrapResponse> {
-  return apiCall<BootstrapResponse>(`/surface/bootstrap?session_id=${encodeURIComponent(sessionId)}`, token)
+  return apiCall<BootstrapResponse>(
+    `/surface/bootstrap?session_id=${encodeURIComponent(sessionId)}`,
+    token,
+  );
 }
 
-export function reportArticleRead(token: string, sessionId: string, articleId: string): Promise<{ ok: true }> {
+export function reportArticleRead(
+  token: string,
+  sessionId: string,
+  articleId: string,
+): Promise<{ ok: true }> {
   return apiCall<{ ok: true }>('/surface/events/article_read', token, {
     method: 'POST',
     body: JSON.stringify({ session_id: sessionId, article_id: articleId }),
-  })
+  });
 }
 ```
 
@@ -2895,22 +3161,31 @@ export function reportArticleRead(token: string, sessionId: string, articleId: s
 `frontend/src/api/playerChatApi.ts`:
 
 ```ts
-import type { PlayerMessageView, PlayerMessagesResponse } from '@support/types'
-import { apiCall } from './httpClient.ts'
+import type { PlayerMessageView, PlayerMessagesResponse } from '@support/types';
+import { apiCall } from './httpClient.ts';
 
-export function fetchPlayerMessages(token: string, sessionId: string): Promise<PlayerMessagesResponse> {
-  return apiCall<PlayerMessagesResponse>(`/surface/messages?session_id=${encodeURIComponent(sessionId)}`, token)
+export function fetchPlayerMessages(
+  token: string,
+  sessionId: string,
+): Promise<PlayerMessagesResponse> {
+  return apiCall<PlayerMessagesResponse>(
+    `/surface/messages?session_id=${encodeURIComponent(sessionId)}`,
+    token,
+  );
 }
 
 export function sendPlayerMessage(
   token: string,
   body: string,
 ): Promise<{ conversation_id: string; message: PlayerMessageView }> {
-  return apiCall(`/surface/messages`, token, { method: 'POST', body: JSON.stringify({ body }) })
+  return apiCall(`/surface/messages`, token, { method: 'POST', body: JSON.stringify({ body }) });
 }
 
 export function markPlayerMessagesRead(token: string, upToSeq: number): Promise<{ ok: true }> {
-  return apiCall(`/surface/messages/read`, token, { method: 'POST', body: JSON.stringify({ up_to_seq: upToSeq }) })
+  return apiCall(`/surface/messages/read`, token, {
+    method: 'POST',
+    body: JSON.stringify({ up_to_seq: upToSeq }),
+  });
 }
 ```
 
@@ -2919,32 +3194,41 @@ export function markPlayerMessagesRead(token: string, upToSeq: number): Promise<
 `frontend/src/pages/chatReconcile.test.ts`:
 
 ```ts
-import { describe, expect, it } from 'vitest'
-import { reconcilePending } from './chatReconcile.ts'
-import type { ChatMessage } from '../components/chat/types.ts'
+import { describe, expect, it } from 'vitest';
+import { reconcilePending } from './chatReconcile.ts';
+import type { ChatMessage } from '../components/chat/types.ts';
 
 function msg(overrides: Partial<ChatMessage> = {}): ChatMessage {
-  return { id: 'server-1', authorType: 'player', body: 'hi', createdAt: '2026-08-06T00:00:00Z', ...overrides }
+  return {
+    id: 'server-1',
+    authorType: 'player',
+    body: 'hi',
+    createdAt: '2026-08-06T00:00:00Z',
+    ...overrides,
+  };
 }
 
 describe('reconcilePending', () => {
   it('keeps a pending message when no server message matches it yet', () => {
-    const pending = [{ ...msg({ id: 'temp-1' }), tempId: 'temp-1' }]
-    expect(reconcilePending([], pending)).toEqual([{ ...msg({ id: 'temp-1' }), tempId: 'temp-1' }])
-  })
+    const pending = [{ ...msg({ id: 'temp-1' }), tempId: 'temp-1' }];
+    expect(reconcilePending([], pending)).toEqual([{ ...msg({ id: 'temp-1' }), tempId: 'temp-1' }]);
+  });
 
   it('drops a pending message once a matching server message arrives', () => {
-    const pending = [{ ...msg({ id: 'temp-1' }), tempId: 'temp-1' }]
-    const result = reconcilePending([msg()], pending)
-    expect(result).toEqual([msg()])
-  })
+    const pending = [{ ...msg({ id: 'temp-1' }), tempId: 'temp-1' }];
+    const result = reconcilePending([msg()], pending);
+    expect(result).toEqual([msg()]);
+  });
 
   it('does not drop a pending message with a different body', () => {
-    const pending = [{ ...msg({ id: 'temp-1', body: 'different' }), tempId: 'temp-1' }]
-    const result = reconcilePending([msg()], pending)
-    expect(result).toEqual([msg(), { ...msg({ id: 'temp-1', body: 'different' }), tempId: 'temp-1' }])
-  })
-})
+    const pending = [{ ...msg({ id: 'temp-1', body: 'different' }), tempId: 'temp-1' }];
+    const result = reconcilePending([msg()], pending);
+    expect(result).toEqual([
+      msg(),
+      { ...msg({ id: 'temp-1', body: 'different' }), tempId: 'temp-1' },
+    ]);
+  });
+});
 ```
 
 - [ ] **Step 4: Run it to confirm it fails**
@@ -2957,9 +3241,9 @@ Expected: FAIL — `chatReconcile.ts` not found
 `frontend/src/pages/chatReconcile.ts`:
 
 ```ts
-import type { ChatMessage } from '../components/chat/types.ts'
+import type { ChatMessage } from '../components/chat/types.ts';
 
-export type PendingMessage = ChatMessage & { tempId: string }
+export type PendingMessage = ChatMessage & { tempId: string };
 
 /**
  * A pending (optimistic) message disappears once the server's own list
@@ -2968,11 +3252,14 @@ export type PendingMessage = ChatMessage & { tempId: string }
  * on body/author is the same fallback StrictMode-safe code elsewhere in this
  * codebase reaches for when there is no id yet to compare.
  */
-export function reconcilePending(serverMessages: ChatMessage[], pending: PendingMessage[]): ChatMessage[] {
+export function reconcilePending(
+  serverMessages: ChatMessage[],
+  pending: PendingMessage[],
+): ChatMessage[] {
   const stillPending = pending.filter(
     (p) => !serverMessages.some((m) => m.authorType === p.authorType && m.body === p.body),
-  )
-  return [...serverMessages, ...stillPending]
+  );
+  return [...serverMessages, ...stillPending];
 }
 ```
 
@@ -2986,20 +3273,36 @@ Expected: PASS (3 tests)
 Add these imports to the top of `frontend/src/pages/SupportSurface.tsx`, alongside the existing ones:
 
 ```tsx
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { fetchPlayerMessages, markPlayerMessagesRead, sendPlayerMessage } from '../api/playerChatApi.ts'
-import { ChatThread } from '../components/chat/ChatThread.tsx'
-import { Composer } from '../components/chat/Composer.tsx'
-import type { ChatMessage } from '../components/chat/types.ts'
-import { createSocket } from '../lib/socket.ts'
-import { reconcilePending, type PendingMessage } from './chatReconcile.ts'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  fetchPlayerMessages,
+  markPlayerMessagesRead,
+  sendPlayerMessage,
+} from '../api/playerChatApi.ts';
+import { ChatThread } from '../components/chat/ChatThread.tsx';
+import { Composer } from '../components/chat/Composer.tsx';
+import type { ChatMessage } from '../components/chat/types.ts';
+import { createSocket } from '../lib/socket.ts';
+import { reconcilePending, type PendingMessage } from './chatReconcile.ts';
 ```
 
 Add this helper above the `SupportSurface` function:
 
 ```tsx
-function toChatMessage(m: { id: string; author_type: ChatMessage['authorType']; body: string; created_at: string; delivery_state: NonNullable<ChatMessage['deliveryState']> }): ChatMessage {
-  return { id: m.id, authorType: m.author_type, body: m.body, createdAt: m.created_at, deliveryState: m.delivery_state }
+function toChatMessage(m: {
+  id: string;
+  author_type: ChatMessage['authorType'];
+  body: string;
+  created_at: string;
+  delivery_state: NonNullable<ChatMessage['deliveryState']>;
+}): ChatMessage {
+  return {
+    id: m.id,
+    authorType: m.author_type,
+    body: m.body,
+    createdAt: m.created_at,
+    deliveryState: m.delivery_state,
+  };
 }
 ```
 
@@ -3007,94 +3310,103 @@ Inside the `SupportSurface` component, add chat-panel state and wiring right aft
 `onRead` handler:
 
 ```tsx
-  const [chatOpen, setChatOpen] = useState(false)
-  const [pending, setPending] = useState<PendingMessage[]>([])
-  const queryClient = useQueryClient()
+const [chatOpen, setChatOpen] = useState(false);
+const [pending, setPending] = useState<PendingMessage[]>([]);
+const queryClient = useQueryClient();
 
-  const messagesQuery = useQuery({
-    queryKey: ['playerMessages', boot?.sessionId],
-    queryFn: () => fetchPlayerMessages(boot!.token, boot!.sessionId),
-    enabled: chatOpen && boot !== null,
-  })
+const messagesQuery = useQuery({
+  queryKey: ['playerMessages', boot?.sessionId],
+  queryFn: () => fetchPlayerMessages(boot!.token, boot!.sessionId),
+  enabled: chatOpen && boot !== null,
+});
 
-  const send = useMutation({
-    mutationFn: (body: string) => sendPlayerMessage(boot!.token, body),
-    onMutate: (body: string) => {
-      const tempId = `temp-${Date.now()}-${Math.random()}`
-      setPending((current) => [
-        ...current,
-        { tempId, id: tempId, authorType: 'player', body, createdAt: new Date().toISOString(), deliveryState: 'sending' },
-      ])
-      return { tempId }
-    },
-    onSuccess: () => {
-      // Deliberately does not clear `pending` here: chatReconcile.ts's
-      // reconcilePending drops a pending entry only once the refetched server
-      // list actually contains a matching message, so the optimistic bubble
-      // never disappears and reappears in the gap before that refetch lands.
-      void queryClient.invalidateQueries({ queryKey: ['playerMessages', boot?.sessionId] })
-    },
-    onError: (_error, _body, context) => {
-      setPending((current) =>
-        current.map((p) => (p.tempId === context?.tempId ? { ...p, deliveryState: 'failed' } : p)),
-      )
-    },
-  })
+const send = useMutation({
+  mutationFn: (body: string) => sendPlayerMessage(boot!.token, body),
+  onMutate: (body: string) => {
+    const tempId = `temp-${Date.now()}-${Math.random()}`;
+    setPending((current) => [
+      ...current,
+      {
+        tempId,
+        id: tempId,
+        authorType: 'player',
+        body,
+        createdAt: new Date().toISOString(),
+        deliveryState: 'sending',
+      },
+    ]);
+    return { tempId };
+  },
+  onSuccess: () => {
+    // Deliberately does not clear `pending` here: chatReconcile.ts's
+    // reconcilePending drops a pending entry only once the refetched server
+    // list actually contains a matching message, so the optimistic bubble
+    // never disappears and reappears in the gap before that refetch lands.
+    void queryClient.invalidateQueries({ queryKey: ['playerMessages', boot?.sessionId] });
+  },
+  onError: (_error, _body, context) => {
+    setPending((current) =>
+      current.map((p) => (p.tempId === context?.tempId ? { ...p, deliveryState: 'failed' } : p)),
+    );
+  },
+});
 
-  const onRetry = (failed: ChatMessage) => {
-    setPending((current) => current.filter((p) => p.id !== failed.id))
-    send.mutate(failed.body)
-  }
+const onRetry = (failed: ChatMessage) => {
+  setPending((current) => current.filter((p) => p.id !== failed.id));
+  send.mutate(failed.body);
+};
 
-  useEffect(() => {
-    if (!chatOpen || !boot) return
-    const socket = createSocket(boot.token, 'player')
-    socket.on('connect', () => {
-      const conversationId = messagesQuery.data?.conversation_id
-      if (conversationId) socket.emit('join_conversation', { conversation_id: conversationId })
-    })
-    socket.on('message:new', () => {
-      void queryClient.invalidateQueries({ queryKey: ['playerMessages', boot.sessionId] })
-    })
-    return () => {
-      socket.close()
-    }
-  }, [chatOpen, boot, messagesQuery.data?.conversation_id, queryClient])
+useEffect(() => {
+  if (!chatOpen || !boot) return;
+  const socket = createSocket(boot.token, 'player');
+  socket.on('connect', () => {
+    const conversationId = messagesQuery.data?.conversation_id;
+    if (conversationId) socket.emit('join_conversation', { conversation_id: conversationId });
+  });
+  socket.on('message:new', () => {
+    void queryClient.invalidateQueries({ queryKey: ['playerMessages', boot.sessionId] });
+  });
+  return () => {
+    socket.close();
+  };
+}, [chatOpen, boot, messagesQuery.data?.conversation_id, queryClient]);
 
-  useEffect(() => {
-    const messages = messagesQuery.data?.messages
-    if (!chatOpen || !boot || !messages || messages.length === 0) return
-    const lastSeq = Math.max(...messages.map((m) => m.seq))
-    void markPlayerMessagesRead(boot.token, lastSeq)
-  }, [chatOpen, boot, messagesQuery.data])
+useEffect(() => {
+  const messages = messagesQuery.data?.messages;
+  if (!chatOpen || !boot || !messages || messages.length === 0) return;
+  const lastSeq = Math.max(...messages.map((m) => m.seq));
+  void markPlayerMessagesRead(boot.token, lastSeq);
+}, [chatOpen, boot, messagesQuery.data]);
 
-  const serverMessages: ChatMessage[] = messagesQuery.data?.messages.map(toChatMessage) ?? []
-  const chatMessages = reconcilePending(serverMessages, pending)
+const serverMessages: ChatMessage[] = messagesQuery.data?.messages.map(toChatMessage) ?? [];
+const chatMessages = reconcilePending(serverMessages, pending);
 ```
 
 Replace the final "Still need help? / Talk to a person" section with:
 
 ```tsx
-      <section>
-        <button type="button" onClick={() => setChatOpen(true)}>
-          Still need help?
-        </button>
-        <button type="button" onClick={() => setChatOpen(true)}>
-          Talk to a person
-        </button>
-        <button type="button" onClick={() => post({ type: 'close' })}>
-          Close
-        </button>
-      </section>
+<section>
+  <button type="button" onClick={() => setChatOpen(true)}>
+    Still need help?
+  </button>
+  <button type="button" onClick={() => setChatOpen(true)}>
+    Talk to a person
+  </button>
+  <button type="button" onClick={() => post({ type: 'close' })}>
+    Close
+  </button>
+</section>;
 
-      {chatOpen && (
-        <section className="chat-panel">
-          <div className="chat-panel__thread">
-            <ChatThread messages={chatMessages} currentAuthorType="player" onRetry={onRetry} />
-          </div>
-          <Composer onSend={(body) => send.mutate(body)} disabled={send.isPending} />
-        </section>
-      )}
+{
+  chatOpen && (
+    <section className="chat-panel">
+      <div className="chat-panel__thread">
+        <ChatThread messages={chatMessages} currentAuthorType="player" onRetry={onRetry} />
+      </div>
+      <Composer onSend={(body) => send.mutate(body)} disabled={send.isPending} />
+    </section>
+  );
+}
 ```
 
 - [ ] **Step 8: Add minimal layout CSS for the chat panel**
@@ -3102,8 +3414,16 @@ Replace the final "Still need help? / Talk to a person" section with:
 Append to `frontend/src/styles.css`:
 
 ```css
-.chat-panel { display: flex; flex-direction: column; height: 60vh; border-top: 1px solid #e5e7eb; }
-.chat-panel__thread { flex: 1; overflow: hidden; }
+.chat-panel {
+  display: flex;
+  flex-direction: column;
+  height: 60vh;
+  border-top: 1px solid #e5e7eb;
+}
+.chat-panel__thread {
+  flex: 1;
+  overflow: hidden;
+}
 ```
 
 - [ ] **Step 9: Run typecheck and build**
@@ -3127,6 +3447,7 @@ git commit -m "feat(web): player chat panel on SupportSurface — send/fetch/rea
 **Batch:** 2
 
 **Files:**
+
 - Create: `frontend/src/lib/agentSession.ts`
 - Create: `frontend/src/api/agentApi.ts`
 - Modify: `frontend/src/pages/AgentLogin.tsx` (replace placeholder)
@@ -3134,6 +3455,7 @@ git commit -m "feat(web): player chat panel on SupportSurface — send/fetch/rea
 - Modify: `frontend/src/pages/AgentConversation.tsx` (replace placeholder)
 
 **Interfaces:**
+
 - Produces: `loadAgentSession()`, `saveAgentSession(session)`, `clearAgentSession()` from
   `lib/agentSession.ts` — a `localStorage`-backed stand-in for a real cookie/session, matching this
   slice's dev-picker scope.
@@ -3146,31 +3468,31 @@ git commit -m "feat(web): player chat panel on SupportSurface — send/fetch/rea
 `frontend/src/lib/agentSession.ts`:
 
 ```ts
-const STORAGE_KEY = 'support_agent_session'
+const STORAGE_KEY = 'support_agent_session';
 
 export type StoredAgentSession = {
-  token: string
-  agentId: string
-  displayName: string
-  workspaceSlug: string
-}
+  token: string;
+  agentId: string;
+  displayName: string;
+  workspaceSlug: string;
+};
 
 export function loadAgentSession(): StoredAgentSession | null {
-  const raw = localStorage.getItem(STORAGE_KEY)
-  if (!raw) return null
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) return null;
   try {
-    return JSON.parse(raw) as StoredAgentSession
+    return JSON.parse(raw) as StoredAgentSession;
   } catch {
-    return null
+    return null;
   }
 }
 
 export function saveAgentSession(session: StoredAgentSession): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(session))
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
 }
 
 export function clearAgentSession(): void {
-  localStorage.removeItem(STORAGE_KEY)
+  localStorage.removeItem(STORAGE_KEY);
 }
 ```
 
@@ -3179,22 +3501,26 @@ export function clearAgentSession(): void {
 `frontend/src/api/agentApi.ts`:
 
 ```ts
-import type { AgentConversationsResponse, AgentMessagesResponse, ClaimResponse } from '@support/types'
-import { apiCall } from './httpClient.ts'
+import type {
+  AgentConversationsResponse,
+  AgentMessagesResponse,
+  ClaimResponse,
+} from '@support/types';
+import { apiCall } from './httpClient.ts';
 
-const BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000'
+const BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000';
 
-export type DevAgentOption = { id: string; email: string; display_name: string }
+export type DevAgentOption = { id: string; email: string; display_name: string };
 export type DevLoginResponse = {
-  token: string
-  agent: { id: string; display_name: string }
-  workspace: { id: string; slug: string }
-}
+  token: string;
+  agent: { id: string; display_name: string };
+  workspace: { id: string; slug: string };
+};
 
 export async function fetchDevAgents(): Promise<{ agents: DevAgentOption[] }> {
-  const res = await fetch(`${BASE}/agent/auth/dev-agents`)
-  if (!res.ok) throw new Error(`Request failed with ${res.status}`)
-  return (await res.json()) as { agents: DevAgentOption[] }
+  const res = await fetch(`${BASE}/agent/auth/dev-agents`);
+  if (!res.ok) throw new Error(`Request failed with ${res.status}`);
+  return (await res.json()) as { agents: DevAgentOption[] };
 }
 
 export async function devLogin(agentId: string): Promise<DevLoginResponse> {
@@ -3202,32 +3528,49 @@ export async function devLogin(agentId: string): Promise<DevLoginResponse> {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ agent_id: agentId }),
-  })
-  if (!res.ok) throw new Error(`Request failed with ${res.status}`)
-  return (await res.json()) as DevLoginResponse
+  });
+  if (!res.ok) throw new Error(`Request failed with ${res.status}`);
+  return (await res.json()) as DevLoginResponse;
 }
 
-export function fetchInbox(token: string, status: 'unassigned' | 'mine'): Promise<AgentConversationsResponse> {
-  return apiCall(`/agent/conversations?status=${status}`, token)
+export function fetchInbox(
+  token: string,
+  status: 'unassigned' | 'mine',
+): Promise<AgentConversationsResponse> {
+  return apiCall(`/agent/conversations?status=${status}`, token);
 }
 
 export function claimConversation(token: string, conversationId: string): Promise<ClaimResponse> {
-  return apiCall(`/agent/conversations/${conversationId}/claim`, token, { method: 'POST' })
+  return apiCall(`/agent/conversations/${conversationId}/claim`, token, { method: 'POST' });
 }
 
-export function fetchConversationMessages(token: string, conversationId: string): Promise<AgentMessagesResponse> {
-  return apiCall(`/agent/conversations/${conversationId}/messages`, token)
+export function fetchConversationMessages(
+  token: string,
+  conversationId: string,
+): Promise<AgentMessagesResponse> {
+  return apiCall(`/agent/conversations/${conversationId}/messages`, token);
 }
 
-export function sendAgentMessage(token: string, conversationId: string, body: string): Promise<{ message: unknown }> {
-  return apiCall(`/agent/messages`, token, { method: 'POST', body: JSON.stringify({ conversation_id: conversationId, body }) })
+export function sendAgentMessage(
+  token: string,
+  conversationId: string,
+  body: string,
+): Promise<{ message: unknown }> {
+  return apiCall(`/agent/messages`, token, {
+    method: 'POST',
+    body: JSON.stringify({ conversation_id: conversationId, body }),
+  });
 }
 
-export function markAgentMessagesRead(token: string, conversationId: string, upToSeq: number): Promise<{ ok: true }> {
+export function markAgentMessagesRead(
+  token: string,
+  conversationId: string,
+  upToSeq: number,
+): Promise<{ ok: true }> {
   return apiCall(`/agent/messages/read`, token, {
     method: 'POST',
     body: JSON.stringify({ conversation_id: conversationId, up_to_seq: upToSeq }),
-  })
+  });
 }
 ```
 
@@ -3236,25 +3579,25 @@ export function markAgentMessagesRead(token: string, conversationId: string, upT
 `frontend/src/pages/AgentLogin.tsx` — replace its contents:
 
 ```tsx
-import { useQuery } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
-import { devLogin, fetchDevAgents } from '../api/agentApi.ts'
-import { saveAgentSession } from '../lib/agentSession.ts'
+import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
+import { devLogin, fetchDevAgents } from '../api/agentApi.ts';
+import { saveAgentSession } from '../lib/agentSession.ts';
 
 export function AgentLogin() {
-  const navigate = useNavigate()
-  const agentsQuery = useQuery({ queryKey: ['devAgents'], queryFn: fetchDevAgents })
+  const navigate = useNavigate();
+  const agentsQuery = useQuery({ queryKey: ['devAgents'], queryFn: fetchDevAgents });
 
   const onPick = async (agentId: string) => {
-    const result = await devLogin(agentId)
+    const result = await devLogin(agentId);
     saveAgentSession({
       token: result.token,
       agentId: result.agent.id,
       displayName: result.agent.display_name,
       workspaceSlug: result.workspace.slug,
-    })
-    navigate('/inbox')
-  }
+    });
+    navigate('/inbox');
+  };
 
   return (
     <main className="agent-login">
@@ -3272,7 +3615,7 @@ export function AgentLogin() {
         ))}
       </ul>
     </main>
-  )
+  );
 }
 ```
 
@@ -3281,54 +3624,54 @@ export function AgentLogin() {
 `frontend/src/pages/AgentInbox.tsx` — replace its contents:
 
 ```tsx
-import { useEffect, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
-import { claimConversation, fetchInbox } from '../api/agentApi.ts'
-import { loadAgentSession } from '../lib/agentSession.ts'
-import { createSocket } from '../lib/socket.ts'
+import { useEffect, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
+import { claimConversation, fetchInbox } from '../api/agentApi.ts';
+import { loadAgentSession } from '../lib/agentSession.ts';
+import { createSocket } from '../lib/socket.ts';
 
 export function AgentInbox() {
-  const navigate = useNavigate()
-  const session = loadAgentSession()
-  const queryClient = useQueryClient()
-  const [claimNotice, setClaimNotice] = useState<string | null>(null)
+  const navigate = useNavigate();
+  const session = loadAgentSession();
+  const queryClient = useQueryClient();
+  const [claimNotice, setClaimNotice] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!session) navigate('/login')
-  }, [session, navigate])
+    if (!session) navigate('/login');
+  }, [session, navigate]);
 
   const unassigned = useQuery({
     queryKey: ['inbox', 'unassigned'],
     queryFn: () => fetchInbox(session!.token, 'unassigned'),
     enabled: session !== null,
-  })
+  });
   const mine = useQuery({
     queryKey: ['inbox', 'mine'],
     queryFn: () => fetchInbox(session!.token, 'mine'),
     enabled: session !== null,
-  })
+  });
 
   const claim = useMutation({
     mutationFn: (conversationId: string) => claimConversation(session!.token, conversationId),
     onSuccess: (result) => {
-      setClaimNotice(result.claimed ? null : 'Already claimed by someone else.')
-      void queryClient.invalidateQueries({ queryKey: ['inbox'] })
+      setClaimNotice(result.claimed ? null : 'Already claimed by someone else.');
+      void queryClient.invalidateQueries({ queryKey: ['inbox'] });
     },
-  })
+  });
 
   useEffect(() => {
-    if (!session) return
-    const socket = createSocket(session.token, 'agent')
+    if (!session) return;
+    const socket = createSocket(session.token, 'agent');
     socket.on('conversation:changed', () => {
-      void queryClient.invalidateQueries({ queryKey: ['inbox'] })
-    })
+      void queryClient.invalidateQueries({ queryKey: ['inbox'] });
+    });
     return () => {
-      socket.close()
-    }
-  }, [session, queryClient])
+      socket.close();
+    };
+  }, [session, queryClient]);
 
-  if (!session) return null
+  if (!session) return null;
 
   return (
     <main className="agent-inbox">
@@ -3364,7 +3707,7 @@ export function AgentInbox() {
         </ul>
       </section>
     </main>
-  )
+  );
 }
 ```
 
@@ -3373,67 +3716,77 @@ export function AgentInbox() {
 `frontend/src/pages/AgentConversation.tsx` — replace its contents:
 
 ```tsx
-import { useEffect } from 'react'
-import type { AgentMessageView } from '@support/types'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate, useParams } from 'react-router-dom'
-import { fetchConversationMessages, markAgentMessagesRead, sendAgentMessage } from '../api/agentApi.ts'
-import { loadAgentSession } from '../lib/agentSession.ts'
-import { createSocket } from '../lib/socket.ts'
-import { ChatThread } from '../components/chat/ChatThread.tsx'
-import { Composer } from '../components/chat/Composer.tsx'
-import type { ChatMessage } from '../components/chat/types.ts'
+import { useEffect } from 'react';
+import type { AgentMessageView } from '@support/types';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate, useParams } from 'react-router-dom';
+import {
+  fetchConversationMessages,
+  markAgentMessagesRead,
+  sendAgentMessage,
+} from '../api/agentApi.ts';
+import { loadAgentSession } from '../lib/agentSession.ts';
+import { createSocket } from '../lib/socket.ts';
+import { ChatThread } from '../components/chat/ChatThread.tsx';
+import { Composer } from '../components/chat/Composer.tsx';
+import type { ChatMessage } from '../components/chat/types.ts';
 
 function toChatMessage(m: AgentMessageView): ChatMessage {
-  return { id: m.id, authorType: m.author_type, body: m.body, createdAt: m.created_at, deliveryState: m.delivery_state }
+  return {
+    id: m.id,
+    authorType: m.author_type,
+    body: m.body,
+    createdAt: m.created_at,
+    deliveryState: m.delivery_state,
+  };
 }
 
 export function AgentConversation() {
-  const { id } = useParams<{ id: string }>()
-  const navigate = useNavigate()
-  const session = loadAgentSession()
-  const queryClient = useQueryClient()
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const session = loadAgentSession();
+  const queryClient = useQueryClient();
 
   useEffect(() => {
-    if (!session) navigate('/login')
-  }, [session, navigate])
+    if (!session) navigate('/login');
+  }, [session, navigate]);
 
   const messagesQuery = useQuery({
     queryKey: ['conversation', id, 'messages'],
     queryFn: () => fetchConversationMessages(session!.token, id!),
     enabled: session !== null && id !== undefined,
-  })
+  });
 
   const send = useMutation({
     mutationFn: (body: string) => sendAgentMessage(session!.token, id!, body),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['conversation', id, 'messages'] })
+      void queryClient.invalidateQueries({ queryKey: ['conversation', id, 'messages'] });
     },
-  })
+  });
 
   useEffect(() => {
-    if (!session || !id) return
-    const socket = createSocket(session.token, 'agent')
-    socket.emit('join_conversation', { conversation_id: id })
+    if (!session || !id) return;
+    const socket = createSocket(session.token, 'agent');
+    socket.emit('join_conversation', { conversation_id: id });
     socket.on('message:new', () => {
-      void queryClient.invalidateQueries({ queryKey: ['conversation', id, 'messages'] })
-    })
+      void queryClient.invalidateQueries({ queryKey: ['conversation', id, 'messages'] });
+    });
     return () => {
-      socket.emit('leave_conversation', { conversation_id: id })
-      socket.close()
-    }
-  }, [session, id, queryClient])
+      socket.emit('leave_conversation', { conversation_id: id });
+      socket.close();
+    };
+  }, [session, id, queryClient]);
 
   useEffect(() => {
-    const messages = messagesQuery.data?.messages
-    if (!session || !id || !messages || messages.length === 0) return
-    const lastSeq = Math.max(...messages.map((m) => m.seq))
-    void markAgentMessagesRead(session.token, id, lastSeq)
-  }, [session, id, messagesQuery.data])
+    const messages = messagesQuery.data?.messages;
+    if (!session || !id || !messages || messages.length === 0) return;
+    const lastSeq = Math.max(...messages.map((m) => m.seq));
+    void markAgentMessagesRead(session.token, id, lastSeq);
+  }, [session, id, messagesQuery.data]);
 
-  if (!session || !id) return null
+  if (!session || !id) return null;
 
-  const chatMessages: ChatMessage[] = messagesQuery.data?.messages.map(toChatMessage) ?? []
+  const chatMessages: ChatMessage[] = messagesQuery.data?.messages.map(toChatMessage) ?? [];
 
   return (
     <main className="agent-conversation">
@@ -3445,7 +3798,7 @@ export function AgentConversation() {
       </div>
       <Composer onSend={(body) => send.mutate(body)} disabled={send.isPending} />
     </main>
-  )
+  );
 }
 ```
 
@@ -3454,8 +3807,15 @@ export function AgentConversation() {
 Append to `frontend/src/styles.css`:
 
 ```css
-.agent-conversation { display: flex; flex-direction: column; height: 100vh; }
-.agent-conversation__thread { flex: 1; overflow: hidden; }
+.agent-conversation {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+.agent-conversation__thread {
+  flex: 1;
+  overflow: hidden;
+}
 ```
 
 - [ ] **Step 7: Run typecheck and build**
@@ -3483,18 +3843,18 @@ In `backend/src/agent/router.ts`, add the imports and both `.use()` lines below 
 `requireAgentSession` line:
 
 ```ts
-import { conversationsRouter } from './routers/conversationsRouter.ts'
-import { messagesRouter } from './routers/messagesRouter.ts'
+import { conversationsRouter } from './routers/conversationsRouter.ts';
+import { messagesRouter } from './routers/messagesRouter.ts';
 ```
 
 ```ts
-export const agentRouter = Router()
+export const agentRouter = Router();
 
-agentRouter.use(authRouter)
+agentRouter.use(authRouter);
 
-agentRouter.use(requireAgentSession)
-agentRouter.use(conversationsRouter)
-agentRouter.use(messagesRouter)
+agentRouter.use(requireAgentSession);
+agentRouter.use(conversationsRouter);
+agentRouter.use(messagesRouter);
 ```
 
 - [ ] **Step 2: Extend the cross-workspace isolation sweep**
@@ -3504,82 +3864,91 @@ In `backend/tests/isolation.test.ts`, add cases for the four new endpoint groups
 (alongside the existing `B_SESSION` constant):
 
 ```ts
-import { signAgentSession } from '../src/shared/auth/agentSession.ts'
+import { signAgentSession } from '../src/shared/auth/agentSession.ts';
 ```
 
 Add these `it` blocks inside the existing `describe`:
 
 ```ts
-  it('POST /surface/messages never lets A read or write into B\'s conversation', async () => {
-    // A's own POST only ever touches A's own (auto-created) conversation — there
-    // is no conversation_id in the request body for A to target B's with.
-    const before = await rowCounts()
-    await withA(request(app).post('/surface/messages')).send({ body: 'hello' }).expect(200)
-    const after = await rowCounts()
-    expect(after.conversation).toBe(before.conversation + 1)
-    expect(after.message).toBe(before.message + 1)
-  })
+it("POST /surface/messages never lets A read or write into B's conversation", async () => {
+  // A's own POST only ever touches A's own (auto-created) conversation — there
+  // is no conversation_id in the request body for A to target B's with.
+  const before = await rowCounts();
+  await withA(request(app).post('/surface/messages')).send({ body: 'hello' }).expect(200);
+  const after = await rowCounts();
+  expect(after.conversation).toBe(before.conversation + 1);
+  expect(after.message).toBe(before.message + 1);
+});
 
-  it('GET /agent/conversations/:id/messages on B\'s conversation is 404 for an A agent', async () => {
-    const { rows } = await ownerPool.query<{ id: string }>(
-      `insert into agent (email, display_name) values ('a-agent@example.test', 'A Agent') returning id`,
-    )
-    await ownerPool.query(`insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`, [
-      a.workspaceId,
-      rows[0]!.id,
-    ])
-    const bConversation = await seedConversation({ workspaceId: b.workspaceId, playerId: b.playerId })
-    const agentToken = await signAgentSession({ agent_id: rows[0]!.id, workspace_id: a.workspaceId })
+it("GET /agent/conversations/:id/messages on B's conversation is 404 for an A agent", async () => {
+  const { rows } = await ownerPool.query<{ id: string }>(
+    `insert into agent (email, display_name) values ('a-agent@example.test', 'A Agent') returning id`,
+  );
+  await ownerPool.query(
+    `insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`,
+    [a.workspaceId, rows[0]!.id],
+  );
+  const bConversation = await seedConversation({
+    workspaceId: b.workspaceId,
+    playerId: b.playerId,
+  });
+  const agentToken = await signAgentSession({ agent_id: rows[0]!.id, workspace_id: a.workspaceId });
 
-    await request(app)
-      .get(`/agent/conversations/${bConversation}/messages`)
-      .set('Authorization', `Bearer ${agentToken}`)
-      .expect(404)
-  })
+  await request(app)
+    .get(`/agent/conversations/${bConversation}/messages`)
+    .set('Authorization', `Bearer ${agentToken}`)
+    .expect(404);
+});
 
-  it('POST /agent/conversations/:id/claim on B\'s conversation is a no-op false claim for an A agent', async () => {
-    const { rows } = await ownerPool.query<{ id: string }>(
-      `insert into agent (email, display_name) values ('a-agent2@example.test', 'A Agent 2') returning id`,
-    )
-    await ownerPool.query(`insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`, [
-      a.workspaceId,
-      rows[0]!.id,
-    ])
-    const bConversation = await seedConversation({ workspaceId: b.workspaceId, playerId: b.playerId })
-    const agentToken = await signAgentSession({ agent_id: rows[0]!.id, workspace_id: a.workspaceId })
+it("POST /agent/conversations/:id/claim on B's conversation is a no-op false claim for an A agent", async () => {
+  const { rows } = await ownerPool.query<{ id: string }>(
+    `insert into agent (email, display_name) values ('a-agent2@example.test', 'A Agent 2') returning id`,
+  );
+  await ownerPool.query(
+    `insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`,
+    [a.workspaceId, rows[0]!.id],
+  );
+  const bConversation = await seedConversation({
+    workspaceId: b.workspaceId,
+    playerId: b.playerId,
+  });
+  const agentToken = await signAgentSession({ agent_id: rows[0]!.id, workspace_id: a.workspaceId });
 
-    const res = await request(app)
-      .post(`/agent/conversations/${bConversation}/claim`)
-      .set('Authorization', `Bearer ${agentToken}`)
-      .expect(200)
-    expect(res.body).toEqual({ claimed: false })
+  const res = await request(app)
+    .post(`/agent/conversations/${bConversation}/claim`)
+    .set('Authorization', `Bearer ${agentToken}`)
+    .expect(200);
+  expect(res.body).toEqual({ claimed: false });
 
-    const { rows: check } = await ownerPool.query<{ assigned_agent_id: string | null }>(
-      `select assigned_agent_id from conversation where id = $1`,
-      [bConversation],
-    )
-    expect(check[0]!.assigned_agent_id).toBeNull()
-  })
+  const { rows: check } = await ownerPool.query<{ assigned_agent_id: string | null }>(
+    `select assigned_agent_id from conversation where id = $1`,
+    [bConversation],
+  );
+  expect(check[0]!.assigned_agent_id).toBeNull();
+});
 
-  it('POST /agent/messages targeting B\'s conversation is 404 for an A agent, and writes nothing', async () => {
-    const { rows } = await ownerPool.query<{ id: string }>(
-      `insert into agent (email, display_name) values ('a-agent3@example.test', 'A Agent 3') returning id`,
-    )
-    await ownerPool.query(`insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`, [
-      a.workspaceId,
-      rows[0]!.id,
-    ])
-    const bConversation = await seedConversation({ workspaceId: b.workspaceId, playerId: b.playerId })
-    const agentToken = await signAgentSession({ agent_id: rows[0]!.id, workspace_id: a.workspaceId })
+it("POST /agent/messages targeting B's conversation is 404 for an A agent, and writes nothing", async () => {
+  const { rows } = await ownerPool.query<{ id: string }>(
+    `insert into agent (email, display_name) values ('a-agent3@example.test', 'A Agent 3') returning id`,
+  );
+  await ownerPool.query(
+    `insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`,
+    [a.workspaceId, rows[0]!.id],
+  );
+  const bConversation = await seedConversation({
+    workspaceId: b.workspaceId,
+    playerId: b.playerId,
+  });
+  const agentToken = await signAgentSession({ agent_id: rows[0]!.id, workspace_id: a.workspaceId });
 
-    const before = await rowCounts()
-    await request(app)
-      .post('/agent/messages')
-      .set('Authorization', `Bearer ${agentToken}`)
-      .send({ conversation_id: bConversation, body: 'leak attempt' })
-      .expect(404)
-    expect((await rowCounts()).message).toBe(before.message)
-  })
+  const before = await rowCounts();
+  await request(app)
+    .post('/agent/messages')
+    .set('Authorization', `Bearer ${agentToken}`)
+    .send({ conversation_id: bConversation, body: 'leak attempt' })
+    .expect(404);
+  expect((await rowCounts()).message).toBe(before.message);
+});
 ```
 
 `seedConversation` is already imported in this file (per the existing import list at the top) —

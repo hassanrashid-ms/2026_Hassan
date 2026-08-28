@@ -1,15 +1,37 @@
-import * as React from 'react'
-import * as ScrollAreaPrimitive from '@radix-ui/react-scroll-area'
-import { cn } from '../../lib/cn.ts'
+import * as React from 'react';
+import * as ScrollAreaPrimitive from '@radix-ui/react-scroll-area';
+import { cn } from '../../lib/cn.ts';
 
-function ScrollArea({ className, children, ...props }: React.ComponentProps<typeof ScrollAreaPrimitive.Root>) {
+function ScrollArea({
+  className,
+  children,
+  onScroll,
+  viewportTestId,
+  ...props
+}: React.ComponentProps<typeof ScrollAreaPrimitive.Root> & {
+  onScroll?: React.UIEventHandler<HTMLDivElement>;
+  viewportTestId?: string;
+}) {
   return (
     <ScrollAreaPrimitive.Root className={cn('relative overflow-hidden', className)} {...props}>
-      <ScrollAreaPrimitive.Viewport className="size-full rounded-[inherit]">{children}</ScrollAreaPrimitive.Viewport>
+      {/* Radix injects an internal div with `display: table; min-width: 100%`
+          around children to measure content size for the scrollbar thumb.
+          Table layout shrink-to-fits, so non-shrinking content (e.g. a
+          `shrink-0` badge cluster) stretches that wrapper wider than the
+          viewport instead of wrapping/truncating, and with only a vertical
+          scrollbar rendered the excess width is silently clipped. Forcing it
+          back to block layout restores normal width constraints. */}
+      <ScrollAreaPrimitive.Viewport
+        className="size-full rounded-[inherit] [&>div]:!block"
+        onScroll={onScroll}
+        data-testid={viewportTestId}
+      >
+        {children}
+      </ScrollAreaPrimitive.Viewport>
       <ScrollBar />
       <ScrollAreaPrimitive.Corner />
     </ScrollAreaPrimitive.Root>
-  )
+  );
 }
 function ScrollBar({
   className,
@@ -29,7 +51,7 @@ function ScrollBar({
     >
       <ScrollAreaPrimitive.ScrollAreaThumb className="relative flex-1 rounded-full bg-slate-300" />
     </ScrollAreaPrimitive.ScrollAreaScrollbar>
-  )
+  );
 }
 
-export { ScrollArea, ScrollBar }
+export { ScrollArea, ScrollBar };

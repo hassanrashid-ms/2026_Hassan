@@ -1,10 +1,10 @@
-import type { RequestHandler } from 'express'
-import { and, eq, inArray, isNull } from 'drizzle-orm'
-import { sendError } from '../../errors.ts'
-import { workspaceMember } from '../db/schema/index.ts'
-import { withWorkspace } from '../db/withWorkspace.ts'
+import type { RequestHandler } from 'express';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { sendError } from '../../errors.ts';
+import { workspaceMember } from '../db/schema/index.ts';
+import { withWorkspace } from '../db/withWorkspace.ts';
 
-export type WorkspaceRole = 'agent' | 'team_lead' | 'admin'
+export type WorkspaceRole = 'agent' | 'team_lead';
 
 /**
  * Gates a route on a SET of workspace roles, per the permission matrix in
@@ -25,7 +25,7 @@ export function requireWorkspaceRole(
   ...roles: readonly [WorkspaceRole, ...WorkspaceRole[]]
 ): RequestHandler {
   return async (req, res, next) => {
-    const ctx = req.agent!
+    const ctx = req.agent!;
     const allowed = await withWorkspace(ctx.workspaceId, async (tx) => {
       const [row] = await tx
         .select({ role: workspaceMember.role })
@@ -37,14 +37,14 @@ export function requireWorkspaceRole(
             inArray(workspaceMember.role, [...roles]),
           ),
         )
-        .limit(1)
-      return row !== undefined
-    })
+        .limit(1);
+      return row !== undefined;
+    });
 
     if (!allowed) {
-      sendError(res, 403, 'forbidden', `Requires one of these roles: ${roles.join(', ')}.`)
-      return
+      sendError(res, 403, 'forbidden', `Requires one of these roles: ${roles.join(', ')}.`);
+      return;
     }
-    next()
-  }
+    next();
+  };
 }

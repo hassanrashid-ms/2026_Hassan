@@ -10,6 +10,7 @@ modelling, metrics, or any feature that touches the core entities.
 ### Key decisions — non-obvious things, read before touching any of these entities
 
 **Conversation / Resolution cycle**
+
 - `resolution_cycle` is its own table (`resolved_at`, `resolution_kind`, `first_human_reply_at`,
   `inactivity_due_at`, `closed_at`). A conversation resolves more than once; each cycle counted
   separately in its window. Cycle 1 opens at creation; every reopen opens the next.
@@ -18,6 +19,7 @@ modelling, metrics, or any feature that touches the core entities.
   database guarantee and finds the current cycle without a circular FK.
 
 **Player state snapshot**
+
 - Keyed to the **session**, not the conversation. The SDK captures it in `Open()` and delivers
   it on `POST /sdk/sessions/start` — before any conversation exists. A conversation reaches its
   snapshot via `conversation.session_id`.
@@ -29,7 +31,7 @@ modelling, metrics, or any feature that touches the core entities.
   latest-started session only when the request carried none. The fallback is a proxy that is
   correct with one live device and wrong with two (an Android build and the editor at once), so
   it is a last resort, never the first choice.
-- Snapshot may arrive *after* the conversation (Outbox retries). `ON CONFLICT (id) DO NOTHING`
+- Snapshot may arrive _after_ the conversation (Outbox retries). `ON CONFLICT (id) DO NOTHING`
   on `session_id` makes delivery order irrelevant.
 - Three distinct no-data states, all rendered "unavailable" but diagnosed differently: **no row**
   (never arrived), **`is_missing = true`** (delivered, provider returned nothing), **`degraded_reason`
@@ -39,6 +41,7 @@ modelling, metrics, or any feature that touches the core entities.
   by construction. **No backfill, ever.**
 
 **Taxonomy (Intent → Subintent)**
+
 - **Store only the deepest level reached, derive the parent.** Storing both lets them drift
   when the taxonomy is edited.
 - `Other` is an intent. Seed a catch-all subintent beneath it in the first migration —
@@ -55,6 +58,7 @@ modelling, metrics, or any feature that touches the core entities.
   misclassification rate.
 
 **Articles**
+
 - `keywords` lives separately from `body` for search matching. See
   `docs/specs/2026-08-07-weaviate-faq-search-design.md` for the current article search/data model
   (Weaviate Cloud BM25, superseding the earlier dead embedding scaffolding).
@@ -63,9 +67,10 @@ modelling, metrics, or any feature that touches the core entities.
 - Which article the bot offered is **not a column** — it's in `article_shown` / `article_rejected`
   events with the title snapshotted into the payload.
 
-**Forms** — *(2026-08-17: the modal premise below is reverted; see
+**Forms** — _(2026-08-17: the modal premise below is reverted; see
 `docs/specs/2026-08-17-player-side-forms-design.md`. The 2026-08-10 note it supersedes still stands
-for everything except where the questions are asked.)*
+for everything except where the questions are asked.)_
+
 - **Forms are asked one question at a time, in a card pinned above the composer** — not in a modal,
   and not as conversation turns. The 2026-08-10 note said modal; that is the one thing that changed.
   The player answers or skips; either way they reach an agent, and **the skip is always present, one
@@ -85,7 +90,7 @@ for everything except where the questions are asked.)*
   the modal opens (`started_at`); `submitted_at` is nullable.
 - `status` is **derived from the answer rows** at terminate time, not from which button was pressed:
   `completed` = every field has at least one answer, `partial` = some do and some do not, `skipped` =
-  zero answers. Partial answers therefore survive a skip. *Which* action terminated the submission —
+  zero answers. Partial answers therefore survive a skip. _Which_ action terminated the submission —
   submit, skip or the abandonment sweeper — is a fact about the turn and lives in the
   `form_completed` event payload, not in a column.
 - `form_answer` now holds the field value written directly from the modal's structured input —
@@ -113,22 +118,25 @@ for everything except where the questions are asked.)*
 </details>
 
 **Labels**
+
 - Two tables + mapping: `label` (workspace vocabulary), `conversation_label` (applied tags),
   `subintent_label` (admin-managed many-to-many: classify as this subintent → apply these labels).
 - `subintent_label` is a table, not a rule — bot picks subintent → server applies labels and
-  `default_priority` → *then* rules evaluate and may read those labels. This ordering is load-bearing.
+  `default_priority` → _then_ rules evaluate and may read those labels. This ordering is load-bearing.
 - An applied tag is permanent until an agent removes it. Reclassification does not swap tags.
 - `applied_by IS NULL` marks an auto-applied tag. `label.archived_at` retires a tag from new use
   while keeping it on old tickets.
 - **Priority is never a tag.** `subintent.default_priority` already exists.
 
 **Session**
+
 - Session id is **generated by the SDK**, not the server. It has to go in the webview URL before
   any network call succeeds. Accepting it as PK makes `POST /sdk/sessions/start` idempotent via
   `ON CONFLICT (id) DO NOTHING`. Duplicate delivery is expected, not exceptional.
 - `session.entry_point` is context only — where in the game they tapped support. **Never classification.**
 
 **Rules**
+
 - **Exactly one extra evaluation pass after an action changes the conversation, then stop.**
   Two rules triggering each other indefinitely otherwise.
 - Every firing is logged (which rule, which conversation, what it did). A rule engine without an
@@ -142,29 +150,29 @@ This section is the spec — the target machine, not the build state. For which 
 backend actually enforces today and which are still unbuilt, see
 [`status-transitions.md`](status-transitions.md).
 
-| Status | Meaning | Player sees |
-|---|---|---|
-| `new` | Created, transient, always left immediately | Received |
-| `bot_active` | Bot handling it. **Every conversation starts here** | Received |
-| `open` | Assigned to an agent. Support owns next action | We're looking into it |
-| `awaiting_player` | Agent asked something. Player owns next action | Waiting for your reply |
-| `escalated` | Handed to engineering | We're looking into it |
-| `resolved` | Player-confirmed **or** timed out | Resolved |
-| `closed` | Settled for reporting. Automatic after `resolved` | Resolved |
+| Status            | Meaning                                             | Player sees            |
+| ----------------- | --------------------------------------------------- | ---------------------- |
+| `new`             | Created, transient, always left immediately         | Received               |
+| `bot_active`      | Bot handling it. **Every conversation starts here** | Received               |
+| `open`            | Assigned to an agent. Support owns next action      | We're looking into it  |
+| `awaiting_player` | Agent asked something. Player owns next action      | Waiting for your reply |
+| `escalated`       | Handed to engineering                               | We're looking into it  |
+| `resolved`        | Player-confirmed **or** timed out                   | Resolved               |
+| `closed`          | Settled for reporting. Automatic after `resolved`   | Resolved               |
 
 `abandoned` **does not exist.** Don't reintroduce the name.
 
-| From → To | Trigger |
-|---|---|
-| — → `new` → `bot_active` | Always. No menu path, bot is the entry point |
-| `bot_active` → `resolved` | Player confirms bot's answer solved it |
-| `bot_active` → `open` | Form submitted or skipped; player asks for a person; bot errors/times out/disabled (unclassified) |
-| `open` → `awaiting_player` | Agent asks something and marks waiting |
-| `awaiting_player` → `open` | Player replies |
-| `open` ↔ `escalated` | Handed to engineering and returned |
-| `open` / `awaiting_player` → `resolved` | Agent resolves, or inactivity clock |
-| `resolved` → `closed` | Auto-close window elapses (**7 days**, per-workspace setting) |
-| `resolved` / `closed` → `open` | Reopened. **No time limit, ever** |
+| From → To                               | Trigger                                                                                           |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| — → `new` → `bot_active`                | Always. No menu path, bot is the entry point                                                      |
+| `bot_active` → `resolved`               | Player confirms bot's answer solved it                                                            |
+| `bot_active` → `open`                   | Form submitted or skipped; player asks for a person; bot errors/times out/disabled (unclassified) |
+| `open` → `awaiting_player`              | Agent asks something and marks waiting                                                            |
+| `awaiting_player` → `open`              | Player replies                                                                                    |
+| `open` ↔ `escalated`                    | Handed to engineering and returned                                                                |
+| `open` / `awaiting_player` → `resolved` | Agent resolves, or inactivity clock                                                               |
+| `resolved` → `closed`                   | Auto-close window elapses (**7 days**, per-workspace setting)                                     |
+| `resolved` / `closed` → `open`          | Reopened. **No time limit, ever**                                                                 |
 
 `closed` is terminal for reports only. **No status is terminal for the player** — a message of
 any age reopens the existing conversation.
@@ -209,15 +217,18 @@ then insert the message with that seq, both in one transaction. Unique index on
 
 **API Documentation (Swagger / OpenAPI 3.0).**
 The API routes and Zod schemas (`@support/types`) are compiled into an OpenAPI 3.0 specification (`backend/src/docs/openapi.ts`).
+
 - **Interactive Swagger UI**: `http://localhost:4000/docs`
 - **Raw OpenAPI JSON Spec**: `http://localhost:4000/docs/json`
-All authentication schemes (`WorkspaceSecretAuth`, `PlayerJwtAuth`, `AgentJwtAuth`) are documented with "Try it out" enabled.
+  All authentication schemes (`WorkspaceSecretAuth`, `PlayerJwtAuth`, `AgentJwtAuth`) are documented with "Try it out" enabled.
 - **Rule**: When adding any new API endpoint, always register its path and Zod schema in `backend/src/docs/openapi.ts` so the Swagger UI remains automatically updated.
 
 **Tenancy.** Every scoped table gets:
+
 ```sql
 CREATE POLICY tenant ON <t> USING (workspace_id = current_setting('app.workspace_id', true)::uuid)
 ```
+
 Every request runs `SET LOCAL app.workspace_id = '<uuid>'` inside its transaction. A query
 with no workspace predicate returns zero rows — no code path around it. Only `workspace` and
 `agent` are unscoped. Write one integration test: authenticate as workspace A, try every
@@ -233,9 +244,11 @@ so a player socket can never receive an internal-note event.
 **Metrics require event sourcing.** "Resolution counts events, not current status" and "a reopen
 starts a new resolution cycle" cannot be computed from a conversation's current `status`. Use an
 append-only `event` table:
+
 ```
 { workspace_id, type, conversation_id, session_id, actor_id, actor_type, occurred_at, payload }
 ```
+
 Enforce append-only with `REVOKE UPDATE, DELETE`, not a convention. BRIN index on `occurred_at`;
 btree on (`conversation_id`, `occurred_at`). **Build this on day two** — most numbers cannot be
 reconstructed retroactively.
@@ -255,12 +268,12 @@ type), `conversation_player_replied`, `conversation_awaiting_player`, `bot_hando
 Bot retrieval types: `bot_search` (`{ query, result_count, articles }` — one per `search_articles`
 call the model made, written on every outcome including a handoff), `bot_article_offered`
 (`{ article_id, article_title }`), `bot_article_rejected` (`{}`). `bot_search` is the difference
-between *"the bot never consulted the knowledge base"* and *"the knowledge base had no answer"* —
+between _"the bot never consulted the knowledge base"_ and _"the knowledge base had no answer"_ —
 two failures that look identical in every other row and need opposite fixes. See
 `docs/specs/2026-08-12-bot-tool-calling-decider-design.md`.
 
-**The session attribution rule.** *An event carries `session_id` when a verified player session
-accompanied the request that caused it. Otherwise `null`.* A client-supplied session id is
+**The session attribution rule.** _An event carries `session_id` when a verified player session
+accompanied the request that caused it. Otherwise `null`._ A client-supplied session id is
 **always** confirmed with a scoped `(id, player_id)` lookup before it is written — FK checks bypass
 RLS, so an unverified id would point across the tenant boundary — and any miss (absent, unknown,
 another player's, or not uploaded yet) degrades to `null` rather than failing the write. Nulls are
@@ -313,7 +326,7 @@ the value before and after**.
   `inactivity_due_at = NULL` so it is skipped.
 - Never store both intent and subintent — store the deepest reached, derive the parent.
 - **No hard deletes anywhere; don't even write the route.** Enforce with `ON DELETE RESTRICT`.
-- An unsent upload has no `attachment` row and *is* deleted — garbage collection, not a record.
+- An unsent upload has no `attachment` row and _is_ deleted — garbage collection, not a record.
   Once the row exists, the object is permanent.
 - Version-stamp every form submission.
 - **Signing a presigned GET must check the parent message's `visibility`.** An internal note's
@@ -331,21 +344,21 @@ the value before and after**.
 Four roles: **Player**, **Agent**, **Team Lead**, **Admin**. Permissions attach to roles;
 **a permission is never granted to an individual.**
 
-| Capability | Agent | Team Lead | Admin |
-|---|---|---|---|
-| Reassign any conversation | · | ✓ | ✓ |
-| Create a shared saved filter | · | ✓ | ✓ |
-| View per-agent workload | · | ✓ | ✓ |
-| Create / edit an article draft | ✓ | ✓ | ✓ |
-| Import articles from markdown | · | ✓ | ✓ |
-| Build or edit forms · map forms to subintents | · | ✓ | ✓ |
-| See bot config · trigger manual sync | · | ✓ | ✓ |
-| **Publish a form** | · | · | ✓ |
-| Create / rename / archive / move / merge a subintent | · | · | ✓ |
-| Edit bot prompt or rules · provision or disable bot | · | · | ✓ |
-| Build or edit rules · declare searchable player fields | · | · | ✓ |
-| Change a role · deactivate an agent · create a workspace | · | · | ✓ |
-| **Delete a message, conversation or subintent** | · | · | · |
+| Capability                                               | Agent | Team Lead | Admin |
+| -------------------------------------------------------- | ----- | --------- | ----- |
+| Reassign any conversation                                | ·     | ✓         | ✓     |
+| Create a shared saved filter                             | ·     | ✓         | ✓     |
+| View per-agent workload                                  | ·     | ✓         | ✓     |
+| Create / edit an article draft                           | ✓     | ✓         | ✓     |
+| Import articles from markdown                            | ·     | ✓         | ✓     |
+| Build or edit forms · map forms to subintents            | ·     | ✓         | ✓     |
+| See bot config · trigger manual sync                     | ·     | ✓         | ✓     |
+| **Publish a form**                                       | ·     | ·         | ✓     |
+| Create / rename / archive / move / merge a subintent     | ·     | ·         | ✓     |
+| Edit bot prompt or rules · provision or disable bot      | ·     | ·         | ✓     |
+| Build or edit rules · declare searchable player fields   | ·     | ·         | ✓     |
+| Change a role · deactivate an agent · create a workspace | ·     | ·         | ✓     |
+| **Delete a message, conversation or subintent**          | ·     | ·         | ·     |
 
 Reporting is visible to everyone; the **Agents tab is Team Lead and Admin only**.
 **Building and publishing are separate acts by different people** — Team Leads build; only Admins
@@ -364,24 +377,24 @@ put things in front of players.
   success and the rate rises fastest when support is at its worst.
 - **Self-serve is per session, never per ticket.** Per ticket, the rate improves whenever
   conversations get harder to start: better number, worse product.
-- **First reply means first *human* reply.** Bot, system and internal-note messages don't count.
+- **First reply means first _human_ reply.** Bot, system and internal-note messages don't count.
 - **Active agent-days means days actually worked**, not days employed.
 - **Bot containment is reported, never a goal.** Optimising to keep players away from humans is
   how a support tool becomes something players work around.
 
 ### Metrics table
 
-| Metric | Calculation |
-|---|---|
-| Self-serve rate | Sessions ending without a conversation created |
-| Resolved by the bot | Conversations player confirmed the bot's answer for |
-| Resolution rate | Conversations reaching `resolved`, **split player-confirmed vs timed out** |
-| Time to first reply | Created → **first agent message** |
-| Resolutions per agent per day | Resolution events ÷ **active agent-days** |
-| Reopen rate | Conversations reopened at least once |
-| Misclassification rate | Conversations where an agent changed the **subintent** |
-| Asked for a person | Conversations where the player bypassed the bot |
-| Bot fallbacks | Conversations created unclassified because bot was unavailable |
+| Metric                        | Calculation                                                                |
+| ----------------------------- | -------------------------------------------------------------------------- |
+| Self-serve rate               | Sessions ending without a conversation created                             |
+| Resolved by the bot           | Conversations player confirmed the bot's answer for                        |
+| Resolution rate               | Conversations reaching `resolved`, **split player-confirmed vs timed out** |
+| Time to first reply           | Created → **first agent message**                                          |
+| Resolutions per agent per day | Resolution events ÷ **active agent-days**                                  |
+| Reopen rate                   | Conversations reopened at least once                                       |
+| Misclassification rate        | Conversations where an agent changed the **subintent**                     |
+| Asked for a person            | Conversations where the player bypassed the bot                            |
+| Bot fallbacks                 | Conversations created unclassified because bot was unavailable             |
 
 ---
 

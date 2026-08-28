@@ -1,9 +1,14 @@
-import { sql } from 'drizzle-orm'
-import { afterAll, beforeEach, describe, expect, it } from 'vitest'
-import { applyBotTurn } from '../src/domain/bot/applyBotTurn.ts'
-import { HANDOFF_PLAYER_MESSAGES, botFailureNote } from '../src/domain/bot/messages.ts'
-import { withWorkspace } from '../src/shared/db/withWorkspace.ts'
-import { closeDb } from '../src/shared/db/client.ts'
+import { sql } from 'drizzle-orm';
+import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { applyBotTurn } from '../src/domain/bot/applyBotTurn.ts';
+import {
+  HANDOFF_PLAYER_MESSAGES,
+  botFailureNote,
+  NO_AGENTS_ONLINE_MESSAGE,
+} from '../src/domain/bot/messages.ts';
+import { withWorkspace } from '../src/shared/db/withWorkspace.ts';
+import { closeDb } from '../src/shared/db/client.ts';
+import { incrementPresence, closePresenceRedis } from '../src/shared/realtime/presence.ts';
 import {
   closeOwnerPool,
   ownerPool,
@@ -16,257 +21,395 @@ import {
   seedWorkspace,
   seedWorkspaceMember,
   truncateAll,
-} from './helpers/db.ts'
+} from './helpers/db.ts';
 
-beforeEach(truncateAll)
+beforeEach(truncateAll);
 afterAll(async () => {
-  await closeDb()
-  await closeOwnerPool()
-})
+  await closeDb();
+  await closeOwnerPool();
+  await closePresenceRedis();
+});
 
 async function conversationRow(id: string) {
   const { rows } = await ownerPool.query(
     `select status, assigned_agent_id, subintent_id, classification_source from conversation where id = $1`,
     [id],
-  )
-  return rows[0]
+  );
+  return rows[0];
+}
+
+async function priorityOf(conversationId: string) {
+  const { rows } = await ownerPool.query<{ priority: string; priority_manually_set: boolean }>(
+    `select priority, priority_manually_set from conversation where id = $1`,
+    [conversationId],
+  );
+  return rows[0]!;
 }
 
 async function messagesFor(conversationId: string) {
   const { rows } = await ownerPool.query(
     `select author_type, visibility, body from message where conversation_id = $1 order by seq`,
     [conversationId],
-  )
-  return rows
+  );
+  return rows;
 }
 
 async function eventsFor(conversationId: string) {
-  const { rows } = await ownerPool.query(`select type, payload from event where conversation_id = $1 order by id`, [
-    conversationId,
-  ])
-  return rows
+  const { rows } = await ownerPool.query(
+    `select type, payload from event where conversation_id = $1 order by id`,
+    [conversationId],
+  );
+  return rows;
 }
 
 async function articleIdsFor(conversationId: string) {
   const { rows } = await ownerPool.query(
     `select author_type, article_id from message where conversation_id = $1 order by seq`,
     [conversationId],
-  )
-  return rows
+  );
+  return rows;
 }
 
 describe('applyBotTurn', () => {
   it('noop writes nothing', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
-
-    await withWorkspace(workspaceId, (tx) => applyBotTurn(tx, { workspaceId, conversationId }, { kind: 'noop' }))
-
-    expect(await messagesFor(conversationId)).toEqual([])
-    expect(await eventsFor(conversationId)).toEqual([])
-    const row = await conversationRow(conversationId)
-    expect(row.status).toBe('bot_active')
-  })
-
-  it('answer keeps bot_active, posts one public bot message, classifies once', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
-    const intentId = await seedIntent(workspaceId, 'Billing')
-    const subintentId = await seedSubintent({ workspaceId, intentId, name: 'Refund' })
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
 
     await withWorkspace(workspaceId, (tx) =>
-      applyBotTurn(tx, { workspaceId, conversationId }, { kind: 'answer', reply: 'Here is how refunds work.', subintentId }),
-    )
+      applyBotTurn(tx, { workspaceId, conversationId }, { kind: 'noop' }),
+    );
 
-    const msgs = await messagesFor(conversationId)
-    expect(msgs).toEqual([{ author_type: 'bot', visibility: 'public', body: 'Here is how refunds work.' }])
+    expect(await messagesFor(conversationId)).toEqual([]);
+    expect(await eventsFor(conversationId)).toEqual([]);
+    const row = await conversationRow(conversationId);
+    expect(row.status).toBe('bot_active');
+  });
 
-    const row = await conversationRow(conversationId)
-    expect(row.status).toBe('bot_active')
-    expect(row.subintent_id).toBe(subintentId)
-    expect(row.classification_source).toBe('bot')
+  it('answer keeps bot_active, posts one public bot message, classifies once', async () => {
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
+    const intentId = await seedIntent(workspaceId, 'Billing');
+    const subintentId = await seedSubintent({ workspaceId, intentId, name: 'Refund' });
+
+    await withWorkspace(workspaceId, (tx) =>
+      applyBotTurn(
+        tx,
+        { workspaceId, conversationId },
+        { kind: 'answer', reply: 'Here is how refunds work.', subintentId },
+      ),
+    );
+
+    const msgs = await messagesFor(conversationId);
+    expect(msgs).toEqual([
+      { author_type: 'bot', visibility: 'public', body: 'Here is how refunds work.' },
+    ]);
+
+    const row = await conversationRow(conversationId);
+    expect(row.status).toBe('bot_active');
+    expect(row.subintent_id).toBe(subintentId);
+    expect(row.classification_source).toBe('bot');
 
     // postMessage (already-landed, separately tested) always appends its own
     // message_sent event alongside whatever bot-turn event this outcome appends.
-    const events = await eventsFor(conversationId)
-    expect(events.map((e) => e.type)).toEqual(['message_sent', 'intent_set'])
-    expect(events[1].payload).toMatchObject({ source: 'bot', subintent_name: 'Refund', intent_name: 'Billing' })
-  })
+    const events = await eventsFor(conversationId);
+    expect(events.map((e) => e.type)).toEqual(['message_sent', 'intent_set']);
+    expect(events[1].payload).toMatchObject({
+      source: 'bot',
+      subintent_name: 'Refund',
+      intent_name: 'Billing',
+    });
+  });
 
   it('a second answer does not reclassify or append a second intent_set', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
     // A sibling, still-unclassified conversation in the same workspace: if
     // classifyIfUnset's `where` ever drops its `eq(conversation.id, ...)`
     // condition (e.g. combining with JS `&&` instead of Drizzle's `and()`,
     // which silently discards the left operand), the UPDATE ... WHERE
     // subintent_id IS NULL would match this row too, and this assertion is
     // what would catch that — a single-conversation test cannot.
-    const siblingConversationId = await seedConversation({ workspaceId, playerId })
-    const intentId = await seedIntent(workspaceId)
-    const firstSubintent = await seedSubintent({ workspaceId, intentId })
-    const secondSubintent = await seedSubintent({ workspaceId, intentId })
+    const siblingConversationId = await seedConversation({ workspaceId, playerId });
+    const intentId = await seedIntent(workspaceId);
+    const firstSubintent = await seedSubintent({ workspaceId, intentId });
+    const secondSubintent = await seedSubintent({ workspaceId, intentId });
 
     await withWorkspace(workspaceId, (tx) =>
-      applyBotTurn(tx, { workspaceId, conversationId }, { kind: 'answer', reply: 'first', subintentId: firstSubintent }),
-    )
+      applyBotTurn(
+        tx,
+        { workspaceId, conversationId },
+        { kind: 'answer', reply: 'first', subintentId: firstSubintent },
+      ),
+    );
     await withWorkspace(workspaceId, (tx) =>
-      applyBotTurn(tx, { workspaceId, conversationId }, { kind: 'answer', reply: 'second', subintentId: secondSubintent }),
-    )
+      applyBotTurn(
+        tx,
+        { workspaceId, conversationId },
+        { kind: 'answer', reply: 'second', subintentId: secondSubintent },
+      ),
+    );
 
-    const row = await conversationRow(conversationId)
-    expect(row.subintent_id).toBe(firstSubintent)
+    const row = await conversationRow(conversationId);
+    expect(row.subintent_id).toBe(firstSubintent);
 
-    const events = await eventsFor(conversationId)
-    expect(events.filter((e) => e.type === 'intent_set').length).toBe(1)
+    const events = await eventsFor(conversationId);
+    expect(events.filter((e) => e.type === 'intent_set').length).toBe(1);
 
-    const siblingRow = await conversationRow(siblingConversationId)
-    expect(siblingRow.subintent_id).toBeNull()
-    expect(siblingRow.classification_source).toBeNull()
-    expect(await eventsFor(siblingConversationId)).toEqual([])
-  })
+    const siblingRow = await conversationRow(siblingConversationId);
+    expect(siblingRow.subintent_id).toBeNull();
+    expect(siblingRow.classification_source).toBeNull();
+    expect(await eventsFor(siblingConversationId)).toEqual([]);
+  });
+
+  it('classifying to a subintent with a default priority applies it, once', async () => {
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId, priority: 'p3' });
+    const intentId = await seedIntent(workspaceId);
+    const subintentId = await seedSubintent({ workspaceId, intentId, defaultPriority: 'p1' });
+
+    await withWorkspace(workspaceId, (tx) =>
+      applyBotTurn(
+        tx,
+        { workspaceId, conversationId },
+        { kind: 'answer', reply: 'first', subintentId },
+      ),
+    );
+
+    const row = await priorityOf(conversationId);
+    expect(row.priority).toBe('p1');
+    expect(row.priority_manually_set).toBe(false);
+
+    const events = await eventsFor(conversationId);
+    expect(events.map((e) => e.type)).toEqual([
+      'message_sent',
+      'intent_set',
+      'conversation_priority_changed',
+    ]);
+  });
+
+  it('does not touch priority when already manually set', async () => {
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({
+      workspaceId,
+      playerId,
+      priority: 'p4',
+      priorityManuallySet: true,
+    });
+    const intentId = await seedIntent(workspaceId);
+    const subintentId = await seedSubintent({ workspaceId, intentId, defaultPriority: 'p1' });
+
+    await withWorkspace(workspaceId, (tx) =>
+      applyBotTurn(
+        tx,
+        { workspaceId, conversationId },
+        { kind: 'answer', reply: 'first', subintentId },
+      ),
+    );
+
+    const row = await priorityOf(conversationId);
+    expect(row.priority).toBe('p4');
+  });
 
   it('handoff flips to open, posts one public system message, no internal note, assigns, appends bot_handoff', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
-    const availableAgent = await seedAgent()
-    await seedWorkspaceMember({ workspaceId, agentId: availableAgent })
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
+    const availableAgent = await seedAgent();
+    await seedWorkspaceMember({ workspaceId, agentId: availableAgent });
+    await incrementPresence(availableAgent);
 
     await withWorkspace(workspaceId, (tx) =>
-      applyBotTurn(tx, { workspaceId, conversationId }, { kind: 'handoff', reason: 'unsure', subintentId: null }),
-    )
+      applyBotTurn(
+        tx,
+        { workspaceId, conversationId },
+        { kind: 'handoff', reason: 'unsure', subintentId: null },
+      ),
+    );
 
-    const msgs = await messagesFor(conversationId)
-    expect(msgs).toEqual([{ author_type: 'system', visibility: 'public', body: expect.toBeOneOf([...HANDOFF_PLAYER_MESSAGES]) }])
+    const msgs = await messagesFor(conversationId);
+    expect(msgs).toEqual([
+      {
+        author_type: 'system',
+        visibility: 'public',
+        body: expect.toBeOneOf([...HANDOFF_PLAYER_MESSAGES]),
+      },
+    ]);
 
-    const row = await conversationRow(conversationId)
-    expect(row.status).toBe('open')
-    expect(row.assigned_agent_id).toBe(availableAgent)
-    expect(row.subintent_id).toBeNull()
+    const row = await conversationRow(conversationId);
+    expect(row.status).toBe('open');
+    expect(row.assigned_agent_id).toBe(availableAgent);
+    expect(row.subintent_id).toBeNull();
 
     // postMessage's own message_sent event precedes the bot-turn event.
-    const events = await eventsFor(conversationId)
-    expect(events.map((e) => e.type)).toEqual(['message_sent', 'bot_handoff'])
-    expect(events[1].payload).toEqual({ reason: 'unsure', assigned_agent_id: availableAgent })
+    const events = await eventsFor(conversationId);
+    expect(events.map((e) => e.type)).toEqual(['message_sent', 'bot_handoff']);
+    expect(events[1].payload).toEqual({ reason: 'unsure', assigned_agent_id: availableAgent });
     // The event snapshots exactly who the conversation landed on.
-    expect(events[1].payload.assigned_agent_id).toBe(row.assigned_agent_id)
-  })
+    expect(events[1].payload.assigned_agent_id).toBe(row.assigned_agent_id);
+  });
 
   it('handoff with no active agent in the workspace records a null assigned_agent_id', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
     // Deactivated member only: assignOnHandoff has nobody to pick, which is
     // explicitly not an error.
-    const deactivated = await seedAgent()
-    await seedWorkspaceMember({ workspaceId, agentId: deactivated, deactivatedAt: new Date() })
+    const deactivated = await seedAgent();
+    await seedWorkspaceMember({ workspaceId, agentId: deactivated, deactivatedAt: new Date() });
 
     await withWorkspace(workspaceId, (tx) =>
-      applyBotTurn(tx, { workspaceId, conversationId }, { kind: 'handoff', reason: 'unsure', subintentId: null }),
-    )
+      applyBotTurn(
+        tx,
+        { workspaceId, conversationId },
+        { kind: 'handoff', reason: 'unsure', subintentId: null },
+      ),
+    );
 
-    const row = await conversationRow(conversationId)
-    expect(row.status).toBe('open')
-    expect(row.assigned_agent_id).toBeNull()
+    const row = await conversationRow(conversationId);
+    expect(row.status).toBe('open');
+    expect(row.assigned_agent_id).toBeNull();
 
-    const events = await eventsFor(conversationId)
-    expect(events.map((e) => e.type)).toEqual(['message_sent', 'bot_handoff'])
-    expect(events[1].payload).toEqual({ reason: 'unsure', assigned_agent_id: null })
-  })
+    const msgs = await messagesFor(conversationId);
+    expect(msgs[1]).toEqual({
+      author_type: 'system',
+      visibility: 'public',
+      body: NO_AGENTS_ONLINE_MESSAGE,
+    });
+
+    const events = await eventsFor(conversationId);
+    expect(events.map((e) => e.type)).toEqual(['message_sent', 'bot_handoff', 'message_sent']);
+    expect(events[1].payload).toEqual({ reason: 'unsure', assigned_agent_id: null });
+  });
 
   it('unavailable with a loud reason posts a public message and an internal note, appends bot_unavailable, no intent_set', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
 
     await withWorkspace(workspaceId, (tx) =>
       applyBotTurn(tx, { workspaceId, conversationId }, { kind: 'unavailable', reason: 'error' }),
-    )
+    );
 
-    const msgs = await messagesFor(conversationId)
+    const msgs = await messagesFor(conversationId);
     expect(msgs).toEqual([
-      { author_type: 'system', visibility: 'public', body: expect.toBeOneOf([...HANDOFF_PLAYER_MESSAGES]) },
+      {
+        author_type: 'system',
+        visibility: 'public',
+        body: expect.toBeOneOf([...HANDOFF_PLAYER_MESSAGES]),
+      },
       { author_type: 'system', visibility: 'internal', body: botFailureNote('error') },
-    ])
+      { author_type: 'system', visibility: 'public', body: NO_AGENTS_ONLINE_MESSAGE },
+    ]);
 
-    const row = await conversationRow(conversationId)
-    expect(row.status).toBe('open')
-    expect(row.subintent_id).toBeNull()
+    const row = await conversationRow(conversationId);
+    expect(row.status).toBe('open');
+    expect(row.subintent_id).toBeNull();
 
     // Two postMessage calls (public + internal) each append their own
-    // message_sent event, ahead of the bot_unavailable event.
-    const events = await eventsFor(conversationId)
-    expect(events.map((e) => e.type)).toEqual(['message_sent', 'message_sent', 'bot_unavailable'])
-    expect(events[2].payload).toEqual({ reason: 'error' })
-  })
+    // message_sent event, ahead of the bot_unavailable event — the third
+    // (no-agents-online) message_sent lands after it, since it depends on
+    // assignOnHandoff's result.
+    const events = await eventsFor(conversationId);
+    expect(events.map((e) => e.type)).toEqual([
+      'message_sent',
+      'message_sent',
+      'bot_unavailable',
+      'message_sent',
+    ]);
+    expect(events[2].payload).toEqual({ reason: 'error' });
+  });
 
   it.each(['not_provisioned'] as const)(
     'unavailable with silent reason %s posts no internal note but still appends bot_unavailable',
     async (reason) => {
-      const workspaceId = await seedWorkspace()
-      const playerId = await seedPlayer(workspaceId)
-      const conversationId = await seedConversation({ workspaceId, playerId })
+      const workspaceId = await seedWorkspace();
+      const playerId = await seedPlayer(workspaceId);
+      const conversationId = await seedConversation({ workspaceId, playerId });
 
       await withWorkspace(workspaceId, (tx) =>
         applyBotTurn(tx, { workspaceId, conversationId }, { kind: 'unavailable', reason }),
-      )
+      );
 
-      const msgs = await messagesFor(conversationId)
-      expect(msgs).toEqual([{ author_type: 'system', visibility: 'public', body: expect.toBeOneOf([...HANDOFF_PLAYER_MESSAGES]) }])
+      const msgs = await messagesFor(conversationId);
+      expect(msgs).toEqual([
+        {
+          author_type: 'system',
+          visibility: 'public',
+          body: expect.toBeOneOf([...HANDOFF_PLAYER_MESSAGES]),
+        },
+        { author_type: 'system', visibility: 'public', body: NO_AGENTS_ONLINE_MESSAGE },
+      ]);
 
-      const events = await eventsFor(conversationId)
-      expect(events.map((e) => e.type)).toEqual(['message_sent', 'bot_unavailable'])
-      expect(events[1].payload).toEqual({ reason })
+      const events = await eventsFor(conversationId);
+      expect(events.map((e) => e.type)).toEqual([
+        'message_sent',
+        'bot_unavailable',
+        'message_sent',
+      ]);
+      expect(events[1].payload).toEqual({ reason });
     },
-  )
+  );
 
   it('no active agent leaves assigned_agent_id null but still flips status to open', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
 
     await withWorkspace(workspaceId, (tx) =>
-      applyBotTurn(tx, { workspaceId, conversationId }, { kind: 'unavailable', reason: 'not_provisioned' }),
-    )
+      applyBotTurn(
+        tx,
+        { workspaceId, conversationId },
+        { kind: 'unavailable', reason: 'not_provisioned' },
+      ),
+    );
 
-    const row = await conversationRow(conversationId)
-    expect(row.status).toBe('open')
-    expect(row.assigned_agent_id).toBeNull()
-  })
+    const row = await conversationRow(conversationId);
+    expect(row.status).toBe('open');
+    expect(row.assigned_agent_id).toBeNull();
+  });
 
   it('is atomic: an event-append failure rolls back the message and status change', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
 
     // A conversation_id that cannot exist forces appendEvent's insert to violate
     // the FK inside the same transaction applyBotTurn runs its writes in — this
     // proves rollback without mocking anything.
     await expect(
       withWorkspace(workspaceId, async (tx) => {
-        await applyBotTurn(tx, { workspaceId, conversationId: '00000000-0000-0000-0000-000000000000' }, {
-          kind: 'handoff',
-          reason: 'unsure',
-          subintentId: null,
-        })
+        await applyBotTurn(
+          tx,
+          { workspaceId, conversationId: '00000000-0000-0000-0000-000000000000' },
+          {
+            kind: 'handoff',
+            reason: 'unsure',
+            subintentId: null,
+          },
+        );
       }),
-    ).rejects.toThrow()
+    ).rejects.toThrow();
 
-    const row = await conversationRow(conversationId)
-    expect(row.status).toBe('bot_active')
-    expect(await messagesFor(conversationId)).toEqual([])
-  })
+    const row = await conversationRow(conversationId);
+    expect(row.status).toBe('bot_active');
+    expect(await messagesFor(conversationId)).toEqual([]);
+  });
 
   it('answer persists the cited article on the message it posted', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
-    const authorId = await seedAgent()
-    const articleId = await seedArticle({ workspaceId, createdBy: authorId, title: 'Refund timing' })
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
+    const authorId = await seedAgent();
+    const articleId = await seedArticle({
+      workspaceId,
+      createdBy: authorId,
+      title: 'Refund timing',
+    });
 
     await withWorkspace(workspaceId, (tx) =>
       applyBotTurn(
@@ -274,60 +417,80 @@ describe('applyBotTurn', () => {
         { workspaceId, conversationId },
         { kind: 'answer', reply: 'Refunds take 48 hours.', subintentId: null, articleId },
       ),
-    )
+    );
 
-    expect(await articleIdsFor(conversationId)).toEqual([{ author_type: 'bot', article_id: articleId }])
+    expect(await articleIdsFor(conversationId)).toEqual([
+      { author_type: 'bot', article_id: articleId },
+    ]);
 
     // The event is the reporting record and stays exactly as it was — same type,
     // same snapshotted title. Delivery did not replace it.
-    const events = await eventsFor(conversationId)
-    expect(events.map((e) => e.type)).toEqual(['message_sent', 'bot_article_offered'])
-    expect(events[1].payload).toMatchObject({ article_id: articleId, article_title: 'Refund timing' })
+    const events = await eventsFor(conversationId);
+    expect(events.map((e) => e.type)).toEqual(['message_sent', 'bot_article_offered']);
+    expect(events[1].payload).toMatchObject({
+      article_id: articleId,
+      article_title: 'Refund timing',
+    });
 
     // Unchanged: reading an article is not answering "did this help?".
-    expect((await conversationRow(conversationId)).status).toBe('bot_active')
-  })
+    expect((await conversationRow(conversationId)).status).toBe('bot_active');
+  });
 
   it('leaves article_id null on an answer that cited nothing', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId })
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId });
 
     await withWorkspace(workspaceId, (tx) =>
-      applyBotTurn(tx, { workspaceId, conversationId }, { kind: 'answer', reply: 'Can you tell me more?', subintentId: null }),
-    )
+      applyBotTurn(
+        tx,
+        { workspaceId, conversationId },
+        { kind: 'answer', reply: 'Can you tell me more?', subintentId: null },
+      ),
+    );
 
-    expect(await articleIdsFor(conversationId)).toEqual([{ author_type: 'bot', article_id: null }])
-  })
+    expect(await articleIdsFor(conversationId)).toEqual([{ author_type: 'bot', article_id: null }]);
+  });
 
   it('leaves article_id null on handoff and on unavailable', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const availableAgent = await seedAgent()
-    await seedWorkspaceMember({ workspaceId, agentId: availableAgent })
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const availableAgent = await seedAgent();
+    await seedWorkspaceMember({ workspaceId, agentId: availableAgent });
 
-    const handoffConversation = await seedConversation({ workspaceId, playerId })
+    const handoffConversation = await seedConversation({ workspaceId, playerId });
     await withWorkspace(workspaceId, (tx) =>
-      applyBotTurn(tx, { workspaceId, conversationId: handoffConversation }, { kind: 'handoff', reason: 'article_rejected', subintentId: null }),
-    )
+      applyBotTurn(
+        tx,
+        { workspaceId, conversationId: handoffConversation },
+        { kind: 'handoff', reason: 'article_rejected', subintentId: null },
+      ),
+    );
 
-    const unavailableConversation = await seedConversation({ workspaceId, playerId })
+    const unavailableConversation = await seedConversation({ workspaceId, playerId });
     await withWorkspace(workspaceId, (tx) =>
-      applyBotTurn(tx, { workspaceId, conversationId: unavailableConversation }, { kind: 'unavailable', reason: 'error' }),
-    )
+      applyBotTurn(
+        tx,
+        { workspaceId, conversationId: unavailableConversation },
+        { kind: 'unavailable', reason: 'error' },
+      ),
+    );
 
-    for (const row of [...(await articleIdsFor(handoffConversation)), ...(await articleIdsFor(unavailableConversation))]) {
-      expect(row.article_id).toBeNull()
+    for (const row of [
+      ...(await articleIdsFor(handoffConversation)),
+      ...(await articleIdsFor(unavailableConversation)),
+    ]) {
+      expect(row.article_id).toBeNull();
     }
-  })
+  });
 
   it('cross-tenant FK is refused by the database, not a handler', async () => {
-    const workspaceA = await seedWorkspace()
-    const workspaceB = await seedWorkspace()
-    const playerA = await seedPlayer(workspaceA)
-    const conversationId = await seedConversation({ workspaceId: workspaceA, playerId: playerA })
-    const intentB = await seedIntent(workspaceB)
-    const subintentB = await seedSubintent({ workspaceId: workspaceB, intentId: intentB })
+    const workspaceA = await seedWorkspace();
+    const workspaceB = await seedWorkspace();
+    const playerA = await seedPlayer(workspaceA);
+    const conversationId = await seedConversation({ workspaceId: workspaceA, playerId: playerA });
+    const intentB = await seedIntent(workspaceB);
+    const subintentB = await seedSubintent({ workspaceId: workspaceB, intentId: intentB });
 
     await expect(
       withWorkspace(workspaceA, async (tx) => {
@@ -335,8 +498,8 @@ describe('applyBotTurn', () => {
           // Raw SQL: the point is proving the database's composite FK refuses this,
           // not that application code happens not to attempt it.
           sql`update conversation set subintent_id = ${subintentB} where id = ${conversationId}`,
-        )
+        );
       }),
-    ).rejects.toThrow()
-  })
-})
+    ).rejects.toThrow();
+  });
+});

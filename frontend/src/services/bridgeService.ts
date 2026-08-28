@@ -17,6 +17,20 @@ export type BridgeMessage =
    */
   | { type: 'open_url'; url: string }
   /**
+   * "I'm about to hand off to a native OS dialog — don't treat what happens
+   * next as the player backgrounding the app."
+   *
+   * Opening a file picker (or the OS permission prompt that can precede it)
+   * pauses and resumes the Unity app the same way switching away from the
+   * game does, from the SDK's point of view — `OnApplicationPause` fires
+   * either way. Without this signal, the SDK's resume watchdog cannot tell
+   * "the player picked a photo" from "the player alt-tabbed away" and closes
+   * the surface on both. Sent right before the native picker is triggered,
+   * never after: the pause can start as soon as the click happens, and this
+   * has to already be in flight for the SDK to catch it in time.
+   */
+  | { type: 'expect_native_dialog' }
+  /**
    * "I have painted; you can show me now."
    *
    * The SDK keeps the native webview hidden until this arrives. Its own page-load
@@ -27,11 +41,11 @@ export type BridgeMessage =
    * load-bearing: dropping it does not degrade the experience, it hides the
    * surface until the SDK's grace timer gives up.
    */
-  | { type: 'surface_ready' }
+  | { type: 'surface_ready' };
 
 declare global {
   interface Window {
-    SupportBridge?: { post(message: unknown): void }
+    SupportBridge?: { post(message: unknown): void };
   }
 }
 
@@ -44,15 +58,15 @@ declare global {
  * mode, not an error — log and carry on.
  */
 export function post(message: BridgeMessage): void {
-  const bridge = window.SupportBridge
+  const bridge = window.SupportBridge;
   if (!bridge) {
-    console.warn('[surface] no SupportBridge on this platform; would have posted', message)
-    return
+    console.warn('[surface] no SupportBridge on this platform; would have posted', message);
+    return;
   }
   try {
-    bridge.post(message)
+    bridge.post(message);
   } catch (error) {
-    console.error('[surface] bridge post failed', error)
+    console.error('[surface] bridge post failed', error);
   }
 }
 
@@ -66,23 +80,23 @@ export function post(message: BridgeMessage): void {
  */
 export function onBridgeReady(callback: () => void): () => void {
   if (window.SupportBridge) {
-    callback()
-    return () => {}
+    callback();
+    return () => {};
   }
 
-  let done = false
+  let done = false;
   const once = () => {
-    if (done) return
-    done = true
-    unsubscribe()
-    callback()
-  }
+    if (done) return;
+    done = true;
+    unsubscribe();
+    callback();
+  };
   const unsubscribe = () => {
-    window.removeEventListener('supportbridgeready', once)
-    document.removeEventListener('supportbridgeready', once)
-  }
+    window.removeEventListener('supportbridgeready', once);
+    document.removeEventListener('supportbridgeready', once);
+  };
 
-  window.addEventListener('supportbridgeready', once)
-  document.addEventListener('supportbridgeready', once)
-  return unsubscribe
+  window.addEventListener('supportbridgeready', once);
+  document.addEventListener('supportbridgeready', once);
+  return unsubscribe;
 }

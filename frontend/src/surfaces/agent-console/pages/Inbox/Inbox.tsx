@@ -1,97 +1,77 @@
-import { useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { fetchConversation, fetchInbox } from '../../api/agentApi.ts'
-import { loadAgentSession, loadContextRailOpen, saveContextRailOpen } from '../../lib/agentSession.ts'
-import { ConversationList } from './components/ConversationList.tsx'
-import { ContextRail } from './components/ContextRail.tsx'
-import { ThreadPanel } from './components/ThreadPanel.tsx'
+import { useMemo } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { MessageSquare } from 'lucide-react';
+import { fetchInbox } from '../../api/agentApi.ts';
+import { loadAgentSession } from '../../lib/agentSession.ts';
+import { ConversationDetailPane } from '../../components/ConversationDetailPane.tsx';
+import { ConversationList } from './components/ConversationList.tsx';
 
 export function Inbox() {
-  const { conversationId } = useParams<{ conversationId?: string }>()
-  const navigate = useNavigate()
-  const session = loadAgentSession()
-  const [railOpen, setRailOpen] = useState(loadContextRailOpen)
+  const { conversationId } = useParams<{ conversationId?: string }>();
+  const navigate = useNavigate();
+  const session = loadAgentSession();
 
-  // Both queries are already cached by ConversationList under the same keys;
-  // this lookup is just to find the selected row's player id + status for
-  // ThreadPanel's header without re-fetching or duplicating that state.
-  const unassigned = useQuery({
-    queryKey: ['inbox', 'unassigned'],
-    queryFn: () => fetchInbox(session!.token, 'unassigned'),
-    enabled: session !== null,
-  })
+  // Already cached by ConversationList under the same keys; this lookup is
+  // just to find the selected row for ConversationDetailPane's header without
+  // re-fetching or duplicating that state.
   const mine = useQuery({
     queryKey: ['inbox', 'mine'],
     queryFn: () => fetchInbox(session!.token, 'mine'),
     enabled: session !== null,
-  })
+  });
+  const escalated = useQuery({
+    queryKey: ['inbox', 'escalated'],
+    queryFn: () => fetchInbox(session!.token, 'escalated'),
+    enabled: session !== null,
+  });
 
-  const selected = useMemo(() => {
-    if (!conversationId) return undefined
+  const summary = useMemo(() => {
+    if (!conversationId) return undefined;
     return (
-      unassigned.data?.conversations.find((c) => c.id === conversationId) ??
-      mine.data?.conversations.find((c) => c.id === conversationId)
-    )
-  }, [conversationId, unassigned.data, mine.data])
+      mine.data?.conversations?.find((c) => c.id === conversationId) ??
+      escalated.data?.conversations?.find((c) => c.id === conversationId)
+    );
+  }, [conversationId, mine.data, escalated.data]);
 
-  // Required, not an optimisation: an older ticket — resolved, owned by another
-  // agent — is in neither list above and never will be, so opening one by URL
-  // otherwise yields no header data at all.
-  const detail = useQuery({
-    queryKey: ['conversation', conversationId, 'detail'],
-    queryFn: () => fetchConversation(session!.token, conversationId!),
-    enabled: session !== null && conversationId != null,
-  })
+  if (!session) return null;
 
-  if (!session) return null
-
-  const selectedId = conversationId ?? null
-  const status = selected?.status ?? detail.data?.status
-  const readOnly = status === 'resolved' || status === 'closed'
-
-  const toggleRail = () => {
-    setRailOpen((open) => {
-      saveContextRailOpen(!open)
-      return !open
-    })
-  }
-
-  const openRail = (open: boolean) => {
-    saveContextRailOpen(open)
-    setRailOpen(open)
-  }
+  const selectedId = conversationId ?? null;
 
   return (
     <div className="flex h-full min-h-0">
       {/* Below the md breakpoint, a selected conversation replaces the list
           full-screen (back affordance via ThreadPanel's onBack) since
           side-by-side doesn't fit narrow viewports. */}
-      <div className={selectedId ? 'hidden w-80 shrink-0 border-r border-slate-200 md:block' : 'w-full shrink-0 border-r border-slate-200 md:w-80'}>
-        <ConversationList token={session.token} selectedId={selectedId} onSelect={(id) => navigate(`/inbox/${id}`)} />
-      </div>
-      <div className={selectedId ? 'min-w-0 flex-1' : 'hidden flex-1 md:block'}>
-        <ThreadPanel
+      <div
+        className={
+          selectedId
+            ? 'hidden w-80 shrink-0 border-r border-slate-200 md:block'
+            : 'w-full shrink-0 border-r border-slate-200 md:w-80'
+        }
+      >
+        <ConversationList
           token={session.token}
-          conversationId={selectedId}
-          playerExternalId={selected?.player.external_player_id ?? detail.data?.player.external_player_id}
-          status={status}
-          confirmPhase={selected?.confirm_phase}
-          readOnly={readOnly}
-          ticketNumber={detail.data?.number}
-          resolutionSource={detail.data?.resolution_source}
-          resolvedByAgentName={detail.data?.resolved_by_agent_name}
-          // There is no resolved_at column; created_at is what the detail carries.
-          openedAt={detail.data?.created_at}
-          railOpen={railOpen}
-          onToggleRail={toggleRail}
-          onBack={() => navigate('/inbox')}
+          selectedId={selectedId}
+          onSelect={(id) => navigate(`/inbox/${id}`)}
         />
       </div>
-      {/* Slides in over the content — the layout above is untouched. */}
-      {selectedId && (
-        <ContextRail token={session.token} conversationId={selectedId} open={railOpen} onOpenChange={openRail} />
-      )}
+      <div className={selectedId ? 'min-w-0 flex-1' : 'hidden flex-1 md:block'}>
+        {selectedId ? (
+          <ConversationDetailPane
+            token={session.token}
+            agentId={session.agentId}
+            conversationId={selectedId}
+            summary={summary}
+            onBack={() => navigate('/inbox')}
+          />
+        ) : (
+          <div className="flex h-full flex-col items-center justify-center gap-2 text-muted">
+            <MessageSquare className="size-8" />
+            <p className="text-sm">Select a conversation</p>
+          </div>
+        )}
+      </div>
     </div>
-  )
+  );
 }

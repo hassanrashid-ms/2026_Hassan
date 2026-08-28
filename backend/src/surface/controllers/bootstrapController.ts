@@ -1,30 +1,30 @@
-import type { RequestHandler } from 'express'
+import type { RequestHandler } from 'express';
 import {
   BootstrapQuery,
   type BootstrapResponse,
   type PlayerStateAvailability,
-} from '@support/types'
-import { getEnv } from '../../env.ts'
-import { sendError } from '../../errors.ts'
-import { loadBootstrap } from '../services/bootstrapService.ts'
+} from '@support/types';
+import { getEnv } from '../../env.ts';
+import { sendError } from '../../errors.ts';
+import { loadBootstrap } from '../services/bootstrapService.ts';
 
 export const bootstrap: RequestHandler = async (req, res) => {
-  const ctx = req.player!
+  const ctx = req.player!;
 
-  const query = BootstrapQuery.safeParse(req.query)
+  const query = BootstrapQuery.safeParse(req.query);
   if (!query.success) {
-    sendError(res, 422, 'invalid_request', 'session_id must be a uuid.')
-    return
+    sendError(res, 422, 'invalid_request', 'session_id must be a uuid.');
+    return;
   }
 
-  const result = await loadBootstrap(ctx, query.data)
+  const result = await loadBootstrap(ctx, query.data);
 
   if (!result) {
-    sendError(res, 404, 'not_found', 'Session not found.')
-    return
+    sendError(res, 404, 'not_found', 'Session not found.');
+    return;
   }
 
-  const { found, snapshot, unreadCount, workspaceName } = result
+  const { found, snapshot, unreadCount, workspaceName } = result;
 
   // Three distinct no-data states, all rendered "unavailable" but diagnosed
   // differently. All three are states, never errors.
@@ -34,7 +34,7 @@ export const bootstrap: RequestHandler = async (req, res) => {
       ? 'missing'
       : snapshot.degradedReason
         ? 'degraded'
-        : 'ok'
+        : 'ok';
 
   const payload: BootstrapResponse = {
     workspace: { name: workspaceName },
@@ -57,7 +57,7 @@ export const bootstrap: RequestHandler = async (req, res) => {
       ...(getEnv().NODE_ENV === 'production' ? {} : { raw: snapshot?.raw ?? {} }),
     },
     unread_count: unreadCount,
-  }
+  };
 
-  res.status(200).json(payload)
-}
+  res.status(200).json(payload);
+};

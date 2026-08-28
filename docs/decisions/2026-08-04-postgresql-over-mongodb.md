@@ -32,7 +32,7 @@ Atlas Search and Atlas Vector Search run as a separate `mongot` process that exi
 It is not in Community Edition. Self-hosting MongoDB therefore leaves the documented fallback:
 in-memory cosine over every published article, held per API replica and reloaded on every process
 start — so a manual re-sync only fixes the instance that served the request. That is a poor foundation
-for the one feature that *is* the bot.
+for the one feature that _is_ the bot.
 
 `pgvector` is one line in a compose file and runs an HNSW index in the same database as everything
 else.
@@ -52,7 +52,7 @@ layer stops being the security boundary, which frees the ORM choice.
 ### 3. Reporting is analytical work
 
 Nine metrics over an append-only event log, with an arbitrary date range plus a separate comparison
-period and a sparkline on every headline number. "Resolutions per *active agent-day*, split
+period and a sparkline on every headline number. "Resolutions per _active agent-day_, split
 player-confirmed vs timed out, versus the prior period" is `GROUP BY` with `FILTER`, window functions
 and `generate_series` for gap-filling. The MongoDB equivalent is several hundred lines of `$facet`
 nobody wants to modify in week 3.
@@ -79,8 +79,8 @@ Rejected, and it is the worst of the three options:
 
 - **It splits the tenancy boundary.** Two enforcement mechanisms with different semantics for the one
   requirement identified as highest-risk. One will drift.
-- **It breaks transactions across the seam.** Publishing an article writes article state *and*
-  embeddings; resolving a conversation writes the cycle row *and* an event. Whichever pair straddles
+- **It breaks transactions across the seam.** Publishing an article writes article state _and_
+  embeddings; resolving a conversation writes the cycle row _and_ an event. Whichever pair straddles
   the seam becomes a distributed write with a half-failure mode to detect and repair.
 - **It doubles the ops surface** on a deployment we operate ourselves. Two backup and restore
   procedures, two upgrade paths. Self-hosted MongoDB also needs a replica set even single-node, just
@@ -96,10 +96,10 @@ not the deciding factor. Three things are:
   and `archived_at IS NULL`, often within one intent. In pgvector that is a `WHERE` clause on the same
   query; across a service boundary it is pre/post-filtering plus keeping Weaviate's copy of
   `published`/`archived` in sync. The spec is explicit that "an archived one the bot still knows about
-  keeps being used" — two stores make that failure *possible*.
+  keeps being used" — two stores make that failure _possible_.
 - **"Knowledge sync must be loud."** With pgvector, publishing an article and writing its embeddings
   is one transaction, so sync cannot half-fail. With Weaviate it is a distributed write — you would
-  need the loud sync status *because* you chose Weaviate.
+  need the loud sync status _because_ you chose Weaviate.
 
 Weaviate earns its place at millions of vectors, or for out-of-the-box BM25+vector fusion. Neither
 applies.

@@ -1,14 +1,14 @@
-import { and, eq, isNull } from 'drizzle-orm'
-import { coerceInstant } from '@support/types'
-import { appendEvent } from '../../shared/events/appendEvent.ts'
-import { playerStateSnapshot, session } from '../../shared/db/schema/index.ts'
-import { withWorkspace } from '../../shared/db/withWorkspace.ts'
-import { loadDeclaredKeys } from '../../shared/playerState/declaredKeys.ts'
-import { splitSnapshot } from '../../shared/playerState/split.ts'
-import { logger } from '../../shared/logging/logger.ts'
-import { headerPayload } from '../headers.ts'
-import type { PlayerContext } from '../../shared/middleware/requirePlayerToken.ts'
-import type { EndSessionInput, StartSessionInput } from '../models/sessionModels.ts'
+import { and, eq, isNull } from 'drizzle-orm';
+import { coerceInstant } from '@support/types';
+import { appendEvent } from '../../shared/events/appendEvent.ts';
+import { playerStateSnapshot, session } from '../../shared/db/schema/index.ts';
+import { withWorkspace } from '../../shared/db/withWorkspace.ts';
+import { loadDeclaredKeys } from '../../shared/playerState/declaredKeys.ts';
+import { splitSnapshot } from '../../shared/playerState/split.ts';
+import { logger } from '../../shared/logging/logger.ts';
+import { headerPayload } from '../headers.ts';
+import type { PlayerContext } from '../../shared/middleware/requirePlayerToken.ts';
+import type { EndSessionInput, StartSessionInput } from '../models/sessionModels.ts';
 
 /**
  * Non-blocking on the SDK side, so this can land after the web app has already
@@ -17,8 +17,8 @@ import type { EndSessionInput, StartSessionInput } from '../models/sessionModels
  * visible — no repair step, no ordering requirement.
  */
 export async function startSession(player: PlayerContext, body: StartSessionInput): Promise<void> {
-  const now = new Date()
-  const startedAt = coerceInstant(body.started_at, now)
+  const now = new Date();
+  const startedAt = coerceInstant(body.started_at, now);
 
   await withWorkspace(player.workspaceId, async (tx) => {
     const inserted = await tx
@@ -31,17 +31,15 @@ export async function startSession(player: PlayerContext, body: StartSessionInpu
         startedAt,
       })
       .onConflictDoNothing({ target: session.id })
-      .returning({ id: session.id })
+      .returning({ id: session.id });
 
-    const isNewSession = inserted.length > 0
+    const isNewSession = inserted.length > 0;
 
     logger.info(
       'sdk/sessions/start',
-      isNewSession
-        ? '✓ new session created'
-        : '~ duplicate session_id (Outbox retry or conflict)',
+      isNewSession ? '✓ new session created' : '~ duplicate session_id (Outbox retry or conflict)',
       { session_id: body.session_id },
-    )
+    );
 
     if (!isNewSession) {
       // The uuid already exists. It is either a retry from this player's Outbox
@@ -55,13 +53,13 @@ export async function startSession(player: PlayerContext, body: StartSessionInpu
         .select({ id: session.id })
         .from(session)
         .where(and(eq(session.id, body.session_id), eq(session.playerId, player.playerId)))
-        .limit(1)
+        .limit(1);
 
       if (!owned) {
         logger.warn('sdk/sessions/start', '✗ session_id conflict — not owned by this player', {
           session_id: body.session_id,
           player_id: player.externalPlayerId,
-        })
+        });
         await appendEvent(tx, {
           workspaceId: player.workspaceId,
           type: 'sdk_incident',
@@ -72,22 +70,22 @@ export async function startSession(player: PlayerContext, body: StartSessionInpu
             session_id: body.session_id,
             ...headerPayload(player),
           },
-        })
-        return
+        });
+        return;
       }
     }
 
-    const declaredKeys = await loadDeclaredKeys(tx)
-    const split = splitSnapshot(body.snapshot, declaredKeys, player.externalPlayerId)
+    const declaredKeys = await loadDeclaredKeys(tx);
+    const split = splitSnapshot(body.snapshot, declaredKeys, player.externalPlayerId);
 
     logger.info('sdk/sessions/start', '✦ snapshot split', {
-      session_id:      body.session_id,
-      is_missing:      split.isMissing,
+      session_id: body.session_id,
+      is_missing: split.isMissing,
       degraded_reason: split.degradedReason,
-      declared_keys:   Object.keys(split.declared),
-      raw_keys:        Object.keys(split.raw),
-      declared:        split.declared,
-    })
+      declared_keys: Object.keys(split.declared),
+      raw_keys: Object.keys(split.raw),
+      declared: split.declared,
+    });
 
     // DO NOTHING, not DO UPDATE. The split is permanent: re-splitting a redelivered
     // payload against a newer declared_field set would promote a key retroactively,
@@ -104,7 +102,7 @@ export async function startSession(player: PlayerContext, body: StartSessionInpu
         capturedAt: startedAt,
       })
       .onConflictDoNothing({ target: playerStateSnapshot.sessionId })
-      .returning({ sessionId: playerStateSnapshot.sessionId })
+      .returning({ sessionId: playerStateSnapshot.sessionId });
 
     logger.info(
       'sdk/sessions/start',
@@ -112,7 +110,7 @@ export async function startSession(player: PlayerContext, body: StartSessionInpu
         ? '✓ snapshot written to player_state_snapshot'
         : '~ snapshot skipped — already exists (idempotent)',
       { session_id: body.session_id },
-    )
+    );
 
     // Only on a genuinely new session. A second session_start would double-count the
     // self-serve denominator, which is the whole reason this endpoint exists.
@@ -129,9 +127,9 @@ export async function startSession(player: PlayerContext, body: StartSessionInpu
           snapshot_state: split.isMissing ? 'missing' : split.degradedReason ? 'degraded' : 'ok',
           ...headerPayload(player),
         },
-      })
+      });
     }
-  })
+  });
 }
 
 /**
@@ -141,7 +139,7 @@ export async function startSession(player: PlayerContext, body: StartSessionInpu
  * silently shrink the denominator.
  */
 export async function endSession(player: PlayerContext, body: EndSessionInput): Promise<void> {
-  const now = new Date()
+  const now = new Date();
 
   await withWorkspace(player.workspaceId, async (tx) => {
     // The predicate carries the whole guard: RLS scopes it to the workspace,
@@ -158,9 +156,9 @@ export async function endSession(player: PlayerContext, body: EndSessionInput): 
           isNull(session.endedAt),
         ),
       )
-      .returning({ id: session.id, startedAt: session.startedAt })
+      .returning({ id: session.id, startedAt: session.startedAt });
 
-    if (!ended) return
+    if (!ended) return;
 
     await appendEvent(tx, {
       workspaceId: player.workspaceId,
@@ -181,6 +179,6 @@ export async function endSession(player: PlayerContext, body: EndSessionInput): 
         articles_read_reported: body.articles_read,
         ...headerPayload(player),
       },
-    })
-  })
+    });
+  });
 }

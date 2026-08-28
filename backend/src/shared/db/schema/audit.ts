@@ -1,8 +1,17 @@
-import { sql } from 'drizzle-orm'
-import { bigserial, check, index, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
-import { agent, workspace } from './identity.ts'
+import { sql } from 'drizzle-orm';
+import {
+  bigserial,
+  check,
+  index,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+} from 'drizzle-orm/pg-core';
+import { agent, workspace } from './identity.ts';
 
-const tz = { withTimezone: true, mode: 'date' } as const
+const tz = { withTimezone: true, mode: 'date' } as const;
 
 /**
  * The audit trail: who changed which field, when, and from what to what.
@@ -63,4 +72,4 @@ export const changeLog = pgTable(
     // queried by entity or by time range.
     index('change_log_changed_brin').using('brin', t.changedAt),
   ],
-)
+);

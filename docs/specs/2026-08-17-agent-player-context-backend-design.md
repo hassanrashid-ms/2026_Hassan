@@ -76,14 +76,14 @@ The whole rail in one payload:
 
 ```ts
 type AgentConversationContextResponse = {
-  player_state: AgentPlayerStateView
-  tickets: AgentTicketSummary[]
+  player_state: AgentPlayerStateView;
+  tickets: AgentTicketSummary[];
   summary: {
-    total_tickets: number      // excludes the current one
-    total_reopened: number
-    first_contact_at: string   // player.first_seen_at, ISO 8601
-  }
-}
+    total_tickets: number; // excludes the current one
+    total_reopened: number;
+    first_contact_at: string; // player.first_seen_at, ISO 8601
+  };
+};
 ```
 
 One endpoint rather than two, because the rail is one thing, always fetched
@@ -97,22 +97,22 @@ type AgentPlayerStateView =
   | { status: 'not_captured' }
   | { status: 'missing' }
   | {
-      status: 'captured'
-      declared: { key: string; label: string; type: DeclaredFieldType; value: unknown }[]
-      raw: Record<string, unknown>
-      degraded_reason: string | null
-      captured_at: string
-    }
+      status: 'captured';
+      declared: { key: string; label: string; type: DeclaredFieldType; value: unknown }[];
+      raw: Record<string, unknown>;
+      degraded_reason: string | null;
+      captured_at: string;
+    };
 ```
 
 Four distinguishable cases, not one nullable object:
 
-| Case | Condition |
-|---|---|
-| `no_session` | `conversation.session_id` is null |
-| `not_captured` | session exists, no `player_state_snapshot` row |
-| `missing` | snapshot exists with `is_missing: true` — the game's provider returned nothing usable |
-| `captured` | everything else |
+| Case           | Condition                                                                             |
+| -------------- | ------------------------------------------------------------------------------------- |
+| `no_session`   | `conversation.session_id` is null                                                     |
+| `not_captured` | session exists, no `player_state_snapshot` row                                        |
+| `missing`      | snapshot exists with `is_missing: true` — the game's provider returned nothing usable |
+| `captured`     | everything else                                                                       |
 
 `session_id` is genuinely nullable in practice: both creation paths write
 `verifiedSession?.id ?? null`. A single nullable field would collapse "the SDK
@@ -120,8 +120,8 @@ never delivered a session" and "the game had nothing to say" into one blank pane
 Those are different bugs, and the agent looking at the panel is the one who would
 report them.
 
-Per CLAUDE.md, none of these is an error: *"Missing player state is a state, not an
-error — never reject a conversation because of it."* All four return `200`.
+Per CLAUDE.md, none of these is an error: _"Missing player state is a state, not an
+error — never reject a conversation because of it."_ All four return `200`.
 
 **No fallback to a later snapshot.** When this ticket has no snapshot, the response
 says so and carries nothing else. Synthesising state from a different session
@@ -144,15 +144,15 @@ agent from the diagnostic data the rail exists to provide.
 
 ```ts
 type AgentTicketSummary = {
-  id: string
-  number: number
-  created_at: string
-  status: ConversationStatusValue
-  subintent: { intent_name: string; subintent_name: string } | null
-  resolution_source: 'bot' | 'agent' | null
-  resolved_by_agent_name: string | null
-  reopen_count: number
-}
+  id: string;
+  number: number;
+  created_at: string;
+  status: ConversationStatusValue;
+  subintent: { intent_name: string; subintent_name: string } | null;
+  resolution_source: 'bot' | 'agent' | null;
+  resolved_by_agent_name: string | null;
+  reopen_count: number;
+};
 ```
 
 This player's other conversations in this workspace, current one excluded, newest
@@ -183,18 +183,18 @@ label.
 
 ## Files
 
-| Path | Change |
-|---|---|
-| `backend/src/shared/db/schema/identity.ts` | `workspace.ticket_seq` |
-| `backend/src/shared/db/schema/conversations.ts` | `conversation.number` + unique index |
-| `backend/drizzle/` | generated migration, five steps above |
-| `backend/src/agent/services/conversationContextService.ts` | new |
-| `backend/src/agent/controllers/conversationsController.ts` | two handlers |
-| `backend/src/agent/routers/conversationsRouter.ts` | two routes |
-| `backend/src/surface/services/newTicketService.ts` | allocate number |
-| `backend/src/surface/services/messagesService.ts` | allocate number on auto-create |
-| `backend/src/docs/openapi.ts` | both routes + Zod schemas |
-| `packages/types/src/agent-context.ts` | new; the three types above |
+| Path                                                       | Change                                |
+| ---------------------------------------------------------- | ------------------------------------- |
+| `backend/src/shared/db/schema/identity.ts`                 | `workspace.ticket_seq`                |
+| `backend/src/shared/db/schema/conversations.ts`            | `conversation.number` + unique index  |
+| `backend/drizzle/`                                         | generated migration, five steps above |
+| `backend/src/agent/services/conversationContextService.ts` | new                                   |
+| `backend/src/agent/controllers/conversationsController.ts` | two handlers                          |
+| `backend/src/agent/routers/conversationsRouter.ts`         | two routes                            |
+| `backend/src/surface/services/newTicketService.ts`         | allocate number                       |
+| `backend/src/surface/services/messagesService.ts`          | allocate number on auto-create        |
+| `backend/src/docs/openapi.ts`                              | both routes + Zod schemas             |
+| `packages/types/src/agent-context.ts`                      | new; the three types above            |
 
 A new service file rather than growing `conversationsService.ts`, which is ~100
 lines of claim/list/messages and would roughly double with unrelated concerns.

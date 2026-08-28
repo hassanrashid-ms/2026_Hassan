@@ -32,21 +32,21 @@ there), and `time` is declared but must never be offered by the form-builder or 
 
 ### In scope
 
-| Thing | Why here |
-|---|---|
-| `form`, `form_version` | The questions, versioned, so old answers stay readable |
-| `form_submission` | One offer of one form on one conversation, and its outcome |
-| `form_answer` | Append-only answers |
-| `bot_config` | What the orchestrator gates on (`is_provisioned`), plus the `prompt` and `rules` it joins into the system prompt |
-| `change_log` | Full audit: who changed which field, when, from what to what |
-| `subintent.form_id` → real FK | The column already exists as a bare uuid; the parent table now exists |
-| `conversation` UNIQUE (`workspace_id`, `id`) | Composite-FK parent key, additive only |
-| `form_field_type`, `form_status` enums | Closed sets |
-| `@support/types` field + answer-value schemas | The SDK↔server contract for the modal |
-| `DEFAULT_BOT_PROMPT` / `DEFAULT_BOT_RULES` | The fallbacks `bot_config.prompt` and `.rules` resolve to |
-| `buildSystemPrompt` | The single join site: two stored fields → one system prompt |
-| `appendChangeLog` | The single choke point that writes audit rows |
-| `REVOKE UPDATE, DELETE` on `form_answer` and `change_log` | Append-only, enforced not conventional |
+| Thing                                                     | Why here                                                                                                         |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `form`, `form_version`                                    | The questions, versioned, so old answers stay readable                                                           |
+| `form_submission`                                         | One offer of one form on one conversation, and its outcome                                                       |
+| `form_answer`                                             | Append-only answers                                                                                              |
+| `bot_config`                                              | What the orchestrator gates on (`is_provisioned`), plus the `prompt` and `rules` it joins into the system prompt |
+| `change_log`                                              | Full audit: who changed which field, when, from what to what                                                     |
+| `subintent.form_id` → real FK                             | The column already exists as a bare uuid; the parent table now exists                                            |
+| `conversation` UNIQUE (`workspace_id`, `id`)              | Composite-FK parent key, additive only                                                                           |
+| `form_field_type`, `form_status` enums                    | Closed sets                                                                                                      |
+| `@support/types` field + answer-value schemas             | The SDK↔server contract for the modal                                                                            |
+| `DEFAULT_BOT_PROMPT` / `DEFAULT_BOT_RULES`                | The fallbacks `bot_config.prompt` and `.rules` resolve to                                                        |
+| `buildSystemPrompt`                                       | The single join site: two stored fields → one system prompt                                                      |
+| `appendChangeLog`                                         | The single choke point that writes audit rows                                                                    |
+| `REVOKE UPDATE, DELETE` on `form_answer` and `change_log` | Append-only, enforced not conventional                                                                           |
 
 ### Out of scope — named so nobody wonders
 
@@ -58,9 +58,9 @@ there), and `time` is declared but must never be offered by the form-builder or 
   orchestrator slice defines when.
 - **The `attachment` table.** So `attachment.form_answer_id` (which `project-overview.md` says must
   exist) waits for the chat-attachments slice, and an `attachment` answer is declared but not
-  writable — see *Field types* below.
-- **`rule` and `rule_firing`.** The committed spec's *"the bot cannot be provisioned with an empty
-  rule set"* invariant therefore cannot be enforced yet. Recorded, not implemented.
+  writable — see _Field types_ below.
+- **`rule` and `rule_firing`.** The committed spec's _"the bot cannot be provisioned with an empty
+  rule set"_ invariant therefore cannot be enforced yet. Recorded, not implemented.
 - **Audit writers other than `bot_config`.** The `change_log` table is generic, but the only thing
   this slice can audit is a bot-config save, because nothing here edits a form. The builder spec
   wires `form` / `form_version` audit into the same table with no schema change. Do not add
@@ -183,11 +183,11 @@ slice that introduces an actual push, with a consumer.
 
 New Drizzle files, all exported from `schema/index.ts`:
 
-| File | Tables |
-|---|---|
+| File                                    | Tables                                                   |
+| --------------------------------------- | -------------------------------------------------------- |
 | `backend/src/shared/db/schema/forms.ts` | `form`, `form_version`, `form_submission`, `form_answer` |
-| `backend/src/shared/db/schema/bot.ts` | `bot_config` |
-| `backend/src/shared/db/schema/audit.ts` | `change_log` |
+| `backend/src/shared/db/schema/bot.ts`   | `bot_config`                                             |
+| `backend/src/shared/db/schema/audit.ts` | `change_log`                                             |
 
 `change_log` gets its own file rather than sitting in `bot.ts`: it is a general-purpose audit table
 whose only current writer happens to be bot config, and filing it under `bot` would invite the next
@@ -197,9 +197,15 @@ slice to add a second audit table somewhere else.
 
 ```ts
 export const formFieldType = pgEnum('form_field_type', [
-  'short_text', 'long_text', 'number', 'date', 'time', 'choice', 'attachment',
-])
-export const formStatus = pgEnum('form_status', ['in_progress', 'completed', 'partial', 'skipped'])
+  'short_text',
+  'long_text',
+  'number',
+  'date',
+  'time',
+  'choice',
+  'attachment',
+]);
+export const formStatus = pgEnum('form_status', ['in_progress', 'completed', 'partial', 'skipped']);
 ```
 
 `form_field_type` is the canonical list. It types the real `form_answer.field_type` column, and the
@@ -313,7 +319,7 @@ key over a surrogate `id`. It still carries a `workspace_id` column, so `002_rls
 policy loop picks the table up with no change to that file.
 
 The committed spec's `last_synced_at`, `last_sync_outcome` and `last_sync_error` are dropped — see
-*Design decisions* §7. Deviation recorded in `spec-contradictions.md`.
+_Design decisions_ §7. Deviation recorded in `spec-contradictions.md`.
 
 `is_provisioned` rather than `provisioned`, matching the committed spec and the `is_system` /
 `is_required` convention in `taxonomy.ts`.
@@ -359,7 +365,7 @@ column that quietly permits one.
 **Append-only, enforced:** `REVOKE UPDATE, DELETE ON change_log FROM support_app`.
 
 `entity_id` is `uuid` because every audited entity in the schema has a uuid primary key. For
-`bot_config` that id *is* the `workspace_id`, which reads redundantly next to the `workspace_id`
+`bot_config` that id _is_ the `workspace_id`, which reads redundantly next to the `workspace_id`
 column but keeps the table uniform — a reader never has to special-case one entity type.
 
 ### `subintent` — delta to an existing table
@@ -387,14 +393,14 @@ Additive only, so `form_submission` can carry a composite FK to it. No existing 
 
 Seven, declared once in `form_field_type` and mirrored into `@support/types`.
 
-| Type | `value` jsonb shape |
-|---|---|
-| `short_text` | JSON string, 1–500 chars |
-| `long_text` | JSON string, 1–5000 chars |
-| `number` | JSON number, finite |
-| `date` | string `"YYYY-MM-DD"` |
-| `time` | string `"HH:mm"`, 24-hour |
-| `choice` | JSON string, must be present in that field's `options` |
+| Type         | `value` jsonb shape                                             |
+| ------------ | --------------------------------------------------------------- |
+| `short_text` | JSON string, 1–500 chars                                        |
+| `long_text`  | JSON string, 1–5000 chars                                       |
+| `number`     | JSON number, finite                                             |
+| `date`       | string `"YYYY-MM-DD"`                                           |
+| `time`       | string `"HH:mm"`, 24-hour                                       |
+| `choice`     | JSON string, must be present in that field's `options`          |
 | `attachment` | `{ "attachmentId": "<uuid>" }` — **not writable in this slice** |
 
 `attachment` is declared now so the wire contract is frozen once — the contract rule is "add
@@ -413,21 +419,31 @@ Exported from `packages/types/src/index.ts`.
 
 ```ts
 export const FORM_FIELD_TYPES = [
-  'short_text', 'long_text', 'number', 'date', 'time', 'choice', 'attachment',
-] as const
-export type FormFieldType = (typeof FORM_FIELD_TYPES)[number]
+  'short_text',
+  'long_text',
+  'number',
+  'date',
+  'time',
+  'choice',
+  'attachment',
+] as const;
+export type FormFieldType = (typeof FORM_FIELD_TYPES)[number];
 
 export const formFieldSchema = z.object({
-  key:        z.string().min(1).max(64).regex(/^[a-z0-9_]+$/),
-  label:      z.string().min(1).max(200),
-  type:       z.enum(FORM_FIELD_TYPES),
+  key: z
+    .string()
+    .min(1)
+    .max(64)
+    .regex(/^[a-z0-9_]+$/),
+  label: z.string().min(1).max(200),
+  type: z.enum(FORM_FIELD_TYPES),
   isRequired: z.boolean(),
-  position:   z.number().int().nonnegative(),
-  options:    z.array(z.string().min(1)).min(2).optional(),
-})
-export type FormField = z.infer<typeof formFieldSchema>
+  position: z.number().int().nonnegative(),
+  options: z.array(z.string().min(1)).min(2).optional(),
+});
+export type FormField = z.infer<typeof formFieldSchema>;
 
-export const formFieldsSchema = z.array(formFieldSchema).superRefine(/* … */)
+export const formFieldsSchema = z.array(formFieldSchema).superRefine(/* … */);
 ```
 
 `formFieldsSchema`'s refinements, all of which must be tested:
@@ -442,13 +458,13 @@ Answer-value validators, keyed by field type:
 ```ts
 export const formAnswerValueSchemas = {
   short_text: z.string().min(1).max(500),
-  long_text:  z.string().min(1).max(5000),
-  number:     z.number().finite(),
-  date:       z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  time:       z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
-  choice:     z.string().min(1),          // membership in options checked against the field
+  long_text: z.string().min(1).max(5000),
+  number: z.number().finite(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+  choice: z.string().min(1), // membership in options checked against the field
   attachment: z.object({ attachmentId: z.string().uuid() }),
-} satisfies Record<FormFieldType, z.ZodTypeAny>
+} satisfies Record<FormFieldType, z.ZodTypeAny>;
 ```
 
 `choice` membership cannot be expressed in a standalone schema — it depends on the field's
@@ -480,12 +496,12 @@ snapshotted into `form_submission.form_version` at insert.
 
 ### Status meanings and transitions
 
-| `status` | Means | `submitted_at` |
-|---|---|---|
-| `in_progress` | The modal is open | null |
-| `completed` | Submitted, every required field answered | set |
-| `partial` | Submitted with a required field left blank | set |
-| `skipped` | Skip option used, or the modal dismissed | set |
+| `status`      | Means                                      | `submitted_at` |
+| ------------- | ------------------------------------------ | -------------- |
+| `in_progress` | The modal is open                          | null           |
+| `completed`   | Submitted, every required field answered   | set            |
+| `partial`     | Submitted with a required field left blank | set            |
+| `skipped`     | Skip option used, or the modal dismissed   | set            |
 
 Legal transitions: `in_progress → completed`, `in_progress → partial`, `in_progress → skipped`.
 **All three are terminal.** There is no transition out of a terminal state and no path back to
@@ -557,14 +573,14 @@ Clearing a customized value is an explicit reset to null, and it is audited like
 
 ```ts
 export type ChangeLogInput = {
-  workspaceId: string
-  entityType: string
-  entityId: string
-  actorId: string                                              // the authenticated agent
-  changes: Array<{ field: string; before: unknown; after: unknown }>
-}
+  workspaceId: string;
+  entityType: string;
+  entityId: string;
+  actorId: string; // the authenticated agent
+  changes: Array<{ field: string; before: unknown; after: unknown }>;
+};
 
-export async function appendChangeLog(tx: Tx, input: ChangeLogInput): Promise<void>
+export async function appendChangeLog(tx: Tx, input: ChangeLogInput): Promise<void>;
 ```
 
 It writes one row per change, **after dropping every entry whose `before` deep-equals its `after`**
@@ -740,9 +756,9 @@ objects.
 Both are recorded in `docs/decisions/spec-contradictions.md`:
 
 1. **Forms use `form_version.fields` jsonb + `form_answer.field_key`**, not a `form_field` table
-   with `form_answer.form_field_id`. Reasoning in *Design decisions* §1.
+   with `form_answer.form_field_id`. Reasoning in _Design decisions_ §1.
 2. **`bot_config` is keyed by `workspace_id`** and drops `last_synced_at` / `last_sync_outcome` /
-   `last_sync_error`. Reasoning in *Design decisions* §7 — those columns are operational sync status,
+   `last_sync_error`. Reasoning in _Design decisions_ §7 — those columns are operational sync status,
    not audit, and audit is `change_log`.
 
 `change_log` itself is **not** a deviation: the committed spec designs it, this slice is simply where

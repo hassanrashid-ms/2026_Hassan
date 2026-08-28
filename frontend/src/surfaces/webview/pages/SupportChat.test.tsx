@@ -1,57 +1,76 @@
-import { describe, expect, it, vi, beforeEach, beforeAll } from 'vitest'
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import type { PlayerMessagesResponse } from '@support/types'
-import { SupportChat } from './SupportChat.tsx'
-import { SupportContextProvider, type SupportContextValue } from '@/surfaces/webview/components/SupportContext.tsx'
-import { makeBootstrapResponse } from '@/surfaces/webview/test-support/fixtures.ts'
+import { describe, expect, it, vi, beforeEach, beforeAll } from 'vitest';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { PlayerMessagesResponse } from '@support/types';
+import { SupportChat } from './SupportChat.tsx';
+import {
+  SupportContextProvider,
+  type SupportContextValue,
+} from '@/surfaces/webview/components/SupportContext.tsx';
+import { makeBootstrapResponse } from '@/surfaces/webview/test-support/fixtures.ts';
 import {
   fetchPlayerMessages,
   markPlayerMessagesRead,
   postFormAnswer,
   skipForm,
   submitForm,
-} from '@/features/chat/api/playerChatApi'
-import { createSocket } from '@/features/chat/api/socket'
-import { fetchArticleDetail, reportArticleRead } from '@/surfaces/webview/api/surfaceApi'
+} from '@/features/chat/api/playerChatApi';
+import { createSocket } from '@/features/chat/api/socket';
+import { fetchArticleDetail, reportArticleRead } from '@/surfaces/webview/api/surfaceApi';
 
-vi.mock('@/features/chat/api/playerChatApi')
-vi.mock('@/features/chat/api/socket')
-vi.mock('@/surfaces/webview/api/surfaceApi')
+vi.mock('@/features/chat/api/playerChatApi');
+vi.mock('@/features/chat/api/socket');
+vi.mock('@/surfaces/webview/api/surfaceApi');
 
 // jsdom lays out nothing, so without this Virtuoso measures a zero-height
 // viewport and mounts no items — the same fix ChatBubbles.test.tsx applies,
 // needed here because the article-delivery tests assert on rendered message
 // text and the "Read more" link, both of which live inside Virtuoso's list.
 beforeAll(() => {
-  Object.defineProperty(HTMLElement.prototype, 'offsetHeight', { configurable: true, value: 600 })
-  Object.defineProperty(HTMLElement.prototype, 'offsetWidth', { configurable: true, value: 600 })
-  Object.defineProperty(HTMLElement.prototype, 'offsetParent', { configurable: true, get: () => document.body })
+  Object.defineProperty(HTMLElement.prototype, 'offsetHeight', { configurable: true, value: 600 });
+  Object.defineProperty(HTMLElement.prototype, 'offsetWidth', { configurable: true, value: 600 });
+  Object.defineProperty(HTMLElement.prototype, 'offsetParent', {
+    configurable: true,
+    get: () => document.body,
+  });
   Element.prototype.getBoundingClientRect = () =>
-    ({ width: 600, height: 600, top: 0, left: 0, right: 600, bottom: 600, x: 0, y: 0, toJSON() {} }) as DOMRect
+    ({
+      width: 600,
+      height: 600,
+      top: 0,
+      left: 0,
+      right: 600,
+      bottom: 600,
+      x: 0,
+      y: 0,
+      toJSON() {},
+    }) as DOMRect;
   globalThis.ResizeObserver = class {
-    callback: ResizeObserverCallback
+    callback: ResizeObserverCallback;
     constructor(callback: ResizeObserverCallback) {
-      this.callback = callback
+      this.callback = callback;
     }
     observe(target: Element) {
-      this.callback([{ target, contentRect: target.getBoundingClientRect() } as ResizeObserverEntry], this as unknown as ResizeObserver)
+      this.callback(
+        [{ target, contentRect: target.getBoundingClientRect() } as ResizeObserverEntry],
+        this as unknown as ResizeObserver,
+      );
     }
     unobserve() {}
     disconnect() {}
-  } as unknown as typeof ResizeObserver
-})
+  } as unknown as typeof ResizeObserver;
+});
 
 const contextValue: SupportContextValue = {
   boot: { token: 't', sessionId: 's', entryPoint: 'test' },
   data: makeBootstrapResponse(),
   error: null,
   retry: vi.fn(),
-}
+};
 
 function renderChat(overrides: Partial<SupportContextValue> = {}) {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return {
     queryClient,
     ...render(
@@ -63,7 +82,7 @@ function renderChat(overrides: Partial<SupportContextValue> = {}) {
         </MemoryRouter>
       </QueryClientProvider>,
     ),
-  }
+  };
 }
 
 function messages(overrides: Partial<PlayerMessagesResponse>): PlayerMessagesResponse {
@@ -84,33 +103,42 @@ function messages(overrides: Partial<PlayerMessagesResponse>): PlayerMessagesRes
     confirm_phase: 'none',
     form: null,
     ...overrides,
-  } as PlayerMessagesResponse
+  } as PlayerMessagesResponse;
 }
 
 beforeEach(() => {
-  vi.mocked(markPlayerMessagesRead).mockResolvedValue({ ok: true })
+  vi.mocked(markPlayerMessagesRead).mockResolvedValue({ ok: true });
   // Nothing in these tests drives realtime; the component only needs a socket
   // whose handlers can be registered and whose close() exists for cleanup.
-  vi.mocked(createSocket).mockReturnValue({ on: vi.fn(), emit: vi.fn(), close: vi.fn() } as never)
-  vi.mocked(postFormAnswer).mockResolvedValue({ ok: true, is_correction: false })
-  vi.mocked(submitForm).mockResolvedValue({ confirm_phase: 'none', status: 'open', form_status: 'completed' })
-  vi.mocked(skipForm).mockResolvedValue({ confirm_phase: 'none', status: 'open', form_status: 'skipped' })
+  vi.mocked(createSocket).mockReturnValue({ on: vi.fn(), emit: vi.fn(), close: vi.fn() } as never);
+  vi.mocked(postFormAnswer).mockResolvedValue({ ok: true, is_correction: false });
+  vi.mocked(submitForm).mockResolvedValue({
+    confirm_phase: 'none',
+    status: 'open',
+    form_status: 'completed',
+  });
+  vi.mocked(skipForm).mockResolvedValue({
+    confirm_phase: 'none',
+    status: 'open',
+    form_status: 'skipped',
+  });
   vi.mocked(fetchArticleDetail).mockResolvedValue({
     id: 'art-1',
     title: 'Refund timing',
     body: 'Refunds take **48 hours**.',
     keywords: [],
+    attachments: [],
     intent_id: null,
     published_at: null,
-  })
+  });
   // ArticleSheet's own once-per-session read effect calls this directly (not
   // through useArticleDetail), so the whole-module mock otherwise leaves it
   // returning undefined and the sheet's effect throws on `.catch`.
-  vi.mocked(reportArticleRead).mockResolvedValue(undefined as never)
-})
+  vi.mocked(reportArticleRead).mockResolvedValue(undefined as never);
+});
 
 function renderChatAt(path: string) {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[path]}>
@@ -122,66 +150,90 @@ function renderChatAt(path: string) {
         </SupportContextProvider>
       </MemoryRouter>
     </QueryClientProvider>,
-  )
+  );
 }
 
 describe('SupportChat composer gating', () => {
   it('leaves the composer usable while no banner is showing', async () => {
-    vi.mocked(fetchPlayerMessages).mockResolvedValue(messages({}))
-    renderChat()
+    vi.mocked(fetchPlayerMessages).mockResolvedValue(messages({}));
+    renderChat();
     // Both banners are absent once the query has settled, which is the state
     // this asserts the composer stays live in.
-    await waitFor(() => expect(screen.queryByText('Is your issue resolved?')).not.toBeInTheDocument())
-    expect(screen.getByLabelText('Message')).not.toBeDisabled()
-  })
+    await waitFor(() =>
+      expect(screen.queryByText('Is your issue resolved?')).not.toBeInTheDocument(),
+    );
+    expect(screen.getByLabelText('Message')).not.toBeDisabled();
+  });
 
   it('disables the composer while the confirm banner is asking', async () => {
-    vi.mocked(fetchPlayerMessages).mockResolvedValue(messages({ confirm_phase: 'agent_ask' }))
-    renderChat()
-    expect(await screen.findByText('Is your issue resolved?')).toBeInTheDocument()
-    expect(screen.getByLabelText('Message')).toBeDisabled()
-    expect(screen.getByLabelText('Send message')).toBeDisabled()
-  })
+    vi.mocked(fetchPlayerMessages).mockResolvedValue(messages({ confirm_phase: 'agent_ask' }));
+    renderChat();
+    expect(await screen.findByText('Is your issue resolved?')).toBeInTheDocument();
+    expect(screen.getByLabelText('Message')).toBeDisabled();
+    expect(screen.getByLabelText('Send message')).toBeDisabled();
+  });
 
   it('disables the composer while the resolved banner is showing', async () => {
-    vi.mocked(fetchPlayerMessages).mockResolvedValue(messages({ status: 'resolved' }))
-    renderChat()
-    expect(await screen.findByText('Your ticket is resolved.')).toBeInTheDocument()
-    expect(screen.getByLabelText('Message')).toBeDisabled()
-  })
-})
+    vi.mocked(fetchPlayerMessages).mockResolvedValue(messages({ status: 'resolved' }));
+    renderChat();
+    expect(await screen.findByText('Your ticket is resolved.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Message')).toBeDisabled();
+  });
+});
+
+describe('SupportChat attachment gating', () => {
+  it('hides the attach control while the bot is the active responder', async () => {
+    vi.mocked(fetchPlayerMessages).mockResolvedValue(messages({ status: 'bot_active' }));
+    renderChat();
+    // Wait for the query to actually settle, not just for the composer's
+    // always-false initial disabled state: allowAttachments derives from
+    // messagesQuery.data, which is still undefined on the very first render.
+    await screen.findByText('my game crashed');
+    expect(screen.queryByLabelText('Attach image or video')).not.toBeInTheDocument();
+  });
+
+  it.each(['open', 'escalated', 'awaiting_player'] as const)(
+    'offers the attach control once status is %s',
+    async (status) => {
+      vi.mocked(fetchPlayerMessages).mockResolvedValue(messages({ status }));
+      renderChat();
+      await screen.findByText('my game crashed');
+      expect(screen.getByLabelText('Attach image or video')).toBeInTheDocument();
+    },
+  );
+});
 
 describe('SupportChat banner focus', () => {
   it('dims the screen behind the banner and lifts the banner above the scrim', async () => {
-    vi.mocked(fetchPlayerMessages).mockResolvedValue(messages({ confirm_phase: 'agent_ask' }))
-    const { container } = renderChat()
+    vi.mocked(fetchPlayerMessages).mockResolvedValue(messages({ confirm_phase: 'agent_ask' }));
+    const { container } = renderChat();
 
-    const banner = await screen.findByRole('dialog')
-    const scrim = container.querySelector('[aria-hidden="true"].fixed')
-    expect(scrim).not.toBeNull()
+    const banner = await screen.findByRole('dialog');
+    const scrim = container.querySelector('[aria-hidden="true"].fixed');
+    expect(scrim).not.toBeNull();
     // The scrim covers everything at z-10; the banner has to outrank it or the
     // decision the player is being asked to make is behind the dimming.
-    expect(scrim!.className).toContain('z-10')
-    expect(banner.className).toContain('z-20')
-  })
+    expect(scrim!.className).toContain('z-10');
+    expect(banner.className).toContain('z-20');
+  });
 
   it('shows no scrim while the thread is an ordinary open conversation', async () => {
-    vi.mocked(fetchPlayerMessages).mockResolvedValue(messages({}))
-    const { container } = renderChat()
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
-    expect(container.querySelector('[aria-hidden="true"].fixed')).toBeNull()
-  })
-})
+    vi.mocked(fetchPlayerMessages).mockResolvedValue(messages({}));
+    const { container } = renderChat();
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(container.querySelector('[aria-hidden="true"].fixed')).toBeNull();
+  });
+});
 
 describe('SupportChat resolved banner', () => {
   it('offers both a reopen and a fresh ticket, not one Yes', async () => {
-    vi.mocked(fetchPlayerMessages).mockResolvedValue(messages({ status: 'resolved' }))
-    renderChat()
-    expect(await screen.findByText('Still facing issues')).toBeInTheDocument()
-    expect(screen.getByText('Open a new ticket')).toBeInTheDocument()
-    expect(screen.queryByText('Yes')).not.toBeInTheDocument()
-  })
-})
+    vi.mocked(fetchPlayerMessages).mockResolvedValue(messages({ status: 'resolved' }));
+    renderChat();
+    expect(await screen.findByText('Still facing issues')).toBeInTheDocument();
+    expect(screen.getByText('Open a new ticket')).toBeInTheDocument();
+    expect(screen.queryByText('Yes')).not.toBeInTheDocument();
+  });
+});
 
 /**
  * Chat used to be the fallback when the backend was unreachable — Home offered
@@ -192,41 +244,41 @@ describe('SupportChat resolved banner', () => {
  */
 describe('SupportChat when the backend is unreachable', () => {
   it('shows the same failure screen Home shows, with its message, instead of the thread', async () => {
-    vi.mocked(fetchPlayerMessages).mockResolvedValue(messages({}))
-    renderChat({ error: 'Could not load support.' })
+    vi.mocked(fetchPlayerMessages).mockResolvedValue(messages({}));
+    renderChat({ error: 'Could not load support.' });
 
-    expect(await screen.findByText('Could not load support')).toBeInTheDocument()
-    expect(screen.getByText('Could not load support.')).toBeInTheDocument()
-    expect(screen.getByText('Try again')).toBeInTheDocument()
-  })
+    expect(await screen.findByText('Could not load support')).toBeInTheDocument();
+    expect(screen.getByText('Could not load support.')).toBeInTheDocument();
+    expect(screen.getByText('Try again')).toBeInTheDocument();
+  });
 
   it('disables the chat module — no composer, no thread, no empty-state invitation to talk', async () => {
-    vi.mocked(fetchPlayerMessages).mockResolvedValue(messages({}))
-    renderChat({ error: 'Could not load support.' })
+    vi.mocked(fetchPlayerMessages).mockResolvedValue(messages({}));
+    renderChat({ error: 'Could not load support.' });
 
-    await screen.findByText('Could not load support')
-    expect(screen.queryByLabelText('Message')).not.toBeInTheDocument()
-    expect(screen.queryByText('my game crashed')).not.toBeInTheDocument()
-    expect(screen.queryByText('Say hello')).not.toBeInTheDocument()
-  })
+    await screen.findByText('Could not load support');
+    expect(screen.queryByLabelText('Message')).not.toBeInTheDocument();
+    expect(screen.queryByText('my game crashed')).not.toBeInTheDocument();
+    expect(screen.queryByText('Say hello')).not.toBeInTheDocument();
+  });
 
   it("falls into the same state when this screen's own fetch fails and nothing has loaded", async () => {
-    vi.mocked(fetchPlayerMessages).mockRejectedValue(new Error('Failed to fetch'))
-    renderChat()
+    vi.mocked(fetchPlayerMessages).mockRejectedValue(new Error('Failed to fetch'));
+    renderChat();
 
-    expect(await screen.findByText('Could not load support')).toBeInTheDocument()
-    expect(screen.getByText('Failed to fetch')).toBeInTheDocument()
-    expect(screen.queryByLabelText('Message')).not.toBeInTheDocument()
-  })
+    expect(await screen.findByText('Could not load support')).toBeInTheDocument();
+    expect(screen.getByText('Failed to fetch')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Message')).not.toBeInTheDocument();
+  });
 
   it('retrying asks the shell to re-arm as well as refetching, since either half may be the failed one', async () => {
-    const retry = vi.fn()
-    vi.mocked(fetchPlayerMessages).mockResolvedValue(messages({}))
-    renderChat({ error: 'Could not load support.', retry })
+    const retry = vi.fn();
+    vi.mocked(fetchPlayerMessages).mockResolvedValue(messages({}));
+    renderChat({ error: 'Could not load support.', retry });
 
-    fireEvent.click(await screen.findByText('Try again'))
-    expect(retry).toHaveBeenCalledTimes(1)
-  })
+    fireEvent.click(await screen.findByText('Try again'));
+    expect(retry).toHaveBeenCalledTimes(1);
+  });
 
   /**
    * The guard is `data === undefined`, not bare `isError`: losing a thread the
@@ -235,22 +287,22 @@ describe('SupportChat when the backend is unreachable', () => {
    * message.
    */
   it('keeps a thread that already loaded when a later refetch fails', async () => {
-    vi.mocked(fetchPlayerMessages).mockResolvedValue(messages({}))
-    const { queryClient } = renderChat()
+    vi.mocked(fetchPlayerMessages).mockResolvedValue(messages({}));
+    const { queryClient } = renderChat();
     // The composer standing in for "the thread is up": ChatBubbles renders
     // through Virtuoso, which measures zero under jsdom and mounts no items, so
     // message text is not assertable here.
-    await waitFor(() => expect(screen.getByLabelText('Message')).not.toBeDisabled())
+    await waitFor(() => expect(screen.getByLabelText('Message')).not.toBeDisabled());
 
-    vi.mocked(fetchPlayerMessages).mockRejectedValue(new Error('Failed to fetch'))
+    vi.mocked(fetchPlayerMessages).mockRejectedValue(new Error('Failed to fetch'));
     await act(async () => {
-      await queryClient.refetchQueries({ queryKey: ['playerMessages', 's'] })
-    })
+      await queryClient.refetchQueries({ queryKey: ['playerMessages', 's'] });
+    });
 
-    expect(screen.queryByText('Could not load support')).not.toBeInTheDocument()
-    expect(screen.getByLabelText('Message')).toBeInTheDocument()
-  })
-})
+    expect(screen.queryByText('Could not load support')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Message')).toBeInTheDocument();
+  });
+});
 
 const FORM = {
   submission_id: 's1',
@@ -266,31 +318,37 @@ const FORM = {
       position: 0,
       options: ['Apple App Store', 'Google Play'],
     },
-    { key: 'order_id', label: 'Order or receipt ID', type: 'short_text', isRequired: true, position: 1 },
+    {
+      key: 'order_id',
+      label: 'Order or receipt ID',
+      type: 'short_text',
+      isRequired: true,
+      position: 1,
+    },
   ],
   answers: [],
-} as unknown as NonNullable<PlayerMessagesResponse['form']>
+} as unknown as NonNullable<PlayerMessagesResponse['form']>;
 
 describe('the form card', () => {
   it('does not render the resolution banner while confirm_phase is form', async () => {
     vi.mocked(fetchPlayerMessages).mockResolvedValue(
       messages({ status: 'bot_active', confirm_phase: 'form', form: FORM }),
-    )
-    renderChat()
-    expect(await screen.findByText('Store')).toBeInTheDocument()
+    );
+    renderChat();
+    expect(await screen.findByText('Store')).toBeInTheDocument();
     // The old `!== 'none'` check made a third enum value silently render the
     // yes/no banner underneath the card.
-    expect(screen.queryByText('Is your issue resolved?')).not.toBeInTheDocument()
-  })
+    expect(screen.queryByText('Is your issue resolved?')).not.toBeInTheDocument();
+  });
 
   it('disables the composer while the card is showing', async () => {
     vi.mocked(fetchPlayerMessages).mockResolvedValue(
       messages({ status: 'bot_active', confirm_phase: 'form', form: FORM }),
-    )
-    renderChat()
-    await screen.findByText('Store')
-    expect(screen.getByLabelText('Message')).toBeDisabled()
-  })
+    );
+    renderChat();
+    await screen.findByText('Store');
+    expect(screen.getByLabelText('Message')).toBeDisabled();
+  });
 
   it('resumes mid-form at the right question with earlier answers present', async () => {
     vi.mocked(fetchPlayerMessages).mockResolvedValue(
@@ -299,28 +357,28 @@ describe('the form card', () => {
         confirm_phase: 'form',
         form: { ...FORM, answers: [{ field_key: 'store', value: 'Google Play' }] },
       }),
-    )
-    renderChat()
-    expect(await screen.findByText('2 of 2')).toBeInTheDocument()
-    expect(screen.getByText('Order or receipt ID')).toBeInTheDocument()
-  })
+    );
+    renderChat();
+    expect(await screen.findByText('2 of 2')).toBeInTheDocument();
+    expect(screen.getByText('Order or receipt ID')).toBeInTheDocument();
+  });
 
   it('still renders the resolution banner on bot_article', async () => {
     vi.mocked(fetchPlayerMessages).mockResolvedValue(
       messages({ status: 'bot_active', confirm_phase: 'bot_article', form: null }),
-    )
-    renderChat()
-    expect(await screen.findByText('Is your issue resolved?')).toBeInTheDocument()
-  })
+    );
+    renderChat();
+    expect(await screen.findByText('Is your issue resolved?')).toBeInTheDocument();
+  });
 
   it('renders no card when confirm_phase is form but the form block is null', async () => {
     vi.mocked(fetchPlayerMessages).mockResolvedValue(
       messages({ status: 'bot_active', confirm_phase: 'form', form: null }),
-    )
-    renderChat()
-    await waitFor(() => expect(screen.getByLabelText('Message')).not.toBeDisabled())
-  })
-})
+    );
+    renderChat();
+    await waitFor(() => expect(screen.getByLabelText('Message')).not.toBeDisabled());
+  });
+});
 
 describe('SupportChat article delivery', () => {
   it('carries article_id from the wire onto the bubble as a Read more link', async () => {
@@ -336,36 +394,37 @@ describe('SupportChat article delivery', () => {
             delivery_state: 'sent',
             read_at: null,
             article_id: 'art-1',
+            attachment: null,
           },
         ],
       }),
-    )
+    );
 
-    renderChatAt('/embed/support/chat')
+    renderChatAt('/embed/support/chat');
 
-    const link = await screen.findByRole('link', { name: 'Read more' })
-    expect(link).toHaveAttribute('href', '/embed/support/chat/articles/art-1')
-  })
+    const link = await screen.findByRole('link', { name: 'Read more' });
+    expect(link).toHaveAttribute('href', '/embed/support/chat/articles/art-1');
+  });
 
   it('opens the article sheet over the thread when mounted at the nested route', async () => {
-    vi.mocked(fetchPlayerMessages).mockResolvedValue(messages({}))
+    vi.mocked(fetchPlayerMessages).mockResolvedValue(messages({}));
 
-    renderChatAt('/embed/support/chat/articles/art-1')
+    renderChatAt('/embed/support/chat/articles/art-1');
 
     // The sheet is open...
-    expect(await screen.findByText('Refund timing')).toBeInTheDocument()
+    expect(await screen.findByText('Refund timing')).toBeInTheDocument();
     // ...and the thread underneath it never unmounted: the player's own message
     // is still on screen, which is what a route that rendered SupportHome would
     // have destroyed along with the socket.
-    await waitFor(() => expect(screen.getByText('my game crashed')).toBeInTheDocument())
-  })
+    await waitFor(() => expect(screen.getByText('my game crashed')).toBeInTheDocument());
+  });
 
   it('leaves the sheet closed on the plain chat route', async () => {
-    vi.mocked(fetchPlayerMessages).mockResolvedValue(messages({}))
+    vi.mocked(fetchPlayerMessages).mockResolvedValue(messages({}));
 
-    renderChatAt('/embed/support/chat')
+    renderChatAt('/embed/support/chat');
 
-    await waitFor(() => expect(screen.getByText('my game crashed')).toBeInTheDocument())
-    expect(screen.queryByText('Refund timing')).not.toBeInTheDocument()
-  })
-})
+    await waitFor(() => expect(screen.getByText('my game crashed')).toBeInTheDocument());
+    expect(screen.queryByText('Refund timing')).not.toBeInTheDocument();
+  });
+});

@@ -1,4 +1,4 @@
-import type { FormSubmissionStatus } from '@support/types'
+import type { FormSubmissionStatus } from '@support/types';
 
 /**
  * The one line under the form's name. Split out for the same reason
@@ -9,15 +9,19 @@ import type { FormSubmissionStatus } from '@support/types'
  * player declined, and the agent has to know to ask rather than wonder where
  * the details went.
  */
-export function formStatusLine(status: FormSubmissionStatus, answeredCount: number, fieldCount: number): string {
+export function formStatusLine(
+  status: FormSubmissionStatus,
+  answeredCount: number,
+  fieldCount: number,
+): string {
   switch (status) {
     case 'in_progress':
-      return `Player is answering · ${answeredCount} of ${fieldCount}`
+      return `Player is answering · ${answeredCount} of ${fieldCount}`;
     case 'completed':
-      return `All ${fieldCount} question${fieldCount === 1 ? '' : 's'} answered`
+      return `All ${fieldCount} question${fieldCount === 1 ? '' : 's'} answered`;
     case 'partial':
-      return `${answeredCount} answered · ${fieldCount - answeredCount} not answered`
+      return `${answeredCount} answered · ${fieldCount - answeredCount} not answered`;
     case 'skipped':
-      return 'Player skipped the questions'
+      return 'Player skipped the questions';
   }
 }

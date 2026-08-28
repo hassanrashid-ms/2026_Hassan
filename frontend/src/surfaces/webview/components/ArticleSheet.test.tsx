@@ -1,7 +1,7 @@
-import { describe, expect, it, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
-import { ArticleSheet } from './ArticleSheet.tsx'
-import { SupportContextProvider } from './SupportContext.tsx'
+import { describe, expect, it, vi } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import { ArticleSheet } from './ArticleSheet.tsx';
+import { SupportContextProvider } from './SupportContext.tsx';
 
 /*
  * The hook is a real useQuery, so it is mocked at the module boundary rather than
@@ -22,7 +22,7 @@ vi.mock('@/surfaces/webview/hooks/useArticleDetail', () => ({
     },
     isError: false,
   }),
-}))
+}));
 
 describe('ArticleSheet body', () => {
   // ArticleBody is lazy — it must not sit on the home screen's critical path —
@@ -32,12 +32,12 @@ describe('ArticleSheet body', () => {
       <SupportContextProvider value={{ boot: null, data: null, error: null, retry: vi.fn() }}>
         <ArticleSheet articleId="art-1" onClose={vi.fn()} />
       </SupportContextProvider>,
-    )
+    );
 
-    expect(await screen.findByRole('heading', { name: 'When we refund' })).toBeInTheDocument()
-    expect(screen.getByText('30 days').tagName).toBe('STRONG')
+    expect(await screen.findByRole('heading', { name: 'When we refund' })).toBeInTheDocument();
+    expect(screen.getByText('30 days').tagName).toBe('STRONG');
     // The bug this closes: players used to see the literal markers.
-    expect(screen.queryByText(/\*\*/)).not.toBeInTheDocument()
-    expect(screen.queryByText(/##/)).not.toBeInTheDocument()
-  })
-})
+    expect(screen.queryByText(/\*\*/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/##/)).not.toBeInTheDocument();
+  });
+});

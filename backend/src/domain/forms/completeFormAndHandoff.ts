@@ -1,32 +1,42 @@
-import { and, desc, eq } from 'drizzle-orm'
-import type { Tx } from '../../shared/db/withWorkspace.ts'
-import { conversation, event, formAnswer, formSubmission, formVersion } from '../../shared/db/schema/index.ts'
-import { appendEvent } from '../../shared/events/appendEvent.ts'
-import { assignOnHandoff } from '../bot/assignOnHandoff.ts'
-import { postMessage, type PostedMessageRow } from '../conversations/postMessage.ts'
-import { formSummaryMessage } from './messages.ts'
+import { and, desc, eq, asc } from 'drizzle-orm';
+import type { Tx } from '../../shared/db/withWorkspace.ts';
+import {
+  conversation,
+  event,
+  form,
+  formAnswer,
+  formSubmission,
+  formVersion,
+} from '../../shared/db/schema/index.ts';
+import { appendEvent } from '../../shared/events/appendEvent.ts';
+import { assignOnHandoff } from '../bot/assignOnHandoff.ts';
+import { postMessage, type PostedMessageRow } from '../conversations/postMessage.ts';
+import { formSummaryMessage } from './messages.ts';
+import { NO_AGENTS_ONLINE_MESSAGE } from '../bot/messages.ts';
 
-export type FormTerminationReason = 'submit' | 'skip' | 'timeout'
-export type TerminalFormStatus = 'completed' | 'partial' | 'skipped'
+export type FormTerminationReason = 'submit' | 'skip' | 'timeout';
+export type TerminalFormStatus = 'completed' | 'partial' | 'skipped';
 
 export type CompleteFormContext = {
-  workspaceId: string
-  conversationId: string
-  submissionId: string
+  workspaceId: string;
+  conversationId: string;
+  submissionId: string;
   /** 'player' for submit and skip; 'system' with a null actor for the sweeper. */
-  actorType: 'player' | 'system'
-  actorId: string | null
-  sessionId: string | null
-}
+  actorType: 'player' | 'system';
+  actorId: string | null;
+  sessionId: string | null;
+};
 
 export type CompleteFormResult = {
-  conversationId: string
-  formStatus: TerminalFormStatus
-  answeredCount: number
-  fieldCount: number
-  assignedAgentId: string | null
-  posted: PostedMessageRow
-}
+  conversationId: string;
+  formStatus: TerminalFormStatus;
+  answeredCount: number;
+  fieldCount: number;
+  assignedAgentId: string | null;
+  posted: PostedMessageRow;
+  /** Set only when assignOnHandoff found nobody online — a second public line. */
+  noAgentsOnlinePosted: PostedMessageRow | null;
+};
 
 /**
  * The terminal half of the split handoff, and the only writer of it. Three
@@ -55,44 +65,72 @@ export async function completeFormAndHandoff(
       status: formSubmission.status,
       formId: formSubmission.formId,
       formVersion: formSubmission.formVersion,
+      formName: form.name,
     })
     .from(formSubmission)
-    .where(and(eq(formSubmission.id, ctx.submissionId), eq(formSubmission.conversationId, ctx.conversationId)))
-    .for('update')
-    .limit(1)
+    .innerJoin(form, eq(form.id, formSubmission.formId))
+    .where(
+      and(
+        eq(formSubmission.id, ctx.submissionId),
+        eq(formSubmission.conversationId, ctx.conversationId),
+      ),
+    )
+    .for('update', { of: formSubmission })
+    .limit(1);
 
-  if (!submission || submission.status !== 'in_progress') return null
+  if (!submission || submission.status !== 'in_progress') return null;
 
   const [version] = await tx
     .select({ fields: formVersion.fields })
     .from(formVersion)
-    .where(and(eq(formVersion.formId, submission.formId), eq(formVersion.version, submission.formVersion)))
-    .limit(1)
-  const fieldCount = version?.fields.length ?? 0
+    .where(
+      and(
+        eq(formVersion.formId, submission.formId),
+        eq(formVersion.version, submission.formVersion),
+      ),
+    )
+    .limit(1);
+  const fieldCount = version?.fields.length ?? 0;
 
   // Distinct keys, never row count: a corrected field is two rows and one
   // answered question, and the snapshot on form_completed has to say the latter.
   const answeredRows = await tx
     .selectDistinct({ fieldKey: formAnswer.fieldKey })
     .from(formAnswer)
-    .where(eq(formAnswer.formSubmissionId, submission.id))
-  const answeredCount = answeredRows.length
+    .where(eq(formAnswer.formSubmissionId, submission.id));
+  const answeredCount = answeredRows.length;
 
   // §1.3: status records the outcome, not the button. Which action terminated
   // the submission is a fact about the turn and lives in form_completed.
   const formStatus: TerminalFormStatus =
-    answeredCount === 0 ? 'skipped' : fieldCount > 0 && answeredCount >= fieldCount ? 'completed' : 'partial'
+    answeredCount === 0
+      ? 'skipped'
+      : fieldCount > 0 && answeredCount >= fieldCount
+        ? 'completed'
+        : 'partial';
 
   await tx
     .update(formSubmission)
     .set({ status: formStatus, submittedAt: new Date() })
-    .where(eq(formSubmission.id, submission.id))
+    .where(eq(formSubmission.id, submission.id));
 
-  const assignedAgentId = await assignOnHandoff(tx, ctx.workspaceId)
+  const assignedAgentId = await assignOnHandoff(tx, ctx.workspaceId);
   await tx
     .update(conversation)
     .set({ status: 'open', confirmPhase: 'none', assignedAgentId })
-    .where(eq(conversation.id, ctx.conversationId))
+    .where(eq(conversation.id, ctx.conversationId));
+
+  const noAgentsOnlinePosted =
+    assignedAgentId === null
+      ? await postMessage(tx, {
+          workspaceId: ctx.workspaceId,
+          conversationId: ctx.conversationId,
+          authorType: 'system',
+          actorId: null,
+          body: NO_AGENTS_ONLINE_MESSAGE,
+          visibility: 'public',
+        })
+      : null;
 
   // The reason belongs to the bot turn that offered the form, so it is read back
   // from that turn's own snapshot. Null rather than a guess if the event is
@@ -102,8 +140,9 @@ export async function completeFormAndHandoff(
     .from(event)
     .where(and(eq(event.conversationId, ctx.conversationId), eq(event.type, 'form_offered')))
     .orderBy(desc(event.occurredAt))
-    .limit(1)
-  const reason = (offer?.payload as { handoff_reason?: string } | undefined)?.handoff_reason ?? null
+    .limit(1);
+  const reason =
+    (offer?.payload as { handoff_reason?: string } | undefined)?.handoff_reason ?? null;
 
   await appendEvent(tx, {
     workspaceId: ctx.workspaceId,
@@ -112,7 +151,7 @@ export async function completeFormAndHandoff(
     actorId: null,
     actorType: 'bot',
     payload: { reason, assigned_agent_id: assignedAgentId },
-  })
+  });
 
   await appendEvent(tx, {
     workspaceId: ctx.workspaceId,
@@ -127,7 +166,7 @@ export async function completeFormAndHandoff(
       answered_count: answeredCount,
       field_count: fieldCount,
     },
-  })
+  });
 
   const posted = await postMessage(tx, {
     workspaceId: ctx.workspaceId,
@@ -136,7 +175,62 @@ export async function completeFormAndHandoff(
     actorId: null,
     body: formSummaryMessage(formStatus),
     visibility: 'public',
-  })
+  });
 
-  return { conversationId: ctx.conversationId, formStatus, answeredCount, fieldCount, assignedAgentId, posted }
+  if (answeredCount > 0) {
+    const answerRows = await tx
+      .select({
+        fieldKey: formAnswer.fieldKey,
+        value: formAnswer.value,
+      })
+      .from(formAnswer)
+      .where(eq(formAnswer.formSubmissionId, submission.id))
+      .orderBy(asc(formAnswer.createdAt), asc(formAnswer.id));
+
+    // Last row per key wins
+    const latestAnswers = new Map<string, any>();
+    for (const row of answerRows) {
+      latestAnswers.set(row.fieldKey, row.value);
+    }
+
+    const orderedFields = [...(version?.fields ?? [])].sort((a, b) => a.position - b.position);
+
+    await postMessage(tx, {
+      workspaceId: ctx.workspaceId,
+      conversationId: ctx.conversationId,
+      authorType: 'system',
+      actorId: null,
+      body: formatFormAnswers(submission.formName, orderedFields, latestAnswers),
+      visibility: 'internal',
+    });
+  }
+
+  return {
+    conversationId: ctx.conversationId,
+    formStatus,
+    answeredCount,
+    fieldCount,
+    assignedAgentId,
+    posted,
+    noAgentsOnlinePosted,
+  };
+}
+
+function formatFormAnswers(
+  formName: string,
+  orderedFields: any[],
+  latestAnswers: Map<string, any>,
+): string {
+  const lines: string[] = [`**Form Submitted:** ${formName}`, ''];
+  for (const field of orderedFields) {
+    const val = latestAnswers.get(field.key);
+    const displayVal = Array.isArray(val) ? val.join(', ') : val;
+    const isEmptyArray = Array.isArray(val) && val.length === 0;
+    if (val !== undefined && val !== null && val !== '' && !isEmptyArray) {
+      lines.push(`• **${field.label}**: ${displayVal}`);
+    } else {
+      lines.push(`• **${field.label}**: *(Not answered)*`);
+    }
+  }
+  return lines.join('\n');
 }

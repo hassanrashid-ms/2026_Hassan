@@ -1,9 +1,19 @@
-import { boolean, foreignKey, pgTable, text, timestamp, unique, uniqueIndex, uuid, type AnyPgColumn } from 'drizzle-orm/pg-core'
-import { conversationPriority } from './enums.ts'
-import { form } from './forms.ts'
-import { workspace } from './identity.ts'
+import {
+  boolean,
+  foreignKey,
+  pgTable,
+  text,
+  timestamp,
+  unique,
+  uniqueIndex,
+  uuid,
+  type AnyPgColumn,
+} from 'drizzle-orm/pg-core';
+import { conversationPriority } from './enums.ts';
+import { form } from './forms.ts';
+import { workspace } from './identity.ts';
 
-const tz = { withTimezone: true, mode: 'date' } as const
+const tz = { withTimezone: true, mode: 'date' } as const;
 
 export const intent = pgTable(
   'intent',
@@ -19,7 +29,7 @@ export const intent = pgTable(
     createdAt: timestamp('created_at', tz).notNull().defaultNow(),
   },
   (t) => [uniqueIndex('intent_workspace_name_uk').on(t.workspaceId, t.name)],
-)
+);
 
 export const subintent = pgTable(
   'subintent',
@@ -38,7 +48,9 @@ export const subintent = pgTable(
      *  FK declared here (many side). The composite FK below ensures cross-workspace safety. */
     formId: uuid('form_id'),
     /** No merge flow yet. Self-referential FK needs the AnyPgColumn getter form. */
-    mergedIntoId: uuid('merged_into_id').references((): AnyPgColumn => subintent.id, { onDelete: 'restrict' }),
+    mergedIntoId: uuid('merged_into_id').references((): AnyPgColumn => subintent.id, {
+      onDelete: 'restrict',
+    }),
     archivedAt: timestamp('archived_at', tz),
     createdAt: timestamp('created_at', tz).notNull().defaultNow(),
   },
@@ -57,4 +69,4 @@ export const subintent = pgTable(
       foreignColumns: [form.workspaceId, form.id],
     }).onDelete('restrict'),
   ],
-)
+);

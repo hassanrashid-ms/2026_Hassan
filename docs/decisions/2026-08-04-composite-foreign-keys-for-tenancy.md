@@ -19,7 +19,7 @@ VALUES ('<workspace A>', '<workspace B''s player id>');
 ```
 
 Both checks pass legitimately. The FK check finds B's player row because RI ignores RLS. The policy's
-`WITH CHECK` passes because `workspace_id` genuinely *is* A. Nothing is violated, and a row now exists
+`WITH CHECK` passes because `workspace_id` genuinely _is_ A. Nothing is violated, and a row now exists
 whose parent belongs to another tenant.
 
 **This is an integrity vector, not a confidentiality one.** Workspace A still cannot read B's player
@@ -65,7 +65,7 @@ The database then refuses the insert above, because no `player` row exists with
 
 Applies to every FK between two scoped tables: `session → player`, `conversation → player`,
 `conversation → session`, `player_state_snapshot → session`, `message → conversation`,
-`event → conversation`, `event → session`. FKs to the two *unscoped* tables (`workspace`, `agent`) are
+`event → conversation`, `event → session`. FKs to the two _unscoped_ tables (`workspace`, `agent`) are
 unaffected — there is no tenant to cross.
 
 ## Timing: decide now, implement in migration `002`
@@ -93,5 +93,5 @@ be removed as redundant until the composite FKs actually exist.
 
 **Relying on a database trigger** to validate that parent and child share a workspace. It would work,
 but it is a per-table hand-written check that can be forgotten exactly like the handler convention,
-with worse performance and no declarative record in the schema. A composite FK *is* the constraint,
+with worse performance and no declarative record in the schema. A composite FK _is_ the constraint,
 visible in `\d` and in the Drizzle schema.

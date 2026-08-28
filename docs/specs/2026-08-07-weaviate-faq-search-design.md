@@ -11,11 +11,13 @@ The `article` table already has `article_phrasing` and `article_embedding` sibli
 ## Data model changes
 
 **`article` table** (`backend/src/shared/db/schema/articles.ts`):
+
 - Drop `summary` column.
 - Add `keywords`: `text[]`, not null, default `'{}'`.
 - `id` (UUID) unchanged — used directly as the Weaviate object id.
 
 **Dropped entirely:**
+
 - `article_phrasing` table
 - `article_embedding` table (and its pgvector HNSW index)
 - `pgvector` extension declaration (`001_extensions.sql`)
@@ -59,6 +61,7 @@ client.collections.create(
 ## Search flow
 
 **Public listing** (`surface/services/articlesService.ts` → `listPublicArticles`):
+
 - Empty `q`: unchanged — Postgres query, `state = 'published'`, optional `intentId` filter, ordered by `published_at desc`. Weaviate is not involved.
 - Non-empty `q`: call Weaviate BM25:
   ```python

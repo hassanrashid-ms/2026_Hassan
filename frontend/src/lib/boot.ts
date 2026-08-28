@@ -1,8 +1,8 @@
 export type SurfaceBoot = {
-  token: string
-  sessionId: string
-  entryPoint: string
-}
+  token: string;
+  sessionId: string;
+  entryPoint: string;
+};
 
 /**
  * The SDK builds: {webviewBaseUrl}?session={sessionId}&entry={entryPoint}#t={jwt}
@@ -13,14 +13,14 @@ export type SurfaceBoot = {
  * line, stay out of proxy and access logs, and are not forwarded in a Referer.
  */
 export function readBoot(location: { search: string; hash: string }): SurfaceBoot | null {
-  const query = new URLSearchParams(location.search)
-  const fragment = new URLSearchParams(location.hash.replace(/^#/, ''))
+  const query = new URLSearchParams(location.search);
+  const fragment = new URLSearchParams(location.hash.replace(/^#/, ''));
 
-  const token = fragment.get('t')
-  const sessionId = query.get('session')
-  if (!token || !sessionId) return null
+  const token = fragment.get('t');
+  const sessionId = query.get('session');
+  if (!token || !sessionId) return null;
 
-  return { token, sessionId, entryPoint: query.get('entry') || 'unknown' }
+  return { token, sessionId, entryPoint: query.get('entry') || 'unknown' };
 }
 
 /**
@@ -29,5 +29,5 @@ export function readBoot(location: { search: string; hash: string }): SurfaceBoo
  * screenshots, so it should not outlive the read.
  */
 export function scrubToken(history: History, location: Location): void {
-  history.replaceState(null, '', `${location.pathname}${location.search}`)
+  history.replaceState(null, '', `${location.pathname}${location.search}`);
 }

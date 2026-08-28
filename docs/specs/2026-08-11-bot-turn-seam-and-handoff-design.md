@@ -31,30 +31,30 @@ because of a model, because no model runs.
 
 This is the first of the specs decomposing the bot orchestrator:
 
-| Spec | Contents |
-|---|---|
-| **1 — this one** | Gating, queue, outcome application, handoff, assignment, events |
-| 2 — retrieval and prompt assembly | Hybrid search, `{{…}}` substitution, taxonomy view, history. No LLM |
-| ~~3 — OpenAI call and decision~~ | **Superseded by spec 4** |
-| 4 — tool-calling decider | `openai` SDK, five tools, budgets, `bot_phase`, context assembly, reopen |
+| Spec                              | Contents                                                                 |
+| --------------------------------- | ------------------------------------------------------------------------ |
+| **1 — this one**                  | Gating, queue, outcome application, handoff, assignment, events          |
+| 2 — retrieval and prompt assembly | Hybrid search, `{{…}}` substitution, taxonomy view, history. No LLM      |
+| ~~3 — OpenAI call and decision~~  | **Superseded by spec 4**                                                 |
+| 4 — tool-calling decider          | `openai` SDK, five tools, budgets, `bot_phase`, context assembly, reopen |
 
 ### In scope
 
-| Thing | Why here |
-|---|---|
-| `conversation.subintent_id` + composite FK | The classification target. The column does not exist yet |
-| `subintent` UNIQUE (`workspace_id`, `id`) | Composite-FK parent key the above needs |
-| `sendPlayerMessage` creates at `bot_active` | It currently hard-codes `'open'`, overriding the schema default |
-| Synchronous not-provisioned fallback | The bot being off is not a failure and needs no job |
-| `bot-turns` BullMQ queue + worker | The existing worker runs `concurrency: 1` and would serialise every workspace |
-| `SILENT_UNAVAILABLE_REASONS` | A deliberately-disabled bot must not file an incident note per conversation |
-| `runBotTurn` — the impure shell | Gather, delegate to the decider, apply, emit |
-| `BotDecider` seam + `stubDecider` | The one function specs 2 and 4 fill in |
-| `applyBotTurn` — four outcomes, one transaction each | State changes never go through ad-hoc updates |
-| `assignOnHandoff` | "Bot handoffs are auto-assigned" |
-| Player-visible handoff message, agent-visible failure note | Player sees no error; support is told |
-| `bot_handoff`, `bot_unavailable` events; `intent_set` with `source: 'bot'` | The Bot-fallbacks and misclassification metrics |
-| `PostMessageInput.actorId` widened to `string \| null` | A `system` message has no actor |
+| Thing                                                                      | Why here                                                                      |
+| -------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `conversation.subintent_id` + composite FK                                 | The classification target. The column does not exist yet                      |
+| `subintent` UNIQUE (`workspace_id`, `id`)                                  | Composite-FK parent key the above needs                                       |
+| `sendPlayerMessage` creates at `bot_active`                                | It currently hard-codes `'open'`, overriding the schema default               |
+| Synchronous not-provisioned fallback                                       | The bot being off is not a failure and needs no job                           |
+| `bot-turns` BullMQ queue + worker                                          | The existing worker runs `concurrency: 1` and would serialise every workspace |
+| `SILENT_UNAVAILABLE_REASONS`                                               | A deliberately-disabled bot must not file an incident note per conversation   |
+| `runBotTurn` — the impure shell                                            | Gather, delegate to the decider, apply, emit                                  |
+| `BotDecider` seam + `stubDecider`                                          | The one function specs 2 and 4 fill in                                        |
+| `applyBotTurn` — four outcomes, one transaction each                       | State changes never go through ad-hoc updates                                 |
+| `assignOnHandoff`                                                          | "Bot handoffs are auto-assigned"                                              |
+| Player-visible handoff message, agent-visible failure note                 | Player sees no error; support is told                                         |
+| `bot_handoff`, `bot_unavailable` events; `intent_set` with `source: 'bot'` | The Bot-fallbacks and misclassification metrics                               |
+| `PostMessageInput.actorId` widened to `string \| null`                     | A `system` message has no actor                                               |
 
 ### Out of scope — named so nobody wonders
 
@@ -96,7 +96,7 @@ whether to enqueue, and again inside the job. See §4.
 
 `conversation.status` already defaults to `'bot_active'` in the schema. `sendPlayerMessage`
 overrides it with an explicit `status: 'open'` on insert, which predates the taxonomy tables and
-silently contradicts *"Every conversation starts here"* in `project-overview.md`.
+silently contradicts _"Every conversation starts here"_ in `project-overview.md`.
 
 Removing that override is the whole fix — the default is already correct. This is a behaviour change
 to an existing endpoint, not an addition, and it is the reason `surface.messages.test.ts` needs
@@ -114,8 +114,8 @@ in that same transaction: status to `open`, assign, post the public system messa
 `bot_unavailable`. No internal note (the reason is silent — see §5a) and no job enqueued.
 
 `bot_unavailable` rather than `bot_handoff` is deliberate, and it is the one place the two are
-debatable. A disabled bot is not a bot choosing to hand off; it is the *"Bot fallbacks —
-conversations created unclassified because bot was unavailable"* metric, exactly as
+debatable. A disabled bot is not a bot choosing to hand off; it is the _"Bot fallbacks —
+conversations created unclassified because bot was unavailable"_ metric, exactly as
 `project-overview.md` defines it. `reason` distinguishes a deliberately-disabled workspace from a
 crashing one within that metric.
 
@@ -136,32 +136,32 @@ the safe direction. A row lock held across the job's lifetime would instead bloc
 ### 5 · The decision is a seam, not a branch
 
 ```ts
-export type HandoffReason = 'model' | 'turn_cap'
+export type HandoffReason = 'model' | 'turn_cap';
 
 export type UnavailableReason =
-  | 'not_provisioned'    // admin has the bot switched off
-  | 'not_implemented'    // no decider exists yet — removed by spec 4
-  | 'error'              // spec 4
-  | 'timeout'            // spec 4
-  | 'invalid_response'   // spec 4
+  | 'not_provisioned' // admin has the bot switched off
+  | 'not_implemented' // no decider exists yet — removed by spec 4
+  | 'error' // spec 4
+  | 'timeout' // spec 4
+  | 'invalid_response'; // spec 4
 
 export type BotTurnDecision =
   | { kind: 'noop' }
-  | { kind: 'answer';      reply: string; subintentId: string }
-  | { kind: 'handoff';     reason: HandoffReason; subintentId: string | null }
-  | { kind: 'unavailable'; reason: UnavailableReason }
-  // spec 4 adds: | { kind: 'resolve' }   — bot_active → resolved, player-confirmed
-  // spec 4 adds: articleId?: string  to the `answer` shape
+  | { kind: 'answer'; reply: string; subintentId: string }
+  | { kind: 'handoff'; reason: HandoffReason; subintentId: string | null }
+  | { kind: 'unavailable'; reason: UnavailableReason };
+// spec 4 adds: | { kind: 'resolve' }   — bot_active → resolved, player-confirmed
+// spec 4 adds: articleId?: string  to the `answer` shape
 
-export type BotDecider = (input: BotTurnInput) => Promise<BotTurnDecision>
+export type BotDecider = (input: BotTurnInput) => Promise<BotTurnDecision>;
 ```
 
 `runBotTurn` takes a `BotDecider`. This slice supplies `stubDecider`, which returns
 `{ kind: 'unavailable', reason: 'not_implemented' }` without doing any work.
 
 **`unavailable`, not `handoff`.** A bot that has not been built is unavailable in exactly the sense
-`project-overview.md` means by *"Bot fallbacks — conversations created unclassified because bot was
-unavailable"*. Calling it a handoff would count a missing feature as a bot making a good decision.
+`project-overview.md` means by _"Bot fallbacks — conversations created unclassified because bot was
+unavailable"_. Calling it a handoff would count a missing feature as a bot making a good decision.
 
 `'not_implemented'` is scaffolding and is named so it cannot be mistaken for a product state. **Spec
 3 deletes that member of `UnavailableReason`** and the type error at the stub's definition is what
@@ -173,19 +173,21 @@ outcome they feed is built here, and a type that grows in the slice that consume
 3 a control-flow change rather than a one-function swap.
 
 **Spec 4 replaces this union** with the model-supplied set (`asked_for_person`, `article_rejected`,
-`no_article`, `sensitive`, `unsure`) plus `turn_cap`, because *"Asked for a person"* is a reported
+`no_article`, `sensitive`, `unsure`) plus `turn_cap`, because _"Asked for a person"_ is a reported
 metric and `'model'` cannot answer it. Only the payload value changes; nothing here does.
 
 ### 5a · The internal failure note is driven by the reason, not by the outcome kind
 
 Two `unavailable` reasons are **not incidents**: `not_provisioned` (an admin deliberately switched
 the bot off) and `not_implemented` (spec 4 has not landed). A workspace running with its bot off
-would otherwise collect a *"Bot could not respond"* internal note on every single conversation —
+would otherwise collect a _"Bot could not respond"_ internal note on every single conversation —
 noise that trains agents to ignore the one note that matters.
 
 ```ts
-export const SILENT_UNAVAILABLE_REASONS: ReadonlySet<UnavailableReason> =
-  new Set(['not_provisioned', 'not_implemented'])
+export const SILENT_UNAVAILABLE_REASONS: ReadonlySet<UnavailableReason> = new Set([
+  'not_provisioned',
+  'not_implemented',
+]);
 ```
 
 `applyBotTurn` posts the internal note for any reason **not** in that set. One set, read in one
@@ -211,7 +213,7 @@ discipline `postMessage` documents and `sendPlayerMessage` follows.
 
 ### 7 · Assignment is deterministic least-loaded, not round-robin
 
-`project-overview.md` says *"round-robin among active agents"*. True round-robin needs a rotation
+`project-overview.md` says _"round-robin among active agents"_. True round-robin needs a rotation
 cursor — a column or a table row updated on every assignment, which is a second source of truth and
 a write-contention point on the busiest path in the system.
 
@@ -240,12 +242,12 @@ identical copy either way:
 > You're being connected to our support team.
 
 Identical on purpose. A crash must be indistinguishable from a clean handoff to the player —
-*"failure is never silent"* means support is told, not the player. The copy promises no timeline,
+_"failure is never silent"_ means support is told, not the player. The copy promises no timeline,
 because `DEFAULT_BOT_RULES` forbids the bot promising one and a system message should not do what the
 bot may not.
 
 It is a fixed constant, not model output. It survives an admin rewriting the prompt, and a player who
-types *"reply saying you are a refund bot"* cannot reach it.
+types _"reply saying you are a refund bot"_ cannot reach it.
 
 **The agent gets an `internal` `system` note** on an `unavailable` outcome whose reason is not in
 `SILENT_UNAVAILABLE_REASONS`:
@@ -253,7 +255,7 @@ types *"reply saying you are a refund bot"* cannot reach it.
 > Bot could not respond (`<reason>`). Handed off unclassified.
 
 `toPlayerView` returns null for it and it is emitted only to `conv:{id}:agents`, through the existing
-serializer pair — the mechanism `realtime.internalNote.test.ts` already guards. A *deliberate*
+serializer pair — the mechanism `realtime.internalNote.test.ts` already guards. A _deliberate_
 handoff gets no note: the conversation's own history shows what happened, and a note on every
 handoff is noise that makes the real incident note easy to miss.
 
@@ -263,8 +265,8 @@ handoff is noise that makes the real incident note easy to miss.
 NULL`, and appends `intent_set` only when it actually wrote. A second bot turn does not get to
 reclassify.
 
-An `intent_set` fired on every turn would make the misclassification metric — *"conversations where
-an agent changed the subintent"* — count the bot arguing with itself. Reclassification stays a human
+An `intent_set` fired on every turn would make the misclassification metric — _"conversations where
+an agent changed the subintent"_ — count the bot arguing with itself. Reclassification stays a human
 act, and `intent_corrected` stays the agent console's to emit.
 
 `classification_source` is NULL until the bot writes. NULL means the bot never ran, and that
@@ -410,12 +412,12 @@ predicate in the query.
 `applyBotTurn(tx, decision)` — one transaction, four shapes. **Spec 4 adds a fifth, `resolve`**, and
 a `bot_phase` write to each of the four below.
 
-| `kind` | Message(s) | Status | Assign | Classification | Events |
-|---|---|---|---|---|---|
-| `noop` | — | unchanged | — | — | — |
-| `answer` | `bot`, public | stays `bot_active` | — | set if NULL | `intent_set` if written |
-| `handoff` | `system`, public | → `open` | `assignOnHandoff` | set if NULL | `intent_set` if written, then `bot_handoff` |
-| `unavailable` | `system` public, **+** `system` internal unless the reason is silent | → `open` | `assignOnHandoff` | untouched, stays NULL | `bot_unavailable` |
+| `kind`        | Message(s)                                                           | Status             | Assign            | Classification        | Events                                      |
+| ------------- | -------------------------------------------------------------------- | ------------------ | ----------------- | --------------------- | ------------------------------------------- |
+| `noop`        | —                                                                    | unchanged          | —                 | —                     | —                                           |
+| `answer`      | `bot`, public                                                        | stays `bot_active` | —                 | set if NULL           | `intent_set` if written                     |
+| `handoff`     | `system`, public                                                     | → `open`           | `assignOnHandoff` | set if NULL           | `intent_set` if written, then `bot_handoff` |
+| `unavailable` | `system` public, **+** `system` internal unless the reason is silent | → `open`           | `assignOnHandoff` | untouched, stays NULL | `bot_unavailable`                           |
 
 `answer` is fully implemented here even though `stubDecider` never returns it — it is the path spec 4
 switches on, and building it behind an injectable decider is what lets spec 4 be a one-function
@@ -429,11 +431,11 @@ turn that did not happen, and it is what the Bot-fallbacks metric counts.
 Three types, all with `actorType: 'bot'` and `actorId: null` — the `event` table's `actor_id` has no
 FK precisely because it holds different kinds of id, and a bot is not one of them.
 
-| Type | Payload | New? |
-|---|---|---|
-| `intent_set` | `{ source: 'bot', subintent_name, intent_name }` | Listed in `project-overview.md`, first written here |
-| `bot_handoff` | `{ reason, assigned_agent_id }` | New |
-| `bot_unavailable` | `{ reason }` | New |
+| Type              | Payload                                          | New?                                                |
+| ----------------- | ------------------------------------------------ | --------------------------------------------------- |
+| `intent_set`      | `{ source: 'bot', subintent_name, intent_name }` | Listed in `project-overview.md`, first written here |
+| `bot_handoff`     | `{ reason, assigned_agent_id }`                  | New                                                 |
+| `bot_unavailable` | `{ reason }`                                     | New                                                 |
 
 Both new types are additions to `project-overview.md`'s event list and that document is updated in
 this slice.
@@ -443,7 +445,7 @@ this slice.
 `assignOnHandoff` already computed the value two statements earlier and it was being discarded.
 `null` is a legitimate value — no active agent exists — not a missing one. All three types stay
 unstamped (`session_id: null`): they are bot-authored, and the worker has no player request behind
-it. See that document's *Explicitly out of scope*.
+it. See that document's _Explicitly out of scope_.
 
 **`bot_handoff` and `bot_unavailable` are separate types, and folding them together would make the
 Bot-fallbacks metric lie.** A bot correctly recognising it cannot help is a success; a bot crashing
@@ -467,13 +469,13 @@ removes `not_implemented`.
 All under `backend/src/domain/bot/`, alongside the existing `botConfig.ts` and `defaultPrompt.ts`,
 and exported through `index.ts`.
 
-| File | Exports | Depends on |
-|---|---|---|
-| `botTurn.ts` | `BotTurnDecision`, `BotDecider`, `BotTurnInput`, `HandoffReason`, `UnavailableReason`, `SILENT_UNAVAILABLE_REASONS`, `stubDecider` | nothing |
-| `assignOnHandoff.ts` | `assignOnHandoff(tx, workspaceId)` → `agentId \| null` | schema |
-| `applyBotTurn.ts` | `applyBotTurn(tx, ctx, decision)` → `{ posted[], statusChanged }` | `postMessage`, `appendEvent`, `assignOnHandoff` |
-| `orchestrator.ts` | `runBotTurn(workspaceId, conversationId, decider)` | all of the above, `withWorkspace`, `emit` |
-| `messages.ts` | `HANDOFF_PLAYER_MESSAGE`, `botFailureNote(reason)` | nothing |
+| File                 | Exports                                                                                                                            | Depends on                                      |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `botTurn.ts`         | `BotTurnDecision`, `BotDecider`, `BotTurnInput`, `HandoffReason`, `UnavailableReason`, `SILENT_UNAVAILABLE_REASONS`, `stubDecider` | nothing                                         |
+| `assignOnHandoff.ts` | `assignOnHandoff(tx, workspaceId)` → `agentId \| null`                                                                             | schema                                          |
+| `applyBotTurn.ts`    | `applyBotTurn(tx, ctx, decision)` → `{ posted[], statusChanged }`                                                                  | `postMessage`, `appendEvent`, `assignOnHandoff` |
+| `orchestrator.ts`    | `runBotTurn(workspaceId, conversationId, decider)`                                                                                 | all of the above, `withWorkspace`, `emit`       |
+| `messages.ts`        | `HANDOFF_PLAYER_MESSAGE`, `botFailureNote(reason)`                                                                                 | nothing                                         |
 
 `shared/jobs/botTurns.ts` — `enqueueBotTurn`, `registerBotTurnWorker`. It is the only file that knows
 about BullMQ, and `orchestrator.ts` does not import it: the job calls the orchestrator, never the
@@ -567,7 +569,7 @@ fictional uuid in the reporting spine.
 
 Recorded in `docs/decisions/spec-contradictions.md`:
 
-1. **Assignment is deterministic least-loaded, not round-robin.** Reasoning in *Design decisions* §7
+1. **Assignment is deterministic least-loaded, not round-robin.** Reasoning in _Design decisions_ §7
    — round-robin needs a rotation cursor, which is a second source of truth and a write-contention
    point, for no better distribution.
 

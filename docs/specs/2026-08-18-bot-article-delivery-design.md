@@ -15,8 +15,8 @@ event. Nothing carries the article to the player:
   is instructed to reuse verbatim ("keep every step, number and condition
   exactly as written"), reaches the player as raw `**`, `##` and `1.`.
 
-`CLAUDE.md` anticipates this change explicitly: *"If you ever add real article
-delivery, that is an addition to this, not a replacement for it."* This is that
+`CLAUDE.md` anticipates this change explicitly: _"If you ever add real article
+delivery, that is an addition to this, not a replacement for it."_ This is that
 addition. `answer_from_article` keeps carrying the answer text; the article
 becomes reachable alongside it.
 
@@ -30,15 +30,15 @@ Two changes, one seam:
 
 ## Decisions
 
-| Decision | Choice | Why not the alternative |
-|---|---|---|
-| How the article reaches the client | Persisted `message.article_id` | A transient socket-only field loses the button on reload; correlating `bot_article_offered` events back onto messages is a fuzzy join between rows with no shared key |
-| Renderer | Reuse `features/articles/components/ArticleBody.tsx` as-is | A chat-scale variant is a second renderer to keep in sync; `ArticleBody` is already the single place article markdown is rendered |
-| Which authors render markdown | `bot` and `agent` | `player` bodies are untrusted input — see Security below. Agent included so pasted article steps render like the bot's answer |
-| Button label | Bare "Read more" | A snapshotted `article_title` is a second column and a second staleness question for a label the player does not need |
-| Surfaces | Both webview and agent console | Both are Tailwind on identical token names, so `ArticleBody` re-themes for free (see Styling) |
-| Webview destination | Nested route `/embed/support/chat/articles/:id` | Reusing `/embed/support/articles/:id` renders `SupportHome`, unmounting a live chat; local state breaks the hardware back button |
-| Console destination | New `/articles/:id` route, opened in a new tab | In-app navigation hijacks the conversation the agent is reading |
+| Decision                           | Choice                                                     | Why not the alternative                                                                                                                                               |
+| ---------------------------------- | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| How the article reaches the client | Persisted `message.article_id`                             | A transient socket-only field loses the button on reload; correlating `bot_article_offered` events back onto messages is a fuzzy join between rows with no shared key |
+| Renderer                           | Reuse `features/articles/components/ArticleBody.tsx` as-is | A chat-scale variant is a second renderer to keep in sync; `ArticleBody` is already the single place article markdown is rendered                                     |
+| Which authors render markdown      | `bot` and `agent`                                          | `player` bodies are untrusted input — see Security below. Agent included so pasted article steps render like the bot's answer                                         |
+| Button label                       | Bare "Read more"                                           | A snapshotted `article_title` is a second column and a second staleness question for a label the player does not need                                                 |
+| Surfaces                           | Both webview and agent console                             | Both are Tailwind on identical token names, so `ArticleBody` re-themes for free (see Styling)                                                                         |
+| Webview destination                | Nested route `/embed/support/chat/articles/:id`            | Reusing `/embed/support/articles/:id` renders `SupportHome`, unmounting a live chat; local state breaks the hardware back button                                      |
+| Console destination                | New `/articles/:id` route, opened in a new tab             | In-app navigation hijacks the conversation the agent is reading                                                                                                       |
 
 ## Data
 
@@ -92,12 +92,12 @@ contract change lands in the OpenAPI spec.
 
 Markdown rendering by author type:
 
-| Author | Rendering |
-|---|---|
-| `bot` | `ArticleBody` |
-| `agent` | `ArticleBody` |
-| `player` | literal text |
-| `system` | literal text |
+| Author   | Rendering     |
+| -------- | ------------- |
+| `bot`    | `ArticleBody` |
+| `agent`  | `ArticleBody` |
+| `player` | literal text  |
+| `system` | literal text  |
 
 `ArticleBody` is lazy-loaded **once per thread**, not per bubble. Its own comment
 records why it must not be static: a static import put ~790KB of react-markdown
@@ -167,18 +167,18 @@ each surface to that surface's own values.
 
 **Player-authored text is never markdown-rendered.** `ArticleBody` is safe today
 only because it deliberately omits `rehype-raw`, so raw HTML in a body renders as
-literal text. That property was reasoned about for *agent-authored* article
+literal text. That property was reasoned about for _agent-authored_ article
 bodies. Pointing the renderer at arbitrary player text would make an incidental
 guarantee into one the system depends on against an adversarial input source.
 Player and system bodies stay literal text.
 
 ## Failure modes
 
-| Case | Behaviour |
-|---|---|
-| `article_id` is null | No button. Every pre-existing message is this case |
-| Article later unpublished | The player endpoint 404s; `ArticleSheet` already degrades to *"This article could not be loaded. Close and try another."* |
-| Article read from a months-old conversation | Same as above — contained, not a crash |
+| Case                                        | Behaviour                                                                                                                 |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `article_id` is null                        | No button. Every pre-existing message is this case                                                                        |
+| Article later unpublished                   | The player endpoint 404s; `ArticleSheet` already degrades to _"This article could not be loaded. Close and try another."_ |
+| Article read from a months-old conversation | Same as above — contained, not a crash                                                                                    |
 
 No server-side filtering of buttons by published status: that would cost a join
 on every thread fetch to prevent a failure the sheet already handles.
@@ -190,12 +190,14 @@ on every thread fetch to prevent a failure the sheet already handles.
 ## Tests
 
 Backend:
+
 - `applyBotTurn` persists `article_id` on an `answer` decision, and leaves it
   null on `handoff`, `resolve`, `unavailable` and `noop`.
 - `toPlayerView` and `toAgentView` both carry `article_id`.
 - `toPlayerView` still returns null for an `internal` message.
 
 Frontend:
+
 - A `bot` bubble renders markdown; a `player` bubble renders `**` literally.
 - No button when `articleId` is absent.
 - "Read more" navigates to `/embed/support/chat/articles/:id` (webview) and

@@ -29,31 +29,122 @@
  * function words on purpose — anything with meaning stays in the denominator.
  */
 const STOPWORDS: ReadonlySet<string> = new Set([
-  'a', 'an', 'and', 'any', 'are', 'as', 'at', 'be', 'been', 'but', 'by', 'can', 'could', 'did', 'do', 'does', 'for',
-  'from', 'get', 'got', 'had', 'has', 'have', 'here', 'how', 'if', 'in', 'into', 'is', 'it', 'its', 'just', 'may',
-  'might', 'more', 'must', 'need', 'no', 'not', 'of', 'off', 'on', 'once', 'one', 'only', 'or', 'other', 'our', 'out',
-  'own', 'please', 'same', 'see', 'should', 'so', 'some', 'still', 'such', 'than', 'that', 'the', 'their', 'them',
-  'then', 'there', 'these', 'they', 'this', 'those', 'to', 'too', 'up', 'use', 'very', 'was', 'we', 'were', 'what',
-  'when', 'where', 'which', 'while', 'who', 'will', 'with', 'would', 'you', 'your', 'yours',
+  'a',
+  'an',
+  'and',
+  'any',
+  'are',
+  'as',
+  'at',
+  'be',
+  'been',
+  'but',
+  'by',
+  'can',
+  'could',
+  'did',
+  'do',
+  'does',
+  'for',
+  'from',
+  'get',
+  'got',
+  'had',
+  'has',
+  'have',
+  'here',
+  'how',
+  'if',
+  'in',
+  'into',
+  'is',
+  'it',
+  'its',
+  'just',
+  'may',
+  'might',
+  'more',
+  'must',
+  'need',
+  'no',
+  'not',
+  'of',
+  'off',
+  'on',
+  'once',
+  'one',
+  'only',
+  'or',
+  'other',
+  'our',
+  'out',
+  'own',
+  'please',
+  'same',
+  'see',
+  'should',
+  'so',
+  'some',
+  'still',
+  'such',
+  'than',
+  'that',
+  'the',
+  'their',
+  'them',
+  'then',
+  'there',
+  'these',
+  'they',
+  'this',
+  'those',
+  'to',
+  'too',
+  'up',
+  'use',
+  'very',
+  'was',
+  'we',
+  'were',
+  'what',
+  'when',
+  'where',
+  'which',
+  'while',
+  'who',
+  'will',
+  'with',
+  'would',
+  'you',
+  'your',
+  'yours',
   // Acknowledgements and greetings: they state nothing about the game, so an
   // article cannot be expected to contain them, and counting them would make a
   // polite answer look fabricated.
-  'hello', 'hey', 'okay', 'sorry', 'sure', 'thank', 'thanks', 'yes', 'yeah',
-])
+  'hello',
+  'hey',
+  'okay',
+  'sorry',
+  'sure',
+  'thank',
+  'thanks',
+  'yes',
+  'yeah',
+]);
 
 /** Below this share of grounded content words the answer is refused. */
-export const MIN_GROUNDED_FRACTION = 0.9
+export const MIN_GROUNDED_FRACTION = 0.9;
 
 /**
  * Long enough that a shared prefix implies a shared root rather than a
  * coincidence — "refund"/"refuse" diverge at five, "receive"/"receiving" do not.
  */
-const PREFIX_LENGTH = 5
+const PREFIX_LENGTH = 5;
 
 /** Words shorter than this are too collision-prone to match on a prefix. */
-const MIN_PREFIX_TOKEN = 5
+const MIN_PREFIX_TOKEN = 5;
 
-const isNumeric = (token: string): boolean => /\d/.test(token)
+const isNumeric = (token: string): boolean => /\d/.test(token);
 
 /**
  * The length floor drops "an", "is", "to" — noise that would only inflate the
@@ -66,7 +157,7 @@ function tokenize(text: string): string[] {
   return text
     .toLowerCase()
     .split(/[^a-z0-9]+/)
-    .filter((t) => t.length > 0 && (t.length > 2 || isNumeric(t)) && !STOPWORDS.has(t))
+    .filter((t) => t.length > 0 && (t.length > 2 || isNumeric(t)) && !STOPWORDS.has(t));
 }
 
 /**
@@ -74,53 +165,60 @@ function tokenize(text: string): string[] {
  * a real stemmer would start collapsing words that mean different things.
  */
 function normalize(token: string): string {
-  return token.length > 3 && token.endsWith('s') && !token.endsWith('ss') ? token.slice(0, -1) : token
+  return token.length > 3 && token.endsWith('s') && !token.endsWith('ss')
+    ? token.slice(0, -1)
+    : token;
 }
 
 export type GroundingResult = {
   /** Share of the answer's content words found in the sources; 1 when it has none. */
-  score: number
+  score: number;
   /** The words that were not, capped for logging. These are what to look at first. */
-  ungrounded: string[]
-}
+  ungrounded: string[];
+};
 
 /**
  * `sources` is the cited article (title and body) plus the player's own messages
  * — see the file comment for why those two and nothing else.
  */
 export function scoreGrounding(answer: string, sources: string[]): GroundingResult {
-  const vocabulary = new Set<string>()
-  const prefixes = new Set<string>()
+  const vocabulary = new Set<string>();
+  const prefixes = new Set<string>();
   for (const source of sources) {
     for (const raw of tokenize(source)) {
-      const token = normalize(raw)
-      vocabulary.add(token)
-      if (token.length >= MIN_PREFIX_TOKEN) prefixes.add(token.slice(0, PREFIX_LENGTH))
+      const token = normalize(raw);
+      vocabulary.add(token);
+      if (token.length >= MIN_PREFIX_TOKEN) prefixes.add(token.slice(0, PREFIX_LENGTH));
     }
   }
 
-  const answerTokens = tokenize(answer).map(normalize)
+  const answerTokens = tokenize(answer).map(normalize);
   // An answer made entirely of function words states no fact, so there is
   // nothing here to have fabricated. Scoring 0/0 as ungrounded would refuse
   // "Yes, you can — see below." for saying nothing wrong.
-  if (answerTokens.length === 0) return { score: 1, ungrounded: [] }
+  if (answerTokens.length === 0) return { score: 1, ungrounded: [] };
 
-  const ungrounded: string[] = []
+  const ungrounded: string[] = [];
   for (const token of answerTokens) {
-    if (vocabulary.has(token)) continue
+    if (vocabulary.has(token)) continue;
     // No prefix leniency for anything containing a digit: an amount, a count or
     // a duration that the article does not state is the single most damaging
     // thing the bot can invent, and "48" must never be grounded by "24".
-    if (!isNumeric(token) && token.length >= MIN_PREFIX_TOKEN && prefixes.has(token.slice(0, PREFIX_LENGTH))) continue
-    ungrounded.push(token)
+    if (
+      !isNumeric(token) &&
+      token.length >= MIN_PREFIX_TOKEN &&
+      prefixes.has(token.slice(0, PREFIX_LENGTH))
+    )
+      continue;
+    ungrounded.push(token);
   }
 
   return {
     score: (answerTokens.length - ungrounded.length) / answerTokens.length,
     ungrounded: [...new Set(ungrounded)].slice(0, 10),
-  }
+  };
 }
 
 export function isGrounded(result: GroundingResult): boolean {
-  return result.score >= MIN_GROUNDED_FRACTION
+  return result.score >= MIN_GROUNDED_FRACTION;
 }

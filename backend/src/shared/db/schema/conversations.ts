@@ -1,5 +1,16 @@
-import { boolean, foreignKey, index, integer, pgTable, text, timestamp, unique, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
-import { sql } from 'drizzle-orm'
+import {
+  boolean,
+  foreignKey,
+  index,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+  unique,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import {
   classificationSource,
   conversationPriority,
@@ -9,13 +20,13 @@ import {
   messageVisibility,
   confirmPhase,
   resolutionSource,
-} from './enums.ts'
-import { agent, workspace } from './identity.ts'
-import { player, session } from './players.ts'
-import { subintent } from './taxonomy.ts'
-import { article } from './articles.ts'
+} from './enums.ts';
+import { agent, workspace } from './identity.ts';
+import { player, session } from './players.ts';
+import { subintent } from './taxonomy.ts';
+import { article } from './articles.ts';
 
-const tz = { withTimezone: true, mode: 'date' } as const
+const tz = { withTimezone: true, mode: 'date' } as const;
 
 /**
  * MINIMAL on purpose. These two tables exist in this slice only because
@@ -37,6 +48,10 @@ export const conversation = pgTable(
     sessionId: uuid('session_id').references(() => session.id, { onDelete: 'restrict' }),
     status: conversationStatus('status').notNull().default('bot_active'),
     priority: conversationPriority('priority').notNull().default('p3'),
+    /** True once an agent has explicitly set priority via PATCH .../priority.
+     *  Sticky: no auto-classification path may overwrite priority after this
+     *  flips true. See docs/specs/2026-08-27-conversation-priority-design.md. */
+    priorityManuallySet: boolean('priority_manually_set').notNull().default(false),
     /** NULL is the unassigned queue. There is no queue table. */
     assignedAgentId: uuid('assigned_agent_id').references(() => agent.id, { onDelete: 'restrict' }),
     /** NULL means unset — the bot never ran. Only 'bot' or 'agent' otherwise. */
@@ -77,7 +92,7 @@ export const conversation = pgTable(
     // so a submission can never name another workspace's conversation.
     unique('conversation_workspace_id_uk').on(t.workspaceId, t.id),
   ],
-)
+);
 
 export const message = pgTable(
   'message',
@@ -119,7 +134,39 @@ export const message = pgTable(
     // The GET /sdk/unread scan.
     index('message_unread_idx').on(t.conversationId, t.deliveryState, t.authorType),
   ],
-)
+);
+
+export const attachment = pgTable(
+  'attachment',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspace.id, { onDelete: 'restrict' }),
+    /**
+     * Exactly one parent, deliberately not polymorphic — see
+     * docs/specs/2026-08-24-minio-attachments-agent-chat-design.md §4. No row
+     * exists until the owning message sends: an abandoned upload is bytes in
+     * `pending/`, never a row here.
+     */
+    messageId: uuid('message_id')
+      .notNull()
+      .references(() => message.id, { onDelete: 'restrict' }),
+    /** `ws/{workspaceId}/attachments/{uuid}.{ext}` once claimed. Never a URL — reads sign this fresh. */
+    storageKey: text('storage_key').notNull(),
+    /** The real, client-declared original filename — used for display only, never trusted for content type or size. */
+    filename: text('filename').notNull(),
+    /** Client-declared value, proven equal to a HEAD-verified read at claim time — see sendAgentMessage's mismatch check — never stored unverified. */
+    mimeType: text('mime_type').notNull(),
+    /** Client-declared value, proven equal to a HEAD-verified read at claim time — see sendAgentMessage's mismatch check — never stored unverified. */
+    byteSize: integer('byte_size').notNull(),
+    createdAt: timestamp('created_at', tz).notNull().defaultNow(),
+  },
+  (t) => [
+    // At most one attachment per message — the read path's leftJoin assumes this.
+    uniqueIndex('attachment_message_id_uk').on(t.messageId),
+  ],
+);
 
 /**
  * One row per resolution attempt. Cycle 1 opens with the conversation; every
@@ -176,4 +223,4 @@ export const resolutionCycle = pgTable(
       .on(t.workspaceId, t.resolvedAt)
       .where(sql`closed_at is null and resolved_at is not null`),
   ],
-)
+);

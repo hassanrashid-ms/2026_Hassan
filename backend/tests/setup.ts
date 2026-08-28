@@ -1,24 +1,24 @@
-import http from 'node:http'
-import https from 'node:https'
-import { afterAll, vi } from 'vitest'
-import { closeTestServers } from './helpers/http.ts'
+import http from 'node:http';
+import https from 'node:https';
+import { afterAll, vi } from 'vitest';
+import { closeTestServers } from './helpers/http.ts';
 
 vi.mock('@langfuse/openai', () => ({
-  observeOpenAI: (client: any) => client
-}))
+  observeOpenAI: (client: any) => client,
+}));
 vi.mock('@langfuse/otel', () => ({
-  LangfuseSpanProcessor: class {}
-}))
+  LangfuseSpanProcessor: class {},
+}));
 vi.mock('@opentelemetry/sdk-node', () => ({
   NodeSDK: class {
     start() {}
     async shutdown() {}
-  }
-}))
+  },
+}));
 
 // Every server tests/helpers/http.ts opened stays listening for the whole file,
 // so the worker only shuts down cleanly if they are closed here.
-afterAll(closeTestServers)
+afterAll(closeTestServers);
 
 /**
  * Runs in every test worker before any test file.
@@ -45,5 +45,5 @@ afterAll(closeTestServers)
  * This narrows the failure but does not eliminate it — see the ECONNRESET note
  * in tests/helpers/app.ts.
  */
-http.globalAgent = new http.Agent({ keepAlive: false })
-https.globalAgent = new https.Agent({ keepAlive: false })
+http.globalAgent = new http.Agent({ keepAlive: false });
+https.globalAgent = new https.Agent({ keepAlive: false });

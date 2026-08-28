@@ -1,12 +1,15 @@
-import { Search } from 'lucide-react'
-import { cn } from '@/surfaces/webview/lib/cn'
+import { Search } from 'lucide-react';
+import { cn } from '@/surfaces/webview/lib/cn';
 
 /**
  * Vite resolves this at build time. An empty record is the normal case — no game
  * has dropped a banner in yet — and the gradient below is a first-class design,
  * not a placeholder for a missing file.
  */
-const heroModules = import.meta.glob('/src/assets/hero.*', { eager: true }) as Record<string, { default: string }>
+const heroModules = import.meta.glob('/src/assets/hero.*', { eager: true }) as Record<
+  string,
+  { default: string }
+>;
 
 /**
  * Split out from the component so both branches are testable without a build.
@@ -15,23 +18,23 @@ const heroModules = import.meta.glob('/src/assets/hero.*', { eager: true }) as R
  * happened to enumerate first.
  */
 export function resolveHeroAsset(modules: Record<string, { default: string }>): string | null {
-  const [firstKey] = Object.keys(modules).sort()
-  if (firstKey === undefined) return null
-  return modules[firstKey]?.default ?? null
+  const [firstKey] = Object.keys(modules).sort();
+  if (firstKey === undefined) return null;
+  return modules[firstKey]?.default ?? null;
 }
 
 type SupportHeroProps = {
-  gameName: string
+  gameName: string;
   /**
    * Not used yet. Decision 5: a future server-driven, per-workspace banner should
    * be a prop that overrides the bundled asset, not a redesign of this component.
    */
-  imageUrl?: string | undefined
-  onSearchTap: () => void
-}
+  imageUrl?: string | undefined;
+  onSearchTap: () => void;
+};
 
 export function SupportHero({ gameName, imageUrl, onSearchTap }: SupportHeroProps) {
-  const asset = imageUrl ?? resolveHeroAsset(heroModules)
+  const asset = imageUrl ?? resolveHeroAsset(heroModules);
 
   return (
     <header
@@ -47,7 +50,9 @@ export function SupportHero({ gameName, imageUrl, onSearchTap }: SupportHeroProp
       )}
 
       <div className="relative flex flex-col gap-3">
-        <p className="text-2xl leading-tight font-extrabold text-white drop-shadow-sm">{gameName} Support</p>
+        <p className="text-2xl leading-tight font-extrabold text-white drop-shadow-sm">
+          {gameName} Support
+        </p>
 
         {/*
           A button that looks like an input, not an input.
@@ -65,5 +70,5 @@ export function SupportHero({ gameName, imageUrl, onSearchTap }: SupportHeroProp
         </button>
       </div>
     </header>
-  )
+  );
 }

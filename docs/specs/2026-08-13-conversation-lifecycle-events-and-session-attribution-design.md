@@ -9,7 +9,7 @@ Three gaps, found while investigating why an Android build and a Unity editor
 Play-mode session — both using the same `UnsafeStaticTokenProvider` token, and so
 the same player — appeared to hold two independent chat threads.
 
-**1. The threads were never split.** The database holds exactly one *live*
+**1. The threads were never split.** The database holds exactly one _live_
 conversation for that player (`b0ec8ed3…`, 45 messages) — a player can now hold
 several closed ones in history via `POST /surface/new-ticket`
 (`docs/specs/2026-08-13-new-ticket-conversation-design.md`), but never two open at
@@ -41,18 +41,18 @@ session, never per ticket.
 
 ## What already exists (do not rebuild)
 
-| Piece | Location |
-|---|---|
-| `event.session_id` + FK + `event_session_type_idx` | `backend/src/shared/db/schema/events.ts:28,39` |
-| `event.type` as free `text` — "new types arrive every slice" | `backend/src/shared/db/schema/events.ts:23` |
-| `appendEvent`, the only permitted writer | `backend/src/shared/events/appendEvent.ts:31` |
-| `conversation.session_id`, set once at creation | `backend/src/shared/db/schema/conversations.ts:32` |
-| Latest-session lookup already inside the create branch | `backend/src/surface/services/messagesService.ts:42` |
-| `bot_handoff`, `bot_unavailable`, `intent_set` | `backend/src/domain/bot/applyBotTurn.ts:62,101,139` |
-| `assignOnHandoff` — least-loaded agent selection | `backend/src/domain/bot/assignOnHandoff.ts:12` |
-| `conversation_reopened`, `conversation_player_replied` | `backend/src/surface/services/messagesService.ts:60,74` |
-| Session ownership check (the pattern to reuse) | `backend/src/surface/services/bootstrapService.ts:26` |
-| `boot.sessionId`, parsed synchronously from the URL | `frontend/src/lib/boot.ts:16` |
+| Piece                                                        | Location                                                |
+| ------------------------------------------------------------ | ------------------------------------------------------- |
+| `event.session_id` + FK + `event_session_type_idx`           | `backend/src/shared/db/schema/events.ts:28,39`          |
+| `event.type` as free `text` — "new types arrive every slice" | `backend/src/shared/db/schema/events.ts:23`             |
+| `appendEvent`, the only permitted writer                     | `backend/src/shared/events/appendEvent.ts:31`           |
+| `conversation.session_id`, set once at creation              | `backend/src/shared/db/schema/conversations.ts:32`      |
+| Latest-session lookup already inside the create branch       | `backend/src/surface/services/messagesService.ts:42`    |
+| `bot_handoff`, `bot_unavailable`, `intent_set`               | `backend/src/domain/bot/applyBotTurn.ts:62,101,139`     |
+| `assignOnHandoff` — least-loaded agent selection             | `backend/src/domain/bot/assignOnHandoff.ts:12`          |
+| `conversation_reopened`, `conversation_player_replied`       | `backend/src/surface/services/messagesService.ts:60,74` |
+| Session ownership check (the pattern to reuse)               | `backend/src/surface/services/bootstrapService.ts:26`   |
+| `boot.sessionId`, parsed synchronously from the URL          | `frontend/src/lib/boot.ts:16`                           |
 
 **No migration.** `event.type` is `text`, not an enum, and `event.session_id`
 already exists. Every change below is application code.
@@ -68,7 +68,7 @@ if (!ownedSession) return null                     // remove
 
 The thread is resolved from `ctx.playerId` under RLS, which the player token
 already grants. The session check was never protecting data — it only converted
-"your session has not uploaded yet" into a 404 that killed history *and* the
+"your session has not uploaded yet" into a 404 that killed history _and_ the
 socket join.
 
 `session_id` stays a required, validated query param: `BootstrapQuery` is shared
@@ -81,8 +81,8 @@ leaving a dead path.
 
 ### Test that changes
 
-`backend/tests/surface.messages.test.ts:258` — *"404s for a session_id that is
-not the caller's own"*. The isolation intent survives and stays tested; the
+`backend/tests/surface.messages.test.ts:258` — _"404s for a session_id that is
+not the caller's own"_. The isolation intent survives and stays tested; the
 assertion becomes **"a foreign `session_id` is ignored and the caller receives
 their own thread"**. No isolation guarantee weakens: the conversation is resolved
 from the token's `player_id` under RLS either way, and a foreign session id
@@ -119,8 +119,8 @@ shipped-Unity-build constraints that apply to `/sdk/*`.
 `event.session_id` is a FK with `ON DELETE RESTRICT`. A `session_id` whose row
 has not arrived yet — the Outbox case that produced this whole investigation —
 would violate the constraint, roll back the transaction, and **fail the player's
-message**. That directly violates *nothing may prevent a player reaching a
-human*.
+message**. That directly violates _nothing may prevent a player reaching a
+human_.
 
 So, one scoped lookup at the top of `sendPlayerMessage`:
 
@@ -129,8 +129,8 @@ const [verified] = await tx
   .select({ id: session.id, entryPoint: session.entryPoint })
   .from(session)
   .where(and(eq(session.id, body.session_id), eq(session.playerId, ctx.playerId)))
-  .limit(1)
-const sessionId = verified?.id ?? null
+  .limit(1);
+const sessionId = verified?.id ?? null;
 ```
 
 `entry_point` is selected here because it is the payload of `conversation_opened`
@@ -149,8 +149,8 @@ for both purposes.
 
 Set once, at creation, to the **originating** session; never rewritten on reopen.
 It is not audit data — it is the pointer an agent's Game View follows to reach
-`player_state_snapshot`, so it must show the player's state *when the problem
-happened*, not their state today.
+`player_state_snapshot`, so it must show the player's state _when the problem
+happened_, not their state today.
 
 The only change is accuracy. Today it is `order by started_at desc limit 1` over
 all the player's sessions — a proxy that is correct with one live device and
@@ -167,11 +167,11 @@ raises the cost of writing a guess into it, not lowers it.
 
 ### New
 
-| Event | Written in | Payload | `session_id` |
-|---|---|---|---|
-| `conversation_opened` | `sendPlayerMessage`, `!existing` branch, same tx as the insert | `{ entry_point }` | verified |
-| `conversation_assigned_bot` | same tx, immediately after | `{}` | verified |
-| `conversation_assigned` | `claimConversation` | `{ agent_id, via: 'claim' }` | null |
+| Event                       | Written in                                                     | Payload                      | `session_id` |
+| --------------------------- | -------------------------------------------------------------- | ---------------------------- | ------------ |
+| `conversation_opened`       | `sendPlayerMessage`, `!existing` branch, same tx as the insert | `{ entry_point }`            | verified     |
+| `conversation_assigned_bot` | same tx, immediately after                                     | `{}`                         | verified     |
+| `conversation_assigned`     | `claimConversation`                                            | `{ agent_id, via: 'claim' }` | null         |
 
 `conversation_assigned_bot` carries no `provisioned` flag. At insert time
 `resolveBotConfig` has not run, and the not-provisioned outcome is already
@@ -194,16 +194,16 @@ and that is explicitly not an error.
 
 ### Stamped
 
-| Event | `session_id` | Why |
-|---|---|---|
-| `message_sent` (player-authored) | verified | player POST |
-| `message_sent` (agent / bot / system) | null | no player request |
-| `conversation_opened` | verified | |
-| `conversation_assigned_bot` | verified | same tx |
-| `conversation_reopened` | verified | the **reopening** session, not the originating one |
-| `conversation_player_replied` | verified | already exists, free to stamp |
-| `bot_handoff` | null | BullMQ worker, no request |
-| `conversation_assigned` | null | agent console, no player session |
+| Event                                 | `session_id` | Why                                                |
+| ------------------------------------- | ------------ | -------------------------------------------------- |
+| `message_sent` (player-authored)      | verified     | player POST                                        |
+| `message_sent` (agent / bot / system) | null         | no player request                                  |
+| `conversation_opened`                 | verified     |                                                    |
+| `conversation_assigned_bot`           | verified     | same tx                                            |
+| `conversation_reopened`               | verified     | the **reopening** session, not the originating one |
+| `conversation_player_replied`         | verified     | already exists, free to stamp                      |
+| `bot_handoff`                         | null         | BullMQ worker, no request                          |
+| `conversation_assigned`               | null         | agent console, no player session                   |
 
 `postMessage` gains an optional `sessionId` parameter, threaded through to its
 `message_sent` event. Agent, bot and system callers omit it and get `null`.
@@ -222,19 +222,19 @@ Consistent nulls beat inconsistent stamps.
 
 ## Testing
 
-| Area | Assertion |
-|---|---|
-| Sync | GET with an unknown `session_id` returns 200 and the caller's full thread |
-| Sync | GET with another player's `session_id` returns the caller's own thread, never the other player's |
-| Sync | Response carries a non-null `conversation_id` when a conversation exists, regardless of session state |
-| Events | First player message writes `conversation_opened` + `conversation_assigned_bot`, both stamped |
-| Events | Second message writes neither |
-| Events | Reopen writes `conversation_reopened` stamped with the *reopening* session while `conversation.session_id` is unchanged |
-| Events | `bot_handoff.payload.assigned_agent_id` matches `conversation.assigned_agent_id`, and is `null` when no active agent exists |
-| Events | Claim writes `conversation_assigned`; a losing concurrent claim writes nothing |
-| Session | Unknown / foreign / absent `session_id` → events stamped `null` **and the message still sends** |
-| Session | `conversation.session_id` is the verified request session, not the latest-started one, when two sessions are open |
-| Isolation | A foreign `session_id` never causes a cross-tenant FK write (`isolation.test.ts` row counts) |
+| Area      | Assertion                                                                                                                   |
+| --------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Sync      | GET with an unknown `session_id` returns 200 and the caller's full thread                                                   |
+| Sync      | GET with another player's `session_id` returns the caller's own thread, never the other player's                            |
+| Sync      | Response carries a non-null `conversation_id` when a conversation exists, regardless of session state                       |
+| Events    | First player message writes `conversation_opened` + `conversation_assigned_bot`, both stamped                               |
+| Events    | Second message writes neither                                                                                               |
+| Events    | Reopen writes `conversation_reopened` stamped with the _reopening_ session while `conversation.session_id` is unchanged     |
+| Events    | `bot_handoff.payload.assigned_agent_id` matches `conversation.assigned_agent_id`, and is `null` when no active agent exists |
+| Events    | Claim writes `conversation_assigned`; a losing concurrent claim writes nothing                                              |
+| Session   | Unknown / foreign / absent `session_id` → events stamped `null` **and the message still sends**                             |
+| Session   | `conversation.session_id` is the verified request session, not the latest-started one, when two sessions are open           |
+| Isolation | A foreign `session_id` never causes a cross-tenant FK write (`isolation.test.ts` row counts)                                |
 
 The "message still sends" case is the important one — it is the FK-rollback
 failure mode, and it maps directly to a non-negotiable constraint.

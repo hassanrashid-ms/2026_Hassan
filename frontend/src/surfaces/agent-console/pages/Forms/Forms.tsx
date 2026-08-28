@@ -1,19 +1,19 @@
-import { useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
-import { loadAgentSession } from '../../lib/agentSession.ts'
-import { FormTable } from './components/FormTable.tsx'
-import { FormEditorSheet } from './components/FormEditorSheet.tsx'
+import { useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { loadAgentSession } from '../../lib/agentSession.ts';
+import { FormTable } from './components/FormTable.tsx';
+import { FormEditorSheet } from './components/FormEditorSheet.tsx';
 
 export function Forms() {
-  const session = loadAgentSession()
+  const session = loadAgentSession();
   // Same deep-link pattern as KnowledgeBase: /forms/:id opens the sheet
   // directly, in-page selection just sets state without touching the URL.
-  const { id: routeFormId } = useParams<{ id: string }>()
-  const navigate = useNavigate()
-  const [selectedId, setSelectedId] = useState<string | null>(routeFormId ?? null)
-  const [sheetOpen, setSheetOpen] = useState(routeFormId !== undefined)
+  const { id: routeFormId } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const [selectedId, setSelectedId] = useState<string | null>(routeFormId ?? null);
+  const [sheetOpen, setSheetOpen] = useState(routeFormId !== undefined);
 
-  if (!session) return null
+  if (!session) return null;
 
   return (
     <div className="flex h-full min-h-0">
@@ -23,12 +23,12 @@ export function Forms() {
           session={session}
           selectedId={selectedId}
           onSelect={(id) => {
-            setSelectedId(id)
-            setSheetOpen(true)
+            setSelectedId(id);
+            setSheetOpen(true);
           }}
           onNew={() => {
-            setSelectedId(null)
-            setSheetOpen(true)
+            setSelectedId(null);
+            setSheetOpen(true);
           }}
         />
       </div>
@@ -38,14 +38,14 @@ export function Forms() {
         formId={selectedId}
         open={sheetOpen}
         onOpenChange={(open) => {
-          setSheetOpen(open)
+          setSheetOpen(open);
           if (!open) {
-            setSelectedId(null)
-            if (routeFormId) navigate('/forms', { replace: true })
+            setSelectedId(null);
+            if (routeFormId) navigate('/forms', { replace: true });
           }
         }}
         onCreated={(id) => setSelectedId(id)}
       />
     </div>
-  )
+  );
 }

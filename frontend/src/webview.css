@@ -6,18 +6,18 @@
  * evaluate this module, so Tailwind's preflight reset cannot reach them.
  */
 
-@import "tailwindcss";
+@import 'tailwindcss';
 
 @theme {
-  --color-bg:          #ffffff;
-  --color-surface:     #f5f3fd;  /* purple-tinted card background */
-  --color-accent:      #7c3aed;  /* primary purple */
-  --color-accent-deep: #5b21b6;  /* hero gradient far stop */
-  --color-accent-soft: #ede9fe;  /* chips, selected tab background */
-  --color-accent-fg:   #ffffff;
-  --color-text:        #1a1720;
-  --color-muted:       #6b6577;
-  --radius-card:       1rem;
+  --color-bg: #ffffff;
+  --color-surface: #f5f3fd; /* purple-tinted card background */
+  --color-accent: #7c3aed; /* primary purple */
+  --color-accent-deep: #5b21b6; /* hero gradient far stop */
+  --color-accent-soft: #ede9fe; /* chips, selected tab background */
+  --color-accent-fg: #ffffff;
+  --color-text: #1a1720;
+  --color-muted: #6b6577;
+  --radius-card: 1rem;
 }
 
 /*
@@ -57,21 +57,37 @@ body {
 }
 
 @keyframes webview-sheet-in {
-  from { transform: translateY(100%); }
-  to   { transform: translateY(0); }
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
 }
 
 @keyframes webview-sheet-out {
-  from { transform: translateY(0); }
-  to   { transform: translateY(100%); }
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(100%);
+  }
 }
 
 @keyframes webview-fade-in {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes webview-fade-out {
-  from { opacity: 1; }
-  to   { opacity: 0; }
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
 }

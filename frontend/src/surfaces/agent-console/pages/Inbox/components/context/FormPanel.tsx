@@ -1,7 +1,7 @@
-import type { AgentFormView } from '@support/types'
-import { cn } from '../../../../lib/cn.ts'
-import { formAnswerValue } from './formAnswerValue.ts'
-import { formStatusLine } from './formStatusLine.ts'
+import type { AgentFormView } from '@support/types';
+import { cn } from '../../../../lib/cn.ts';
+import { formAnswerValue } from './formAnswerValue.ts';
+import { formStatusLine } from './formStatusLine.ts';
 
 /**
  * The third stacked section of the rail: what the bot asked before handoff and
@@ -19,7 +19,7 @@ export function FormPanel({ form }: { form: AgentFormView }) {
   // A skipped form has no answers by construction, so listing every field as
   // "Not answered" would repeat the status line four times. In every other
   // state the gaps are the point and stay visible as rows.
-  const showFields = form.status !== 'skipped' && form.fields.length > 0
+  const showFields = form.status !== 'skipped' && form.fields.length > 0;
 
   return (
     <section className="px-4 py-3" aria-label="Form">
@@ -48,5 +48,5 @@ export function FormPanel({ form }: { form: AgentFormView }) {
         </dl>
       )}
     </section>
-  )
+  );
 }

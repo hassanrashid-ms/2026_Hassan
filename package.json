@@ -15,10 +15,19 @@
     "db:baseline": "pnpm --filter @support/api db:baseline",
     "db:seed": "pnpm --filter @support/api db:seed",
     "repomix": "repomix --compress",
-    "repomix:watch": "repomix --watch --compress"
+    "repomix:watch": "repomix --watch --compress",
+    "lint": "eslint .",
+    "format": "prettier --write ."
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.8.1",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.6",
+    "globals": "^17.11.0",
     "http-proxy": "^1.18.1",
-    "repomix": "^1.18.0"
+    "prettier": "^3.9.6",
+    "repomix": "^1.18.0",
+    "typescript-eslint": "^8.66.0"
   }
 }

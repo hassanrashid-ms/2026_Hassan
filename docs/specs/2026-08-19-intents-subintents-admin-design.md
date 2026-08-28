@@ -44,14 +44,14 @@ existing `GET /agent/intents` stays available to any authenticated agent-session
 mutation writes an entry via the existing `appendChangeLog` helper (entity_type `'intent'` /
 `'subintent'`, before/after values).
 
-| Endpoint | Behaviour |
-|---|---|
-| `PATCH /agent/intents/:id` | Body `{ name }`. Renames the intent. 409 if the name collides with another intent in the workspace (existing unique index). |
-| `POST /agent/intents/:id/archive` | Sets `archivedAt`. 409 if `isSystem`, or if any subintent under it has `archivedAt IS NULL`, or if any published article still has `intentId` pointing at it. |
-| `PATCH /agent/subintents/:id` | Body `{ name?, defaultPriority? }`. Renames and/or sets default priority. 409 on name collision within the same intent (existing unique index). |
-| `POST /agent/subintents/:id/archive` | Sets `archivedAt`. 409 if this is the workspace's "Other" subintent. |
-| `POST /agent/subintents/:id/move` | Body `{ intentId }`. Updates `subintent.intentId` to the new parent. 404 if the target intent doesn't exist or is archived. |
-| `POST /agent/subintents/:id/merge` | Body `{ intoId }`. One transaction: reassign every `conversation.subintent_id` equal to the loser over to `intoId`, then set the loser's `mergedIntoId = intoId` and `archivedAt = now()`. 409 if `intoId` is archived, is the loser itself, or belongs to a different workspace. 409 if the loser is the "Other" subintent. |
+| Endpoint                             | Behaviour                                                                                                                                                                                                                                                                                                                    |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PATCH /agent/intents/:id`           | Body `{ name }`. Renames the intent. 409 if the name collides with another intent in the workspace (existing unique index).                                                                                                                                                                                                  |
+| `POST /agent/intents/:id/archive`    | Sets `archivedAt`. 409 if `isSystem`, or if any subintent under it has `archivedAt IS NULL`, or if any published article still has `intentId` pointing at it.                                                                                                                                                                |
+| `PATCH /agent/subintents/:id`        | Body `{ name?, defaultPriority? }`. Renames and/or sets default priority. 409 on name collision within the same intent (existing unique index).                                                                                                                                                                              |
+| `POST /agent/subintents/:id/archive` | Sets `archivedAt`. 409 if this is the workspace's "Other" subintent.                                                                                                                                                                                                                                                         |
+| `POST /agent/subintents/:id/move`    | Body `{ intentId }`. Updates `subintent.intentId` to the new parent. 404 if the target intent doesn't exist or is archived.                                                                                                                                                                                                  |
+| `POST /agent/subintents/:id/merge`   | Body `{ intoId }`. One transaction: reassign every `conversation.subintent_id` equal to the loser over to `intoId`, then set the loser's `mergedIntoId = intoId` and `archivedAt = now()`. 409 if `intoId` is archived, is the loser itself, or belongs to a different workspace. 409 if the loser is the "Other" subintent. |
 
 Response bodies for the new endpoints follow the existing pattern in `taxonomyService.ts` — return
 the updated row's `{ id, name, ... }`, not the full tree; the frontend already refetches

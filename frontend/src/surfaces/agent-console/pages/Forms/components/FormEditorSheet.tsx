@@ -1,7 +1,7 @@
-import { useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { FormDetail, FormField, IntentView } from '@support/types'
-import { ArrowDown, ArrowUp, X } from 'lucide-react'
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { FormDetail, FormField, IntentView } from '@support/types';
+import { ArrowDown, ArrowUp, X } from 'lucide-react';
 import {
   archiveForm,
   createForm,
@@ -10,8 +10,8 @@ import {
   publishForm,
   setFormSubintents,
   updateForm,
-} from '../../../api/agentApi.ts'
-import { isAdmin, type StoredAgentSession } from '../../../lib/agentSession.ts'
+} from '../../../api/agentApi.ts';
+import { isAdmin, type StoredAgentSession } from '../../../lib/agentSession.ts';
 import {
   BUILDER_FIELD_TYPES,
   FIELD_TYPE_LABELS,
@@ -20,9 +20,9 @@ import {
   slugifyKey,
   renumberPositions,
   validateFields,
-} from '../formForm.ts'
-import { Badge } from '../../../components/ui/badge.tsx'
-import { Button } from '../../../components/ui/button.tsx'
+} from '../formForm.ts';
+import { Badge } from '../../../components/ui/badge.tsx';
+import { Button } from '../../../components/ui/button.tsx';
 import {
   Dialog,
   DialogContent,
@@ -30,11 +30,17 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '../../../components/ui/dialog.tsx'
-import { Input } from '../../../components/ui/input.tsx'
-import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from '../../../components/ui/sheet.tsx'
-import { Skeleton } from '../../../components/ui/skeleton.tsx'
-import { ShownForPicker } from './ShownForPicker.tsx'
+} from '../../../components/ui/dialog.tsx';
+import { Input } from '../../../components/ui/input.tsx';
+import {
+  Sheet,
+  SheetContent,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from '../../../components/ui/sheet.tsx';
+import { Skeleton } from '../../../components/ui/skeleton.tsx';
+import { ShownForPicker } from './ShownForPicker.tsx';
 
 export function FormEditorSheet({
   token,
@@ -44,21 +50,21 @@ export function FormEditorSheet({
   onOpenChange,
   onCreated,
 }: {
-  token: string
-  session: StoredAgentSession
-  formId: string | null
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  onCreated: (id: string) => void
+  token: string;
+  session: StoredAgentSession;
+  formId: string | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onCreated: (id: string) => void;
 }) {
-  const intents = useQuery({ queryKey: ['admin-intents'], queryFn: () => fetchIntents(token) })
+  const intents = useQuery({ queryKey: ['admin-intents'], queryFn: () => fetchIntents(token) });
   const selected = useQuery({
     queryKey: ['admin-form', formId],
     queryFn: () => fetchForm(token, formId!),
     enabled: formId !== null,
-  })
+  });
 
-  const loading = (formId !== null && selected.isLoading) || intents.isLoading
+  const loading = (formId !== null && selected.isLoading) || intents.isLoading;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -68,7 +74,10 @@ export function FormEditorSheet({
         </SheetHeader>
 
         {loading ? (
-          <div className="flex min-h-0 flex-1 flex-col gap-4 p-4" data-testid="form-editor-skeleton">
+          <div
+            className="flex min-h-0 flex-1 flex-col gap-4 p-4"
+            data-testid="form-editor-skeleton"
+          >
             <Skeleton className="h-3 w-14" />
             <Skeleton className="h-9 w-full" />
             <Skeleton className="h-3 w-20" />
@@ -77,7 +86,12 @@ export function FormEditorSheet({
         ) : selected.isError ? (
           <div className="flex min-h-0 flex-1 flex-col items-start gap-3 p-4">
             <p className="text-sm text-muted">This form could not be loaded.</p>
-            <Button type="button" variant="outline" size="sm" onClick={() => void selected.refetch()}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void selected.refetch()}
+            >
               Retry
             </Button>
           </div>
@@ -95,7 +109,7 @@ export function FormEditorSheet({
         )}
       </SheetContent>
     </Sheet>
-  )
+  );
 }
 
 function FormEditorForm({
@@ -107,69 +121,72 @@ function FormEditorForm({
   onCreated,
   onOpenChange,
 }: {
-  token: string
-  session: StoredAgentSession
-  formId: string | null
-  form: FormDetail | null
-  intents: IntentView[]
-  onCreated: (id: string) => void
-  onOpenChange: (open: boolean) => void
+  token: string;
+  session: StoredAgentSession;
+  formId: string | null;
+  form: FormDetail | null;
+  intents: IntentView[];
+  onCreated: (id: string) => void;
+  onOpenChange: (open: boolean) => void;
 }) {
-  const queryClient = useQueryClient()
-  const initialFields = form?.draft?.fields ?? form?.published?.fields ?? []
-  const [name, setName] = useState(form?.name ?? '')
-  const [fields, setFields] = useState<FormField[]>(initialFields)
-  const [shownFor, setShownFor] = useState<string[]>(form?.subintents.map((s) => s.id) ?? [])
-  const [expandedKey, setExpandedKey] = useState<string | null>(null)
-  const [addingField, setAddingField] = useState(false)
-  const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false)
+  const queryClient = useQueryClient();
+  const initialFields = form?.draft?.fields ?? form?.published?.fields ?? [];
+  const [name, setName] = useState(form?.name ?? '');
+  const [fields, setFields] = useState<FormField[]>(initialFields);
+  const [shownFor, setShownFor] = useState<string[]>(form?.subintents.map((s) => s.id) ?? []);
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const [addingField, setAddingField] = useState(false);
+  const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
 
-  const errors = validateFields(fields)
-  const admin = isAdmin(session)
-  const archived = form?.archivedAt !== null && form?.archivedAt !== undefined
+  const errors = validateFields(fields);
+  const admin = isAdmin(session);
+  const archived = form?.archivedAt !== null && form?.archivedAt !== undefined;
 
   const invalidate = (id: string) => {
-    void queryClient.invalidateQueries({ queryKey: ['admin-forms'] })
-    void queryClient.invalidateQueries({ queryKey: ['admin-form', id] })
-  }
+    void queryClient.invalidateQueries({ queryKey: ['admin-forms'] });
+    void queryClient.invalidateQueries({ queryKey: ['admin-form', id] });
+  };
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      const created = await createForm(token, name)
-      if (fields.length > 0) await updateForm(token, created.id, { fields })
-      if (shownFor.length > 0) await setFormSubintents(token, created.id, shownFor)
-      return created.id
+      const created = await createForm(token, name);
+      if (fields.length > 0) await updateForm(token, created.id, { fields });
+      if (shownFor.length > 0) await setFormSubintents(token, created.id, shownFor);
+      return created.id;
     },
     onSuccess: (id) => {
-      invalidate(id)
-      onCreated(id)
+      invalidate(id);
+      onCreated(id);
     },
-  })
+  });
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      await updateForm(token, formId!, { name, fields })
-      await setFormSubintents(token, formId!, shownFor)
+      await updateForm(token, formId!, { name, fields });
+      await setFormSubintents(token, formId!, shownFor);
     },
     onSuccess: () => invalidate(formId!),
-  })
+  });
 
   const publishMutation = useMutation({
     mutationFn: () => publishForm(token, formId!),
     onSuccess: () => invalidate(formId!),
-  })
+  });
 
   const archiveMutation = useMutation({
     mutationFn: () => archiveForm(token, formId!),
     onSuccess: () => {
-      invalidate(formId!)
-      setArchiveConfirmOpen(false)
+      invalidate(formId!);
+      setArchiveConfirmOpen(false);
     },
-  })
+  });
 
   const addField = (type: (typeof BUILDER_FIELD_TYPES)[number]) => {
-    const label = 'New question'
-    const key = slugifyKey(label, fields.map((f) => f.key))
+    const label = 'New question';
+    const key = slugifyKey(
+      label,
+      fields.map((f) => f.key),
+    );
     const next: FormField = {
       key,
       label,
@@ -177,33 +194,33 @@ function FormEditorForm({
       isRequired: false,
       position: nextPosition(fields),
       options: type === 'choice' ? ['Option 1', 'Option 2'] : undefined,
-    }
-    setFields([...fields, next])
-    setExpandedKey(key)
-    setAddingField(false)
-  }
+    };
+    setFields([...fields, next]);
+    setExpandedKey(key);
+    setAddingField(false);
+  };
 
   const removeField = (key: string) => {
-    setFields(renumberPositions(fields.filter((f) => f.key !== key)))
-    if (expandedKey === key) setExpandedKey(null)
-  }
+    setFields(renumberPositions(fields.filter((f) => f.key !== key)));
+    if (expandedKey === key) setExpandedKey(null);
+  };
 
   const moveField = (index: number, direction: -1 | 1) => {
-    const target = index + direction
-    if (target < 0 || target >= fields.length) return
-    const next = [...fields]
-    const tmp = next[index]!
-    next[index] = next[target]!
-    next[target] = tmp
-    setFields(renumberPositions(next))
-  }
+    const target = index + direction;
+    if (target < 0 || target >= fields.length) return;
+    const next = [...fields];
+    const tmp = next[index]!;
+    next[index] = next[target]!;
+    next[target] = tmp;
+    setFields(renumberPositions(next));
+  };
 
   const updateFieldAt = (key: string, patch: Partial<FormField>) => {
-    setFields(fields.map((f) => (f.key === key ? { ...f, ...patch } : f)))
-  }
+    setFields(fields.map((f) => (f.key === key ? { ...f, ...patch } : f)));
+  };
 
-  const canSave = name.trim() !== '' && errors.length === 0 && !archived
-  const canPublishNow = admin && canPublish(form?.draft?.fields ?? [])
+  const canSave = name.trim() !== '' && errors.length === 0 && !archived;
+  const canPublishNow = admin && canPublish(form?.draft?.fields ?? []);
 
   return (
     <>
@@ -239,7 +256,9 @@ function FormEditorForm({
                     disabled={archived}
                     onChange={(e) => updateFieldAt(field.key, { label: e.target.value })}
                   />
-                  <Badge variant="outline">{FIELD_TYPE_LABELS[field.type as keyof typeof FIELD_TYPE_LABELS] ?? field.type}</Badge>
+                  <Badge variant="outline">
+                    {FIELD_TYPE_LABELS[field.type as keyof typeof FIELD_TYPE_LABELS] ?? field.type}
+                  </Badge>
                   <Button
                     type="button"
                     variant={field.isRequired ? 'secondary' : 'ghost'}
@@ -295,13 +314,17 @@ function FormEditorForm({
                       placeholder="Placeholder text"
                       value={field.placeholder ?? ''}
                       disabled={archived}
-                      onChange={(e) => updateFieldAt(field.key, { placeholder: e.target.value || undefined })}
+                      onChange={(e) =>
+                        updateFieldAt(field.key, { placeholder: e.target.value || undefined })
+                      }
                     />
                     <Input
                       placeholder="Helper text"
                       value={field.helperText ?? ''}
                       disabled={archived}
-                      onChange={(e) => updateFieldAt(field.key, { helperText: e.target.value || undefined })}
+                      onChange={(e) =>
+                        updateFieldAt(field.key, { helperText: e.target.value || undefined })
+                      }
                     />
                     {field.type === 'choice' && (
                       <div className="flex flex-col gap-1.5">
@@ -313,9 +336,9 @@ function FormEditorForm({
                               value={option}
                               disabled={archived}
                               onChange={(e) => {
-                                const nextOptions = [...(field.options ?? [])]
-                                nextOptions[optIndex] = e.target.value
-                                updateFieldAt(field.key, { options: nextOptions })
+                                const nextOptions = [...(field.options ?? [])];
+                                nextOptions[optIndex] = e.target.value;
+                                updateFieldAt(field.key, { options: nextOptions });
                               }}
                             />
                             <Button
@@ -325,8 +348,10 @@ function FormEditorForm({
                               aria-label={`Remove option ${optIndex + 1}`}
                               disabled={archived || (field.options?.length ?? 0) <= 2}
                               onClick={() => {
-                                const nextOptions = (field.options ?? []).filter((_, i) => i !== optIndex)
-                                updateFieldAt(field.key, { options: nextOptions })
+                                const nextOptions = (field.options ?? []).filter(
+                                  (_, i) => i !== optIndex,
+                                );
+                                updateFieldAt(field.key, { options: nextOptions });
                               }}
                             >
                               <X className="size-4" />
@@ -340,7 +365,10 @@ function FormEditorForm({
                           disabled={archived}
                           onClick={() =>
                             updateFieldAt(field.key, {
-                              options: [...(field.options ?? []), `Option ${(field.options?.length ?? 0) + 1}`],
+                              options: [
+                                ...(field.options ?? []),
+                                `Option ${(field.options?.length ?? 0) + 1}`,
+                              ],
                             })
                           }
                         >
@@ -361,16 +389,33 @@ function FormEditorForm({
             {addingField ? (
               <div className="flex flex-wrap gap-2">
                 {BUILDER_FIELD_TYPES.map((type) => (
-                  <Button key={type} type="button" variant="outline" size="sm" onClick={() => addField(type)}>
+                  <Button
+                    key={type}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => addField(type)}
+                  >
                     {FIELD_TYPE_LABELS[type]}
                   </Button>
                 ))}
-                <Button type="button" variant="ghost" size="sm" onClick={() => setAddingField(false)}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setAddingField(false)}
+                >
                   Cancel
                 </Button>
               </div>
             ) : (
-              <Button type="button" variant="outline" size="sm" disabled={archived} onClick={() => setAddingField(true)}>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={archived}
+                onClick={() => setAddingField(true)}
+              >
                 + Add a field
               </Button>
             )}
@@ -396,7 +441,11 @@ function FormEditorForm({
 
       <SheetFooter className="flex-row justify-end gap-2 border-t border-slate-200">
         {formId === null ? (
-          <Button type="button" onClick={() => createMutation.mutate()} disabled={!canSave || createMutation.isPending}>
+          <Button
+            type="button"
+            onClick={() => createMutation.mutate()}
+            disabled={!canSave || createMutation.isPending}
+          >
             Create Form
           </Button>
         ) : (
@@ -437,7 +486,8 @@ function FormEditorForm({
           <DialogHeader>
             <DialogTitle>Archive this form?</DialogTitle>
             <DialogDescription>
-              Subintents currently mapped to it will stop showing a form until re-mapped. This cannot be undone.
+              Subintents currently mapped to it will stop showing a form until re-mapped. This
+              cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -448,8 +498,8 @@ function FormEditorForm({
               type="button"
               variant="destructive"
               onClick={() => {
-                archiveMutation.mutate()
-                onOpenChange(false)
+                archiveMutation.mutate();
+                onOpenChange(false);
               }}
               disabled={archiveMutation.isPending}
             >
@@ -459,5 +509,5 @@ function FormEditorForm({
         </DialogContent>
       </Dialog>
     </>
-  )
+  );
 }

@@ -3,12 +3,13 @@
 **Date:** 2026-08-06
 **Status:** Proposed
 **Depends on:** [`2026-08-06-chat-module-design.md`](2026-08-06-chat-module-design.md) — this
-picks up the "Out" list item that slice explicitly deferred: *"Forms, attachments, internal
-notes."*
+picks up the "Out" list item that slice explicitly deferred: _"Forms, attachments, internal
+notes."_
 
 ## Scope
 
 **In:**
+
 - Agent console: a Public reply / Internal note toggle on the composer. Internal notes are
   visually distinct (amber) and never reach a player, by construction of the existing
   `toPlayerView`/`toAgentView` split and separate socket rooms.
@@ -20,6 +21,7 @@ notes."*
   already implements.
 
 **Out (deferred):**
+
 - `resolution_cycle` table and true resolution-cycle metrics. This slice's "resolved" stays a
   bare `conversation.status` write, same minimal shape the schema is already in.
 - Any manual "Mark Awaiting Player" / "Mark Resolved" agent control. Both are automated, per the
@@ -57,6 +59,7 @@ non-default value — see Testing.
 `author_type`, for future internal-note reporting without a new event type.
 
 **Frontend:**
+
 - `ChatMessage` (`frontend/src/components/chat/types.ts`) and the agent's mapping from
   `AgentMessageView` gain `visibility`. `ChatThread` renders `visibility === 'internal'` rows
   with a `chat-message--internal` class (amber). The player-facing `SupportSurface` consumes
@@ -71,16 +74,17 @@ non-default value — see Testing.
 Inside `sendAgentMessage`'s existing transaction, after the existing lookup of
 `{ id, assignedAgentId }`, also select `status`. If `body.visibility !== 'internal'` (i.e. a
 public reply) and `status === 'open'`:
+
 - Update `conversation.status = 'awaiting_player'`.
 - `appendEvent(tx, { type: 'conversation_awaiting_player', conversationId, actorId: ctx.agentId,
-  actorType: 'agent' })` — same shape as `sendPlayerMessage`'s existing
+actorType: 'agent' })` — same shape as `sendPlayerMessage`'s existing
   `conversation_reopened` event.
 - After commit, `emitInboxChanged(getIo(), ctx.workspaceId, conversationId, 'awaiting_player')`,
   mirroring the existing `inboxStatus` pattern in `sendPlayerMessage` and the claim handler.
 
 Any other current status is left untouched — this is the one documented transition
-(`docs/project-overview.md`'s status machine: *"`open` → `awaiting_player` — Agent asks
-something and marks waiting"*), now automatic instead of a button. Internal notes never reach
+(`docs/project-overview.md`'s status machine: _"`open` → `awaiting_player` — Agent asks
+something and marks waiting"_), now automatic instead of a button. Internal notes never reach
 this branch at all.
 
 ## Player reopen banner

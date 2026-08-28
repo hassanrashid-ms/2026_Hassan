@@ -1,9 +1,10 @@
-import { and, eq, isNull } from 'drizzle-orm'
-import { agent as agentTable, workspace, workspaceMember } from '../../shared/db/schema/index.ts'
-import { withoutWorkspace, withWorkspace } from '../../shared/db/withWorkspace.ts'
-import { signAgentSession } from '../../shared/auth/agentSession.ts'
+import { eq, isNull } from 'drizzle-orm';
+import { agent as agentTable, workspace, workspaceMember } from '../../shared/db/schema/index.ts';
+import { withoutWorkspace, withWorkspace } from '../../shared/db/withWorkspace.ts';
+import { signAgentSession } from '../../shared/auth/agentSession.ts';
+import { logger } from '../../shared/logging/logger.ts';
 
-export type DevAgentOption = { id: string; email: string; display_name: string }
+export type DevAgentOption = { id: string; email: string; display_name: string };
 
 /**
  * `workspace_member` is RLS-scoped, so it can only be read inside
@@ -13,11 +14,19 @@ export type DevAgentOption = { id: string; email: string; display_name: string }
  * and would need a different approach (e.g. a superuser reporting role) at real
  * scale — acceptable because this whole endpoint is a throwaway stand-in for
  * Google OAuth (docs/decisions/2026-08-04-agent-auth-google-oauth.md).
+ *
+ * A global admin (agent.is_admin) holds no workspace_member row at all under
+ * the admin-dashboard model — see 2026-08-21-admin-dashboard-design.md — so the
+ * per-workspace loop alone would never surface one. `agent` is one of the two
+ * unscoped tables, so admins are fetched separately with a single
+ * withoutWorkspace query and merged in.
  */
 export async function listDevAgents(): Promise<DevAgentOption[]> {
-  const workspaces = await withoutWorkspace(async (tx) => tx.select({ id: workspace.id }).from(workspace))
+  const workspaces = await withoutWorkspace(async (tx) =>
+    tx.select({ id: workspace.id }).from(workspace),
+  );
 
-  const seen = new Map<string, DevAgentOption>()
+  const seen = new Map<string, DevAgentOption>();
   for (const ws of workspaces) {
     const rows = await withWorkspace(ws.id, async (tx) =>
       tx
@@ -25,50 +34,65 @@ export async function listDevAgents(): Promise<DevAgentOption[]> {
         .from(workspaceMember)
         .innerJoin(agentTable, eq(agentTable.id, workspaceMember.agentId))
         .where(isNull(workspaceMember.deactivatedAt)),
-    )
+    );
     for (const row of rows) {
-      seen.set(row.id, { id: row.id, email: row.email, display_name: row.displayName })
+      seen.set(row.id, { id: row.id, email: row.email, display_name: row.displayName });
     }
   }
-  return [...seen.values()]
+
+  const admins = await withoutWorkspace(async (tx) =>
+    tx
+      .select({ id: agentTable.id, email: agentTable.email, displayName: agentTable.displayName })
+      .from(agentTable)
+      .where(eq(agentTable.isAdmin, true)),
+  );
+  for (const row of admins) {
+    seen.set(row.id, { id: row.id, email: row.email, display_name: row.displayName });
+  }
+
+  return [...seen.values()];
 }
 
-export type DevLoginResult = {
-  token: string
-  agent: { id: string; display_name: string }
-  workspace: { id: string; slug: string }
-} | null
+export type DevLoginResult = { token: string; agent: { id: string; display_name: string } } | null;
 
+/**
+ * A first successful login is the acceptance — there is no separate "accept
+ * invite" step or UI for one. `invited` is a real gate elsewhere
+ * (reassignConversation, setAgentLeaveStatus both refuse it), so leaving it
+ * unset here would let an agent authenticate yet never become assignable.
+ * No change-log row: `appendChangeLog` requires a real actor, and the
+ * logging-in agent isn't acting on themselves as an admin would — same
+ * reasoning as the system-driven transition in leaveExpiry.ts. `logger.info`
+ * is the audit trail instead.
+ */
 export async function devLogin(agentId: string): Promise<DevLoginResult> {
   const agentRow = await withoutWorkspace(async (tx) => {
     const [row] = await tx
-      .select({ id: agentTable.id, displayName: agentTable.displayName })
+      .select({
+        id: agentTable.id,
+        displayName: agentTable.displayName,
+        isAdmin: agentTable.isAdmin,
+        status: agentTable.status,
+      })
       .from(agentTable)
       .where(eq(agentTable.id, agentId))
-      .limit(1)
-    return row ?? null
-  })
-  if (!agentRow) return null
+      .limit(1);
+    if (!row) return null;
 
-  const workspaces = await withoutWorkspace(async (tx) => tx.select({ id: workspace.id, slug: workspace.slug }).from(workspace))
-
-  for (const ws of workspaces) {
-    const membership = await withWorkspace(ws.id, async (tx) => {
-      const [row] = await tx
-        .select({ id: workspaceMember.id })
-        .from(workspaceMember)
-        .where(and(eq(workspaceMember.agentId, agentId), isNull(workspaceMember.deactivatedAt)))
-        .limit(1)
-      return row ?? null
-    })
-    if (membership) {
-      const token = await signAgentSession({ agent_id: agentRow.id, workspace_id: ws.id })
-      return {
-        token,
-        agent: { id: agentRow.id, display_name: agentRow.displayName },
-        workspace: { id: ws.id, slug: ws.slug },
-      }
+    if (row.status === 'invited') {
+      await tx.update(agentTable).set({ status: 'active' }).where(eq(agentTable.id, row.id));
+      logger.info('auth', `agent ${row.id} accepted invite on first login`);
     }
-  }
-  return null
+
+    return row;
+  });
+  if (!agentRow) return null;
+
+  // Identity only — see 2026-08-25-global-inbox-workspace-decoupling-design.md
+  // section 1. Which workspace(s) this agent can act in is discovered via
+  // GET /agent/memberships and chosen client-side, never fixed at login. An
+  // agent with zero memberships still gets a token; the frontend shows an
+  // empty/no-access state rather than refusing to log them in.
+  const token = await signAgentSession({ agent_id: agentRow.id, is_admin: agentRow.isAdmin });
+  return { token, agent: { id: agentRow.id, display_name: agentRow.displayName } };
 }

@@ -61,8 +61,8 @@ verticals, so it isn't itself a vertical. `app.ts` keeps
 
 `shared/auth/` and `shared/middleware/` are a deliberate split, not one bucket: `auth/` holds
 token issuance and verification (`playerToken`, `playerTokenRoute`, `workspaceSecret`) —
-code that *produces* or *checks* credentials. `middleware/` holds the Express
-`RequestHandler`s that *gate* a request using those credentials
+code that _produces_ or _checks_ credentials. `middleware/` holds the Express
+`RequestHandler`s that _gate_ a request using those credentials
 (`requirePlayerToken`, `requireSdkHeaders`) — code that plugs into a router's `.use()`
 chain. Every vertical's router imports its gating middleware from `shared/middleware/`
 and, where it needs the token/claims shape, imports types from `shared/auth/`.

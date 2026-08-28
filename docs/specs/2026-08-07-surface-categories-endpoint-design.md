@@ -20,11 +20,13 @@ The webview surface UI needs to render category tabs above the article list. Cat
 **Query params:** none.
 
 **Response:**
+
 ```json
-{ "intents": [ { "id": "uuid", "name": "Billing" } ] }
+{ "intents": [{ "id": "uuid", "name": "Billing" }] }
 ```
 
 **Selection rules, in order:**
+
 1. Exclude intents where `archivedAt IS NOT NULL`.
 2. Exclude intents with zero `article` rows in `state = 'published'` referencing them. An intent with only draft/archived articles does not appear — no point opening a tab to an empty list.
 3. Include `isSystem` intents (the "Other" catch-all) for now — no special-casing.
@@ -39,10 +41,10 @@ The webview surface UI needs to render category tabs above the article list. Cat
 
 The webview builds tabs as: one "All" tab (frontend-only, no backend representation) + one tab per item returned by `/surface/intents`.
 
-| Tab selected | Request |
-|---|---|
-| "All" | `GET /surface/articles` — no `intentId` param. Existing behavior: returns all published articles in the workspace. |
-| A category | `GET /surface/articles?intentId=<id>` — existing behavior in `articlesService.listPublicArticles`, unchanged. |
+| Tab selected | Request                                                                                                            |
+| ------------ | ------------------------------------------------------------------------------------------------------------------ |
+| "All"        | `GET /surface/articles` — no `intentId` param. Existing behavior: returns all published articles in the workspace. |
+| A category   | `GET /surface/articles?intentId=<id>` — existing behavior in `articlesService.listPublicArticles`, unchanged.      |
 
 No synthetic `{ id: "all", name: "All" }` entry is added to the `/surface/intents` response — "All" is a frontend concept only. `articlesService` does not need to special-case any sentinel value.
 
@@ -58,6 +60,7 @@ No synthetic `{ id: "all", name: "All" }` entry is added to the `/surface/intent
 ## Testing
 
 Unit tests on `listPublicIntents` covering:
+
 - Excludes an archived intent even if it has published articles.
 - Excludes an intent whose only articles are draft/archived.
 - Includes an intent with at least one published article.

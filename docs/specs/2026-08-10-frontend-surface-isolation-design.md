@@ -105,29 +105,29 @@ not part of the shared `features/articles` feature.
 
 ## Migration mapping
 
-| Current file | New location |
-|---|---|
-| `pages/AgentLogin.tsx` | `surfaces/agent-console/pages/AgentLogin.tsx` |
-| `pages/AgentInbox.tsx` | `surfaces/agent-console/pages/AgentInbox.tsx` |
-| `pages/AgentConversation.tsx` | `surfaces/agent-console/pages/AgentConversation.tsx` |
-| `pages/AdminArticles.tsx` | `surfaces/agent-console/pages/AdminArticles.tsx` |
-| `pages/articleForm.ts` + `.test.ts` | `surfaces/agent-console/pages/articleForm.ts` |
-| `lib/agentSession.ts` | `surfaces/agent-console/lib/agentSession.ts` (plain module today — a dummy session read; becomes real OAuth token handling later, may move to `hooks/` at that point if it becomes hook-shaped) |
-| `api/agentApi.ts` | `surfaces/agent-console/api/agentApi.ts` |
-| `pages/SupportSurface.tsx` | `surfaces/webview/pages/SupportSurface.tsx` |
-| `pages/ArticleList.tsx` | `surfaces/webview/pages/ArticleList.tsx` |
-| `pages/ArticleView.tsx` | `surfaces/webview/pages/ArticleView.tsx` |
-| `pages/articleSearch.ts` + `.test.ts` | `surfaces/webview/pages/articleSearch.ts` |
-| `api/surfaceApi.ts` | `surfaces/webview/api/surfaceApi.ts` |
-| `api/playerChatApi.ts` | `features/chat/api/playerChatApi.ts` |
-| `components/chat/ChatThread.tsx`, `Composer.tsx`, `types.ts` | `features/chat/components/` |
-| `pages/chatReconcile.ts` + `.test.ts` | `features/chat/hooks/chatReconcile.ts` |
-| `lib/socket.ts` | `features/chat/api/socket.ts` (chat-only realtime; move to global `lib/` if a future non-chat consumer needs sockets) |
-| `api/articlesApi.ts` (`fetchPublicArticles`/`fetchPublicArticle`) | `features/articles/api/articlesApi.ts` |
-| `api/httpClient.ts` | stays global: `lib/httpClient.ts` |
-| `services/bridgeService.ts` | stays global: `services/bridgeService.ts` (unchanged) |
-| `boot.ts` + `.test.ts` | stays global: `lib/boot.ts` |
-| `routes.tsx` | `routes/AppRoutes.tsx`, routes visually grouped by surface |
+| Current file                                                      | New location                                                                                                                                                                                    |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pages/AgentLogin.tsx`                                            | `surfaces/agent-console/pages/AgentLogin.tsx`                                                                                                                                                   |
+| `pages/AgentInbox.tsx`                                            | `surfaces/agent-console/pages/AgentInbox.tsx`                                                                                                                                                   |
+| `pages/AgentConversation.tsx`                                     | `surfaces/agent-console/pages/AgentConversation.tsx`                                                                                                                                            |
+| `pages/AdminArticles.tsx`                                         | `surfaces/agent-console/pages/AdminArticles.tsx`                                                                                                                                                |
+| `pages/articleForm.ts` + `.test.ts`                               | `surfaces/agent-console/pages/articleForm.ts`                                                                                                                                                   |
+| `lib/agentSession.ts`                                             | `surfaces/agent-console/lib/agentSession.ts` (plain module today — a dummy session read; becomes real OAuth token handling later, may move to `hooks/` at that point if it becomes hook-shaped) |
+| `api/agentApi.ts`                                                 | `surfaces/agent-console/api/agentApi.ts`                                                                                                                                                        |
+| `pages/SupportSurface.tsx`                                        | `surfaces/webview/pages/SupportSurface.tsx`                                                                                                                                                     |
+| `pages/ArticleList.tsx`                                           | `surfaces/webview/pages/ArticleList.tsx`                                                                                                                                                        |
+| `pages/ArticleView.tsx`                                           | `surfaces/webview/pages/ArticleView.tsx`                                                                                                                                                        |
+| `pages/articleSearch.ts` + `.test.ts`                             | `surfaces/webview/pages/articleSearch.ts`                                                                                                                                                       |
+| `api/surfaceApi.ts`                                               | `surfaces/webview/api/surfaceApi.ts`                                                                                                                                                            |
+| `api/playerChatApi.ts`                                            | `features/chat/api/playerChatApi.ts`                                                                                                                                                            |
+| `components/chat/ChatThread.tsx`, `Composer.tsx`, `types.ts`      | `features/chat/components/`                                                                                                                                                                     |
+| `pages/chatReconcile.ts` + `.test.ts`                             | `features/chat/hooks/chatReconcile.ts`                                                                                                                                                          |
+| `lib/socket.ts`                                                   | `features/chat/api/socket.ts` (chat-only realtime; move to global `lib/` if a future non-chat consumer needs sockets)                                                                           |
+| `api/articlesApi.ts` (`fetchPublicArticles`/`fetchPublicArticle`) | `features/articles/api/articlesApi.ts`                                                                                                                                                          |
+| `api/httpClient.ts`                                               | stays global: `lib/httpClient.ts`                                                                                                                                                               |
+| `services/bridgeService.ts`                                       | stays global: `services/bridgeService.ts` (unchanged)                                                                                                                                           |
+| `boot.ts` + `.test.ts`                                            | stays global: `lib/boot.ts`                                                                                                                                                                     |
+| `routes.tsx`                                                      | `routes/AppRoutes.tsx`, routes visually grouped by surface                                                                                                                                      |
 
 ## Out of scope
 
