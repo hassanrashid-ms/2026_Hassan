@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { PlayerFormView } from '@support/types';
 import { FormCard } from './FormCard.tsx';
 
@@ -61,21 +61,53 @@ describe('FormCard', () => {
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
   });
 
-  it('shows skip on the first question and on the last', async () => {
+  it('hides skip while any required field in the form is unanswered, and shows it once all are answered', async () => {
     const { onSkip } = setup();
-    expect(screen.getByRole('button', { name: /skip and talk to an agent/i })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /skip and talk to an agent/i }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Google Play' }));
     fireEvent.click(screen.getByRole('button', { name: /^next$/i }));
-    fireEvent.click(await screen.findByRole('button', { name: /^next$/i }));
+    await screen.findByText('2 of 3');
+    expect(
+      screen.queryByRole('button', { name: /skip and talk to an agent/i }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText('e.g. GPA.1234-5678'), {
+      target: { value: 'GPA.1' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /^next$/i }));
+    await screen.findByText('3 of 3');
+    fireEvent.change(screen.getByLabelText('Date of purchase'), {
+      target: { value: '2026-01-01' },
+    });
+
     expect(screen.getByRole('button', { name: /skip and talk to an agent/i })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /skip and talk to an agent/i }));
     expect(onSkip).toHaveBeenCalledOnce();
   });
 
-  it('does not block Next on an unanswered required field', () => {
+  it('blocks Next on an unanswered required field', async () => {
     setup();
+    expect(screen.getByRole('button', { name: /^next$/i })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: /^next$/i }));
+    expect(screen.queryByText('2 of 3')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Google Play' }));
     expect(screen.getByRole('button', { name: /^next$/i })).not.toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: /^next$/i }));
-    expect(screen.getByText('2 of 3')).toBeInTheDocument();
+    expect(await screen.findByText('2 of 3')).toBeInTheDocument();
+  });
+
+  it('marks a required field label with an asterisk', () => {
+    setup();
+    expect(screen.getByText('*')).toBeInTheDocument();
+  });
+
+  it('does not mark an optional field label with an asterisk', () => {
+    setup({ ...FORM, fields: [{ ...FORM.fields[0]!, isRequired: false }] });
+    expect(screen.queryByText('*')).not.toBeInTheDocument();
   });
 
   it('posts an answer when the value changed and advances', async () => {
@@ -123,10 +155,11 @@ describe('FormCard', () => {
     expect(screen.getByRole('button', { name: /^back$/i })).toBeInTheDocument();
   });
 
-  it('shows a placeholder inside an empty text field', () => {
+  it('shows a placeholder inside an empty text field', async () => {
     setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Google Play' }));
     fireEvent.click(screen.getByRole('button', { name: /^next$/i }));
-    expect(screen.getByPlaceholderText('e.g. GPA.1234-5678')).toBeInTheDocument();
+    expect(await screen.findByPlaceholderText('e.g. GPA.1234-5678')).toBeInTheDocument();
   });
 
   it('uses the field label when a text placeholder is missing', () => {
@@ -146,28 +179,44 @@ describe('FormCard', () => {
     expect(screen.getByPlaceholderText('Purchase details')).toBeInTheDocument();
   });
 
-  it('shows helper text under the question when the field has one', () => {
+  it('shows helper text under the question when the field has one', async () => {
     setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Google Play' }));
     fireEvent.click(screen.getByRole('button', { name: /^next$/i }));
+    fireEvent.change(await screen.findByPlaceholderText('e.g. GPA.1234-5678'), {
+      target: { value: 'GPA.1' },
+    });
     fireEvent.click(screen.getByRole('button', { name: /^next$/i }));
-    expect(screen.getByText("Can't be in the future.")).toBeInTheDocument();
+    expect(await screen.findByText("Can't be in the future.")).toBeInTheDocument();
   });
 
-  it('caps the date field at today, so a purchase cannot be dated in the future', () => {
+  it('caps the date field at today, so a purchase cannot be dated in the future', async () => {
     setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Google Play' }));
     fireEvent.click(screen.getByRole('button', { name: /^next$/i }));
+    fireEvent.change(await screen.findByPlaceholderText('e.g. GPA.1234-5678'), {
+      target: { value: 'GPA.1' },
+    });
     fireEvent.click(screen.getByRole('button', { name: /^next$/i }));
     const todayStr = new Date().toISOString().slice(0, 10);
-    expect(screen.getByLabelText('Date of purchase')).toHaveAttribute('max', todayStr);
+    expect(await screen.findByLabelText('Date of purchase')).toHaveAttribute('max', todayStr);
   });
 
   it('calls onSubmit from the last question', async () => {
     const { onSubmit } = setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Google Play' }));
     fireEvent.click(screen.getByRole('button', { name: /^next$/i }));
-    fireEvent.click(await screen.findByRole('button', { name: /^next$/i }));
+    fireEvent.change(await screen.findByPlaceholderText('e.g. GPA.1234-5678'), {
+      target: { value: 'GPA.1' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /^next$/i }));
     await screen.findByText('3 of 3');
+    fireEvent.change(screen.getByLabelText('Date of purchase'), {
+      target: { value: '2026-01-01' },
+    });
+    expect(screen.getByRole('button', { name: /^submit$/i })).not.toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: /^submit$/i }));
-    expect(onSubmit).toHaveBeenCalledOnce();
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
   });
 
   it('renders an attach-image control for the attachment field type instead of the inert message', () => {

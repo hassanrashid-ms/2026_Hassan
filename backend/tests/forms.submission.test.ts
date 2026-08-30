@@ -383,14 +383,40 @@ describe('POST /surface/form/answer', () => {
 });
 
 describe('POST /surface/form/submit and /skip', () => {
-  it('submit terminates with terminated_by submit', async () => {
+  it('rejects submit when the required field is unanswered', async () => {
     const f = await liveForm();
     const res = await request(app)
       .post('/form/submit')
       .set('Authorization', `Bearer ${f.token}`)
       .send({});
+    expect(res.status).toBe(422);
+    expect(res.body.error.code).toBe('required_fields_missing');
+    const rows = await withWorkspace(f.workspaceId, (tx) => tx.select().from(formSubmission));
+    expect(rows[0]!.status).toBe('in_progress');
+  });
+
+  it('rejects skip when the required field is unanswered', async () => {
+    const f = await liveForm();
+    const res = await request(app)
+      .post('/form/skip')
+      .set('Authorization', `Bearer ${f.token}`)
+      .send({});
+    expect(res.status).toBe(422);
+    expect(res.body.error.code).toBe('required_fields_missing');
+  });
+
+  it('submit terminates with terminated_by submit once the required field is answered, leaving the rest optional', async () => {
+    const f = await liveForm();
+    await request(app)
+      .post('/form/answer')
+      .set('Authorization', `Bearer ${f.token}`)
+      .send({ field_key: 'store', value: 'Google Play' });
+    const res = await request(app)
+      .post('/form/submit')
+      .set('Authorization', `Bearer ${f.token}`)
+      .send({});
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ confirm_phase: 'none', status: 'open', form_status: 'skipped' });
+    expect(res.body).toEqual({ confirm_phase: 'none', status: 'open', form_status: 'partial' });
     const { rows } = await ownerPool.query(
       `select payload from event where type = 'form_completed'`,
     );
@@ -418,6 +444,10 @@ describe('POST /surface/form/submit and /skip', () => {
 
   it('refuses a second terminate on a terminal submission', async () => {
     const f = await liveForm();
+    await request(app)
+      .post('/form/answer')
+      .set('Authorization', `Bearer ${f.token}`)
+      .send({ field_key: 'store', value: 'Google Play' });
     await request(app).post('/form/skip').set('Authorization', `Bearer ${f.token}`).send({});
     const res = await request(app)
       .post('/form/submit')
@@ -428,11 +458,15 @@ describe('POST /surface/form/submit and /skip', () => {
 
   it('refuses an answer once the submission is terminal', async () => {
     const f = await liveForm();
+    await request(app)
+      .post('/form/answer')
+      .set('Authorization', `Bearer ${f.token}`)
+      .send({ field_key: 'store', value: 'Google Play' });
     await request(app).post('/form/skip').set('Authorization', `Bearer ${f.token}`).send({});
     const res = await request(app)
       .post('/form/answer')
       .set('Authorization', `Bearer ${f.token}`)
-      .send({ field_key: 'store', value: 'Google Play' });
+      .send({ field_key: 'store', value: 'Apple App Store' });
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe('no_form_pending');
   });

@@ -31,8 +31,12 @@ export type FormFieldType = (typeof FORM_FIELD_TYPES)[number];
  * §14). `position` is the render order and is snapshotted into events later, so
  * it must be present and unique.
  *
- * `isRequired` is SOFT everywhere. Nothing about a form may block a player
- * reaching a human, so a required field left blank still lands.
+ * `isRequired` blocks progress: the webview refuses to advance past an
+ * unanswered required field and hides "Skip and talk to an agent" while any
+ * required field in the form is unanswered, and `POST /surface/form/submit`
+ * and `/skip` reject the same condition server-side (see `terminateForm` in
+ * `formService.ts`). The one exception is the form-timeout sweeper, which
+ * force-closes a stale submission regardless — see `formTimeout.ts`.
  */
 export const formFieldSchema = z.object({
   key: z

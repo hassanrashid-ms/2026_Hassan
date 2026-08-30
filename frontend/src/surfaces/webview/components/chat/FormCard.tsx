@@ -73,6 +73,13 @@ export function FormCard({
   const changed = !isEmpty(value) && value !== committed[field.key];
   const disabled = busy || sending;
 
+  // A field's effective answer: the one on screen reads its live draft, every
+  // other field reads what the server already has. Used both to gate Next on
+  // the current question and to decide whether Skip may still be shown at all.
+  const effectiveValue = (f: FormField) => (f.key === field.key ? value : committed[f.key]);
+  const currentRequiredUnanswered = field.isRequired && isEmpty(effectiveValue(field));
+  const anyRequiredUnanswered = fields.some((f) => f.isRequired && isEmpty(effectiveValue(f)));
+
   const advance = async () => {
     setSending(true);
     try {
@@ -143,6 +150,11 @@ export function FormCard({
         <p className="flex items-baseline gap-2 text-xl font-bold tracking-tight text-text">
           <span aria-hidden="true" className="inline-block size-1.5 rounded-full bg-accent" />
           {field.label}
+          {field.isRequired && (
+            <span aria-hidden="true" className="text-accent">
+              *
+            </span>
+          )}
         </p>
         {field.helperText && <p className="text-sm text-muted">{field.helperText}</p>}
       </div>
@@ -158,24 +170,25 @@ export function FormCard({
       <SupportButton
         variant="primary"
         className="w-full"
-        // Required fields do not block Next. isRequired is soft, because
-        // nothing about a form may block a player reaching a human.
-        disabled={disabled}
+        // A required field must have a value before Next may advance.
+        disabled={disabled || currentRequiredUnanswered}
         onClick={() => void advance()}
       >
         {isLast ? 'Submit' : 'Next'}
       </SupportButton>
 
-      {/* The product spec's own label. Present on every question, first to last,
-          and never removable. */}
-      <button
-        type="button"
-        className="min-h-11 text-sm text-muted underline"
-        onClick={onSkip}
-        disabled={disabled}
-      >
-        Skip and talk to an agent
-      </button>
+      {/* Hidden, not merely disabled, while any required field in the form is
+          unanswered: a player may not reach an agent around a required answer. */}
+      {!anyRequiredUnanswered && (
+        <button
+          type="button"
+          className="min-h-11 text-sm text-muted underline"
+          onClick={onSkip}
+          disabled={disabled}
+        >
+          Skip and talk to an agent
+        </button>
+      )}
     </div>
   );
 }
@@ -260,8 +273,7 @@ function FieldInput({
           aria-label={field.label}
           // A support form never has a legitimate reason to ask about a date that
           // hasn't happened yet — "when did you buy this" and "when did it break"
-          // are both always in the past. Soft, not enforced server-side: nothing
-          // about a form may block a player reaching a human.
+          // are both always in the past. Not enforced server-side, unlike isRequired.
           max={today()}
           disabled={disabled}
           value={typeof value === 'string' ? value : ''}

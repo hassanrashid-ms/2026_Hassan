@@ -39,7 +39,7 @@ export type AnswerFormResult =
   | { ok: true; isCorrection: boolean };
 
 export type TerminateFormResult =
-  | { ok: false; reason: 'not_found' | 'no_form_pending' }
+  | { ok: false; reason: 'not_found' | 'no_form_pending' | 'required_fields_missing' }
   | { ok: true; formStatus: TerminalFormStatus; status: ConversationStatusValue };
 
 /**
@@ -174,6 +174,33 @@ export async function terminateForm(
     const { conv, submission } = await liveSubmission(tx, ctx.playerId);
     if (!conv) return { ok: false as const, reason: 'not_found' as const };
     if (!submission) return { ok: false as const, reason: 'no_form_pending' as const };
+
+    // Player-initiated termination only — the timeout sweeper reaches
+    // completeFormAndHandoff directly, never through here, and must keep
+    // force-closing stale submissions regardless of required fields.
+    const [version] = await tx
+      .select({ fields: formVersion.fields })
+      .from(formVersion)
+      .where(
+        and(
+          eq(formVersion.formId, submission.formId),
+          eq(formVersion.version, submission.formVersion),
+        ),
+      )
+      .limit(1);
+
+    const answeredRows = await tx
+      .selectDistinct({ fieldKey: formAnswer.fieldKey })
+      .from(formAnswer)
+      .where(eq(formAnswer.formSubmissionId, submission.id));
+    const answeredKeys = new Set(answeredRows.map((r) => r.fieldKey));
+
+    const hasUnansweredRequired = (version?.fields ?? []).some(
+      (f) => f.isRequired && !answeredKeys.has(f.key),
+    );
+    if (hasUnansweredRequired) {
+      return { ok: false as const, reason: 'required_fields_missing' as const };
+    }
 
     const completed = await completeFormAndHandoff(
       tx,

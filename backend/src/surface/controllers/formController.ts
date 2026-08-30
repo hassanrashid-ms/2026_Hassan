@@ -9,6 +9,7 @@ const ERRORS = {
   unknown_field: [422, 'That question is not part of this form.'],
   invalid_value: [422, 'That answer does not match the question.'],
   unsupported_field_type: [422, 'That question type cannot be answered yet.'],
+  required_fields_missing: [422, 'All required fields must be answered before continuing.'],
 } as const;
 
 export const formAnswerHandler: RequestHandler = async (req, res) => {

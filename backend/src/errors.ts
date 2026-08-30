@@ -19,6 +19,7 @@ export type ErrorCode =
   | 'unknown_field'
   | 'invalid_value'
   | 'unsupported_field_type'
+  | 'required_fields_missing'
   | 'name_taken'
   | 'key_taken'
   | 'not_archivable'
