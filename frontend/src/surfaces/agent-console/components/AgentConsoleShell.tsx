@@ -9,6 +9,7 @@ import {
   ChevronDown,
   LogOut,
   Settings,
+  ShieldCheck,
   SlidersHorizontal,
   Tags,
   Gauge,
@@ -22,6 +23,7 @@ import { scrubToken } from '@/lib/boot.ts';
 import {
   canBuildForms,
   clearAgentSession,
+  isAdmin,
   loadAgentSession,
   saveAgentSession,
   saveLastActiveWorkspaceId,
@@ -332,6 +334,33 @@ export function AgentConsoleShell() {
                   {option.label}
                 </DropdownMenuCheckboxItem>
               ))}
+              {isAdmin(session) && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onSelect={() => {
+                      // New tab, agent-console session untouched — mirrors
+                      // admin-console Overview.tsx's "Open console" action in
+                      // the opposite direction. The token already carries
+                      // is_admin: true, so no new token needs to be minted;
+                      // AdminConsoleShell's boot effect confirms it's really
+                      // an admin token via GET /admin/agents before trusting it.
+                      const params = new URLSearchParams({
+                        agentId: session.agentId,
+                        name: session.displayName,
+                      });
+                      window.open(
+                        `/dashboard/overview?${params.toString()}#t=${session.token}`,
+                        '_blank',
+                        'noopener',
+                      );
+                    }}
+                  >
+                    <ShieldCheck className="size-4" />
+                    Switch to Admin Dashboard
+                  </DropdownMenuItem>
+                </>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onSelect={() => {

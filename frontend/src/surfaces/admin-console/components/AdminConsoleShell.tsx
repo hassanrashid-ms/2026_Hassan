@@ -1,11 +1,14 @@
-import { Suspense, useEffect } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { LayoutGrid, LogOut, ShieldCheck } from 'lucide-react';
 // admin-console.css is imported HERE and nowhere else — never from main.tsx or
 // any statically-reachable module, so its Tailwind preflight never leaks into
 // the other two surfaces (mirrors AgentConsoleShell.tsx / WebviewShell.tsx).
 import '@/admin-console.css';
-import { clearAdminSession, loadAdminSession } from '../lib/adminSession.ts';
+import { readAdminConsoleBoot } from '@/lib/adminConsoleBoot.ts';
+import { scrubToken } from '@/lib/boot.ts';
+import { clearAdminSession, loadAdminSession, saveAdminSession } from '../lib/adminSession.ts';
+import { fetchAgents } from '../api/adminApi.ts';
 import { Avatar, AvatarFallback } from './ui/avatar.tsx';
 import { Badge } from './ui/badge.tsx';
 import { Button } from './ui/button.tsx';
@@ -20,13 +23,45 @@ const NAV_ITEMS = [
 
 export function AdminConsoleShell() {
   const navigate = useNavigate();
-  const session = loadAdminSession();
+  const [session, setSession] = useState(loadAdminSession);
+  // StrictMode double-invokes mount effects in development — mirrors
+  // AgentConsoleShell.tsx's startedRef guard for the same reason: scrubToken
+  // removes the fragment as a side effect of the first run, so a naive
+  // second run would read an already-scrubbed URL and see no boot data.
+  const bootConsumedRef = useRef(false);
+  const [booting, setBooting] = useState(false);
 
   useEffect(() => {
-    if (!session) navigate('/dashboard/login');
-  }, [session, navigate]);
+    if (!bootConsumedRef.current) {
+      bootConsumedRef.current = true;
+      const boot = readAdminConsoleBoot(window.location);
+      if (boot) {
+        setBooting(true);
+        // The boot token carries no is_super_admin claim — same lookup
+        // AdminLogin.tsx does after a normal sign-in, via a route already
+        // gated by requireAdminAccess, so a non-admin token fails closed here
+        // instead of silently landing with isSuperAdmin: false.
+        void fetchAgents(boot.token)
+          .then((res) => {
+            const self = res.agents.find((a) => a.id === boot.agentId);
+            saveAdminSession({
+              token: boot.token,
+              agentId: boot.agentId,
+              displayName: boot.displayName,
+              isSuperAdmin: self?.is_super_admin ?? false,
+            });
+            scrubToken(window.history, window.location);
+            setSession(loadAdminSession());
+          })
+          .catch(() => navigate('/dashboard/login'))
+          .finally(() => setBooting(false));
+        return;
+      }
+    }
+    if (!session && !booting) navigate('/dashboard/login');
+  }, [session, booting, navigate]);
 
-  if (!session) return null;
+  if (booting || !session) return null;
 
   const initials = session.displayName
     .split(' ')

@@ -170,6 +170,48 @@ describe('AgentConsoleShell Bot Config nav gating', () => {
   });
 });
 
+describe('AgentConsoleShell switch-to-admin-dashboard', () => {
+  it('hides the item for an agent role session', async () => {
+    vi.mocked(loadAgentSession).mockReturnValue(AGENT_SESSION);
+    renderShell();
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole('button', { name: /agent a/i }));
+
+    expect(
+      screen.queryByRole('menuitem', { name: /switch to admin dashboard/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('hides the item for a team_lead role session', async () => {
+    vi.mocked(loadAgentSession).mockReturnValue(TEAM_LEAD_SESSION);
+    renderShell();
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole('button', { name: /agent a/i }));
+
+    expect(
+      screen.queryByRole('menuitem', { name: /switch to admin dashboard/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows the item for an admin role session and opens /dashboard/overview with the token in the fragment', async () => {
+    vi.mocked(loadAgentSession).mockReturnValue(ADMIN_SESSION);
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+    renderShell();
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole('button', { name: /agent a/i }));
+    await user.click(screen.getByRole('menuitem', { name: /switch to admin dashboard/i }));
+
+    expect(openSpy).toHaveBeenCalledWith(
+      '/dashboard/overview?agentId=a1&name=Agent+A#t=t',
+      '_blank',
+      'noopener',
+    );
+  });
+});
+
 describe('AgentConsoleShell role reconciliation', () => {
   beforeEach(async () => {
     // Earlier describe blocks in this file leave loadAgentSession pinned to a
