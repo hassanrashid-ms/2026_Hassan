@@ -50,6 +50,8 @@ export type ConversationsListFilters = {
   olderThanHours?: number;
   q?: string;
   cursor?: string;
+  createdFrom?: string;
+  createdTo?: string;
 };
 
 export type ConversationsPage = {
@@ -129,6 +131,9 @@ function extraFilterConditions(extra: ConversationsListFilters) {
       ),
     );
   }
+  if (extra.createdFrom) conditions.push(sql`${conversation.createdAt} >= ${extra.createdFrom}::date`);
+  if (extra.createdTo)
+    conditions.push(sql`${conversation.createdAt} < (${extra.createdTo}::date + interval '1 day')`);
   if (extra.q) {
     const term = `%${extra.q}%`;
     const qNum = parseInt(extra.q, 10);

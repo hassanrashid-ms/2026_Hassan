@@ -426,6 +426,34 @@ describe('GET /agent/conversations filters', () => {
 
     expect(res.body.conversations.map((c: any) => c.id)).toEqual([c1]);
   });
+
+  it('filters by createdFrom/createdTo, AND-ed with the status mode', async () => {
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const inRange = await seedConversation({
+      workspaceId,
+      playerId,
+      status: 'open',
+      createdAt: new Date('2026-08-15T00:00:00Z'),
+    });
+    await seedConversation({
+      workspaceId,
+      playerId,
+      status: 'open',
+      createdAt: new Date('2026-08-01T00:00:00Z'),
+    });
+    const { token } = await setupAgent(workspaceId);
+
+    const res = await request(app)
+      .get('/conversations')
+      .query({ status: 'unassigned', createdFrom: '2026-08-10', createdTo: '2026-08-20' })
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+
+    expect(res.body.conversations).toHaveLength(1);
+    expect(res.body.conversations[0].id).toBe(inRange);
+  });
 });
 
 describe('GET /agent/conversations pagination', () => {

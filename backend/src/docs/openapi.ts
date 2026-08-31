@@ -619,6 +619,8 @@ registry.registerPath({
       olderThanHours: z.coerce.number().optional(),
       q: z.string().optional(),
       cursor: z.string().optional(),
+      createdFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      createdTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     }),
   },
   responses: {
