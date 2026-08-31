@@ -133,7 +133,18 @@ export function TicketsFilterBar({
           type="date"
           className="w-36"
           value={filters.createdFrom}
-          onChange={(e) => onChange({ createdFrom: e.target.value })}
+          max={filters.createdTo || undefined}
+          onChange={(e) => {
+            const value = e.target.value;
+            // Keep the range non-inverted: pulling "from" past the current
+            // "to" moves "to" up with it instead of silently producing an
+            // always-empty from>to range.
+            if (filters.createdTo && value > filters.createdTo) {
+              onChange({ createdFrom: value, createdTo: value });
+            } else {
+              onChange({ createdFrom: value });
+            }
+          }}
         />
       </label>
       <label className="flex items-center gap-1 text-xs text-muted">
@@ -143,7 +154,15 @@ export function TicketsFilterBar({
           type="date"
           className="w-36"
           value={filters.createdTo}
-          onChange={(e) => onChange({ createdTo: e.target.value })}
+          min={filters.createdFrom || undefined}
+          onChange={(e) => {
+            const value = e.target.value;
+            if (filters.createdFrom && value < filters.createdFrom) {
+              onChange({ createdFrom: value, createdTo: value });
+            } else {
+              onChange({ createdTo: value });
+            }
+          }}
         />
       </label>
     </div>

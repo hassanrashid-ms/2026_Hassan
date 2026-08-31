@@ -14,7 +14,15 @@ import { createSocket } from '../../../../features/chat/api/socket.ts';
 import { handleSessionExpired } from '../../lib/authErrorHandling.ts';
 import { ConversationDetailPane } from '../../components/ConversationDetailPane.tsx';
 import { EmptyState } from '../../components/ui/empty-state.tsx';
-import { ConversationRow } from '../Inbox/components/ConversationRow.tsx';
+import {
+  ConversationRow,
+  PRIORITY_BADGE_VARIANT,
+  STATUS_BADGE_VARIANT,
+  formatStatus,
+} from '../Inbox/components/ConversationRow.tsx';
+import { Badge } from '../../components/ui/badge.tsx';
+import { Button } from '../../components/ui/button.tsx';
+import { tagBadgeClassName } from '../../lib/tagBadge.ts';
 import { TicketsFilterBar } from './TicketsFilterBar.tsx';
 import { useTicketsFilters } from './useTicketsFilters.ts';
 import { QUEUE_OPTIONS } from './queues.ts';
@@ -250,27 +258,97 @@ function TicketsListView({
   return (
     <div
       style={{ height: '70vh' }}
-      className="min-h-0 flex-1 overflow-y-auto rounded-card border border-slate-200 bg-surface"
+      className="min-h-0 flex-1 overflow-auto rounded-card border border-slate-200 bg-bg"
       onScroll={handleScroll}
     >
-      {conversations.length === 0 && !queue.isLoading && (
+      {conversations.length === 0 && !queue.isLoading ? (
         <p className="p-3 text-xs text-muted">No tickets match your filters.</p>
+      ) : (
+        <table className="w-full min-w-[860px] border-collapse text-sm">
+          <thead className="sticky top-0 z-10 bg-surface">
+            <tr className="border-b border-slate-200 text-left text-xs font-semibold tracking-wide text-muted uppercase">
+              <th className="px-4 py-2.5">Player</th>
+              <th className="px-4 py-2.5">Status</th>
+              <th className="px-4 py-2.5">Priority</th>
+              <th className="px-4 py-2.5">Assignee</th>
+              <th className="px-4 py-2.5">Last message</th>
+              <th className="px-4 py-2.5">Tags</th>
+              <th className="px-4 py-2.5" />
+            </tr>
+          </thead>
+          <tbody>
+            {conversations.map((conversation) => {
+              const claimable =
+                conversation.assigned_agent_id === null &&
+                (conversation.status === 'open' || conversation.status === 'escalated');
+              return (
+                <tr
+                  key={conversation.id}
+                  tabIndex={0}
+                  onClick={() => onSelect(conversation.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') onSelect(conversation.id);
+                  }}
+                  className="cursor-pointer border-b border-slate-100 transition-colors last:border-b-0 hover:bg-accent-soft/50"
+                >
+                  <td className="max-w-40 truncate px-4 py-2.5 font-medium">
+                    {conversation.player.external_player_id}
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <Badge variant={STATUS_BADGE_VARIANT[conversation.status]}>
+                      {formatStatus(conversation.status)}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <Badge variant={PRIORITY_BADGE_VARIANT[conversation.priority]}>
+                      {conversation.priority.toUpperCase()}
+                    </Badge>
+                  </td>
+                  <td className="max-w-32 truncate px-4 py-2.5 text-muted">
+                    {conversation.assigned_agent_name ?? 'Unassigned'}
+                  </td>
+                  <td className="max-w-xs truncate px-4 py-2.5 text-muted">
+                    {conversation.last_message_preview ?? '(no messages)'}
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <span className="flex max-w-[160px] flex-wrap items-center gap-1 overflow-hidden">
+                      {conversation.tags.slice(0, 2).map((tag) => (
+                        <Badge
+                          key={tag.id}
+                          className={cn('max-w-20 truncate', tagBadgeClassName(tag.colorIndex))}
+                        >
+                          {tag.name}
+                        </Badge>
+                      ))}
+                      {conversation.tags.length > 2 && (
+                        <span className="shrink-0 text-xs text-muted">
+                          +{conversation.tags.length - 2}
+                        </span>
+                      )}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2.5 text-right">
+                    {claimable && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={claim.isPending}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          claim.mutate(conversation.id);
+                        }}
+                      >
+                        Claim
+                      </Button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       )}
-      {conversations.map((conversation) => {
-        const claimable =
-          conversation.assigned_agent_id === null &&
-          (conversation.status === 'open' || conversation.status === 'escalated');
-        return (
-          <ConversationRow
-            key={conversation.id}
-            conversation={conversation}
-            selected={false}
-            onSelect={() => onSelect(conversation.id)}
-            onClaim={claimable ? () => claim.mutate(conversation.id) : undefined}
-            claiming={claim.isPending}
-          />
-        );
-      })}
       {queue.isFetchingNextPage && <p className="p-3 text-xs text-muted">Loading more...</p>}
       {queue.isError && <p className="p-3 text-xs text-muted">Could not load tickets.</p>}
     </div>
@@ -383,19 +461,20 @@ export function Tickets() {
 
   return (
     <div className="h-full overflow-auto p-4">
-      <div className="mb-4">
-        <h1 className="text-lg font-semibold">Tickets</h1>
-        <p className="text-sm text-muted">All active queues at a glance</p>
-      </div>
-      <div className="mb-4 flex items-center gap-4">
-        <TicketsFilterBar token={session.token} filters={filters} onChange={updateFilters} />
-        <div className="flex shrink-0 gap-1 rounded-md border border-slate-200 p-0.5">
+      <div className="mb-4 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-lg font-semibold">Tickets</h1>
+          <p className="text-sm text-muted">All active queues at a glance</p>
+        </div>
+        <div className="flex shrink-0 gap-1 rounded-md border border-slate-200 bg-surface p-0.5">
           <button
             type="button"
             aria-pressed={filters.view === 'board'}
             className={cn(
-              'rounded px-2 py-1 text-xs font-medium',
-              filters.view === 'board' ? 'bg-accent-soft text-accent-fg' : 'text-muted',
+              'rounded px-3 py-1 text-xs font-medium transition-colors',
+              filters.view === 'board'
+                ? 'bg-accent text-accent-fg shadow-xs'
+                : 'text-muted hover:text-text',
             )}
             onClick={() => updateFilters({ view: 'board' })}
           >
@@ -405,14 +484,19 @@ export function Tickets() {
             type="button"
             aria-pressed={filters.view === 'list'}
             className={cn(
-              'rounded px-2 py-1 text-xs font-medium',
-              filters.view === 'list' ? 'bg-accent-soft text-accent-fg' : 'text-muted',
+              'rounded px-3 py-1 text-xs font-medium transition-colors',
+              filters.view === 'list'
+                ? 'bg-accent text-accent-fg shadow-xs'
+                : 'text-muted hover:text-text',
             )}
             onClick={() => updateFilters({ view: 'list' })}
           >
             List
           </button>
         </div>
+      </div>
+      <div className="mb-4">
+        <TicketsFilterBar token={session.token} filters={filters} onChange={updateFilters} />
       </div>
       {filters.view === 'list' ? (
         <TicketsListView
