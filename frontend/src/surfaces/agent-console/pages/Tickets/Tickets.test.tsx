@@ -243,4 +243,30 @@ describe('Tickets view toggle', () => {
     expect(screen.getByText('42')).toBeInTheDocument();
     expect(screen.getByText(/Aug 15, 2026/)).toBeInTheDocument();
   });
+
+  it('defaults list view sort to Priority asc, Created asc, shown on both headers', async () => {
+    vi.mocked(agentApi.fetchInbox).mockResolvedValue({ conversations: [], nextCursor: null });
+    renderTickets('/tickets?view=list');
+
+    await screen.findByText('Priority');
+    expect(screen.getByLabelText('sorted ascending, primary')).toBeInTheDocument();
+    expect(screen.getByLabelText('sorted ascending, secondary')).toBeInTheDocument();
+  });
+
+  it('clicking a column header re-fetches with the new sort params', async () => {
+    vi.mocked(agentApi.fetchInbox).mockResolvedValue({ conversations: [], nextCursor: null });
+    renderTickets('/tickets?view=list');
+    await screen.findByText('Assignee');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Assignee' }));
+
+    await waitFor(() =>
+      expect(agentApi.fetchInbox).toHaveBeenCalledWith(
+        expect.anything(),
+        'all',
+        expect.objectContaining({ sortBy: 'assignee', sortDir: 'asc', sortBy2: 'priority', sortDir2: 'asc' }),
+        undefined,
+      ),
+    );
+  });
 });

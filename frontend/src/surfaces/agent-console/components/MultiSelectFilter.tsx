@@ -28,8 +28,7 @@ export function MultiSelectFilter({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button type="button" variant="outline" size="sm">
-          {label}
-          {selected.length > 0 && (
+          {label}:{selected.length > 0 && (
             <span className="ml-1 text-xs text-muted">({selected.length})</span>
           )}
         </Button>

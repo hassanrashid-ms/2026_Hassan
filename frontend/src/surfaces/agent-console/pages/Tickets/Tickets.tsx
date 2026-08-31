@@ -27,6 +27,7 @@ import { tagBadgeClassName } from '../../lib/tagBadge.ts';
 import { TicketsFilterBar } from './TicketsFilterBar.tsx';
 import { useTicketsFilters } from './useTicketsFilters.ts';
 import { QUEUE_OPTIONS } from './queues.ts';
+import { SortableHeader, type SortState } from './SortableHeader.tsx';
 
 import {
   DndContext,
@@ -64,6 +65,10 @@ function toQueryFilters(f: ReturnType<typeof useTicketsFilters>[0]): TicketsQuer
     statuses: f.statuses.length ? f.statuses : undefined,
     createdFrom: f.createdFrom || undefined,
     createdTo: f.createdTo || undefined,
+    sortBy: f.sortBy,
+    sortDir: f.sortDir,
+    sortBy2: f.sortBy2,
+    sortDir2: f.sortDir2,
   };
 }
 
@@ -227,10 +232,14 @@ function QueueColumn({
 function TicketsListView({
   token,
   queryFilters,
+  sort,
+  onSort,
   onSelect,
 }: {
   token: string;
   queryFilters: TicketsQueryFilters;
+  sort: SortState;
+  onSort: (next: SortState) => void;
   onSelect: (id: string) => void;
 }) {
   const queryClient = useQueryClient();
@@ -262,26 +271,30 @@ function TicketsListView({
       className="min-h-0 flex-1 overflow-auto rounded-card border border-slate-200 bg-bg"
       onScroll={handleScroll}
     >
-      {conversations.length === 0 && !queue.isLoading ? (
-        <p className="p-3 text-xs text-muted">No tickets match your filters.</p>
-      ) : (
-        <table className="w-full min-w-[860px] border-collapse text-sm">
-          <thead className="sticky top-0 z-10 bg-surface">
-            <tr className="border-b border-slate-200 text-left text-xs font-semibold tracking-wide text-muted uppercase">
-              <th className="px-4 py-2.5">Player</th>
-              <th className="px-4 py-2.5">Status</th>
-              <th className="px-4 py-2.5">Priority</th>
-              <th className="px-4 py-2.5">Assignee</th>
-              <th className="px-4 py-2.5">Last message</th>
-              <th className="px-4 py-2.5">Tags</th>
-              <th className="px-4 py-2.5">Created</th>
-              <th className="px-4 py-2.5">Subintent</th>
-              <th className="px-4 py-2.5">Ticket #</th>
-              <th className="px-4 py-2.5" />
+      <table className="w-full min-w-[860px] border-collapse text-sm">
+        <thead className="sticky top-0 z-10 bg-surface">
+          <tr className="border-b border-slate-200 text-left text-xs font-semibold tracking-wide text-muted uppercase">
+            <SortableHeader label="Player" sortKey="player" sort={sort} onSort={onSort} />
+            <SortableHeader label="Status" sortKey="status" sort={sort} onSort={onSort} />
+            <SortableHeader label="Priority" sortKey="priority" sort={sort} onSort={onSort} />
+            <SortableHeader label="Assignee" sortKey="assignee" sort={sort} onSort={onSort} />
+            <SortableHeader label="Last message" sortKey="lastMessage" sort={sort} onSort={onSort} />
+            <SortableHeader label="Tags" sortKey="tags" sort={sort} onSort={onSort} />
+            <SortableHeader label="Created" sortKey="created" sort={sort} onSort={onSort} />
+            <SortableHeader label="Subintent" sortKey="subintent" sort={sort} onSort={onSort} />
+            <SortableHeader label="Ticket #" sortKey="number" sort={sort} onSort={onSort} />
+            <th className="px-4 py-2.5" />
+          </tr>
+        </thead>
+        <tbody>
+          {conversations.length === 0 && !queue.isLoading ? (
+            <tr>
+              <td colSpan={10} className="p-3 text-xs text-muted">
+                No tickets match your filters.
+              </td>
             </tr>
-          </thead>
-          <tbody>
-            {conversations.map((conversation) => {
+          ) : (
+            conversations.map((conversation) => {
               const claimable =
                 conversation.assigned_agent_id === null &&
                 (conversation.status === 'open' || conversation.status === 'escalated');
@@ -358,10 +371,10 @@ function TicketsListView({
                   </td>
                 </tr>
               );
-            })}
-          </tbody>
-        </table>
-      )}
+            })
+          )}
+        </tbody>
+      </table>
       {queue.isFetchingNextPage && <p className="p-3 text-xs text-muted">Loading more...</p>}
       {queue.isError && <p className="p-3 text-xs text-muted">Could not load tickets.</p>}
     </div>
@@ -515,6 +528,20 @@ export function Tickets() {
         <TicketsListView
           token={session.token}
           queryFilters={queryFilters}
+          sort={{
+            primary: filters.sortBy,
+            primaryDir: filters.sortDir,
+            secondary: filters.sortBy2,
+            secondaryDir: filters.sortDir2,
+          }}
+          onSort={(next) =>
+            updateFilters({
+              sortBy: next.primary,
+              sortDir: next.primaryDir,
+              sortBy2: next.secondary,
+              sortDir2: next.secondaryDir,
+            })
+          }
           onSelect={(id) => navigate(`/tickets/${id}`)}
         />
       ) : (
