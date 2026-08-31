@@ -68,6 +68,7 @@ export function DeclaredFieldRow({ token, field }: { token: string; field: Decla
 
   const dirty = label !== field.label || type !== field.type;
   const isActive = field.status === 'active';
+  const isSeeded = field.declaredBy === null;
 
   return (
     <tr className={!isActive ? 'opacity-60' : undefined}>
@@ -81,18 +82,27 @@ export function DeclaredFieldRow({ token, field }: { token: string; field: Decla
       </td>
       <td className="px-3 py-2">
         {editing ? (
-          <Select value={type} onValueChange={(v) => setType(v as DeclaredFieldType)}>
-            <SelectTrigger className="h-8 w-32">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {TYPES.map((t) => (
-                <SelectItem key={t} value={t}>
-                  {t}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-2">
+            <Select
+              value={type}
+              onValueChange={(v) => setType(v as DeclaredFieldType)}
+              disabled={isSeeded}
+            >
+              <SelectTrigger className="h-8 w-32">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {TYPES.map((t) => (
+                  <SelectItem key={t} value={t}>
+                    {t}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {isSeeded && (
+              <span className="text-xs text-muted">Type is locked for built-in fields</span>
+            )}
+          </div>
         ) : (
           <Badge variant="secondary">{field.type}</Badge>
         )}

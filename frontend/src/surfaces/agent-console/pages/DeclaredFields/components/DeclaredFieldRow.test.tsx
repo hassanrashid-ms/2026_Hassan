@@ -30,6 +30,17 @@ const activeField: DeclaredFieldView = {
 
 const inactiveField: DeclaredFieldView = { ...activeField, status: 'inactive' };
 
+const seededField: DeclaredFieldView = {
+  id: 'f2',
+  key: 'player_level',
+  label: 'Player level',
+  type: 'number',
+  status: 'active',
+  declaredAt: '2026-01-01T00:00:00Z',
+  declaredBy: null,
+  declaredByName: null,
+};
+
 describe('DeclaredFieldRow', () => {
   it('shows the key, label, type, status and declared-by', () => {
     renderWithClient(<DeclaredFieldRow token="t" field={activeField} />);
@@ -128,5 +139,24 @@ describe('DeclaredFieldRow', () => {
     await waitFor(() =>
       expect(spy).toHaveBeenCalledWith('t', 'f1', { label: 'VIP tier', type: 'string' }),
     );
+  });
+
+  it('disables the type select for a seeded field but keeps label editable', async () => {
+    renderWithClient(<DeclaredFieldRow token="t" field={seededField} />);
+
+    const user = userEvent.setup();
+    await user.click(screen.getByText('Edit'));
+
+    expect(screen.getByRole('combobox')).toBeDisabled();
+    expect(screen.getByDisplayValue('Player level')).not.toBeDisabled();
+  });
+
+  it('keeps the type select enabled for a promoted (non-seeded) field', async () => {
+    renderWithClient(<DeclaredFieldRow token="t" field={activeField} />);
+
+    const user = userEvent.setup();
+    await user.click(screen.getByText('Edit'));
+
+    expect(screen.getByRole('combobox')).not.toBeDisabled();
   });
 });
