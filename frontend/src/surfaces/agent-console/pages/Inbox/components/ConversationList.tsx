@@ -10,6 +10,93 @@ import { ConversationRow } from './ConversationRow.tsx';
 
 type InboxPages = { pages: AgentConversationsResponse[]; pageParams: (string | undefined)[] };
 
+// Each queue scrolls independently, capped to roughly five rows tall — a
+// queue with many pages loaded no longer pushes the other queue's header
+// out of reach, and no longer re-triggers the other queue's pagination just
+// because the user is scrolled near the bottom of this one.
+//
+// A fixed height, not max-height: Radix's ScrollArea needs a determinate
+// height on Root to compute the Viewport's overflow against. max-height only
+// clips — Root still sizes to its (shorter) content, the Viewport never
+// becomes taller than its content, and nothing ever registers as
+// scrollable, even once more rows are loaded than fit.
+const QUEUE_HEIGHT = 'h-[26rem]';
+// ConversationRow is ~88px tall (py-3.5 + three text lines) — roughly what
+// fits in QUEUE_HEIGHT before the queue actually scrolls. Below this count,
+// the fixed height would just be empty space, so the queue is left unsized
+// (shrinks to its content) instead.
+const ROWS_BEFORE_SCROLLING = 4;
+
+function ConversationQueue({
+  title,
+  testId,
+  conversations,
+  selectedId,
+  onSelect,
+  emptyLabel,
+  hasNextPage,
+  isFetchingNextPage,
+  fetchNextPage,
+}: {
+  title: string;
+  testId: string;
+  conversations: AgentConversationsResponse['conversations'];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  emptyLabel: string;
+  hasNextPage: boolean;
+  isFetchingNextPage: boolean;
+  fetchNextPage: () => void;
+}) {
+  function handleScroll(event: React.UIEvent<HTMLDivElement>) {
+    const el = event.currentTarget;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 200;
+    if (!nearBottom) return;
+    if (hasNextPage && !isFetchingNextPage) fetchNextPage();
+  }
+
+  // More loaded than fits, or more still to fetch — either way, this queue
+  // needs its fixed height to actually scroll. Short of that, leave it
+  // unsized so it doesn't sit in a box with empty space below it.
+  const scrollable = conversations.length > ROWS_BEFORE_SCROLLING || hasNextPage;
+
+  return (
+    <div className="flex shrink-0 flex-col border-b border-slate-100">
+      <div className="flex items-center gap-2 border-b border-slate-100 bg-surface px-3 py-2 text-sm font-semibold">
+        {title}
+        <span className="rounded-full bg-muted/15 px-1.5 py-0.5 text-xs font-medium text-muted">
+          {conversations.length}
+        </span>
+      </div>
+      <div className="relative">
+        <ScrollArea
+          className={scrollable ? QUEUE_HEIGHT : undefined}
+          viewportTestId={testId}
+          onScroll={handleScroll}
+        >
+          {conversations.map((c) => (
+            <ConversationRow
+              key={c.id}
+              conversation={c}
+              selected={c.id === selectedId}
+              onSelect={() => onSelect(c.id)}
+            />
+          ))}
+          {conversations.length === 0 && (
+            <div className="px-3 py-3 text-sm text-muted">{emptyLabel}</div>
+          )}
+          {isFetchingNextPage && <div className="px-3 pb-3 text-sm text-muted">Loading more...</div>}
+        </ScrollArea>
+        {/* Same condition as the fixed height above — rendering this on a
+          queue that isn't scrollable at all would lie. */}
+        {scrollable && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-4 bg-gradient-to-t from-black/10 to-transparent" />
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function ConversationList({
   token,
   selectedId,
@@ -120,59 +207,36 @@ export function ConversationList({
     mineConversations.length === 0 &&
     escalatedConversations.length === 0;
 
-  function handleScroll(event: React.UIEvent<HTMLDivElement>) {
-    const el = event.currentTarget;
-    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 200;
-    if (!nearBottom) return;
-    if (mine.hasNextPage && !mine.isFetchingNextPage) void mine.fetchNextPage();
-    if (escalated.hasNextPage && !escalated.isFetchingNextPage) void escalated.fetchNextPage();
-  }
-
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <ScrollArea
-        className="min-h-0 flex-1"
-        viewportTestId="conversation-list-scroll"
-        onScroll={handleScroll}
-      >
-        {bothLoadedAndEmpty ? (
-          <EmptyState message="Nothing to show" />
-        ) : (
-          <>
-            <div className="p-3 text-sm font-semibold">My tickets</div>
-            {mineConversations.map((c) => (
-              <ConversationRow
-                key={c.id}
-                conversation={c}
-                selected={c.id === selectedId}
-                onSelect={() => onSelect(c.id)}
-              />
-            ))}
-            {mineConversations.length === 0 && (
-              <div className="px-3 pb-3 text-sm text-muted">No open tickets.</div>
-            )}
-            {mine.isFetchingNextPage && (
-              <div className="px-3 pb-3 text-sm text-muted">Loading more...</div>
-            )}
-
-            <div className="p-3 text-sm font-semibold">Escalated tickets</div>
-            {escalatedConversations.map((c) => (
-              <ConversationRow
-                key={c.id}
-                conversation={c}
-                selected={c.id === selectedId}
-                onSelect={() => onSelect(c.id)}
-              />
-            ))}
-            {escalatedConversations.length === 0 && (
-              <div className="px-3 pb-3 text-sm text-muted">No escalated tickets.</div>
-            )}
-            {escalated.isFetchingNextPage && (
-              <div className="px-3 pb-3 text-sm text-muted">Loading more...</div>
-            )}
-          </>
-        )}
-      </ScrollArea>
+    <div className="flex h-full min-h-0 flex-col overflow-y-auto">
+      {bothLoadedAndEmpty ? (
+        <EmptyState message="Nothing to show" />
+      ) : (
+        <>
+          <ConversationQueue
+            title="My tickets"
+            testId="conversation-list-scroll-mine"
+            conversations={mineConversations}
+            selectedId={selectedId}
+            onSelect={onSelect}
+            emptyLabel="No open tickets."
+            hasNextPage={mine.hasNextPage}
+            isFetchingNextPage={mine.isFetchingNextPage}
+            fetchNextPage={() => void mine.fetchNextPage()}
+          />
+          <ConversationQueue
+            title="Escalated tickets"
+            testId="conversation-list-scroll-escalated"
+            conversations={escalatedConversations}
+            selectedId={selectedId}
+            onSelect={onSelect}
+            emptyLabel="No escalated tickets."
+            hasNextPage={escalated.hasNextPage}
+            isFetchingNextPage={escalated.isFetchingNextPage}
+            fetchNextPage={() => void escalated.fetchNextPage()}
+          />
+        </>
+      )}
     </div>
   );
 }

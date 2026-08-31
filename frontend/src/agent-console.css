@@ -21,6 +21,7 @@
   --color-text: #0f172a; /* slate-900 */
   --color-muted: #64748b; /* slate-500 */
   --radius-card: 0.75rem;
+  --shadow-card: 0 1px 2px 0 rgb(15 23 42 / 0.06), 0 1px 1px 0 rgb(15 23 42 / 0.04);
 }
 
 body {

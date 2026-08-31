@@ -72,6 +72,11 @@ function toChatMessage(m: AgentMessageView): ChatMessage {
   };
 }
 
+// Same reasoning as ConversationRow's MAX_VISIBLE_TAGS: the header is a
+// toolbar, not the tag list — past a few, they crowd out the action buttons
+// and force the row onto a second line.
+const MAX_VISIBLE_HEADER_TAGS = 3;
+
 function formatTicketDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, {
     day: 'numeric',
@@ -398,7 +403,7 @@ export function ThreadPanel({
   return (
     <>
       <div className="flex h-full min-h-0 flex-col">
-        <div className="flex shrink-0 items-center gap-2 border-b border-slate-200 px-4 py-3">
+        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-200 px-4 py-3">
           {onBack && (
             <Button
               type="button"
@@ -431,26 +436,36 @@ export function ThreadPanel({
               }
             />
           )}
-          {tags.map((tag) => (
-            <Badge key={tag.id} className={tagBadgeClassName(tag.colorIndex)}>
-              {tag.name}
-              <button
-                type="button"
-                aria-label="Remove tag"
-                disabled={detach.isPending}
-                onClick={() => detach.mutate(tag.id)}
-              >
-                <X className="size-3" />
-              </button>
-            </Badge>
-          ))}
-          {conversationId && (
-            <TagPicker
-              token={token}
-              conversationId={conversationId}
-              attachedTagIds={tags.map((t) => t.id)}
-            />
-          )}
+          <div className="flex items-center gap-1.5">
+            {tags.slice(0, MAX_VISIBLE_HEADER_TAGS).map((tag) => (
+              <Badge key={tag.id} className={tagBadgeClassName(tag.colorIndex)}>
+                {tag.name}
+                <button
+                  type="button"
+                  aria-label="Remove tag"
+                  disabled={detach.isPending}
+                  onClick={() => detach.mutate(tag.id)}
+                >
+                  <X className="size-3" />
+                </button>
+              </Badge>
+            ))}
+            {/* Same "+N more" treatment as ConversationRow — the full list is
+              still reachable via the TagPicker's attached-tags state, this is
+              just the header's glance, not the source of truth. */}
+            {tags.length > MAX_VISIBLE_HEADER_TAGS && (
+              <span className="text-xs text-muted">
+                +{tags.length - MAX_VISIBLE_HEADER_TAGS}
+              </span>
+            )}
+            {conversationId && (
+              <TagPicker
+                token={token}
+                conversationId={conversationId}
+                attachedTagIds={tags.map((t) => t.id)}
+              />
+            )}
+          </div>
           {conversationId && canBuildForms(loadAgentSession()) && (
             <AssignPicker
               token={token}
@@ -459,7 +474,7 @@ export function ThreadPanel({
               currentAssigneeName={assignedAgentName}
             />
           )}
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex shrink-0 items-center gap-2">
             {takeOverAvailable && (
               <Button
                 type="button"

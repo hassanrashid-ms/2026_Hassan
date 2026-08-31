@@ -131,10 +131,10 @@ export function ChatThread({
                       className={[
                         'flex size-8 items-center justify-center rounded-full',
                         isBot
-                          ? 'bg-muted/20'
+                          ? 'bg-muted/25'
                           : chatMessage.authorType === 'agent'
-                            ? 'bg-accent-deep/20'
-                            : 'bg-muted/20',
+                            ? 'bg-accent-deep/25'
+                            : 'bg-muted/25',
                       ].join(' ')}
                       aria-hidden="true"
                     >
@@ -149,7 +149,7 @@ export function ChatThread({
                   </div>
                   <div
                     className={[
-                      'rounded-2xl px-3 py-2 text-sm leading-snug break-words shadow-sm',
+                      'rounded-card px-3.5 py-2.5 text-sm leading-snug break-words shadow-card',
                       // Side is "whose side of the conversation", not "who typed it"
                       // — kept separate from the colour below so the bot can sit on
                       // support's side without also borrowing the agent's styling.

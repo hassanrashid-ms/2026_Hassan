@@ -216,7 +216,7 @@ describe('ConversationList pagination', () => {
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith('tok', 'mine', undefined, undefined));
     await screen.findByText('player-42');
 
-    const scrollable = screen.getByTestId('conversation-list-scroll');
+    const scrollable = screen.getByTestId('conversation-list-scroll-mine');
     Object.defineProperty(scrollable, 'scrollHeight', { value: 1000, configurable: true });
     Object.defineProperty(scrollable, 'clientHeight', { value: 400, configurable: true });
     Object.defineProperty(scrollable, 'scrollTop', { value: 700, configurable: true });

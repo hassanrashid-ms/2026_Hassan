@@ -77,15 +77,15 @@ export function ConversationRow({
         if (e.key === 'Enter') onSelect();
       }}
       className={cn(
-        'group flex cursor-pointer flex-col gap-1 border-b border-slate-100 px-4 py-3 text-left transition-colors',
-        selected ? 'bg-accent-soft' : 'hover:bg-accent-soft/50',
+        'group flex cursor-pointer flex-col gap-1 border-b border-slate-100 border-l-2 px-4 py-3.5 text-left transition-colors',
+        selected ? 'border-l-accent bg-accent-soft' : 'border-l-transparent hover:bg-accent-soft/50',
       )}
     >
       <div className="flex items-start justify-between gap-2">
         <span className="min-w-0 flex-1 truncate text-sm font-medium">
           {conversation.player.external_player_id}
         </span>
-        <span className="flex max-w-[70%] flex-none flex-wrap items-center justify-end gap-1.5 overflow-hidden">
+        <span className="flex max-w-[70%] flex-none flex-wrap items-center justify-end gap-1 overflow-hidden">
           {/* No new data: confirm_phase already rides on the summary. A
               bot_active ticket sits in the unassigned queue, so without this a
               half-filled form reads as a stuck ticket. */}

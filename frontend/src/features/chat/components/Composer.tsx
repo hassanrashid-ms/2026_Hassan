@@ -134,7 +134,7 @@ export function Composer({
   };
 
   return (
-    <div className="flex shrink-0 flex-col gap-2 border-t border-muted/20 bg-bg p-2">
+    <div className="flex shrink-0 flex-col gap-2 border-t border-muted/20 bg-bg p-3">
       {previewUrl && previewMeta && (
         <div className="flex items-center gap-2">
           <AttachmentThumbnail
