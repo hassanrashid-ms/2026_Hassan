@@ -151,10 +151,7 @@ export function BotTestPanel({ token }: { token: string }) {
       <div className="flex flex-col gap-3 border-b border-slate-200 bg-accent-soft/40 p-3">
         <div className="flex flex-col gap-1.5">
           <span className="text-xs font-medium text-muted">Subintent</span>
-          <Select
-            value={subintentId ?? NO_SUBINTENT}
-            onValueChange={(v) => setSubintentId(v === NO_SUBINTENT ? null : v)}
-          >
+          <Select value={subintentId ?? NO_SUBINTENT} disabled>
             <SelectTrigger className="h-8 text-xs">
               <SelectValue placeholder="None" />
             </SelectTrigger>
@@ -170,10 +167,7 @@ export function BotTestPanel({ token }: { token: string }) {
         </div>
         <div className="flex flex-col gap-1.5">
           <span className="text-xs font-medium text-muted">Confirm phase</span>
-          <Select
-            value={confirmPhase}
-            onValueChange={(v) => setConfirmPhase(v as ConfirmPhaseValue)}
-          >
+          <Select value={confirmPhase} disabled>
             <SelectTrigger className="h-8 text-xs">
               <SelectValue />
             </SelectTrigger>
@@ -187,9 +181,8 @@ export function BotTestPanel({ token }: { token: string }) {
           </Select>
         </div>
         <p className="text-[11px] leading-snug text-muted">
-          Reflects the simulated conversation's state — the bot updates these as it classifies
-          and replies, same as a real conversation's columns. Change them by hand to jump into a
-          mid-conversation state instead of starting fresh.
+          Read-only — reflects the simulated conversation's state as the bot classifies and
+          replies, same as a real conversation's columns. Not settable by hand.
         </p>
         {(subintentId || confirmPhase !== 'none') && (
           <div className="flex flex-wrap gap-1.5">
