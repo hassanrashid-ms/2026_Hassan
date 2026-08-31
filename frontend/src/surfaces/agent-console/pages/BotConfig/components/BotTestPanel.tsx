@@ -151,14 +151,16 @@ export function BotTestPanel({ token }: { token: string }) {
       <div className="flex flex-col gap-3 border-b border-slate-200 bg-accent-soft/40 p-3">
         <div className="flex flex-col gap-1.5">
           <span className="text-xs font-medium text-muted">Subintent</span>
-          <Select value={subintentId ?? NO_SUBINTENT} disabled>
+          <Select value={subintentId ?? NO_SUBINTENT}>
             <SelectTrigger className="h-8 text-xs">
               <SelectValue placeholder="None" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={NO_SUBINTENT}>None</SelectItem>
+              <SelectItem value={NO_SUBINTENT} disabled>
+                None
+              </SelectItem>
               {subintentOptions.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
+                <SelectItem key={opt.value} value={opt.value} disabled>
                   {opt.label}
                 </SelectItem>
               ))}
@@ -167,13 +169,13 @@ export function BotTestPanel({ token }: { token: string }) {
         </div>
         <div className="flex flex-col gap-1.5">
           <span className="text-xs font-medium text-muted">Confirm phase</span>
-          <Select value={confirmPhase} disabled>
+          <Select value={confirmPhase}>
             <SelectTrigger className="h-8 text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               {CONFIRM_PHASES.map((phase) => (
-                <SelectItem key={phase} value={phase}>
+                <SelectItem key={phase} value={phase} disabled>
                   {phase}
                 </SelectItem>
               ))}
