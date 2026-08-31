@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, beforeAll } from 'vitest';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { PlayerFormView, PlayerMessagesResponse } from '@support/types';
@@ -456,10 +456,16 @@ describe('SupportChat form attachment upload', () => {
     vi.mocked(sendPlayerMessage).mockResolvedValue({ conversation_id: 'c1', message: null });
 
     renderChat();
-    await screen.findByLabelText('Attach image or video');
+    // FormCard wraps its fields in role="group" aria-label={form.form_name} —
+    // scope to it because ChatComposer's own (disabled) attach control shares
+    // the exact same "Attach image or video" label and stays mounted
+    // underneath the active form.
+    const formGroup = await screen.findByRole('group', { name: 'Proof of purchase' });
 
     const file = new File([new Uint8Array(3)], 'shot.png', { type: 'image/png' });
-    fireEvent.change(screen.getByLabelText('Attach image or video'), { target: { files: [file] } });
+    fireEvent.change(within(formGroup).getByLabelText('Attach image or video'), {
+      target: { files: [file] },
+    });
 
     await waitFor(() =>
       expect(putFileToUploadUrl).toHaveBeenCalledWith(
