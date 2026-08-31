@@ -1,4 +1,13 @@
 import { apiCall } from '../../../lib/httpClient.ts';
+import type {
+  ArchiveDeclaredFieldResponse,
+  CreateDeclaredFieldResponse,
+  DeactivateDeclaredFieldResponse,
+  DeclaredFieldsResponse,
+  DeclaredFieldType,
+  ReactivateDeclaredFieldResponse,
+  UpdateDeclaredFieldResponse,
+} from '@support/types';
 
 const BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000';
 
@@ -153,5 +162,65 @@ export function setSuperAdminFlag(
   return apiCall(`/admin/agents/${id}/super-admin`, token, {
     method: 'PATCH',
     body: JSON.stringify({ is_super_admin: isSuperAdmin }),
+  });
+}
+
+export function fetchDeclaredFields(
+  token: string,
+  workspaceId: string,
+): Promise<DeclaredFieldsResponse> {
+  return apiCall(`/admin/workspaces/${workspaceId}/declared-fields`, token);
+}
+
+export function createDeclaredField(
+  token: string,
+  workspaceId: string,
+  input: { key: string; label: string; type: DeclaredFieldType },
+): Promise<CreateDeclaredFieldResponse> {
+  return apiCall(`/admin/workspaces/${workspaceId}/declared-fields`, token, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateDeclaredField(
+  token: string,
+  workspaceId: string,
+  id: string,
+  patch: { label?: string; type?: DeclaredFieldType },
+): Promise<UpdateDeclaredFieldResponse> {
+  return apiCall(`/admin/workspaces/${workspaceId}/declared-fields/${id}`, token, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
+}
+
+export function deactivateDeclaredField(
+  token: string,
+  workspaceId: string,
+  id: string,
+): Promise<DeactivateDeclaredFieldResponse> {
+  return apiCall(`/admin/workspaces/${workspaceId}/declared-fields/${id}/deactivate`, token, {
+    method: 'POST',
+  });
+}
+
+export function reactivateDeclaredField(
+  token: string,
+  workspaceId: string,
+  id: string,
+): Promise<ReactivateDeclaredFieldResponse> {
+  return apiCall(`/admin/workspaces/${workspaceId}/declared-fields/${id}/reactivate`, token, {
+    method: 'POST',
+  });
+}
+
+export function archiveDeclaredField(
+  token: string,
+  workspaceId: string,
+  id: string,
+): Promise<ArchiveDeclaredFieldResponse> {
+  return apiCall(`/admin/workspaces/${workspaceId}/declared-fields/${id}/archive`, token, {
+    method: 'POST',
   });
 }
