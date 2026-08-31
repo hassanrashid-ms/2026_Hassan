@@ -34,7 +34,36 @@ describe('useTicketsFilters', () => {
       createdFrom: '',
       createdTo: '',
       view: 'board',
+      sortBy: 'priority',
+      sortDir: 'asc',
+      sortBy2: 'created',
+      sortDir2: 'asc',
     });
+  });
+
+  it('reads a non-default sort from the URL', () => {
+    const { result } = renderWithRouter('/tickets?sortBy=assignee&sortDir=desc&sortBy2=number');
+    const [filters] = result.current;
+    expect(filters.sortBy).toBe('assignee');
+    expect(filters.sortDir).toBe('desc');
+    expect(filters.sortBy2).toBe('number');
+    expect(filters.sortDir2).toBe('asc');
+  });
+
+  it('round-trips a non-default sort through the URL on update, omitting defaulted slots', () => {
+    const { result } = renderWithRouter('/tickets');
+    act(() => {
+      const [, update] = result.current;
+      update({ sortBy: 'assignee', sortDir: 'desc', sortBy2: 'number', sortDir2: 'asc' });
+    });
+    const [filters] = result.current;
+    expect(filters.sortBy).toBe('assignee');
+    expect(filters.sortDir).toBe('desc');
+    expect(filters.sortBy2).toBe('number');
+    // sortDir2 'asc' is the default for the secondary slot, so it's omitted
+    // from the URL — but reading it back still resolves to 'asc' either way,
+    // matching how every other filter field round-trips only when non-default.
+    expect(filters.sortDir2).toBe('asc');
   });
 
   it('merges a partial update into the current filters', () => {
@@ -55,6 +84,10 @@ describe('useTicketsFilters', () => {
       createdFrom: '',
       createdTo: '',
       view: 'board',
+      sortBy: 'priority',
+      sortDir: 'asc',
+      sortBy2: 'created',
+      sortDir2: 'asc',
     });
   });
 

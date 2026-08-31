@@ -11,6 +11,10 @@ export type TicketsFilters = {
   createdFrom: string;
   createdTo: string;
   view: 'board' | 'list';
+  sortBy: string;
+  sortDir: 'asc' | 'desc';
+  sortBy2: string;
+  sortDir2: 'asc' | 'desc';
 };
 
 function parseCsv(value: string | null): string[] {
@@ -36,6 +40,10 @@ export function useTicketsFilters(): [TicketsFilters, (next: Partial<TicketsFilt
     createdFrom: params.get('createdFrom') ?? '',
     createdTo: params.get('createdTo') ?? '',
     view: params.get('view') === 'list' ? 'list' : 'board',
+    sortBy: params.get('sortBy') ?? 'priority',
+    sortDir: params.get('sortDir') === 'desc' ? 'desc' : 'asc',
+    sortBy2: params.get('sortBy2') ?? 'created',
+    sortDir2: params.get('sortDir2') === 'desc' ? 'desc' : 'asc',
   };
 
   function update(next: Partial<TicketsFilters>) {
@@ -51,6 +59,10 @@ export function useTicketsFilters(): [TicketsFilters, (next: Partial<TicketsFilt
     if (merged.createdFrom) nextParams.set('createdFrom', merged.createdFrom);
     if (merged.createdTo) nextParams.set('createdTo', merged.createdTo);
     if (merged.view === 'list') nextParams.set('view', 'list');
+    if (merged.sortBy !== 'priority') nextParams.set('sortBy', merged.sortBy);
+    if (merged.sortDir !== 'asc') nextParams.set('sortDir', merged.sortDir);
+    if (merged.sortBy2 !== 'created') nextParams.set('sortBy2', merged.sortBy2);
+    if (merged.sortDir2 !== 'asc') nextParams.set('sortDir2', merged.sortDir2);
     setParams(nextParams, { replace: true });
   }
 
