@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Search } from 'lucide-react';
 import { fetchIntents, fetchTags, fetchWorkspaceAgents } from '../../api/agentApi.ts';
 import { Input } from '../../components/ui/input.tsx';
+import { Button } from '../../components/ui/button.tsx';
 import {
   Select,
   SelectContent,
@@ -11,6 +12,7 @@ import {
   SelectValue,
 } from '../../components/ui/select.tsx';
 import { MultiSelectFilter } from '../../components/MultiSelectFilter.tsx';
+import { DateRangeFilter } from './DateRangeFilter.tsx';
 import { QUEUE_OPTIONS } from './queues.ts';
 import type { TicketsFilters } from './useTicketsFilters.ts';
 
@@ -70,6 +72,17 @@ export function TicketsFilterBar({
     label: a.display_name,
   }));
 
+  const hasActiveFilters =
+    filters.q !== '' ||
+    filters.priority.length > 0 ||
+    filters.labelIds.length > 0 ||
+    filters.subintentIds.length > 0 ||
+    filters.assigneeIds.length > 0 ||
+    filters.olderThanHours !== '' ||
+    filters.statuses.length > 0 ||
+    filters.createdFrom !== '' ||
+    filters.createdTo !== '';
+
   return (
     <div className="mb-4 flex flex-wrap items-center gap-2">
       <div className="relative">
@@ -126,45 +139,33 @@ export function TicketsFilterBar({
           ))}
         </SelectContent>
       </Select>
-      <label className="flex items-center gap-1 text-xs text-muted">
-        Created from
-        <Input
-          aria-label="Created from"
-          type="date"
-          className="w-36"
-          value={filters.createdFrom}
-          max={filters.createdTo || undefined}
-          onChange={(e) => {
-            const value = e.target.value;
-            // Keep the range non-inverted: pulling "from" past the current
-            // "to" moves "to" up with it instead of silently producing an
-            // always-empty from>to range.
-            if (filters.createdTo && value > filters.createdTo) {
-              onChange({ createdFrom: value, createdTo: value });
-            } else {
-              onChange({ createdFrom: value });
-            }
-          }}
-        />
-      </label>
-      <label className="flex items-center gap-1 text-xs text-muted">
-        to
-        <Input
-          aria-label="Created to"
-          type="date"
-          className="w-36"
-          value={filters.createdTo}
-          min={filters.createdFrom || undefined}
-          onChange={(e) => {
-            const value = e.target.value;
-            if (filters.createdFrom && value < filters.createdFrom) {
-              onChange({ createdFrom: value, createdTo: value });
-            } else {
-              onChange({ createdTo: value });
-            }
-          }}
-        />
-      </label>
+      <DateRangeFilter
+        from={filters.createdFrom}
+        to={filters.createdTo}
+        onChange={(next) => onChange(next)}
+      />
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        disabled={!hasActiveFilters}
+        onClick={() => {
+          setSearchInput('');
+          onChange({
+            q: '',
+            priority: [],
+            labelIds: [],
+            subintentIds: [],
+            assigneeIds: [],
+            olderThanHours: '',
+            statuses: [],
+            createdFrom: '',
+            createdTo: '',
+          });
+        }}
+      >
+        Reset filters
+      </Button>
     </div>
   );
 }

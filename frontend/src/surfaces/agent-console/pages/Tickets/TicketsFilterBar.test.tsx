@@ -70,11 +70,57 @@ describe('TicketsFilterBar', () => {
     expect(onChange).toHaveBeenCalledWith({ statuses: ['escalated'] });
   });
 
-  it('changing the Created-from date calls onChange', async () => {
+  it('selecting a date range calls onChange with both bounds', async () => {
     const { onChange } = renderBar();
-    const fromInput = screen.getAllByLabelText(/Created from/i)[0]!;
-    await userEvent.type(fromInput, '2026-08-01');
+    await userEvent.click(screen.getByRole('button', { name: /Created date/ }));
+    const day1 = await screen.findByRole('gridcell', { name: '1' });
+    await userEvent.click(day1.querySelector('button')!);
+    const day5 = screen.getByRole('gridcell', { name: '5' });
+    await userEvent.click(day5.querySelector('button')!);
 
-    expect(onChange).toHaveBeenCalledWith({ createdFrom: '2026-08-01' });
+    expect(onChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        createdFrom: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+        createdTo: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+      }),
+    );
+  });
+
+  it('disables Reset filters when no filters are active', () => {
+    renderBar();
+    expect(screen.getByRole('button', { name: /Reset filters/ })).toBeDisabled();
+  });
+
+  it('enables Reset filters once a filter is set, and clears everything on click', async () => {
+    const onChange = vi.fn();
+    vi.mocked(agentApi.fetchTags).mockResolvedValue([]);
+    vi.mocked(agentApi.fetchIntents).mockResolvedValue({ intents: [] });
+    vi.mocked(agentApi.fetchWorkspaceAgents).mockResolvedValue({ agents: [] });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <TicketsFilterBar
+          token="t"
+          filters={{ ...EMPTY_FILTERS, priority: ['p1'] }}
+          onChange={onChange}
+        />
+      </QueryClientProvider>,
+    );
+
+    const resetButton = screen.getByRole('button', { name: /Reset filters/ });
+    expect(resetButton).not.toBeDisabled();
+    await userEvent.click(resetButton);
+
+    expect(onChange).toHaveBeenCalledWith({
+      q: '',
+      priority: [],
+      labelIds: [],
+      subintentIds: [],
+      assigneeIds: [],
+      olderThanHours: '',
+      statuses: [],
+      createdFrom: '',
+      createdTo: '',
+    });
   });
 });
