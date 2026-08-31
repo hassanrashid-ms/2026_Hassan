@@ -1,8 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import type { FormField, PlayerFormView } from '@support/types';
 import { SupportButton } from '@/surfaces/webview/components/SupportButton';
 import { post } from '@/services/bridgeService';
 import { cn } from '@/surfaces/webview/lib/cn';
+import { Paperclip } from 'lucide-react';
+import { AttachmentThumbnail } from '@/features/chat/components/AttachmentThumbnail';
 
 type FormCardProps = {
   form: PlayerFormView;
@@ -17,7 +19,11 @@ type FormCardProps = {
    * it bypasses the draft/committed/advance machinery entirely. Optional so
    * existing callers/tests that seed no attachment field are unaffected.
    */
-  onSendAttachment?: (fieldKey: string, file: File) => Promise<void>;
+  onSendAttachment?: (
+    fieldKey: string,
+    file: File,
+    onProgress: (percent: number) => void,
+  ) => Promise<void>;
 };
 
 /** Empty means "nothing to send": a blank value is never posted, required or not. */
@@ -104,18 +110,13 @@ export function FormCard({
   // compare, since a picked file that uploaded successfully is always a
   // "yes, send this" — there is no re-shown-unchanged case to skip posting
   // for. This mirrors advance()'s isLast/onSubmit/setIndex tail without its
-  // changed-value branch.
-  const handleAttachmentPicked = async (fieldKey: string, file: File) => {
-    if (!onSendAttachment) return;
-    setSending(true);
-    try {
-      await onSendAttachment(fieldKey, file);
-      setCommitted((current) => ({ ...current, [fieldKey]: true }));
-      if (isLast) onSubmit();
-      else setIndex((current) => current + 1);
-    } finally {
-      setSending(false);
-    }
+  // changed-value branch. The upload itself, its preview, and its progress
+  // are owned by AttachmentField below; this only runs once that upload has
+  // actually succeeded.
+  const handleAttachmentUploaded = (fieldKey: string) => {
+    setCommitted((current) => ({ ...current, [fieldKey]: true }));
+    if (isLast) onSubmit();
+    else setIndex((current) => current + 1);
   };
 
   return (
@@ -159,13 +160,19 @@ export function FormCard({
         {field.helperText && <p className="text-sm text-muted">{field.helperText}</p>}
       </div>
 
-      <FieldInput
-        field={field}
-        value={value}
-        onChange={set}
-        disabled={disabled}
-        onAttachmentPicked={(file) => void handleAttachmentPicked(field.key, file)}
-      />
+      {field.type === 'attachment' ? (
+        onSendAttachment && (
+          <AttachmentField
+            fieldKey={field.key}
+            disabled={disabled}
+            onSendAttachment={onSendAttachment}
+            onUploading={setSending}
+            onUploaded={() => handleAttachmentUploaded(field.key)}
+          />
+        )
+      ) : (
+        <FieldInput field={field} value={value} onChange={set} disabled={disabled} />
+      )}
 
       <SupportButton
         variant="primary"
@@ -203,13 +210,11 @@ function FieldInput({
   value,
   onChange,
   disabled,
-  onAttachmentPicked,
 }: {
   field: FormField;
   value: unknown;
   onChange: (next: unknown) => void;
   disabled: boolean;
-  onAttachmentPicked: (file: File) => void;
 }) {
   // Older form versions may not include a placeholder. Keep those inputs
   // actionable by using the field label as a frontend-only fallback.
@@ -292,28 +297,6 @@ function FieldInput({
           className={inputClass}
         />
       );
-    case 'attachment':
-      // Bypasses draft/onChange entirely: picking a file drives its own
-      // upload-then-advance path in FormCard (handleAttachmentPicked), not
-      // the changed-value comparison Next relies on for typed fields.
-      return (
-        <div className="flex flex-col gap-2">
-          <input
-            type="file"
-            accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm"
-            aria-label="Attach image or video"
-            disabled={disabled}
-            // Must post before the native picker opens (it starts as this
-            // click's default action): the SDK's resume watchdog needs to
-            // already know to expect the pause it's about to see.
-            onClick={() => post({ type: 'expect_native_dialog' })}
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) onAttachmentPicked(file);
-            }}
-          />
-        </div>
-      );
     case 'short_text':
     default:
       return (
@@ -328,6 +311,148 @@ function FieldInput({
         />
       );
   }
+}
+
+// Mirrors backend/src/shared/storage/presign.ts's ALLOWED_CHAT_ATTACHMENT_MIME_TYPES /
+// maxBytesForAttachment. Duplicated rather than imported — the frontend doesn't
+// import backend code, and this surface already duplicates the same constants
+// in ChatComposer.tsx rather than sharing a module across surfaces — so a fast
+// client-side rejection matches what the server would reject anyway, instead of
+// round-tripping to find out.
+const ALLOWED_ATTACHMENT_MIME_TYPES = [
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/gif',
+  'video/mp4',
+  'video/webm',
+];
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
+const VIDEO_MIME_TYPES = new Set(['video/mp4', 'video/webm']);
+
+function maxBytesForAttachment(mimeType: string): number {
+  return VIDEO_MIME_TYPES.has(mimeType) ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
+}
+
+/**
+ * The form's attachment field: a clickable container with a centered icon
+ * when idle, replaced by AttachmentThumbnail's preview+scrim+progress-ring
+ * once a file is picked. Owns its own preview/uploading/progress/error state
+ * exactly like features/chat/components/Composer.tsx's attachment handling —
+ * FormCard only learns "an upload is in flight" (to keep Back/Skip/Next
+ * disabled) and "the upload succeeded" (to advance) via the two callback
+ * props below.
+ */
+function AttachmentField({
+  fieldKey,
+  disabled,
+  onSendAttachment,
+  onUploading,
+  onUploaded,
+}: {
+  fieldKey: string;
+  disabled: boolean;
+  onSendAttachment: (
+    fieldKey: string,
+    file: File,
+    onProgress: (percent: number) => void,
+  ) => Promise<void>;
+  onUploading: (isUploading: boolean) => void;
+  onUploaded: () => void;
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewMeta, setPreviewMeta] = useState<{ filename: string; mimeType: string } | null>(
+    null,
+  );
+  const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleFilePicked = async (file: File) => {
+    setError(null);
+
+    if (!ALLOWED_ATTACHMENT_MIME_TYPES.includes(file.type)) {
+      setError('Only PNG, JPEG, WebP, GIF images or MP4/WebM videos are supported.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+    const cap = maxBytesForAttachment(file.type);
+    if (file.size > cap) {
+      setError(
+        VIDEO_MIME_TYPES.has(file.type)
+          ? 'Videos must be 50 MB or smaller.'
+          : 'Images must be 10 MB or smaller.',
+      );
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    // Local blob URL shown immediately — the player sees what they picked
+    // before the network upload even starts.
+    setPreviewUrl(URL.createObjectURL(file));
+    setPreviewMeta({ filename: file.name, mimeType: file.type });
+    setUploading(true);
+    onUploading(true);
+    setProgress(0);
+    try {
+      await onSendAttachment(fieldKey, file, setProgress);
+      setPreviewUrl(null);
+      setPreviewMeta(null);
+      onUploaded();
+    } catch {
+      setError('Upload failed. Please try again.');
+      setPreviewUrl(null);
+      setPreviewMeta(null);
+    } finally {
+      setUploading(false);
+      onUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-2">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm"
+        aria-label="Attach image or video"
+        className="hidden"
+        disabled={disabled || uploading}
+        // Must post before the native picker opens (it starts as this click's
+        // default action): the SDK's resume watchdog needs to already know to
+        // expect the pause it's about to see.
+        onClick={() => post({ type: 'expect_native_dialog' })}
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) void handleFilePicked(file);
+        }}
+      />
+      {previewUrl && previewMeta ? (
+        <AttachmentThumbnail
+          previewUrl={previewUrl}
+          mimeType={previewMeta.mimeType}
+          filename={previewMeta.filename}
+          uploading={uploading}
+          progress={progress}
+          className="mx-auto h-32 w-32 rounded-card"
+        />
+      ) : (
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => fileInputRef.current?.click()}
+          className="flex min-h-24 w-full flex-col items-center justify-center gap-2 rounded-card border border-dashed border-muted/30 bg-surface p-6 text-center disabled:opacity-60"
+        >
+          <Paperclip className="size-6 text-muted" />
+          <span className="text-sm text-muted">Tap to attach a photo or video</span>
+        </button>
+      )}
+      {error && <span className="text-xs text-red-600">{error}</span>}
+    </div>
+  );
 }
 
 /** Local YYYY-MM-DD, matching the `<input type="date">` value format exactly. */

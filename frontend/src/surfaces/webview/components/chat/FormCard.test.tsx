@@ -37,6 +37,10 @@ const FORM: PlayerFormView = {
   answers: [],
 };
 
+function makeFile(name: string, type: string, size: number): File {
+  return new File([new Uint8Array(size)], name, { type });
+}
+
 function setup(form: PlayerFormView = FORM) {
   const onAnswer = vi.fn().mockResolvedValue({ ok: true, is_correction: false });
   const onSubmit = vi.fn();
@@ -290,7 +294,7 @@ describe('FormCard', () => {
     fireEvent.change(screen.getByLabelText('Attach image or video'), { target: { files: [file] } });
 
     expect(await screen.findByText('2 of 2')).toBeInTheDocument();
-    expect(onSendAttachment).toHaveBeenCalledWith('proof', file);
+    expect(onSendAttachment).toHaveBeenCalledWith('proof', file, expect.any(Function));
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
@@ -334,7 +338,7 @@ describe('FormCard', () => {
     fireEvent.change(screen.getByLabelText('Attach image or video'), { target: { files: [file] } });
 
     expect(await screen.findByText('2 of 2')).toBeInTheDocument();
-    expect(onSendAttachment).toHaveBeenCalledWith('proof', file);
+    expect(onSendAttachment).toHaveBeenCalledWith('proof', file, expect.any(Function));
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
@@ -366,5 +370,197 @@ describe('FormCard', () => {
 
     expect(post).toHaveBeenCalledWith({ type: 'expect_native_dialog' });
     delete window.SupportBridge;
+  });
+
+  it('shows a clickable container with an attachment icon before any file is picked', () => {
+    const form: PlayerFormView = {
+      submission_id: 's1',
+      form_id: 'f1',
+      form_name: 'Proof of purchase',
+      version: 1,
+      fields: [
+        { key: 'proof', label: 'Upload a photo', type: 'attachment', isRequired: false, position: 0 },
+      ],
+      answers: [],
+    };
+    render(
+      <FormCard
+        form={form}
+        onAnswer={vi.fn()}
+        onSubmit={vi.fn()}
+        onSkip={vi.fn()}
+        busy={false}
+        onSendAttachment={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByRole('button', { name: /tap to attach a photo or video/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('rejects an oversized image client-side without calling onSendAttachment', () => {
+    const onSendAttachment = vi.fn();
+    const form: PlayerFormView = {
+      submission_id: 's1',
+      form_id: 'f1',
+      form_name: 'Proof of purchase',
+      version: 1,
+      fields: [
+        { key: 'proof', label: 'Upload a photo', type: 'attachment', isRequired: false, position: 0 },
+      ],
+      answers: [],
+    };
+    render(
+      <FormCard
+        form={form}
+        onAnswer={vi.fn()}
+        onSubmit={vi.fn()}
+        onSkip={vi.fn()}
+        busy={false}
+        onSendAttachment={onSendAttachment}
+      />,
+    );
+    const big = makeFile('huge.png', 'image/png', 11 * 1024 * 1024);
+    fireEvent.change(screen.getByLabelText('Attach image or video'), { target: { files: [big] } });
+
+    expect(onSendAttachment).not.toHaveBeenCalled();
+    expect(screen.getByText(/10 MB or smaller/)).toBeInTheDocument();
+  });
+
+  it('rejects an oversized video client-side without calling onSendAttachment', () => {
+    const onSendAttachment = vi.fn();
+    const form: PlayerFormView = {
+      submission_id: 's1',
+      form_id: 'f1',
+      form_name: 'Proof of purchase',
+      version: 1,
+      fields: [
+        { key: 'proof', label: 'Upload a video', type: 'attachment', isRequired: false, position: 0 },
+      ],
+      answers: [],
+    };
+    render(
+      <FormCard
+        form={form}
+        onAnswer={vi.fn()}
+        onSubmit={vi.fn()}
+        onSkip={vi.fn()}
+        busy={false}
+        onSendAttachment={onSendAttachment}
+      />,
+    );
+    const big = makeFile('huge.mp4', 'video/mp4', 51 * 1024 * 1024);
+    fireEvent.change(screen.getByLabelText('Attach image or video'), { target: { files: [big] } });
+
+    expect(onSendAttachment).not.toHaveBeenCalled();
+    expect(screen.getByText(/50 MB or smaller/)).toBeInTheDocument();
+  });
+
+  it('rejects an unsupported file type client-side without calling onSendAttachment', () => {
+    const onSendAttachment = vi.fn();
+    const form: PlayerFormView = {
+      submission_id: 's1',
+      form_id: 'f1',
+      form_name: 'Proof of purchase',
+      version: 1,
+      fields: [
+        { key: 'proof', label: 'Upload a photo', type: 'attachment', isRequired: false, position: 0 },
+      ],
+      answers: [],
+    };
+    render(
+      <FormCard
+        form={form}
+        onAnswer={vi.fn()}
+        onSubmit={vi.fn()}
+        onSkip={vi.fn()}
+        busy={false}
+        onSendAttachment={onSendAttachment}
+      />,
+    );
+    const bad = makeFile('doc.pdf', 'application/pdf', 100);
+    fireEvent.change(screen.getByLabelText('Attach image or video'), { target: { files: [bad] } });
+
+    expect(onSendAttachment).not.toHaveBeenCalled();
+    expect(
+      screen.getByText(/Only PNG, JPEG, WebP, GIF images or MP4\/WebM videos are supported\./),
+    ).toBeInTheDocument();
+  });
+
+  it('shows the picked file as a preview with a progress overlay while uploading', async () => {
+    let resolveUpload!: () => void;
+    const onSendAttachment = vi.fn(
+      (_fieldKey: string, _file: File, onProgress: (percent: number) => void) =>
+        new Promise<void>((resolve) => {
+          onProgress(42);
+          resolveUpload = resolve;
+        }),
+    );
+    const form: PlayerFormView = {
+      submission_id: 's1',
+      form_id: 'f1',
+      form_name: 'Proof of purchase',
+      version: 1,
+      fields: [
+        { key: 'proof', label: 'Upload a photo', type: 'attachment', isRequired: false, position: 0 },
+      ],
+      answers: [],
+    };
+    render(
+      <FormCard
+        form={form}
+        onAnswer={vi.fn()}
+        onSubmit={vi.fn()}
+        onSkip={vi.fn()}
+        busy={false}
+        onSendAttachment={onSendAttachment}
+      />,
+    );
+    const file = makeFile('shot.png', 'image/png', 3);
+    fireEvent.change(screen.getByLabelText('Attach image or video'), { target: { files: [file] } });
+
+    await screen.findByAltText('shot.png');
+    expect(screen.getByTestId('upload-progress-overlay')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /tap to attach a photo or video/i }),
+    ).not.toBeInTheDocument();
+
+    resolveUpload();
+    await waitFor(() =>
+      expect(onSendAttachment).toHaveBeenCalledWith('proof', file, expect.any(Function)),
+    );
+  });
+
+  it('reverts to the idle container and shows an error when the upload fails', async () => {
+    const onSubmit = vi.fn();
+    const onSendAttachment = vi.fn().mockRejectedValue(new Error('network error'));
+    const form: PlayerFormView = {
+      submission_id: 's1',
+      form_id: 'f1',
+      form_name: 'Proof of purchase',
+      version: 1,
+      fields: [
+        { key: 'proof', label: 'Upload a photo', type: 'attachment', isRequired: false, position: 0 },
+      ],
+      answers: [],
+    };
+    render(
+      <FormCard
+        form={form}
+        onAnswer={vi.fn()}
+        onSubmit={onSubmit}
+        onSkip={vi.fn()}
+        busy={false}
+        onSendAttachment={onSendAttachment}
+      />,
+    );
+    const file = makeFile('shot.png', 'image/png', 3);
+    fireEvent.change(screen.getByLabelText('Attach image or video'), { target: { files: [file] } });
+
+    await screen.findByText(/Upload failed/);
+    expect(
+      screen.getByRole('button', { name: /tap to attach a photo or video/i }),
+    ).toBeInTheDocument();
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 });
