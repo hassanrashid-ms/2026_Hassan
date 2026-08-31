@@ -1350,117 +1350,6 @@ registry.registerPath({
 });
 
 registry.registerPath({
-  method: 'get',
-  path: '/agent/declared-fields',
-  summary: 'Agent List Declared Fields',
-  description:
-    'Lists active and inactive declared fields for the workspace (archived rows are hidden). Admin-only.',
-  security: [{ [bearerAgentJwt.name]: [] }],
-  responses: {
-    200: { description: 'Declared fields' },
-    403: { description: 'Forbidden — admin role required' },
-  },
-});
-
-registry.registerPath({
-  method: 'post',
-  path: '/agent/declared-fields',
-  summary: 'Agent Promote Declared Field',
-  description:
-    'Promotes a key to declared, or revives a previously inactive/archived one with the same key. Admin-only.',
-  security: [{ [bearerAgentJwt.name]: [] }],
-  request: {
-    body: {
-      content: {
-        'application/json': {
-          schema: z.object({
-            key: z.string().min(1).max(64),
-            label: z.string().min(1).max(120),
-            type: z.enum(['string', 'number', 'boolean', 'timestamp']),
-          }),
-        },
-      },
-    },
-  },
-  responses: {
-    201: { description: 'Declared field created or revived' },
-    409: { description: 'Key already actively declared' },
-    403: { description: 'Forbidden — admin role required' },
-  },
-});
-
-registry.registerPath({
-  method: 'patch',
-  path: '/agent/declared-fields/{id}',
-  summary: 'Agent Update Declared Field',
-  description:
-    'Edits the label and/or type of an active or inactive declared field. The key is immutable. Admin-only.',
-  security: [{ [bearerAgentJwt.name]: [] }],
-  request: {
-    params: z.object({ id: z.uuid() }),
-    body: {
-      content: {
-        'application/json': {
-          schema: z.object({
-            label: z.string().min(1).max(120).optional(),
-            type: z.enum(['string', 'number', 'boolean', 'timestamp']).optional(),
-          }),
-        },
-      },
-    },
-  },
-  responses: {
-    200: { description: 'Declared field updated' },
-    404: { description: 'Not found, or archived' },
-    403: { description: 'Forbidden — admin role required' },
-  },
-});
-
-registry.registerPath({
-  method: 'post',
-  path: '/agent/declared-fields/{id}/deactivate',
-  summary: 'Agent Deactivate Declared Field',
-  description:
-    'Pauses an active declared field: excluded from future splits, but stays visible. Admin-only.',
-  security: [{ [bearerAgentJwt.name]: [] }],
-  request: { params: z.object({ id: z.uuid() }) },
-  responses: {
-    200: { description: 'Declared field deactivated' },
-    404: { description: 'Not found, or not currently active' },
-    403: { description: 'Forbidden — admin role required' },
-  },
-});
-
-registry.registerPath({
-  method: 'post',
-  path: '/agent/declared-fields/{id}/reactivate',
-  summary: 'Agent Reactivate Declared Field',
-  description: 'Resumes an inactive declared field. Admin-only.',
-  security: [{ [bearerAgentJwt.name]: [] }],
-  request: { params: z.object({ id: z.uuid() }) },
-  responses: {
-    200: { description: 'Declared field reactivated' },
-    404: { description: 'Not found, or not currently inactive' },
-    403: { description: 'Forbidden — admin role required' },
-  },
-});
-
-registry.registerPath({
-  method: 'post',
-  path: '/agent/declared-fields/{id}/archive',
-  summary: 'Agent Archive Declared Field',
-  description:
-    'Soft-removes a declared field, hiding it from the list. Future snapshots for this key fall back into raw. Admin-only.',
-  security: [{ [bearerAgentJwt.name]: [] }],
-  request: { params: z.object({ id: z.uuid() }) },
-  responses: {
-    200: { description: 'Declared field archived' },
-    404: { description: 'Not found, or already archived' },
-    403: { description: 'Forbidden — admin role required' },
-  },
-});
-
-registry.registerPath({
   method: 'post',
   path: '/agent/intents/{id}/subintents',
   summary: 'Agent Create Subintent',
@@ -2638,6 +2527,113 @@ registry.registerPath({
       description: 'New secret minted',
       content: { 'application/json': { schema: RotatedSecretSchema } },
     },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/admin/workspaces/{id}/declared-fields',
+  summary: 'List Declared Fields',
+  description:
+    'Lists active and inactive declared fields for the workspace (archived rows are hidden).',
+  security: [{ [bearerAgentSession.name]: [] }],
+  request: { params: z.object({ id: z.uuid() }) },
+  responses: {
+    200: { description: 'Declared fields' },
+  },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/admin/workspaces/{id}/declared-fields',
+  summary: 'Promote Declared Field',
+  description:
+    'Promotes a key to declared, or revives a previously inactive/archived one with the same key.',
+  security: [{ [bearerAgentSession.name]: [] }],
+  request: {
+    params: z.object({ id: z.uuid() }),
+    body: {
+      content: {
+        'application/json': {
+          schema: z.object({
+            key: z.string().min(1).max(64),
+            label: z.string().min(1).max(120),
+            type: z.enum(['string', 'number', 'boolean', 'timestamp']),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    201: { description: 'Declared field created or revived' },
+    409: { description: 'Key already actively declared' },
+  },
+});
+
+registry.registerPath({
+  method: 'patch',
+  path: '/admin/workspaces/{id}/declared-fields/{fieldId}',
+  summary: 'Update Declared Field',
+  description:
+    'Edits the label and/or type of an active or inactive declared field. The key is immutable.',
+  security: [{ [bearerAgentSession.name]: [] }],
+  request: {
+    params: z.object({ id: z.uuid(), fieldId: z.uuid() }),
+    body: {
+      content: {
+        'application/json': {
+          schema: z.object({
+            label: z.string().min(1).max(120).optional(),
+            type: z.enum(['string', 'number', 'boolean', 'timestamp']).optional(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: { description: 'Declared field updated' },
+    404: { description: 'Not found, or archived' },
+    409: { description: 'Type change rejected — field is seeded' },
+  },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/admin/workspaces/{id}/declared-fields/{fieldId}/deactivate',
+  summary: 'Deactivate Declared Field',
+  description: 'Pauses an active declared field: excluded from future splits, but stays visible.',
+  security: [{ [bearerAgentSession.name]: [] }],
+  request: { params: z.object({ id: z.uuid(), fieldId: z.uuid() }) },
+  responses: {
+    200: { description: 'Declared field deactivated' },
+    404: { description: 'Not found, or not currently active' },
+  },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/admin/workspaces/{id}/declared-fields/{fieldId}/reactivate',
+  summary: 'Reactivate Declared Field',
+  description: 'Resumes an inactive declared field.',
+  security: [{ [bearerAgentSession.name]: [] }],
+  request: { params: z.object({ id: z.uuid(), fieldId: z.uuid() }) },
+  responses: {
+    200: { description: 'Declared field reactivated' },
+    404: { description: 'Not found, or not currently inactive' },
+  },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/admin/workspaces/{id}/declared-fields/{fieldId}/archive',
+  summary: 'Archive Declared Field',
+  description:
+    'Soft-removes a declared field, hiding it from the list. Future snapshots for this key fall back into raw.',
+  security: [{ [bearerAgentSession.name]: [] }],
+  request: { params: z.object({ id: z.uuid(), fieldId: z.uuid() }) },
+  responses: {
+    200: { description: 'Declared field archived' },
+    404: { description: 'Not found, or already archived' },
   },
 });
 
