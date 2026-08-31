@@ -83,4 +83,38 @@ describe('BotTestPanel', () => {
 
     expect(await screen.findByText(/Test turn failed/)).toBeInTheDocument();
   });
+
+  it('carries the subintent and confirm phase the bot set into the next turn, not always null/none', async () => {
+    vi.mocked(testBotTurn)
+      .mockResolvedValueOnce({
+        decision: {
+          kind: 'answer',
+          reply: 'Here is the article',
+          subintent_id: 'sub-1',
+          article_id: 'art-1',
+        },
+      })
+      .mockResolvedValueOnce({
+        decision: { kind: 'resolve', subintent_id: 'sub-1' },
+      });
+
+    renderPanel();
+    const input = await screen.findByLabelText('Message');
+
+    await userEvent.type(input, 'first message');
+    await userEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(testBotTurn).toHaveBeenCalledTimes(1));
+    await screen.findByText('Here is the article');
+
+    // Second turn's request must carry forward what the first turn set —
+    // classified subintent and the bot_article confirm phase — instead of
+    // resending null/'none' as if the bot had never replied.
+    await userEvent.type(input, 'second message');
+    await userEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(testBotTurn).toHaveBeenCalledTimes(2));
+
+    const [, secondBody] = vi.mocked(testBotTurn).mock.calls[1]!;
+    expect(secondBody.subintent_id).toBe('sub-1');
+    expect(secondBody.confirm_phase).toBe('bot_article');
+  });
 });
