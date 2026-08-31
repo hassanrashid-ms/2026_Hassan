@@ -99,6 +99,33 @@ describe('GET /declared-fields', () => {
     expect(active.key).toBe('ab_bucket');
   });
 
+  it('sorts inactive fields to the end regardless of key order', async () => {
+    const workspaceId = await seedWorkspace();
+    const { token } = await seedAgentWithRole(workspaceId, 'admin');
+
+    // Keys are chosen so alphabetical order would put the inactive one
+    // first — proves the sort is status-first, not just key order.
+    const inactive = await promote(app, token, workspaceId, { key: 'aaa_bucket' });
+    await promote(app, token, workspaceId, { key: 'zzz_bucket' });
+
+    await request(app)
+      .post(`/declared-fields/${inactive.id}/deactivate`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+
+    const res = await request(app)
+      .get('/declared-fields')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+
+    expect(res.body.fields.map((f: { key: string; status: string }) => [f.key, f.status])).toEqual([
+      ['zzz_bucket', 'active'],
+      ['aaa_bucket', 'inactive'],
+    ]);
+  });
+
   it('forbids a team lead', async () => {
     const workspaceId = await seedWorkspace();
     const { token } = await seedAgentWithRole(workspaceId, 'team_lead');

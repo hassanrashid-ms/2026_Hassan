@@ -1,4 +1,4 @@
-import { and, asc, eq, ne } from 'drizzle-orm';
+import { and, asc, eq, ne, sql } from 'drizzle-orm';
 import type {
   ArchiveDeclaredFieldResponse,
   CreateDeclaredFieldResponse,
@@ -61,7 +61,12 @@ export async function listDeclaredFields(ctx: AgentContext): Promise<DeclaredFie
       .from(declaredField)
       .leftJoin(agent, eq(agent.id, declaredField.declaredBy))
       .where(ne(declaredField.status, 'archived'))
-      .orderBy(asc(declaredField.key));
+      // Inactive fields sort to the end instead of interleaving with active
+      // ones by key — they're paused, not something an admin is scanning for.
+      .orderBy(
+        sql`case when ${declaredField.status} = 'inactive' then 1 else 0 end`,
+        asc(declaredField.key),
+      );
 
     return {
       fields: rows.map((row) => ({
