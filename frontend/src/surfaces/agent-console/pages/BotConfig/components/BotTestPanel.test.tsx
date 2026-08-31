@@ -1,51 +1,11 @@
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { VirtuosoMockContext } from 'react-virtuoso';
 import { BotTestPanel } from './BotTestPanel.tsx';
 import { BotConfigDraftProvider } from '../BotConfigDraftContext.tsx';
 import type { BotConfigView } from '@support/types';
-
-// jsdom never lays out real pixels and the global ResizeObserver stub never
-// calls back, so Virtuoso's viewport measurement always reads 0 and it mounts
-// no items. Give elements a non-zero size and fire the observer once so
-// Virtuoso's measurement effect actually runs. Copied verbatim from
-// frontend/src/features/chat/components/ChatThread.test.tsx — BotTestPanel
-// renders ChatThread and needs the identical shim to mount any message.
-beforeAll(() => {
-  Object.defineProperty(HTMLElement.prototype, 'offsetHeight', { configurable: true, value: 600 });
-  Object.defineProperty(HTMLElement.prototype, 'offsetWidth', { configurable: true, value: 600 });
-  Object.defineProperty(HTMLElement.prototype, 'offsetParent', {
-    configurable: true,
-    get: () => document.body,
-  });
-  Element.prototype.getBoundingClientRect = () =>
-    ({
-      width: 600,
-      height: 600,
-      top: 0,
-      left: 0,
-      right: 600,
-      bottom: 600,
-      x: 0,
-      y: 0,
-      toJSON() {},
-    }) as DOMRect;
-  globalThis.ResizeObserver = class {
-    callback: ResizeObserverCallback;
-    constructor(callback: ResizeObserverCallback) {
-      this.callback = callback;
-    }
-    observe(target: Element) {
-      this.callback(
-        [{ target, contentRect: target.getBoundingClientRect() } as ResizeObserverEntry],
-        this as unknown as ResizeObserver,
-      );
-    }
-    unobserve() {}
-    disconnect() {}
-  } as unknown as typeof ResizeObserver;
-});
 
 vi.mock('../../../api/agentApi.ts', () => ({
   testBotTurn: vi.fn(),
@@ -80,11 +40,13 @@ function baseConfig(): BotConfigView {
 function renderPanel() {
   const queryClient = new QueryClient();
   return render(
-    <QueryClientProvider client={queryClient}>
-      <BotConfigDraftProvider config={baseConfig()}>
-        <BotTestPanel token="test-token" />
-      </BotConfigDraftProvider>
-    </QueryClientProvider>,
+    <VirtuosoMockContext.Provider value={{ viewportHeight: 600, itemHeight: 60 }}>
+      <QueryClientProvider client={queryClient}>
+        <BotConfigDraftProvider config={baseConfig()}>
+          <BotTestPanel token="test-token" />
+        </BotConfigDraftProvider>
+      </QueryClientProvider>
+    </VirtuosoMockContext.Provider>,
   );
 }
 

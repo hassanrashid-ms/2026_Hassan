@@ -116,27 +116,15 @@ export function BotTestPanel({ token }: { token: string }) {
         </label>
       </div>
       <div className="min-h-0 flex-1">
-        {/*
-          Virtuoso in react-virtuoso only ever mounts the item at its computed
-          topmost index — `initialTopMostItemIndex` relies on an imperative
-          scrollTo the browser performs after mount, which jsdom does not
-          execute, so any earlier message in a longer list simply never
-          renders in tests (react-virtuoso@4.18, jsdom via happy-dom/vitest).
-          Passing only the latest message sidesteps that entirely: item 0 is
-          always the one on screen, matching every other ChatThread test in
-          this codebase, which also only ever renders a single-message array.
-          Full turn-by-turn history is still sent to the server via `history`
-          below; only the live rendered bubble is capped to the latest turn.
-        */}
-        <ChatThread
-          key={messages.length}
-          messages={messages.slice(-1)}
-          currentAuthorType="agent"
-        />
-        {messages.length > 0 &&
-          messages[messages.length - 1]!.toolActivity && (
-            <div>{messages[messages.length - 1]!.toolActivity}</div>
-          )}
+        <ChatThread messages={messages} currentAuthorType="agent" />
+        {messages.map(
+          (m) =>
+            m.toolActivity && (
+              <div key={`activity-${m.id}`} className="px-3">
+                {m.toolActivity}
+              </div>
+            ),
+        )}
       </div>
       <Composer onSend={(body) => void send(body)} disabled={sending || !draft} />
     </div>
