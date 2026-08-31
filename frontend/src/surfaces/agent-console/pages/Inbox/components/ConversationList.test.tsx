@@ -46,6 +46,9 @@ const UNASSIGNED_CONVERSATION = {
   assigned_agent_name: null,
   priority: 'p3' as const,
   tags: [],
+  created_at: '2026-08-10T11:00:00Z',
+  subintent: null,
+  number: 1,
 };
 
 beforeEach(() => {

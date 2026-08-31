@@ -29,6 +29,9 @@ const TICKET = {
   assigned_agent_name: null,
   priority: 'p1' as const,
   tags: [],
+  created_at: '2026-08-20T09:00:00Z',
+  subintent: null,
+  number: 1,
   workspace: { id: 'workspace-b', slug: 'ws-b', name: 'Workspace B' },
 };
 

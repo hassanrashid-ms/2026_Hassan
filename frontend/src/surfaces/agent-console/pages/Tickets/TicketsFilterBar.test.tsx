@@ -18,6 +18,10 @@ const EMPTY_FILTERS = {
   createdFrom: '',
   createdTo: '',
   view: 'board' as const,
+  sortBy: 'priority',
+  sortDir: 'asc' as const,
+  sortBy2: 'created',
+  sortDir2: 'asc' as const,
 };
 
 function renderBar(onChange = vi.fn()) {
