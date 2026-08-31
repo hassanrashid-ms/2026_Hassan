@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { format } from 'date-fns';
 import type { ConversationStatusValue } from '@support/types';
 import { useInfiniteQuery, useMutation, useQueries, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -273,6 +274,9 @@ function TicketsListView({
               <th className="px-4 py-2.5">Assignee</th>
               <th className="px-4 py-2.5">Last message</th>
               <th className="px-4 py-2.5">Tags</th>
+              <th className="px-4 py-2.5">Created</th>
+              <th className="px-4 py-2.5">Subintent</th>
+              <th className="px-4 py-2.5">Ticket #</th>
               <th className="px-4 py-2.5" />
             </tr>
           </thead>
@@ -326,6 +330,15 @@ function TicketsListView({
                         </span>
                       )}
                     </span>
+                  </td>
+                  <td className="px-4 py-2.5 text-muted">
+                    {format(new Date(conversation.created_at), 'MMM d, yyyy h:mm a')}
+                  </td>
+                  <td className="max-w-32 truncate px-4 py-2.5 text-muted">
+                    {conversation.subintent?.name ?? '—'}
+                  </td>
+                  <td className="px-4 py-2.5 text-right font-mono text-muted">
+                    {conversation.number}
                   </td>
                   <td className="px-4 py-2.5 text-right">
                     {claimable && (

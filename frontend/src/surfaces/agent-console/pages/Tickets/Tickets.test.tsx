@@ -124,6 +124,9 @@ describe('Tickets pagination', () => {
       assigned_agent_name: null,
       priority: 'p3' as const,
       tags: [],
+      created_at: '2026-08-01T00:00:00.000Z',
+      subintent: null,
+      number: 1,
     });
 
     const fetchInboxSpy = vi
@@ -197,6 +200,9 @@ describe('Tickets view toggle', () => {
       assigned_agent_name: assignedAgentId ? 'Agent One' : null,
       priority: 'p3' as const,
       tags: [],
+      created_at: '2026-08-01T00:00:00.000Z',
+      subintent: null,
+      number: 1,
     });
     vi.mocked(agentApi.fetchInbox).mockResolvedValue({
       conversations: [row('unassigned-1', 'open', null), row('escalated-1', 'escalated', 'a1')],
@@ -207,5 +213,34 @@ describe('Tickets view toggle', () => {
     await screen.findByText('unassigned-1');
     const claimButtons = await screen.findAllByRole('button', { name: 'Claim' });
     expect(claimButtons).toHaveLength(1);
+  });
+
+  it('renders Created, Subintent, and Ticket # columns in list view', async () => {
+    vi.mocked(agentApi.fetchInbox).mockResolvedValue({
+      conversations: [
+        {
+          id: 'c1',
+          player: { external_player_id: 'p1' },
+          status: 'open',
+          confirm_phase: 'none',
+          last_message_preview: null,
+          last_message_at: null,
+          assigned_agent_id: null,
+          assigned_agent_name: null,
+          priority: 'p1',
+          tags: [],
+          created_at: '2026-08-15T14:30:00.000Z',
+          subintent: { id: 's1', name: 'Refund request' },
+          number: 42,
+        },
+      ],
+      nextCursor: null,
+    });
+
+    renderTickets('/tickets?view=list');
+
+    expect(await screen.findByText('Refund request')).toBeInTheDocument();
+    expect(screen.getByText('42')).toBeInTheDocument();
+    expect(screen.getByText(/Aug 15, 2026/)).toBeInTheDocument();
   });
 });
