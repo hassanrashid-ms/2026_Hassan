@@ -50,6 +50,8 @@ async function getWorkspaceInboxSlice(
         assignedAgentId: conversation.assignedAgentId,
         assignedAgentName: agent.displayName,
         priority: conversation.priority,
+        createdAt: conversation.createdAt,
+        number: conversation.number,
       })
       .from(conversation)
       .innerJoin(player, eq(player.id, conversation.playerId))
@@ -81,6 +83,9 @@ async function getWorkspaceInboxSlice(
         assigned_agent_name: row.assignedAgentName,
         priority: row.priority,
         tags,
+        created_at: row.createdAt.toISOString(),
+        subintent: null,
+        number: row.number,
         workspace: ws,
       });
     }
