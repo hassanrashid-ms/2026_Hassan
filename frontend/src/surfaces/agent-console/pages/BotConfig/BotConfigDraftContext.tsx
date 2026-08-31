@@ -16,6 +16,18 @@ type BotConfigDraftContextValue = {
 const BotConfigDraftContext = createContext<BotConfigDraftContextValue | null>(null);
 
 /**
+ * `config.rules` is RuleEntryView — it carries a derived `enforcement` field
+ * that RulesTab strips before saving. That strip normally happens in
+ * RulesTab's own useEffect, but Tabs unmounts inactive TabsContent, so if
+ * RulesTab was never opened this seed is the only place `enforcement` gets
+ * dropped before a test-turn request goes out.
+ */
+function stripEnforcement(rule: BotConfigView['rules'][number]): RuleEntryValue {
+  const { enforcement: _enforcement, ...rest } = rule;
+  return rest;
+}
+
+/**
  * Seeded once from the loaded config, then only ever updated by the tabs'
  * own useEffects below — never re-seeded from `config` again, so a save on
  * one tab (which refetches `config`) doesn't clobber unsaved edits a admin
@@ -34,7 +46,7 @@ export function BotConfigDraftProvider({
     if (config && draft === null) {
       setDraft({
         prompt: config.prompt,
-        rules: config.rules,
+        rules: config.rules.map(stripEnforcement),
         toolsConfig: config.tools_config,
         limitsConfig: config.limits_config,
       });

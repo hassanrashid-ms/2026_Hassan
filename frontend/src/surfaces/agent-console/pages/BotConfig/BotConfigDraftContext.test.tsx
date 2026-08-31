@@ -31,6 +31,11 @@ function DraftReader() {
   return <span>{draft?.prompt ?? 'none'}</span>;
 }
 
+function DraftRulesReader() {
+  const { draft } = useBotConfigDraft();
+  return <span>{draft ? JSON.stringify(draft.rules) : 'none'}</span>;
+}
+
 describe('BotConfigDraftContext', () => {
   it('seeds the draft from the loaded config once it arrives', async () => {
     render(
@@ -39,6 +44,29 @@ describe('BotConfigDraftContext', () => {
       </BotConfigDraftProvider>,
     );
     expect(await screen.findByText('base prompt')).toBeInTheDocument();
+  });
+
+  it('strips the derived enforcement field from rules when seeding, even if RulesTab never mounts', async () => {
+    const config = {
+      ...baseConfig(),
+      rules: [
+        {
+          key: 'no_credentials',
+          text: 'Never ask for a password.',
+          enabled: true,
+          locked: true,
+          source: 'builtin' as const,
+          enforcement: 'prompt' as const,
+        },
+      ],
+    };
+    render(
+      <BotConfigDraftProvider config={config}>
+        <DraftRulesReader />
+      </BotConfigDraftProvider>,
+    );
+    const text = await screen.findByText(/no_credentials/);
+    expect(text.textContent).not.toContain('enforcement');
   });
 
   it('has no draft yet while config is undefined', () => {
