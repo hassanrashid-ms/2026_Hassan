@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach, beforeAll } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { PlayerMessagesResponse } from '@support/types';
+import type { PlayerFormView, PlayerMessagesResponse } from '@support/types';
 import { SupportChat } from './SupportChat.tsx';
 import {
   SupportContextProvider,
@@ -13,6 +13,9 @@ import {
   fetchPlayerMessages,
   markPlayerMessagesRead,
   postFormAnswer,
+  putFileToUploadUrl,
+  requestUpload,
+  sendPlayerMessage,
   skipForm,
   submitForm,
 } from '@/features/chat/api/playerChatApi';
@@ -426,5 +429,51 @@ describe('SupportChat article delivery', () => {
 
     await waitFor(() => expect(screen.getByText('my game crashed')).toBeInTheDocument());
     expect(screen.queryByText('Refund timing')).not.toBeInTheDocument();
+  });
+});
+
+describe('SupportChat form attachment upload', () => {
+  it('threads a progress callback into putFileToUploadUrl when the active form asks for an attachment', async () => {
+    const form: PlayerFormView = {
+      submission_id: 'sub1',
+      form_id: 'f1',
+      form_name: 'Proof of purchase',
+      version: 1,
+      fields: [
+        { key: 'proof', label: 'Upload a photo', type: 'attachment', isRequired: false, position: 0 },
+      ],
+      answers: [],
+    };
+    vi.mocked(fetchPlayerMessages).mockResolvedValue(
+      messages({ confirm_phase: 'form', form }),
+    );
+    vi.mocked(requestUpload).mockResolvedValue({
+      key: 'pending/ws/player/uuid.png',
+      upload_url: 'https://upload.example/put',
+      expires_at: '2026-01-01T00:00:00.000Z',
+    });
+    vi.mocked(putFileToUploadUrl).mockResolvedValue(undefined);
+    vi.mocked(sendPlayerMessage).mockResolvedValue({ conversation_id: 'c1', message: null });
+
+    renderChat();
+    await screen.findByLabelText('Attach image or video');
+
+    const file = new File([new Uint8Array(3)], 'shot.png', { type: 'image/png' });
+    fireEvent.change(screen.getByLabelText('Attach image or video'), { target: { files: [file] } });
+
+    await waitFor(() =>
+      expect(putFileToUploadUrl).toHaveBeenCalledWith(
+        'https://upload.example/put',
+        file,
+        expect.any(Function),
+      ),
+    );
+    expect(sendPlayerMessage).toHaveBeenCalledWith(
+      't',
+      '',
+      's',
+      { key: 'pending/ws/player/uuid.png', filename: 'shot.png', mimeType: 'image/png', byteSize: 3 },
+      'proof',
+    );
   });
 });

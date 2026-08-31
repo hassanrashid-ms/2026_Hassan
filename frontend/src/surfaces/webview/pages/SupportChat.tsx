@@ -371,13 +371,13 @@ export function SupportChat() {
             onSubmit={() => formTerminate.mutate('submit')}
             onSkip={() => formTerminate.mutate('skip')}
             busy={formTerminate.isPending}
-            onSendAttachment={async (fieldKey, file) => {
+            onSendAttachment={async (fieldKey, file, onProgress) => {
               const uploaded = await requestUpload(boot!.token, {
                 filename: file.name,
                 contentType: file.type,
                 byteSize: file.size,
               });
-              await putFileToUploadUrl(uploaded.upload_url, file);
+              await putFileToUploadUrl(uploaded.upload_url, file, onProgress);
               await sendPlayerMessage(
                 boot!.token,
                 '',
