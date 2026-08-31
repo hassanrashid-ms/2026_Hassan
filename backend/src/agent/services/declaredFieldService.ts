@@ -127,9 +127,18 @@ export async function createDeclaredField(
 
 export type UpdateDeclaredFieldResult =
   | { ok: true; field: UpdateDeclaredFieldResponse }
-  | { ok: false; reason: 'not_found' };
+  | { ok: false; reason: 'not_found' }
+  | { ok: false; reason: 'seeded_type_locked' };
 
-/** Operates on `active` or `inactive` rows. An `archived` row 404s, same as a missing id. */
+/**
+ * Operates on `active` or `inactive` rows. An `archived` row 404s, same as a
+ * missing id. A row with no `declaredBy` is one of the seeded fields — its
+ * `type` is locked because historical player-state snapshots don't store
+ * type/label, they're looked up live from this table on every render
+ * (conversationContextService.getPlayerStateView), so editing a seeded
+ * field's type retroactively relabels every already-captured snapshot.
+ * `label` stays editable on every row, seeded or not.
+ */
 export async function updateDeclaredField(
   ctx: AgentContext,
   id: string,
@@ -137,11 +146,20 @@ export async function updateDeclaredField(
 ): Promise<UpdateDeclaredFieldResult> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
     const [current] = await tx
-      .select({ id: declaredField.id, label: declaredField.label, type: declaredField.type })
+      .select({
+        id: declaredField.id,
+        label: declaredField.label,
+        type: declaredField.type,
+        declaredBy: declaredField.declaredBy,
+      })
       .from(declaredField)
       .where(and(eq(declaredField.id, id), ne(declaredField.status, 'archived')))
       .limit(1);
     if (!current) return { ok: false, reason: 'not_found' };
+
+    if (patch.type !== undefined && current.declaredBy === null) {
+      return { ok: false, reason: 'seeded_type_locked' };
+    }
 
     const changes: { field: string; before: unknown; after: unknown }[] = [];
     if (patch.label !== undefined)

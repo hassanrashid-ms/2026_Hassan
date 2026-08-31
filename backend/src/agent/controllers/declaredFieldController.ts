@@ -45,6 +45,15 @@ export const updateDeclaredFieldHandler: RequestHandler = async (req, res) => {
   }
   const result = await updateDeclaredField(req.agent!, params.data.id, body.data);
   if (!result.ok) {
+    if (result.reason === 'seeded_type_locked') {
+      sendError(
+        res,
+        409,
+        'seeded_field_locked',
+        'This field is built in — only its label can be changed.',
+      );
+      return;
+    }
     sendError(res, 404, 'not_found', 'Declared field not found.');
     return;
   }

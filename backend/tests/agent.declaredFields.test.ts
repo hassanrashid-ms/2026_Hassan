@@ -272,6 +272,52 @@ describe('PATCH /declared-fields/:id', () => {
       .expect(404);
   });
 
+  it('rejects a type change on a seeded field (no declaredBy), but allows the label', async () => {
+    const workspaceId = await seedWorkspace();
+    const { token } = await seedAgentWithRole(workspaceId, 'admin');
+
+    const { rows } = await ownerPool.query<{ id: string }>(
+      `insert into declared_field (workspace_id, key, label, type, status)
+       values ($1, 'player_level', 'Player level', 'number', 'active')
+       returning id`,
+      [workspaceId],
+    );
+    const seededId = rows[0]!.id;
+
+    await request(app)
+      .patch(`/declared-fields/${seededId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ type: 'string' })
+      .expect(409);
+
+    const res = await request(app)
+      .patch(`/declared-fields/${seededId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ label: 'Player Level (v2)' })
+      .expect(200);
+
+    expect(res.body).toMatchObject({
+      key: 'player_level',
+      label: 'Player Level (v2)',
+      type: 'number',
+    });
+  });
+
+  it('allows a type change on a promoted (non-seeded) field', async () => {
+    const workspaceId = await seedWorkspace();
+    const { token } = await seedAgentWithRole(workspaceId, 'admin');
+    const created = await promote(app, token, workspaceId);
+
+    await request(app)
+      .patch(`/declared-fields/${created.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ type: 'number' })
+      .expect(200);
+  });
+
   it('writes a change_log row per changed field', async () => {
     const workspaceId = await seedWorkspace();
     const { agentId, token } = await seedAgentWithRole(workspaceId, 'admin');

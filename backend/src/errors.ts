@@ -23,6 +23,7 @@ export type ErrorCode =
   | 'name_taken'
   | 'key_taken'
   | 'not_archivable'
+  | 'seeded_field_locked'
   | 'invalid_status'
   | 'agent_not_found'
   | 'agent_not_active'
