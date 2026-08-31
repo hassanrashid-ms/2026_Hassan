@@ -468,12 +468,14 @@ describe('SupportChat form attachment upload', () => {
         expect.any(Function),
       ),
     );
-    expect(sendPlayerMessage).toHaveBeenCalledWith(
-      't',
-      '',
-      's',
-      { key: 'pending/ws/player/uuid.png', filename: 'shot.png', mimeType: 'image/png', byteSize: 3 },
-      'proof',
+    await waitFor(() =>
+      expect(sendPlayerMessage).toHaveBeenCalledWith(
+        't',
+        '',
+        's',
+        { key: 'pending/ws/player/uuid.png', filename: 'shot.png', mimeType: 'image/png', byteSize: 3 },
+        'proof',
+      ),
     );
   });
 });
