@@ -8,6 +8,7 @@ import {
   rollbackBotConfigHandler,
   saveBotConfigHandler,
 } from '../controllers/botConfigController.ts';
+import { testBotTurnHandler } from '../controllers/botTestTurnController.ts';
 
 /**
  * Roles follow the permission matrix in docs/project-overview.md, which splits
@@ -36,3 +37,7 @@ botConfigRouter.post('/bot-config', requireAdminRole, saveBotConfigHandler);
 botConfigRouter.get('/bot-config/versions', canSeeBotConfig, getBotConfigVersionsHandler);
 botConfigRouter.get('/bot-config/versions/:version', canSeeBotConfig, getBotConfigVersionHandler);
 botConfigRouter.post('/bot-config/rollback', requireAdminRole, rollbackBotConfigHandler);
+// Admin-only, same reasoning as save: this executes arbitrary draft prompt
+// text supplied in the request body, not merely a persisted, already-vetted
+// config.
+botConfigRouter.post('/bot-config/test-turn', requireAdminRole, testBotTurnHandler);

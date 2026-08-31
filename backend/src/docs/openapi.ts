@@ -2303,6 +2303,60 @@ registry.registerPath({
   },
 });
 
+registry.registerPath({
+  method: 'post',
+  path: '/agent/bot-config/test-turn',
+  summary: 'Agent Test Bot Turn',
+  description:
+    'Runs one bot turn through the real decider against a draft config supplied in the request body — never the persisted bot_config row — and a synthetic, non-persisted conversation. Writes nothing to conversation, message, or event. Used by the Bot Config admin UI to preview behavior before saving. Admin-only.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: z.object({
+            config: z.object({
+              prompt: z.string(),
+              rules: z.array(
+                z.object({
+                  key: z.string(),
+                  text: z.string(),
+                  enabled: z.boolean(),
+                  locked: z.boolean(),
+                  source: z.enum(['builtin', 'custom']),
+                }),
+              ),
+              tools_config: z.array(z.object({ tool: z.string(), enabled: z.boolean() })),
+              limits_config: z.array(z.object({ key: z.string(), value: z.number().int().positive() })),
+            }),
+            subintent_id: z.string().nullable(),
+            confirm_phase: z.enum([
+              'none',
+              'bot_article',
+              'agent_ask',
+              'form',
+              'inactivity_ask',
+              'player_stated',
+            ]),
+            history: z.array(
+              z.object({
+                author_type: z.enum(['player', 'bot']),
+                body: z.string(),
+              }),
+            ),
+            player_message: z.string().openapi({ example: 'How do I reset my password?' }),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: { description: 'The decision the bot made this turn, plus any searches it ran' },
+    403: { description: 'Forbidden — admin role required' },
+    422: { description: 'Invalid test-turn payload' },
+  },
+});
+
 // --- 6. SURFACE ARTICLE ENDPOINTS ---
 registry.registerPath({
   method: 'get',
