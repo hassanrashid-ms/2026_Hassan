@@ -135,6 +135,10 @@ export type TicketsQueryFilters = {
   statuses?: string[];
   createdFrom?: string;
   createdTo?: string;
+  sortBy?: string;
+  sortDir?: 'asc' | 'desc';
+  sortBy2?: string;
+  sortDir2?: 'asc' | 'desc';
 };
 
 function buildTicketsQuery(
@@ -154,6 +158,10 @@ function buildTicketsQuery(
   if (filters?.statuses?.length) filters.statuses.forEach((s) => params.append('statuses', s));
   if (filters?.createdFrom) params.set('createdFrom', filters.createdFrom);
   if (filters?.createdTo) params.set('createdTo', filters.createdTo);
+  if (filters?.sortBy) params.set('sortBy', filters.sortBy);
+  if (filters?.sortDir) params.set('sortDir', filters.sortDir);
+  if (filters?.sortBy2) params.set('sortBy2', filters.sortBy2);
+  if (filters?.sortDir2) params.set('sortDir2', filters.sortDir2);
   if (cursor) params.set('cursor', cursor);
   return params.toString();
 }
