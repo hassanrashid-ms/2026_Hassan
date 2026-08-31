@@ -112,6 +112,15 @@ export type PlayerMessageView = {
     byte_size: number;
     url: string | null;
   } | null;
+  /**
+   * Present only when this message exists purely to carry a form's
+   * `attachment` field answer — names the field it answered. Null for every
+   * other message. The webview uses it to hide these from the player's own
+   * thread (answering a form question is silent, like every other field
+   * type); the agent console makes no use of it and keeps showing the
+   * message normally.
+   */
+  form_field_key: string | null;
 };
 
 /** Same fields as PlayerMessageView plus the two an agent may see and a player may not. */

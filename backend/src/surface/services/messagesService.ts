@@ -369,6 +369,16 @@ export async function sendPlayerMessage(
           .limit(1);
         const field = version?.fields.find((f) => f.key === body.form_field_key);
         if (field?.type === 'attachment') {
+          // Marks this message as existing purely to carry the form answer, so
+          // the player-facing webview can hide it from the visible thread —
+          // a follow-up UPDATE rather than passing it into postMessage's insert,
+          // since this validation (a real, live, pending attachment field) only
+          // exists on this one path and postMessage is the shared choke point
+          // every message send funnels through.
+          await tx
+            .update(message)
+            .set({ formFieldKey: field.key })
+            .where(eq(message.id, posted.id));
           await tx.insert(formAnswer).values({
             workspaceId: ctx.workspaceId,
             formSubmissionId: liveSub.id,
@@ -531,6 +541,7 @@ export async function getPlayerMessages(
         authorAgentId: message.authorAgentId,
         body: message.body,
         articleId: message.articleId,
+        formFieldKey: message.formFieldKey,
         visibility: message.visibility,
         deliveryState: message.deliveryState,
         readAt: message.readAt,

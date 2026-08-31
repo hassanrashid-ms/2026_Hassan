@@ -591,6 +591,7 @@ function playerMessage(body: string): BotTurnInput['history'][number] {
     created_at: new Date().toISOString(),
     article_id: null,
     attachment: null,
+    form_field_key: null,
   };
 }
 

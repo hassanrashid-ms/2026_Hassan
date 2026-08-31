@@ -247,6 +247,7 @@ describe('FormCard', () => {
         onSubmit={vi.fn()}
         onSkip={vi.fn()}
         busy={false}
+        onUploadAttachment={vi.fn()}
         onSendAttachment={vi.fn()}
       />,
     );
@@ -254,8 +255,14 @@ describe('FormCard', () => {
     expect(screen.queryByText('This question cannot be answered here yet.')).not.toBeInTheDocument();
   });
 
-  it('advances to the next question after onSendAttachment resolves', async () => {
+  it('uploads on pick but waits for Next to send the answer and advance', async () => {
     const onSubmit = vi.fn();
+    const onUploadAttachment = vi.fn().mockResolvedValue({
+      key: 'pending/ws/player/uuid.png',
+      filename: 'shot.png',
+      mimeType: 'image/png',
+      byteSize: 3,
+    });
     const onSendAttachment = vi.fn().mockResolvedValue(undefined);
     const form: PlayerFormView = {
       submission_id: 's1',
@@ -270,13 +277,6 @@ describe('FormCard', () => {
           isRequired: false,
           position: 0,
         },
-        {
-          key: 'order_id',
-          label: 'Order or receipt ID',
-          type: 'short_text',
-          isRequired: true,
-          position: 1,
-        },
       ],
       answers: [],
     };
@@ -287,19 +287,48 @@ describe('FormCard', () => {
         onSubmit={onSubmit}
         onSkip={vi.fn()}
         busy={false}
+        onUploadAttachment={onUploadAttachment}
         onSendAttachment={onSendAttachment}
       />,
     );
     const file = new File([new Uint8Array(3)], 'shot.png', { type: 'image/png' });
     fireEvent.change(screen.getByLabelText('Attach image or video'), { target: { files: [file] } });
 
-    expect(await screen.findByText('2 of 2')).toBeInTheDocument();
-    expect(onSendAttachment).toHaveBeenCalledWith('proof', file, expect.any(Function));
+    await waitFor(() =>
+      expect(onUploadAttachment).toHaveBeenCalledWith(file, expect.any(Function)),
+    );
+    // Uploaded, but nothing sent and no advance until the player confirms.
+    expect(onSendAttachment).not.toHaveBeenCalled();
     expect(onSubmit).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Submit' }));
+
+    await waitFor(() =>
+      expect(onSendAttachment).toHaveBeenCalledWith('proof', {
+        key: 'pending/ws/player/uuid.png',
+        filename: 'shot.png',
+        mimeType: 'image/png',
+        byteSize: 3,
+      }),
+    );
+    expect(onSubmit).toHaveBeenCalled();
   });
 
-  it('advances to the next question after picking a video for the attachment field', async () => {
-    const onSubmit = vi.fn();
+  it('lets the player remove a picked file and pick a different one before confirming', async () => {
+    const onUploadAttachment = vi
+      .fn()
+      .mockResolvedValueOnce({
+        key: 'pending/ws/player/first.png',
+        filename: 'first.png',
+        mimeType: 'image/png',
+        byteSize: 3,
+      })
+      .mockResolvedValueOnce({
+        key: 'pending/ws/player/second.png',
+        filename: 'second.png',
+        mimeType: 'image/png',
+        byteSize: 3,
+      });
     const onSendAttachment = vi.fn().mockResolvedValue(undefined);
     const form: PlayerFormView = {
       submission_id: 's1',
@@ -307,20 +336,7 @@ describe('FormCard', () => {
       form_name: 'Proof of purchase',
       version: 1,
       fields: [
-        {
-          key: 'proof',
-          label: 'Upload a photo or video',
-          type: 'attachment',
-          isRequired: false,
-          position: 0,
-        },
-        {
-          key: 'order_id',
-          label: 'Order or receipt ID',
-          type: 'short_text',
-          isRequired: true,
-          position: 1,
-        },
+        { key: 'proof', label: 'Upload a photo', type: 'attachment', isRequired: false, position: 0 },
       ],
       answers: [],
     };
@@ -328,18 +344,38 @@ describe('FormCard', () => {
       <FormCard
         form={form}
         onAnswer={vi.fn()}
-        onSubmit={onSubmit}
+        onSubmit={vi.fn()}
         onSkip={vi.fn()}
         busy={false}
+        onUploadAttachment={onUploadAttachment}
         onSendAttachment={onSendAttachment}
       />,
     );
-    const file = new File([new Uint8Array(3)], 'clip.mp4', { type: 'video/mp4' });
-    fireEvent.change(screen.getByLabelText('Attach image or video'), { target: { files: [file] } });
+    const first = makeFile('first.png', 'image/png', 3);
+    fireEvent.change(screen.getByLabelText('Attach image or video'), { target: { files: [first] } });
+    await screen.findByAltText('first.png');
 
-    expect(await screen.findByText('2 of 2')).toBeInTheDocument();
-    expect(onSendAttachment).toHaveBeenCalledWith('proof', file, expect.any(Function));
-    expect(onSubmit).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByLabelText('Remove attachment'));
+    expect(screen.queryByAltText('first.png')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /tap to attach a photo or video/i }),
+    ).toBeInTheDocument();
+
+    const second = makeFile('second.png', 'image/png', 3);
+    fireEvent.change(screen.getByLabelText('Attach image or video'), { target: { files: [second] } });
+    await screen.findByAltText('second.png');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Submit' }));
+    await waitFor(() =>
+      expect(onSendAttachment).toHaveBeenCalledWith(
+        'proof',
+        expect.objectContaining({ filename: 'second.png' }),
+      ),
+    );
+    expect(onSendAttachment).not.toHaveBeenCalledWith(
+      'proof',
+      expect.objectContaining({ filename: 'first.png' }),
+    );
   });
 
   it('posts expect_native_dialog before the native picker opens for an attachment field', () => {
@@ -362,6 +398,7 @@ describe('FormCard', () => {
         onSubmit={vi.fn()}
         onSkip={vi.fn()}
         busy={false}
+        onUploadAttachment={vi.fn()}
         onSendAttachment={vi.fn()}
       />,
     );
@@ -390,6 +427,7 @@ describe('FormCard', () => {
         onSubmit={vi.fn()}
         onSkip={vi.fn()}
         busy={false}
+        onUploadAttachment={vi.fn()}
         onSendAttachment={vi.fn()}
       />,
     );
@@ -398,8 +436,8 @@ describe('FormCard', () => {
     ).toBeInTheDocument();
   });
 
-  it('rejects an oversized image client-side without calling onSendAttachment', () => {
-    const onSendAttachment = vi.fn();
+  it('rejects an oversized image client-side without calling onUploadAttachment', () => {
+    const onUploadAttachment = vi.fn();
     const form: PlayerFormView = {
       submission_id: 's1',
       form_id: 'f1',
@@ -417,18 +455,19 @@ describe('FormCard', () => {
         onSubmit={vi.fn()}
         onSkip={vi.fn()}
         busy={false}
-        onSendAttachment={onSendAttachment}
+        onUploadAttachment={onUploadAttachment}
+        onSendAttachment={vi.fn()}
       />,
     );
     const big = makeFile('huge.png', 'image/png', 11 * 1024 * 1024);
     fireEvent.change(screen.getByLabelText('Attach image or video'), { target: { files: [big] } });
 
-    expect(onSendAttachment).not.toHaveBeenCalled();
+    expect(onUploadAttachment).not.toHaveBeenCalled();
     expect(screen.getByText(/10 MB or smaller/)).toBeInTheDocument();
   });
 
-  it('rejects an oversized video client-side without calling onSendAttachment', () => {
-    const onSendAttachment = vi.fn();
+  it('rejects an oversized video client-side without calling onUploadAttachment', () => {
+    const onUploadAttachment = vi.fn();
     const form: PlayerFormView = {
       submission_id: 's1',
       form_id: 'f1',
@@ -446,18 +485,19 @@ describe('FormCard', () => {
         onSubmit={vi.fn()}
         onSkip={vi.fn()}
         busy={false}
-        onSendAttachment={onSendAttachment}
+        onUploadAttachment={onUploadAttachment}
+        onSendAttachment={vi.fn()}
       />,
     );
     const big = makeFile('huge.mp4', 'video/mp4', 51 * 1024 * 1024);
     fireEvent.change(screen.getByLabelText('Attach image or video'), { target: { files: [big] } });
 
-    expect(onSendAttachment).not.toHaveBeenCalled();
+    expect(onUploadAttachment).not.toHaveBeenCalled();
     expect(screen.getByText(/50 MB or smaller/)).toBeInTheDocument();
   });
 
-  it('rejects an unsupported file type client-side without calling onSendAttachment', () => {
-    const onSendAttachment = vi.fn();
+  it('rejects an unsupported file type client-side without calling onUploadAttachment', () => {
+    const onUploadAttachment = vi.fn();
     const form: PlayerFormView = {
       submission_id: 's1',
       form_id: 'f1',
@@ -475,26 +515,34 @@ describe('FormCard', () => {
         onSubmit={vi.fn()}
         onSkip={vi.fn()}
         busy={false}
-        onSendAttachment={onSendAttachment}
+        onUploadAttachment={onUploadAttachment}
+        onSendAttachment={vi.fn()}
       />,
     );
     const bad = makeFile('doc.pdf', 'application/pdf', 100);
     fireEvent.change(screen.getByLabelText('Attach image or video'), { target: { files: [bad] } });
 
-    expect(onSendAttachment).not.toHaveBeenCalled();
+    expect(onUploadAttachment).not.toHaveBeenCalled();
     expect(
       screen.getByText(/Only PNG, JPEG, WebP, GIF images or MP4\/WebM videos are supported\./),
     ).toBeInTheDocument();
   });
 
-  it('shows the picked file as a preview with a progress overlay while uploading', async () => {
-    let resolveUpload!: () => void;
-    const onSendAttachment = vi.fn(
-      (_fieldKey: string, _file: File, onProgress: (percent: number) => void) =>
-        new Promise<void>((resolve) => {
-          onProgress(42);
-          resolveUpload = resolve;
-        }),
+  it('shows the picked file as a preview with a progress overlay while uploading, then clears it once uploaded', async () => {
+    let resolveUpload!: (v: {
+      key: string;
+      filename: string;
+      mimeType: string;
+      byteSize: number;
+    }) => void;
+    const onUploadAttachment = vi.fn(
+      (_file: File, onProgress: (percent: number) => void) =>
+        new Promise<{ key: string; filename: string; mimeType: string; byteSize: number }>(
+          (resolve) => {
+            onProgress(42);
+            resolveUpload = resolve;
+          },
+        ),
     );
     const form: PlayerFormView = {
       submission_id: 's1',
@@ -513,7 +561,8 @@ describe('FormCard', () => {
         onSubmit={vi.fn()}
         onSkip={vi.fn()}
         busy={false}
-        onSendAttachment={onSendAttachment}
+        onUploadAttachment={onUploadAttachment}
+        onSendAttachment={vi.fn().mockResolvedValue(undefined)}
       />,
     );
     const file = makeFile('shot.png', 'image/png', 3);
@@ -525,15 +574,20 @@ describe('FormCard', () => {
       screen.queryByRole('button', { name: /tap to attach a photo or video/i }),
     ).not.toBeInTheDocument();
 
-    resolveUpload();
-    await waitFor(() =>
-      expect(onSendAttachment).toHaveBeenCalledWith('proof', file, expect.any(Function)),
-    );
+    resolveUpload({
+      key: 'pending/ws/player/uuid.png',
+      filename: 'shot.png',
+      mimeType: 'image/png',
+      byteSize: 3,
+    });
+
+    await screen.findByLabelText('Remove attachment');
+    expect(screen.queryByTestId('upload-progress-overlay')).not.toBeInTheDocument();
   });
 
   it('reverts to the idle container and shows an error when the upload fails', async () => {
     const onSubmit = vi.fn();
-    const onSendAttachment = vi.fn().mockRejectedValue(new Error('network error'));
+    const onUploadAttachment = vi.fn().mockRejectedValue(new Error('network error'));
     const form: PlayerFormView = {
       submission_id: 's1',
       form_id: 'f1',
@@ -551,7 +605,8 @@ describe('FormCard', () => {
         onSubmit={onSubmit}
         onSkip={vi.fn()}
         busy={false}
-        onSendAttachment={onSendAttachment}
+        onUploadAttachment={onUploadAttachment}
+        onSendAttachment={vi.fn()}
       />,
     );
     const file = makeFile('shot.png', 'image/png', 3);

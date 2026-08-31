@@ -156,7 +156,7 @@ describe('POST /surface/messages with an attachment', () => {
 
 describe('POST /surface/messages answering a form attachment field', () => {
   it('creates a form_answer with the attachment id and does not error', async () => {
-    const { workspaceId, playerId, token } = await setup();
+    const { workspaceId, playerId, sessionId, token } = await setup();
     const conversationId = await seedConversation({ workspaceId, playerId });
     const formId = await seedForm({ workspaceId, name: 'Missing Purchase' });
     await seedFormVersion({
@@ -213,6 +213,37 @@ describe('POST /surface/messages answering a form attachment field', () => {
     );
     expect(rows).toHaveLength(1);
     expect(rows[0].value).toMatchObject({ attachmentId: expect.any(String) });
+
+    const list = await request(app)
+      .get('/surface/messages')
+      .query({ session_id: sessionId })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    const posted = list.body.messages.find((m: { attachment: unknown }) => m.attachment !== null);
+    expect(posted.form_field_key).toBe('proof_of_purchase');
+  });
+
+  it('leaves form_field_key null for an attachment message sent outside any form', async () => {
+    const { workspaceId, playerId, sessionId, token } = await setup();
+    await seedConversation({ workspaceId, playerId });
+
+    const key = await uploadFixtureImage(workspaceId, playerId);
+    await request(app)
+      .post('/surface/messages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        body: '',
+        attachment: { key, filename: 'shot.png', mime_type: 'image/png', byte_size: 14 },
+      })
+      .expect(200);
+
+    const list = await request(app)
+      .get('/surface/messages')
+      .query({ session_id: sessionId })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    const posted = list.body.messages.find((m: { attachment: unknown }) => m.attachment !== null);
+    expect(posted.form_field_key).toBeNull();
   });
 });
 

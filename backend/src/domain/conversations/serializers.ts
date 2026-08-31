@@ -44,6 +44,7 @@ export function toPlayerView(row: PostedMessageRow): PlayerMessageView | null {
     created_at: row.createdAt.toISOString(),
     article_id: row.articleId,
     attachment: toAttachmentFields(row),
+    form_field_key: row.formFieldKey ?? null,
   };
 }
 
@@ -66,5 +67,6 @@ export function toAgentView(row: PostedMessageRow): AgentMessageView {
     // attachment fields); every other call site relies on this join-derived
     // value, present only when the row came from a message-list join.
     attachment: toAttachmentFields(row),
+    form_field_key: row.formFieldKey ?? null,
   };
 }

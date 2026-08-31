@@ -398,6 +398,7 @@ describe('SupportChat article delivery', () => {
             read_at: null,
             article_id: 'art-1',
             attachment: null,
+            form_field_key: null,
           },
         ],
       }),
@@ -433,7 +434,7 @@ describe('SupportChat article delivery', () => {
 });
 
 describe('SupportChat form attachment upload', () => {
-  it('threads a progress callback into putFileToUploadUrl when the active form asks for an attachment', async () => {
+  it('uploads on pick with a progress callback, but only sends the message on Submit', async () => {
     const form: PlayerFormView = {
       submission_id: 'sub1',
       form_id: 'f1',
@@ -474,6 +475,12 @@ describe('SupportChat form attachment upload', () => {
         expect.any(Function),
       ),
     );
+    // Uploaded, but not yet confirmed — the field's answer isn't sent until
+    // the player explicitly taps Submit.
+    expect(sendPlayerMessage).not.toHaveBeenCalled();
+
+    fireEvent.click(within(formGroup).getByRole('button', { name: 'Submit' }));
+
     await waitFor(() =>
       expect(sendPlayerMessage).toHaveBeenCalledWith(
         't',

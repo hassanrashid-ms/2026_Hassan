@@ -58,6 +58,8 @@ export type PostedMessageRow = {
   attachmentByteSize?: number | null;
   body: string;
   articleId: string | null;
+  /** Set only for a message that exists purely to carry a form's `attachment` answer. */
+  formFieldKey?: string | null;
   visibility: 'public' | 'internal';
   deliveryState: ChatDeliveryState;
   readAt: Date | null;

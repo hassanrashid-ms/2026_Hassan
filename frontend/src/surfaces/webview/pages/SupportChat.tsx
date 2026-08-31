@@ -249,7 +249,14 @@ export function SupportChat() {
     void markPlayerMessagesRead(boot.token, lastSeq);
   }, [boot, messagesQuery.data]);
 
-  const serverMessages: ChatMessage[] = messagesQuery.data?.messages.map(toChatMessage) ?? [];
+  // Messages that exist purely to carry a form's attachment answer are
+  // deliberately hidden here: answering a form question is silent for every
+  // other field type (postFormAnswer, never a message), and this one
+  // shouldn't be the exception just because its answer happens to also be a
+  // real message row for the agent to see. Agent console makes no such
+  // filter — it keeps showing these normally.
+  const serverMessages: ChatMessage[] =
+    messagesQuery.data?.messages.filter((m) => !m.form_field_key).map(toChatMessage) ?? [];
   const chatMessages = reconcilePending(serverMessages, pending);
 
   const settled =
@@ -371,29 +378,28 @@ export function SupportChat() {
             onSubmit={() => formTerminate.mutate('submit')}
             onSkip={() => formTerminate.mutate('skip')}
             busy={formTerminate.isPending}
-            onSendAttachment={async (fieldKey, file, onProgress) => {
+            onUploadAttachment={async (file, onProgress) => {
               const uploaded = await requestUpload(boot!.token, {
                 filename: file.name,
                 contentType: file.type,
                 byteSize: file.size,
               });
               await putFileToUploadUrl(uploaded.upload_url, file, onProgress);
-              await sendPlayerMessage(
-                boot!.token,
-                '',
-                boot!.sessionId,
-                {
-                  key: uploaded.key,
-                  filename: file.name,
-                  mimeType: file.type,
-                  byteSize: file.size,
-                },
-                fieldKey,
-              );
+              return {
+                key: uploaded.key,
+                filename: file.name,
+                mimeType: file.type,
+                byteSize: file.size,
+              };
+            }}
+            onSendAttachment={async (fieldKey, attachment) => {
+              await sendPlayerMessage(boot!.token, '', boot!.sessionId, attachment, fieldKey);
               // The card owns its own progress and deliberately never
               // refetches mid-form (see FormCard's docstring) — but the
-              // attachment answer just posted a real message row, and that
-              // message must show up in the thread once the field advances.
+              // attachment answer just posted a real message row (hidden from
+              // this thread by the form_field_key filter below, visible to
+              // the agent), and the messages query still needs to catch up so
+              // a later refetch doesn't show it appearing out of nowhere.
               void queryClient.invalidateQueries({ queryKey: ['playerMessages', boot?.sessionId] });
             }}
           />

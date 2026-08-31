@@ -3,8 +3,9 @@ import type { FormField, PlayerFormView } from '@support/types';
 import { SupportButton } from '@/surfaces/webview/components/SupportButton';
 import { post } from '@/services/bridgeService';
 import { cn } from '@/surfaces/webview/lib/cn';
-import { Paperclip } from 'lucide-react';
+import { Check, Paperclip, X } from 'lucide-react';
 import { AttachmentThumbnail } from '@/features/chat/components/AttachmentThumbnail';
+import type { UploadedAttachment } from '@/features/chat/components/Composer';
 
 type FormCardProps = {
   form: PlayerFormView;
@@ -13,17 +14,22 @@ type FormCardProps = {
   onSkip: () => void;
   busy: boolean;
   /**
-   * The attachment field's own send-and-advance path, separate from
-   * onAnswer/advance: a picked file that uploads successfully has no
-   * "unchanged, don't resubmit" case the way a re-shown text field does, so
-   * it bypasses the draft/committed/advance machinery entirely. Optional so
-   * existing callers/tests that seed no attachment field are unaffected.
+   * Uploads a picked file for the attachment field, before the field has an
+   * answer to send — mirrors Composer.tsx's own onUpload. Resolves with the
+   * uploaded file's metadata, which then flows through the normal
+   * draft/onChange path like any other field's value.
    */
-  onSendAttachment?: (
-    fieldKey: string,
+  onUploadAttachment?: (
     file: File,
     onProgress: (percent: number) => void,
-  ) => Promise<void>;
+  ) => Promise<UploadedAttachment>;
+  /**
+   * Posts the already-uploaded attachment as the field's answer. Called only
+   * from advance(), on an explicit Next/Submit tap — same moment every other
+   * field type's onAnswer runs. Optional so existing callers/tests that seed
+   * no attachment field are unaffected.
+   */
+  onSendAttachment?: (fieldKey: string, attachment: UploadedAttachment) => Promise<void>;
 };
 
 /** Empty means "nothing to send": a blank value is never posted, required or not. */
@@ -48,6 +54,7 @@ export function FormCard({
   onSubmit,
   onSkip,
   busy,
+  onUploadAttachment,
   onSendAttachment,
 }: FormCardProps) {
   const fields = useMemo(
@@ -92,9 +99,16 @@ export function FormCard({
       // Pressing Next on an unchanged prefilled answer writes nothing:
       // re-submitting an identical value would inflate the correction rate with
       // events that record no correction, and grow an append-only table with
-      // rows that differ only by timestamp.
+      // rows that differ only by timestamp. An attachment field's "value" is
+      // the already-uploaded file's metadata (set by AttachmentField's
+      // onChange once the upload resolves) — Next is what actually sends it,
+      // the same moment every other field type's answer is posted.
       if (changed) {
-        await onAnswer(field.key, value);
+        if (field.type === 'attachment' && onSendAttachment) {
+          await onSendAttachment(field.key, value as UploadedAttachment);
+        } else {
+          await onAnswer(field.key, value);
+        }
         setCommitted((current) => ({ ...current, [field.key]: value }));
       }
       if (isLast) onSubmit();
@@ -105,19 +119,6 @@ export function FormCard({
   };
 
   const set = (next: unknown) => setDraft((current) => ({ ...current, [field.key]: next }));
-
-  // The attachment field's own advance path: no draft/changed value to
-  // compare, since a picked file that uploaded successfully is always a
-  // "yes, send this" — there is no re-shown-unchanged case to skip posting
-  // for. This mirrors advance()'s isLast/onSubmit/setIndex tail without its
-  // changed-value branch. The upload itself, its preview, and its progress
-  // are owned by AttachmentField below; this only runs once that upload has
-  // actually succeeded.
-  const handleAttachmentUploaded = (fieldKey: string) => {
-    setCommitted((current) => ({ ...current, [fieldKey]: true }));
-    if (isLast) onSubmit();
-    else setIndex((current) => current + 1);
-  };
 
   return (
     <div role="group" aria-label={form.form_name} className="flex flex-col gap-4">
@@ -161,13 +162,13 @@ export function FormCard({
       </div>
 
       {field.type === 'attachment' ? (
-        onSendAttachment && (
+        onUploadAttachment && (
           <AttachmentField
-            fieldKey={field.key}
+            value={value}
+            onChange={set}
             disabled={disabled}
-            onSendAttachment={onSendAttachment}
+            onUpload={onUploadAttachment}
             onUploading={setSending}
-            onUploaded={() => handleAttachmentUploaded(field.key)}
           />
         )
       ) : (
@@ -338,28 +339,27 @@ function maxBytesForAttachment(mimeType: string): number {
 /**
  * The form's attachment field: a clickable container with a centered icon
  * when idle, replaced by AttachmentThumbnail's preview+scrim+progress-ring
- * once a file is picked. Owns its own preview/uploading/progress/error state
- * exactly like features/chat/components/Composer.tsx's attachment handling —
- * FormCard only learns "an upload is in flight" (to keep Back/Skip/Next
- * disabled) and "the upload succeeded" (to advance) via the two callback
- * props below.
+ * once a file is picked. Behaves like every other field type from FormCard's
+ * point of view — `value`/`onChange` flow through the normal draft state, and
+ * advance() is what actually sends the answer, only on an explicit tap — but
+ * still owns its own preview/uploading/progress/error state internally,
+ * exactly like features/chat/components/Composer.tsx's attachment handling.
+ * `onUploading` is the one thing that isn't a value: it keeps Back/Skip/Next
+ * disabled while the upload itself is in flight, before there's a value to
+ * report at all.
  */
 function AttachmentField({
-  fieldKey,
+  value,
+  onChange,
   disabled,
-  onSendAttachment,
+  onUpload,
   onUploading,
-  onUploaded,
 }: {
-  fieldKey: string;
+  value: unknown;
+  onChange: (next: unknown) => void;
   disabled: boolean;
-  onSendAttachment: (
-    fieldKey: string,
-    file: File,
-    onProgress: (percent: number) => void,
-  ) => Promise<void>;
+  onUpload: (file: File, onProgress: (percent: number) => void) => Promise<UploadedAttachment>;
   onUploading: (isUploading: boolean) => void;
-  onUploaded: () => void;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -369,6 +369,8 @@ function AttachmentField({
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+
+  const attachment = value as UploadedAttachment | undefined;
 
   const handleFilePicked = async (file: File) => {
     setError(null);
@@ -397,10 +399,12 @@ function AttachmentField({
     onUploading(true);
     setProgress(0);
     try {
-      await onSendAttachment(fieldKey, file, setProgress);
-      setPreviewUrl(null);
-      setPreviewMeta(null);
-      onUploaded();
+      const uploaded = await onUpload(file, setProgress);
+      // Reported as the field's value, not sent — advance() is what actually
+      // posts it, on an explicit Next/Submit tap. The local preview stays up
+      // (not cleared here) so the player keeps seeing exactly what they
+      // picked until they confirm or remove it.
+      onChange(uploaded);
     } catch {
       setError('Upload failed. Please try again.');
       setPreviewUrl(null);
@@ -410,6 +414,13 @@ function AttachmentField({
       onUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
+  };
+
+  const handleRemove = () => {
+    setPreviewUrl(null);
+    setPreviewMeta(null);
+    setError(null);
+    onChange(undefined);
   };
 
   return (
@@ -431,14 +442,47 @@ function AttachmentField({
         }}
       />
       {previewUrl && previewMeta ? (
-        <AttachmentThumbnail
-          previewUrl={previewUrl}
-          mimeType={previewMeta.mimeType}
-          filename={previewMeta.filename}
-          uploading={uploading}
-          progress={progress}
-          className="mx-auto h-32 w-32 rounded-card"
-        />
+        <div className="relative mx-auto">
+          <AttachmentThumbnail
+            previewUrl={previewUrl}
+            mimeType={previewMeta.mimeType}
+            filename={previewMeta.filename}
+            uploading={uploading}
+            progress={progress}
+            className="h-32 w-32 rounded-card"
+          />
+          {/* Lets the player swap the photo before confirming — hidden while
+              uploading, matching Composer.tsx's own remove-button gating. */}
+          {!uploading && (
+            <button
+              type="button"
+              aria-label="Remove attachment"
+              disabled={disabled}
+              onClick={handleRemove}
+              className="absolute -top-2 -right-2 rounded-full bg-surface p-1 text-muted"
+            >
+              <X className="size-3.5" />
+            </button>
+          )}
+        </div>
+      ) : attachment ? (
+        // No local preview blob survives a remount (e.g. the player backed up
+        // past this field and returned to it) — a plain confirmed state
+        // stands in for the thumbnail rather than trying to re-derive one.
+        <div className="flex items-center justify-between gap-2 rounded-card border border-muted/30 bg-surface px-4 py-3">
+          <span className="flex items-center gap-2 truncate text-sm text-text">
+            <Check aria-hidden="true" className="size-4 shrink-0 text-accent" />
+            <span className="truncate">{attachment.filename}</span>
+          </span>
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => fileInputRef.current?.click()}
+            className="shrink-0 text-sm text-muted underline"
+          >
+            Change
+          </button>
+        </div>
       ) : (
         <button
           type="button"
