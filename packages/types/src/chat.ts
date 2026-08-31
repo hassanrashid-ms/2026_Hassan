@@ -164,6 +164,10 @@ export type AgentConversationSummary = {
   assigned_agent_name: string | null;
   priority: ConversationPriorityValue;
   tags: TagView[];
+  /** ISO timestamp. */
+  created_at: string;
+  subintent: { id: string; name: string } | null;
+  number: number;
 };
 export type AgentConversationsResponse = {
   conversations: AgentConversationSummary[];

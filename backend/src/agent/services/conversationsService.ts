@@ -274,6 +274,9 @@ export async function listConversations(
         assignedAgentName: agent.displayName,
         priority: conversation.priority,
         createdAt: conversation.createdAt,
+        subintentId: subintent.id,
+        subintentName: subintent.name,
+        number: conversation.number,
       })
       .from(conversation)
       .innerJoin(player, eq(player.id, conversation.playerId))
@@ -330,6 +333,9 @@ export async function listConversations(
         assigned_agent_name: row.assignedAgentName,
         priority: row.priority,
         tags,
+        created_at: row.createdAt.toISOString(),
+        subintent: row.subintentId ? { id: row.subintentId, name: row.subintentName! } : null,
+        number: row.number,
       });
     }
 
@@ -391,6 +397,10 @@ async function listAllConversations(
         assignedAgentName: agent.displayName,
         priority: conversation.priority,
         activity,
+        createdAt: conversation.createdAt,
+        subintentId: subintent.id,
+        subintentName: subintent.name,
+        number: conversation.number,
       })
       .from(conversation)
       .innerJoin(player, eq(player.id, conversation.playerId))
@@ -430,6 +440,9 @@ async function listAllConversations(
         assigned_agent_name: row.assignedAgentName,
         priority: row.priority,
         tags,
+        created_at: row.createdAt.toISOString(),
+        subintent: row.subintentId ? { id: row.subintentId, name: row.subintentName! } : null,
+        number: row.number,
       });
     }
 
@@ -471,6 +484,10 @@ async function listResolvedOrClosedConversations(
         assignedAgentName: agent.displayName,
         priority: conversation.priority,
         ts: timestampCol,
+        createdAt: conversation.createdAt,
+        subintentId: subintent.id,
+        subintentName: subintent.name,
+        number: conversation.number,
       })
       .from(conversation)
       .innerJoin(player, eq(player.id, conversation.playerId))
@@ -529,6 +546,9 @@ async function listResolvedOrClosedConversations(
         assigned_agent_name: row.assignedAgentName,
         priority: row.priority,
         tags,
+        created_at: row.createdAt.toISOString(),
+        subintent: row.subintentId ? { id: row.subintentId, name: row.subintentName! } : null,
+        number: row.number,
       });
     }
 

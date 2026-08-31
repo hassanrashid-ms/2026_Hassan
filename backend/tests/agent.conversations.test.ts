@@ -817,6 +817,34 @@ describe('GET /agent/conversations?status=all', () => {
     const page2Ids = page2.body.conversations.map((c: { id: string }) => c.id);
     expect(new Set([...page1Ids, ...page2Ids]).size).toBe(30);
   });
+
+  it('includes created_at, subintent, and ticket number on each row', async () => {
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const intentId = await seedIntent(workspaceId, 'Billing');
+    const subintentId = await seedSubintent({ workspaceId, intentId, name: 'Refund request' });
+    const createdAt = new Date('2026-08-15T10:00:00Z');
+    const conversationId = await seedConversation({
+      workspaceId,
+      playerId,
+      status: 'open',
+      createdAt,
+      subintentId,
+    });
+    const { token } = await setupAgent(workspaceId);
+
+    const res = await request(app)
+      .get('/conversations')
+      .query({ status: 'all' })
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+
+    const row = res.body.conversations.find((c: { id: string }) => c.id === conversationId);
+    expect(row.created_at).toBe(createdAt.toISOString());
+    expect(row.subintent).toEqual({ id: subintentId, name: 'Refund request' });
+    expect(typeof row.number).toBe('number');
+  });
 });
 
 describe('POST /agent/conversations/:id/claim', () => {
