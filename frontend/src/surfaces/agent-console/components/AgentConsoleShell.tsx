@@ -12,7 +12,6 @@ import {
   SlidersHorizontal,
   Tags,
   Gauge,
-  Layers,
 } from 'lucide-react';
 // agent-console.css is imported HERE and nowhere else — never from main.tsx or
 // any statically-reachable module, so its Tailwind preflight never leaks into
@@ -23,7 +22,6 @@ import { scrubToken } from '@/lib/boot.ts';
 import {
   canBuildForms,
   clearAgentSession,
-  isAdmin,
   loadAgentSession,
   saveAgentSession,
   saveLastActiveWorkspaceId,
@@ -96,16 +94,6 @@ const WORKSPACE_SETTINGS_NAV_ITEM = {
   to: '/workspace-settings',
   label: 'Workspace Settings',
   icon: SlidersHorizontal,
-  group: 'Manage',
-};
-
-// Admin-only — unlike every other item in the Manage group, which is Team
-// Lead + Admin. The API enforces this with requireAdminRole regardless of
-// what this nav shows; see declaredFieldRouter.ts.
-const DECLARED_FIELDS_NAV_ITEM = {
-  to: '/declared-fields',
-  label: 'Declared Fields',
-  icon: Layers,
   group: 'Manage',
 };
 
@@ -239,7 +227,6 @@ export function AgentConsoleShell() {
         WORKLOAD_NAV_ITEM,
         BOT_CONFIG_NAV_ITEM,
         WORKSPACE_SETTINGS_NAV_ITEM,
-        ...(isAdmin(session) ? [DECLARED_FIELDS_NAV_ITEM] : []),
       ]
     : NAV_ITEMS;
 
