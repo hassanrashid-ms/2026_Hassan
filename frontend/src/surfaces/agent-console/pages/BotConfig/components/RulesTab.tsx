@@ -7,6 +7,7 @@ import { Button } from '../../../components/ui/button.tsx';
 import { Input } from '../../../components/ui/input.tsx';
 import { Switch } from '../../../components/ui/switch.tsx';
 import { ConfirmDialog } from '../../../components/ConfirmDialog.tsx';
+import { useBotConfigDraft } from '../BotConfigDraftContext.tsx';
 
 function stripView(rule: RuleEntryView) {
   const { enforcement, ...rest } = rule;
@@ -23,6 +24,7 @@ const HIDDEN_RULE_KEY = 'no_invented_facts';
 
 export function RulesTab({ token, config }: { token: string; config: BotConfigView | undefined }) {
   const queryClient = useQueryClient();
+  const { setDraftField } = useBotConfigDraft();
   const [newRuleText, setNewRuleText] = useState('');
   const [rules, setRules] = useState<RuleEntryView[]>(config?.rules ?? []);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -31,6 +33,10 @@ export function RulesTab({ token, config }: { token: string; config: BotConfigVi
   useEffect(() => {
     if (config) setRules(config.rules);
   }, [config?.rules]);
+
+  useEffect(() => {
+    setDraftField('rules', rules.map(stripView));
+  }, [rules, setDraftField]);
 
   const save = useMutation({
     mutationFn: (rules: ReturnType<typeof stripView>[]) => saveBotConfig(token, { rules }),

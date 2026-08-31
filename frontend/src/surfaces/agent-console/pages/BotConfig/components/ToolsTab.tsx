@@ -6,6 +6,7 @@ import { Badge } from '../../../components/ui/badge.tsx';
 import { Button } from '../../../components/ui/button.tsx';
 import { Switch } from '../../../components/ui/switch.tsx';
 import { ConfirmDialog } from '../../../components/ConfirmDialog.tsx';
+import { useBotConfigDraft } from '../BotConfigDraftContext.tsx';
 
 // Mirrors backend/src/domain/bot/tools.ts TOOL_CATALOG — kept in sync by hand;
 // this is display copy only, not enforcement (the API is the enforcement point).
@@ -29,6 +30,7 @@ const LIMIT_LABELS: Record<string, string> = {
 
 export function ToolsTab({ token, config }: { token: string; config: BotConfigView | undefined }) {
   const queryClient = useQueryClient();
+  const { setDraftField } = useBotConfigDraft();
   const [toolsConfig, setToolsConfig] = useState<ToolToggleValue[]>(config?.tools_config ?? []);
   const [limitsConfig, setLimitsConfig] = useState<LimitToggleValue[]>(config?.limits_config ?? []);
   const [toolsConfirmOpen, setToolsConfirmOpen] = useState(false);
@@ -42,6 +44,14 @@ export function ToolsTab({ token, config }: { token: string; config: BotConfigVi
   useEffect(() => {
     if (config) setLimitsConfig(config.limits_config);
   }, [config?.limits_config]);
+
+  useEffect(() => {
+    setDraftField('toolsConfig', toolsConfig);
+  }, [toolsConfig, setDraftField]);
+
+  useEffect(() => {
+    setDraftField('limitsConfig', limitsConfig);
+  }, [limitsConfig, setDraftField]);
 
   const save = useMutation({
     mutationFn: (toolsConfig: ToolToggleValue[]) =>

@@ -5,9 +5,11 @@ import { saveBotConfig } from '../../../api/agentApi.ts';
 import { Button } from '../../../components/ui/button.tsx';
 import { Textarea } from '../../../components/ui/textarea.tsx';
 import { ConfirmDialog } from '../../../components/ConfirmDialog.tsx';
+import { useBotConfigDraft } from '../BotConfigDraftContext.tsx';
 
 export function PromptTab({ token, config }: { token: string; config: BotConfigView | undefined }) {
   const queryClient = useQueryClient();
+  const { setDraftField } = useBotConfigDraft();
   const [prompt, setPrompt] = useState(config?.prompt ?? '');
   const [saveConfirmOpen, setSaveConfirmOpen] = useState(false);
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
@@ -16,6 +18,10 @@ export function PromptTab({ token, config }: { token: string; config: BotConfigV
   useEffect(() => {
     if (config) setPrompt(config.prompt);
   }, [config?.prompt]);
+
+  useEffect(() => {
+    setDraftField('prompt', prompt);
+  }, [prompt, setDraftField]);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['bot-config'] });
 
