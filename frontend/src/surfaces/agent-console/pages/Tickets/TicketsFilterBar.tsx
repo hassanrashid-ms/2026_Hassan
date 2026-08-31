@@ -128,7 +128,7 @@ export function TicketsFilterBar({
         value={filters.olderThanHours || 'any'}
         onValueChange={(v) => onChange({ olderThanHours: v === 'any' ? '' : v })}
       >
-        <SelectTrigger className="w-40">
+        <SelectTrigger className="h-8 w-40 py-1 text-xs">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
