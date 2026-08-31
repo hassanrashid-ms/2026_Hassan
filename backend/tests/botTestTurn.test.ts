@@ -66,10 +66,7 @@ describe('runTestBotTurn', () => {
 
     mockCallModel.mockResolvedValueOnce({ toolCalls: [], text: 'draft answer' });
 
-    const decision = await runTestBotTurn(
-      { agentId, workspaceId, isAdmin: true },
-      baseBody(),
-    );
+    const decision = await runTestBotTurn({ agentId, workspaceId, isAdmin: true }, baseBody());
 
     expect(decision).toMatchObject({ kind: 'answer', reply: 'draft answer' });
   });

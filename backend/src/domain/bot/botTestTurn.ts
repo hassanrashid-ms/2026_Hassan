@@ -105,7 +105,10 @@ function toWireDecision(decision: BotTurnDecision): BotTestTurnDecision {
   })();
   return (
     decision.searches
-      ? { ...base, searches: decision.searches.map((s) => ({ query: s.query, results: s.results })) }
+      ? {
+          ...base,
+          searches: decision.searches.map((s) => ({ query: s.query, results: s.results })),
+        }
       : base
   ) as BotTestTurnDecision;
 }

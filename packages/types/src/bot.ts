@@ -132,7 +132,8 @@ export type BotTestTurnHandoffReason =
   | 'turn_cap'
   | 'unhelped_cap';
 
-export type BotTestTurnUnavailableReason = 'not_provisioned' | 'error' | 'timeout' | 'invalid_response';
+export type BotTestTurnUnavailableReason =
+  'not_provisioned' | 'error' | 'timeout' | 'invalid_response';
 
 export type BotTestTurnSearch = { query: string; results: { id: string; title: string }[] };
 
