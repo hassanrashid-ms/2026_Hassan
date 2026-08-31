@@ -142,14 +142,14 @@ export function DeclaredFieldRow({ token, field }: { token: string; field: Decla
               </>
             ) : (
               <>
-                <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(true)}>
+                <Button type="button" size="sm" variant="outline" onClick={() => setEditing(true)}>
                   Edit
                 </Button>
                 {isActive ? (
                   <Button
                     type="button"
                     size="sm"
-                    variant="ghost"
+                    variant="outline"
                     onClick={() => setConfirmDeactivate(true)}
                   >
                     Deactivate
@@ -158,7 +158,7 @@ export function DeclaredFieldRow({ token, field }: { token: string; field: Decla
                   <Button
                     type="button"
                     size="sm"
-                    variant="ghost"
+                    variant="outline"
                     onClick={() => setConfirmReactivate(true)}
                   >
                     Reactivate
@@ -167,7 +167,7 @@ export function DeclaredFieldRow({ token, field }: { token: string; field: Decla
                 <Button
                   type="button"
                   size="sm"
-                  variant="ghost"
+                  variant="outline"
                   onClick={() => setConfirmArchive(true)}
                 >
                   ×
