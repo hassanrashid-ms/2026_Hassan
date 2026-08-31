@@ -6,6 +6,7 @@ import { loadAdminSession } from '../../lib/adminSession.ts';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs.tsx';
 import { MembersTable } from './components/MembersTable.tsx';
 import { SecretPanel } from './components/SecretPanel.tsx';
+import { DeclaredFieldsPanel } from './components/DeclaredFieldsPanel.tsx';
 
 export function WorkspaceDetail() {
   const { id } = useParams<{ id: string }>();
@@ -52,12 +53,16 @@ export function WorkspaceDetail() {
           <TabsList>
             <TabsTrigger value="members">Members</TabsTrigger>
             <TabsTrigger value="secret">Secret</TabsTrigger>
+            <TabsTrigger value="declared-fields">Declared Fields</TabsTrigger>
           </TabsList>
           <TabsContent value="members">
             <MembersTable token={session.token} workspaceId={workspace.id} />
           </TabsContent>
           <TabsContent value="secret">
             <SecretPanel token={session.token} workspaceId={workspace.id} />
+          </TabsContent>
+          <TabsContent value="declared-fields">
+            <DeclaredFieldsPanel token={session.token} workspaceId={workspace.id} />
           </TabsContent>
         </Tabs>
       )}
