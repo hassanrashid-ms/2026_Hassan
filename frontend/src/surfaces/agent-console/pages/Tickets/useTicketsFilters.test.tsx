@@ -30,6 +30,10 @@ describe('useTicketsFilters', () => {
       subintentIds: [],
       assigneeIds: [],
       olderThanHours: '',
+      statuses: [],
+      createdFrom: '',
+      createdTo: '',
+      view: 'board',
     });
   });
 
@@ -47,6 +51,10 @@ describe('useTicketsFilters', () => {
       subintentIds: [],
       assigneeIds: [],
       olderThanHours: '',
+      statuses: [],
+      createdFrom: '',
+      createdTo: '',
+      view: 'board',
     });
   });
 
@@ -58,5 +66,15 @@ describe('useTicketsFilters', () => {
     });
     const [filters] = result.current;
     expect(filters.priority).toEqual([]);
+  });
+
+  it('reads and updates the view param', () => {
+    const { result } = renderWithRouter('/tickets?view=list');
+    expect(result.current[0].view).toBe('list');
+    act(() => {
+      const [, update] = result.current;
+      update({ view: 'board' });
+    });
+    expect(result.current[0].view).toBe('board');
   });
 });

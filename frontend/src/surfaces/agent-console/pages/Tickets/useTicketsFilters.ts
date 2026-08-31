@@ -7,6 +7,10 @@ export type TicketsFilters = {
   subintentIds: string[];
   assigneeIds: string[];
   olderThanHours: string;
+  statuses: string[];
+  createdFrom: string;
+  createdTo: string;
+  view: 'board' | 'list';
 };
 
 function parseCsv(value: string | null): string[] {
@@ -28,6 +32,10 @@ export function useTicketsFilters(): [TicketsFilters, (next: Partial<TicketsFilt
     subintentIds: parseCsv(params.get('subintentIds')),
     assigneeIds: parseCsv(params.get('assigneeIds')),
     olderThanHours: params.get('olderThanHours') ?? '',
+    statuses: parseCsv(params.get('statuses')),
+    createdFrom: params.get('createdFrom') ?? '',
+    createdTo: params.get('createdTo') ?? '',
+    view: params.get('view') === 'list' ? 'list' : 'board',
   };
 
   function update(next: Partial<TicketsFilters>) {
@@ -39,6 +47,10 @@ export function useTicketsFilters(): [TicketsFilters, (next: Partial<TicketsFilt
     if (merged.subintentIds.length) nextParams.set('subintentIds', merged.subintentIds.join(','));
     if (merged.assigneeIds.length) nextParams.set('assigneeIds', merged.assigneeIds.join(','));
     if (merged.olderThanHours) nextParams.set('olderThanHours', merged.olderThanHours);
+    if (merged.statuses.length) nextParams.set('statuses', merged.statuses.join(','));
+    if (merged.createdFrom) nextParams.set('createdFrom', merged.createdFrom);
+    if (merged.createdTo) nextParams.set('createdTo', merged.createdTo);
+    if (merged.view === 'list') nextParams.set('view', 'list');
     setParams(nextParams, { replace: true });
   }
 
