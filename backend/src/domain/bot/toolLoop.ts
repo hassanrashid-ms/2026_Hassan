@@ -62,7 +62,7 @@ function parseToolCall(raw: { id: string; name: string; arguments: string }): Pa
  * (not retried — a deterministic input that produced a refusal will produce
  * it again, per spec's Control flow section).
  */
-export const toolLoopDecider: BotDecider = async (input) => {
+export const toolLoopDecider: BotDecider = async (input, overrides) => {
   // Declared outside the try so the catch below can still attach whatever
   // retrieval happened before the model refused or returned something
   // unparseable. A turn that searched and *then* failed is the case where
@@ -76,6 +76,7 @@ export const toolLoopDecider: BotDecider = async (input) => {
         const { messages, subintentOptions, enabledTools, resolvedLimits } = await buildMessages(
           tx,
           input,
+          overrides,
         );
 
         // Evaluated before the turn_cap check — whichever ceiling is lower fires
@@ -289,7 +290,16 @@ export const toolLoopDecider: BotDecider = async (input) => {
                 articleTitle: cited.title,
                 score: Number(grounding.score.toFixed(2)),
               });
-              return { kind: 'answer', reply, subintentId: classifiedSubintentId, articleId };
+              return {
+                kind: 'answer',
+                reply,
+                subintentId: classifiedSubintentId,
+                articleId,
+                grounding: {
+                  score: Number(grounding.score.toFixed(2)),
+                  ungrounded: grounding.ungrounded,
+                },
+              };
             }
 
             if (call.name === CONFIRM_RESOLUTION_TOOL_NAME) {

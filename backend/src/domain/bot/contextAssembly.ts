@@ -1,7 +1,7 @@
 // backend/src/domain/bot/contextAssembly.ts
 import { and, asc, desc, eq, isNull } from 'drizzle-orm';
 import type { Tx } from '../../shared/db/withWorkspace.ts';
-import type { BotTurnInput } from './botTurn.ts';
+import type { BotTurnInput, BotTurnOverrides } from './botTurn.ts';
 import { resolveBotConfig } from './botConfig.ts';
 import { article, event, intent, message, subintent } from '../../shared/db/schema/index.ts';
 import type { LimitKey } from '@support/types';
@@ -148,8 +148,12 @@ function toChatRole(authorType: string): ChatRole | null {
  * against temperature 0, and can hallucinate that the bot asked something it
  * did not, the exact failure this block exists to prevent.
  */
-export async function buildMessages(tx: Tx, input: BotTurnInput): Promise<BuildMessagesResult> {
-  const config = await resolveBotConfig(tx, input.workspaceId);
+export async function buildMessages(
+  tx: Tx,
+  input: BotTurnInput,
+  overrides?: BotTurnOverrides,
+): Promise<BuildMessagesResult> {
+  const config = overrides?.config ?? (await resolveBotConfig(tx, input.workspaceId));
   const subintentOptions = await loadSubintentOptions(tx, input.workspaceId);
   const catalogue = await renderArticleCatalogue(tx, input.workspaceId);
   const stateBlock = await renderStateBlock(tx, input);
@@ -158,16 +162,18 @@ export async function buildMessages(tx: Tx, input: BotTurnInput): Promise<BuildM
     .replace('{{subintents}}', renderSubintentBlock(subintentOptions, input.subintentId != null))
     .replace('{{articles}}', catalogue.text);
 
-  const rows = await tx
-    .select()
-    .from(message)
-    .where(eq(message.conversationId, input.conversationId))
-    .orderBy(asc(message.seq));
-
-  const transcript = rows
-    .filter((r) => r.visibility === 'public')
-    .map((r) => ({ role: toChatRole(r.authorType), body: r.body }))
-    .filter((m): m is { role: ChatRole; body: string } => m.role !== null);
+  const transcript =
+    overrides?.transcript ??
+    (
+      await tx
+        .select()
+        .from(message)
+        .where(eq(message.conversationId, input.conversationId))
+        .orderBy(asc(message.seq))
+    )
+      .filter((r) => r.visibility === 'public')
+      .map((r) => ({ role: toChatRole(r.authorType), body: r.body }))
+      .filter((m): m is { role: ChatRole; body: string } => m.role !== null);
 
   const first = transcript[0];
   const rest = transcript.slice(1);

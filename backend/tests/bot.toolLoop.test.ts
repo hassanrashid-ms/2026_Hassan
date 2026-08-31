@@ -140,6 +140,7 @@ describe('toolLoopDecider', () => {
       reply: answer,
       subintentId: null,
       articleId,
+      grounding: { score: 1, ungrounded: [] },
       // The turn's retrieval record rides on the decision so applyBotTurn can
       // write it in the same transaction as the outcome it explains.
       searches: [{ query: 'refund', results: [{ id: articleId, title: 'Refund policy' }] }],

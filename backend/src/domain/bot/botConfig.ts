@@ -27,7 +27,7 @@ export type ResolvedBotConfig = {
   systemPrompt: string;
 };
 
-function resolved(
+export function resolved(
   isProvisioned: boolean,
   prompt: string,
   rules: RuleEntry[],

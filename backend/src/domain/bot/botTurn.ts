@@ -1,6 +1,8 @@
 // backend/src/domain/bot/botTurn.ts
 
 import type { ConfirmPhaseValue, PlayerMessageView } from '@support/types';
+import type { ResolvedBotConfig } from './botConfig.ts';
+import type { ChatRole } from './contextAssembly.ts';
 
 /**
  * Model-chosen (`asked_for_person`, `no_article`, `sensitive` — passed directly
@@ -37,7 +39,14 @@ export type BotSearchRecord = {
 
 type BotTurnOutcome =
   | { kind: 'noop' }
-  | { kind: 'answer'; reply: string; subintentId: string | null; articleId?: string }
+  | {
+      kind: 'answer';
+      reply: string;
+      subintentId: string | null;
+      articleId?: string;
+      /** Only set when articleId is — the score computed for that citation. The production path only ever logs this; carried on the decision so a caller like the bot-config test-turn endpoint can report it without rescoring. */
+      grounding?: { score: number; ungrounded: string[] };
+    }
   | { kind: 'resolve'; subintentId: string | null }
   | { kind: 'handoff'; reason: HandoffReason; subintentId: string | null }
   | { kind: 'unavailable'; reason: UnavailableReason }
@@ -82,7 +91,17 @@ export type BotTurnInput = {
   history: PlayerMessageView[];
 };
 
-export type BotDecider = (input: BotTurnInput) => Promise<BotTurnDecision>;
+export type BotTurnOverrides = {
+  /** Bypasses the DB read in buildMessages — the draft config a caller wants tested, not what's persisted. */
+  config?: ResolvedBotConfig;
+  /** Bypasses the DB transcript read in buildMessages — the caller's own synthetic history. */
+  transcript?: { role: ChatRole; body: string }[];
+};
+
+export type BotDecider = (
+  input: BotTurnInput,
+  overrides?: BotTurnOverrides,
+) => Promise<BotTurnDecision>;
 
 /** Only an admin's deliberate choice is silent. Every other reason gets an internal note. */
 export const SILENT_UNAVAILABLE_REASONS: ReadonlySet<UnavailableReason> = new Set([
