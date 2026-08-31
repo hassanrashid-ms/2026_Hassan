@@ -72,7 +72,7 @@ describe('TicketsFilterBar', () => {
 
   it('changing the Created-from date calls onChange', async () => {
     const { onChange } = renderBar();
-    const [fromInput] = screen.getAllByLabelText(/Created from/i);
+    const fromInput = screen.getAllByLabelText(/Created from/i)[0]!;
     await userEvent.type(fromInput, '2026-08-01');
 
     expect(onChange).toHaveBeenCalledWith({ createdFrom: '2026-08-01' });
