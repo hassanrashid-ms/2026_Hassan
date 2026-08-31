@@ -116,7 +116,14 @@ export async function devLogin(agentId: string): Promise<DevLoginResponse> {
 }
 
 export type ConversationListFilter =
-  'unassigned' | 'mine' | 'agentAssigned' | 'botHandling' | 'escalated' | 'resolved' | 'closed';
+  | 'unassigned'
+  | 'mine'
+  | 'agentAssigned'
+  | 'botHandling'
+  | 'escalated'
+  | 'resolved'
+  | 'closed'
+  | 'all';
 
 export type TicketsQueryFilters = {
   q?: string;
@@ -125,6 +132,9 @@ export type TicketsQueryFilters = {
   subintentIds?: string[];
   assigneeIds?: string[];
   olderThanHours?: number;
+  statuses?: string[];
+  createdFrom?: string;
+  createdTo?: string;
 };
 
 function buildTicketsQuery(
@@ -141,6 +151,9 @@ function buildTicketsQuery(
   if (filters?.assigneeIds?.length)
     filters.assigneeIds.forEach((a) => params.append('assigneeIds', a));
   if (filters?.olderThanHours) params.set('olderThanHours', String(filters.olderThanHours));
+  if (filters?.statuses?.length) filters.statuses.forEach((s) => params.append('statuses', s));
+  if (filters?.createdFrom) params.set('createdFrom', filters.createdFrom);
+  if (filters?.createdTo) params.set('createdTo', filters.createdTo);
   if (cursor) params.set('cursor', cursor);
   return params.toString();
 }

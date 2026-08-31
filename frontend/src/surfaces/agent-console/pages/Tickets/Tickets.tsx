@@ -16,6 +16,7 @@ import { EmptyState } from '../../components/ui/empty-state.tsx';
 import { ConversationRow } from '../Inbox/components/ConversationRow.tsx';
 import { TicketsFilterBar } from './TicketsFilterBar.tsx';
 import { useTicketsFilters } from './useTicketsFilters.ts';
+import { QUEUE_OPTIONS } from './queues.ts';
 
 import {
   DndContext,
@@ -35,14 +36,12 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical } from 'lucide-react';
 
-const COLUMNS: { title: string; filter: ConversationListFilter; claimable?: boolean }[] = [
-  { title: 'Unassigned', filter: 'unassigned', claimable: true },
-  { title: 'Bot Handling', filter: 'botHandling' },
-  { title: 'Agent Assigned', filter: 'agentAssigned' },
-  { title: 'Escalated', filter: 'escalated' },
-  { title: 'Resolved', filter: 'resolved' },
-  { title: 'Closed', filter: 'closed' },
-];
+const COLUMNS: { title: string; filter: ConversationListFilter; claimable?: boolean }[] =
+  QUEUE_OPTIONS.map((q) => ({
+    title: q.title,
+    filter: q.value,
+    claimable: q.value === 'unassigned',
+  }));
 
 function toQueryFilters(f: ReturnType<typeof useTicketsFilters>[0]): TicketsQueryFilters {
   return {
