@@ -38,7 +38,7 @@ export function AdminConsoleShell() {
       if (boot) {
         setBooting(true);
         // The boot token carries no is_super_admin claim — same lookup
-        // AdminLogin.tsx does after a normal sign-in, via a route already
+        // routes/Login.tsx does after a normal sign-in, via a route already
         // gated by requireAdminAccess, so a non-admin token fails closed here
         // instead of silently landing with isSuperAdmin: false.
         void fetchAgents(boot.token)

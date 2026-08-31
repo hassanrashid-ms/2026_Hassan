@@ -12,10 +12,11 @@ import type {
 const BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000';
 
 /*
- * Dev login is duplicated from agent-console/api/agentApi.ts rather than
- * imported — surfaces never cross-import (see CLAUDE.md's Folder structure
- * rule), and this surface's session shape (isSuperAdmin, no workspaceSlug) is
- * different enough that sharing the response handling wouldn't save much.
+ * Dev login lives here rather than duplicated per-surface: routes/Login.tsx
+ * (the composition root, not a surface) is the only caller now that it's the
+ * single picker for both consoles — see
+ * docs/decisions/2026-08-04-agent-auth-google-oauth.md for why this dev
+ * picker exists at all.
  */
 export type DevAgentOption = { id: string; email: string; display_name: string };
 export type DevLoginResponse = {

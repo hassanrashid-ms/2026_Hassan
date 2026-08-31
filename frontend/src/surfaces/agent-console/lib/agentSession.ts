@@ -25,7 +25,7 @@ export type StoredAgentSession = {
    */
   workspaceId?: string;
   /**
-   * Set from the membership chosen at login (see AgentLogin.tsx) or from the
+   * Set from the membership chosen at login (see routes/Login.tsx) or from the
    * workspace switcher (see WorkspaceSwitcher.tsx) — always the role for the
    * *current* workspaceId, not a fixed account-level role.
    */

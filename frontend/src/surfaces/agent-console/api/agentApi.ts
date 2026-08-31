@@ -46,14 +46,6 @@ import type {
 import { apiCall } from '../../../lib/httpClient.ts';
 import { loadAgentSession } from '../lib/agentSession.ts';
 
-const BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000';
-
-export type DevAgentOption = { id: string; email: string; display_name: string };
-export type DevLoginResponse = {
-  token: string;
-  agent: { id: string; display_name: string };
-};
-
 export type MembershipView = {
   workspace_id: string;
   workspace_slug: string;
@@ -86,28 +78,6 @@ export function fetchGlobalInbox(token: string): Promise<GlobalInboxResponse> {
  */
 function call<T>(path: string, token: string, init?: RequestInit): Promise<T> {
   return apiCall(path, token, init, loadAgentSession()?.workspaceId);
-}
-
-// See httpClient.ts's NGROK_SKIP_WARNING_HEADER comment — these two calls run
-// before a token exists, so they can't go through apiCall, but need the same
-// bypass: without it, an ngrok free-tier tunnel serves an HTML interstitial
-// (still a 200) that fails .json() with a SyntaxError.
-const NGROK_SKIP_WARNING_HEADER = { 'ngrok-skip-browser-warning': 'true' };
-
-export async function fetchDevAgents(): Promise<{ agents: DevAgentOption[] }> {
-  const res = await fetch(`${BASE}/agent/auth/dev-agents`, { headers: NGROK_SKIP_WARNING_HEADER });
-  if (!res.ok) throw new Error(`Request failed with ${res.status}`);
-  return (await res.json()) as { agents: DevAgentOption[] };
-}
-
-export async function devLogin(agentId: string): Promise<DevLoginResponse> {
-  const res = await fetch(`${BASE}/agent/auth/dev-login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...NGROK_SKIP_WARNING_HEADER },
-    body: JSON.stringify({ agent_id: agentId }),
-  });
-  if (!res.ok) throw new Error(`Request failed with ${res.status}`);
-  return (await res.json()) as DevLoginResponse;
 }
 
 export type ConversationListFilter =

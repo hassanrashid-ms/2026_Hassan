@@ -20,7 +20,7 @@ export default tseslint.config(
         { type: 'webview', pattern: '**/src/surfaces/webview/**/*' },
         { type: 'shared', pattern: '**/src/**/*' },
       ],
-      'boundaries/ignore': ['**/src/routes/AppRoutes.tsx'],
+      'boundaries/ignore': ['**/src/routes/AppRoutes.tsx', '**/src/routes/Login.tsx', '**/src/routes/Login.test.tsx'],
     },
     rules: {
       'boundaries/dependencies': [
@@ -100,11 +100,14 @@ export default tseslint.config(
     },
   },
   {
-    // Shared code — everything outside the two surface zones. AppRoutes.tsx is
-    // the one deliberate crossing and is exempt here for the same reason it is
-    // listed in `boundaries/ignore` above: it is the single composition root.
+    // Shared code — everything outside the two surface zones. AppRoutes.tsx
+    // and routes/Login.tsx are the deliberate crossings and are exempt here
+    // for the same reason they are listed in `boundaries/ignore` above: they
+    // are the composition-root files — AppRoutes.tsx mounts both consoles'
+    // shells, Login.tsx is the single picker that decides which one a signed
+    // in agent lands in.
     files: ['**/src/**/*.{ts,tsx}'],
-    ignores: ['**/src/surfaces/**', '**/src/routes/AppRoutes.tsx'],
+    ignores: ['**/src/surfaces/**', '**/src/routes/AppRoutes.tsx', '**/src/routes/Login.tsx', '**/src/routes/Login.test.tsx'],
     rules: {
       'no-restricted-imports': [
         'error',

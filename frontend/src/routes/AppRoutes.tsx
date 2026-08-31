@@ -1,7 +1,6 @@
 import { Suspense, lazy } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
-import { AgentLogin } from '../surfaces/agent-console/pages/AgentLogin.tsx';
-import { AdminLogin } from '../surfaces/admin-console/pages/AdminLogin.tsx';
+import { Login } from './Login.tsx';
 import { RequireRole } from '../surfaces/agent-console/components/RequireRole.tsx';
 import { canBuildForms } from '../surfaces/agent-console/lib/agentSession.ts';
 import {
@@ -76,7 +75,7 @@ export function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/login" replace />} />
-      <Route path="/login" element={<AgentLogin />} />
+      <Route path="/login" element={<Login />} />
       <Route
         path="/"
         element={
@@ -146,7 +145,7 @@ export function AppRoutes() {
        * so a frontend route sharing that prefix is unreachable through the
        * shared ngrok tunnel. See docs/decisions for the collision writeup.
        */}
-      <Route path="/dashboard/login" element={<AdminLogin />} />
+      <Route path="/dashboard/login" element={<Navigate to="/login" replace />} />
       <Route
         path="/dashboard"
         element={
