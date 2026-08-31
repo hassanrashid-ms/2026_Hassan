@@ -94,6 +94,63 @@ export const SaveBotConfigBody = z
   );
 export type SaveBotConfigBodyValue = z.infer<typeof SaveBotConfigBody>;
 
+export const TestBotTurnBody = z
+  .object({
+    config: z.object({
+      prompt: z.string().min(1),
+      rules: z.array(RuleEntrySchema),
+      tools_config: z.array(ToolToggleSchema),
+      limits_config: z.array(LimitToggleSchema),
+    }),
+    subintent_id: z.string().nullable(),
+    confirm_phase: z.enum([
+      'none',
+      'bot_article',
+      'agent_ask',
+      'form',
+      'inactivity_ask',
+      'player_stated',
+    ]),
+    history: z.array(
+      z.object({
+        author_type: z.enum(['player', 'bot']),
+        body: z.string(),
+      }),
+    ),
+    player_message: z.string().min(1),
+  })
+  .strict();
+
+export type TestBotTurnBodyValue = z.infer<typeof TestBotTurnBody>;
+
+export type BotTestTurnHandoffReason =
+  | 'asked_for_person'
+  | 'article_rejected'
+  | 'no_article'
+  | 'sensitive'
+  | 'unsure'
+  | 'turn_cap'
+  | 'unhelped_cap';
+
+export type BotTestTurnUnavailableReason = 'not_provisioned' | 'error' | 'timeout' | 'invalid_response';
+
+export type BotTestTurnSearch = { query: string; results: { id: string; title: string }[] };
+
+export type BotTestTurnDecision = (
+  | { kind: 'noop' }
+  | {
+      kind: 'answer';
+      reply: string;
+      subintent_id: string | null;
+      article_id?: string;
+      grounding?: { score: number; ungrounded: string[] };
+    }
+  | { kind: 'resolve'; subintent_id: string | null }
+  | { kind: 'handoff'; reason: BotTestTurnHandoffReason; subintent_id: string | null }
+  | { kind: 'unavailable'; reason: BotTestTurnUnavailableReason }
+  | { kind: 'confirm_player_resolution'; subintent_id: string | null; quoted_text: string }
+) & { searches?: BotTestTurnSearch[] };
+
 export type RuleEntryView = RuleEntryValue & { enforcement: 'code' | 'prompt' };
 
 /**
