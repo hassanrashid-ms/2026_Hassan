@@ -34,6 +34,7 @@ const ConversationsQuery = z.object({
     'escalated',
     'resolved',
     'closed',
+    'all',
   ]),
   priority: z
     .union([z.enum(['p1', 'p2', 'p3', 'p4']), z.array(z.enum(['p1', 'p2', 'p3', 'p4']))])
@@ -56,6 +57,13 @@ const ConversationsQuery = z.object({
   cursor: z.string().optional(),
   createdFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   createdTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  statuses: z
+    .union([
+      z.enum(['unassigned', 'agentAssigned', 'botHandling', 'escalated', 'resolved', 'closed']),
+      z.array(z.enum(['unassigned', 'agentAssigned', 'botHandling', 'escalated', 'resolved', 'closed'])),
+    ])
+    .optional()
+    .transform((v) => (v ? (Array.isArray(v) ? v : [v]) : undefined)),
 });
 const ConversationIdParams = z.object({ id: z.uuid() });
 

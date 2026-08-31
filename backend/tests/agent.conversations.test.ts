@@ -701,6 +701,124 @@ describe('GET /agent/conversations resolved/closed queues', () => {
   });
 });
 
+describe('GET /agent/conversations?status=all', () => {
+  it('merges unassigned, escalated, and resolved conversations, sorted by priority then activity', async () => {
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+
+    const p2Unassigned = await seedConversation({
+      workspaceId,
+      playerId,
+      status: 'open',
+      priority: 'p2',
+    });
+    const p1Escalated = await seedConversation({
+      workspaceId,
+      playerId,
+      status: 'escalated',
+      priority: 'p1',
+    });
+    const p1ResolvedRecent = await seedConversation({
+      workspaceId,
+      playerId,
+      status: 'resolved',
+      priority: 'p1',
+    });
+    await seedResolutionCycle({
+      workspaceId,
+      conversationId: p1ResolvedRecent,
+      resolvedAt: new Date(),
+    });
+    const p1ResolvedStale = await seedConversation({
+      workspaceId,
+      playerId,
+      status: 'resolved',
+      priority: 'p1',
+    });
+    await seedResolutionCycle({
+      workspaceId,
+      conversationId: p1ResolvedStale,
+      resolvedAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000),
+    });
+    await seedMessage({
+      workspaceId,
+      conversationId: p1Escalated,
+      seq: 1,
+      authorType: 'agent',
+      body: 'checking on this',
+    });
+    const { token } = await setupAgent(workspaceId);
+
+    const res = await request(app)
+      .get('/conversations')
+      .query({ status: 'all' })
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+
+    const ids = res.body.conversations.map((c: { id: string }) => c.id);
+    expect(ids).toContain(p2Unassigned);
+    expect(ids).toContain(p1Escalated);
+    expect(ids).toContain(p1ResolvedRecent);
+    // Outside the 7-day resolved window — excluded exactly like the dedicated resolved queue.
+    expect(ids).not.toContain(p1ResolvedStale);
+    // p1s before the p2, and among the p1s the one with the most recent
+    // activity (p1Escalated has a message just now) sorts before the other.
+    expect(ids.indexOf(p1Escalated)).toBeLessThan(ids.indexOf(p2Unassigned));
+    expect(ids.indexOf(p1Escalated)).toBeLessThan(ids.indexOf(p1ResolvedRecent));
+  });
+
+  it('restricts to the requested statuses subset', async () => {
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const unassigned = await seedConversation({ workspaceId, playerId, status: 'open' });
+    const botHandling = await seedConversation({ workspaceId, playerId, status: 'bot_active' });
+    const { token } = await setupAgent(workspaceId);
+
+    const res = await request(app)
+      .get('/conversations')
+      .query({ status: 'all', statuses: ['unassigned'] })
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+
+    const ids = res.body.conversations.map((c: { id: string }) => c.id);
+    expect(ids).toContain(unassigned);
+    expect(ids).not.toContain(botHandling);
+  });
+
+  it('paginates with a stable keyset cursor', async () => {
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    for (let i = 0; i < 30; i++) {
+      await seedConversation({ workspaceId, playerId, status: 'open', priority: 'p3' });
+    }
+    const { token } = await setupAgent(workspaceId);
+
+    const page1 = await request(app)
+      .get('/conversations')
+      .query({ status: 'all' })
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+    expect(page1.body.conversations).toHaveLength(25);
+    expect(page1.body.nextCursor).not.toBeNull();
+
+    const page2 = await request(app)
+      .get('/conversations')
+      .query({ status: 'all', cursor: page1.body.nextCursor })
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+    expect(page2.body.conversations).toHaveLength(5);
+    expect(page2.body.nextCursor).toBeNull();
+
+    const page1Ids = page1.body.conversations.map((c: { id: string }) => c.id);
+    const page2Ids = page2.body.conversations.map((c: { id: string }) => c.id);
+    expect(new Set([...page1Ids, ...page2Ids]).size).toBe(30);
+  });
+});
+
 describe('POST /agent/conversations/:id/claim', () => {
   it('claims an unassigned conversation', async () => {
     const workspaceId = await seedWorkspace();

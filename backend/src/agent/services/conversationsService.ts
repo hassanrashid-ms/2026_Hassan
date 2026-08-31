@@ -40,7 +40,14 @@ import { getPresenceStatusBatch } from '../../shared/realtime/presence.ts';
 import { logger } from '../../shared/logging/logger.ts';
 
 export type ConversationsFilter =
-  'unassigned' | 'mine' | 'agentAssigned' | 'botHandling' | 'escalated' | 'resolved' | 'closed';
+  | 'unassigned'
+  | 'mine'
+  | 'agentAssigned'
+  | 'botHandling'
+  | 'escalated'
+  | 'resolved'
+  | 'closed'
+  | 'all';
 
 export type ConversationsListFilters = {
   priority?: (typeof conversation.priority.enumValues)[number][];
@@ -52,6 +59,7 @@ export type ConversationsListFilters = {
   cursor?: string;
   createdFrom?: string;
   createdTo?: string;
+  statuses?: Exclude<ConversationsFilter, 'all' | 'mine'>[];
 };
 
 export type ConversationsPage = {
@@ -68,6 +76,75 @@ const UNASSIGNED_STATUSES: (typeof conversation.status.enumValues)[number][] = [
   'open',
   'escalated',
 ];
+
+const ALL_QUEUE_STATUSES: Exclude<ConversationsFilter, 'all' | 'mine'>[] = [
+  'unassigned',
+  'botHandling',
+  'agentAssigned',
+  'escalated',
+  'resolved',
+  'closed',
+];
+
+// Reused by the 'all' merged mode so a conversation only counts as
+// resolved/closed there under the exact same 7-day-window + latest-cycle
+// rule the dedicated resolved/closed queues already enforce — expressed as
+// an EXISTS condition (not a join) so it composes into the single-query,
+// no-row-multiplication shape the other five queues use.
+function resolvedOrClosedCondition(tx: Tx, status: 'resolved' | 'closed') {
+  const cycle = alias(resolutionCycle, `${status}_cycle`);
+  const laterCycle = alias(resolutionCycle, `${status}_later_cycle`);
+  const timestampCol = status === 'resolved' ? cycle.resolvedAt : cycle.closedAt;
+  return and(
+    eq(conversation.status, status),
+    exists(
+      tx
+        .select({ one: sql`1` })
+        .from(cycle)
+        .where(
+          and(
+            eq(cycle.conversationId, conversation.id),
+            isNotNull(timestampCol),
+            sql`${timestampCol} >= now() - interval '7 days'`,
+            notExists(
+              tx
+                .select({ one: sql`1` })
+                .from(laterCycle)
+                .where(
+                  and(
+                    eq(laterCycle.conversationId, cycle.conversationId),
+                    sql`${laterCycle.cycleNo} > ${cycle.cycleNo}`,
+                  ),
+                ),
+            ),
+          ),
+        ),
+    ),
+  );
+}
+
+function queueCondition(tx: Tx, queue: Exclude<ConversationsFilter, 'all' | 'mine'>) {
+  switch (queue) {
+    case 'unassigned':
+      return and(
+        isNull(conversation.assignedAgentId),
+        inArray(conversation.status, UNASSIGNED_STATUSES),
+      );
+    case 'agentAssigned':
+      return and(
+        isNotNull(conversation.assignedAgentId),
+        inArray(conversation.status, ACTIVE_AGENT_STATUSES),
+      );
+    case 'botHandling':
+      return eq(conversation.status, 'bot_active');
+    case 'escalated':
+      return eq(conversation.status, 'escalated');
+    case 'resolved':
+      return resolvedOrClosedCondition(tx, 'resolved');
+    case 'closed':
+      return resolvedOrClosedCondition(tx, 'closed');
+  }
+}
 
 const PAGE_SIZE = 25;
 
@@ -86,6 +163,28 @@ function decodeStatusCursor(cursor: string): StatusCursor | null {
       typeof parsed?.id === 'string'
     ) {
       return parsed as StatusCursor;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+type AllCursor = { priority: string; activity: string; id: string };
+
+function encodeAllCursor(payload: AllCursor): string {
+  return Buffer.from(JSON.stringify(payload)).toString('base64url');
+}
+
+function decodeAllCursor(cursor: string): AllCursor | null {
+  try {
+    const parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
+    if (
+      typeof parsed?.priority === 'string' &&
+      typeof parsed?.activity === 'string' &&
+      typeof parsed?.id === 'string'
+    ) {
+      return parsed as AllCursor;
     }
     return null;
   } catch {
@@ -149,6 +248,7 @@ export async function listConversations(
   filter: ConversationsFilter,
   extra: ConversationsListFilters = {},
 ): Promise<ConversationsPage> {
+  if (filter === 'all') return listAllConversations(ctx, extra);
   if (filter === 'resolved' || filter === 'closed') {
     return listResolvedOrClosedConversations(ctx, filter, extra);
   }
@@ -252,6 +352,97 @@ export async function listConversations(
         nextCursor,
       };
     }
+    return { conversations: summaries, nextCursor };
+  });
+}
+
+async function listAllConversations(
+  ctx: AgentContext,
+  extra: ConversationsListFilters,
+): Promise<ConversationsPage> {
+  return withWorkspace(ctx.workspaceId, async (tx) => {
+    const statuses = extra.statuses?.length ? extra.statuses : ALL_QUEUE_STATUSES;
+    // "Most recent activity" falls back to conversation.createdAt when there
+    // are no messages yet — entering a state (creation) counts as activity
+    // (see CLAUDE.md), and it keeps the sort/cursor comparison total, with no
+    // NULLS-LAST branch to get wrong.
+    const activity = sql<Date>`coalesce((select max(m.created_at) from message m where m.conversation_id = ${conversation.id}), ${conversation.createdAt})`;
+    const activityMs = sql`date_trunc('millisecond', ${activity})`;
+    const cursor = extra.cursor ? decodeAllCursor(extra.cursor) : null;
+    // Priority ASC, activity DESC is a mixed-direction sort, so the keyset
+    // condition can't be one tuple comparison like the single-direction
+    // queues use — it's the three-branch OR form for a 2-column sort where
+    // the columns disagree on direction.
+    const cursorCondition = cursor
+      ? sql`(
+          ${conversation.priority} > ${cursor.priority}::conversation_priority
+          or (${conversation.priority} = ${cursor.priority}::conversation_priority and ${activityMs} < ${cursor.activity}::timestamptz)
+          or (${conversation.priority} = ${cursor.priority}::conversation_priority and ${activityMs} = ${cursor.activity}::timestamptz and ${conversation.id} < ${cursor.id}::uuid)
+        )`
+      : undefined;
+
+    const rows = await tx
+      .select({
+        id: conversation.id,
+        status: conversation.status,
+        externalPlayerId: player.externalId,
+        confirmPhase: conversation.confirmPhase,
+        assignedAgentId: conversation.assignedAgentId,
+        assignedAgentName: agent.displayName,
+        priority: conversation.priority,
+        activity,
+      })
+      .from(conversation)
+      .innerJoin(player, eq(player.id, conversation.playerId))
+      .leftJoin(agent, eq(agent.id, conversation.assignedAgentId))
+      .leftJoin(subintent, eq(subintent.id, conversation.subintentId))
+      .where(
+        and(
+          or(...statuses.map((queue) => queueCondition(tx, queue))),
+          cursorCondition,
+          ...extraFilterConditions(extra),
+        ),
+      )
+      .orderBy(conversation.priority, desc(activityMs), desc(conversation.id))
+      .limit(PAGE_SIZE + 1);
+
+    const hasMore = rows.length > PAGE_SIZE;
+    const pageRows = hasMore ? rows.slice(0, PAGE_SIZE) : rows;
+
+    const summaries: AgentConversationSummary[] = [];
+    for (const row of pageRows) {
+      const [last] = await tx
+        .select({ body: message.body, createdAt: message.createdAt })
+        .from(message)
+        .where(eq(message.conversationId, row.id))
+        .orderBy(desc(message.seq))
+        .limit(1);
+      const tags = await getConversationTags(tx, row.id);
+
+      summaries.push({
+        id: row.id,
+        player: { external_player_id: row.externalPlayerId },
+        status: row.status,
+        confirm_phase: row.confirmPhase,
+        last_message_preview: last?.body ?? null,
+        last_message_at: last?.createdAt.toISOString() ?? null,
+        assigned_agent_id: row.assignedAgentId,
+        assigned_agent_name: row.assignedAgentName,
+        priority: row.priority,
+        tags,
+      });
+    }
+
+    const lastRow = pageRows[pageRows.length - 1];
+    const nextCursor =
+      hasMore && lastRow
+        ? encodeAllCursor({
+            priority: lastRow.priority,
+            activity: new Date(lastRow.activity).toISOString(),
+            id: lastRow.id,
+          })
+        : null;
+
     return { conversations: summaries, nextCursor };
   });
 }
