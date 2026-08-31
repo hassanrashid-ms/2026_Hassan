@@ -27,6 +27,7 @@ function syntheticPlayerMessageView(
     created_at: new Date().toISOString(),
     article_id: null,
     attachment: null,
+    form_field_key: null,
   };
 }
 
@@ -102,7 +103,9 @@ function toWireDecision(decision: BotTurnDecision): BotTestTurnDecision {
         };
     }
   })();
-  return decision.searches
-    ? { ...base, searches: decision.searches.map((s) => ({ query: s.query, results: s.results })) }
-    : base;
+  return (
+    decision.searches
+      ? { ...base, searches: decision.searches.map((s) => ({ query: s.query, results: s.results })) }
+      : base
+  ) as BotTestTurnDecision;
 }
