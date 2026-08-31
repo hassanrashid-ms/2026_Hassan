@@ -701,8 +701,21 @@ describe('GET /agent/conversations resolved/closed queues', () => {
   });
 });
 
+async function setupAssignedAgentNamed(workspaceId: string, displayName: string) {
+  const { rows } = await ownerPool.query<{ id: string }>(
+    `insert into agent (email, display_name) values ($2, $1) returning id`,
+    [displayName, `${displayName.toLowerCase()}@example.test`],
+  );
+  const agentId = rows[0]!.id;
+  await ownerPool.query(
+    `insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`,
+    [workspaceId, agentId],
+  );
+  return { agentId };
+}
+
 describe('GET /agent/conversations?status=all', () => {
-  it('merges unassigned, escalated, and resolved conversations, sorted by priority then activity', async () => {
+  it('merges unassigned, escalated, and resolved conversations, sorted by priority then created (default)', async () => {
     const workspaceId = await seedWorkspace();
     const playerId = await seedPlayer(workspaceId);
 
@@ -711,22 +724,25 @@ describe('GET /agent/conversations?status=all', () => {
       playerId,
       status: 'open',
       priority: 'p2',
+      createdAt: new Date('2026-08-01T00:00:00Z'),
     });
-    const p1Escalated = await seedConversation({
+    const p1Older = await seedConversation({
       workspaceId,
       playerId,
       status: 'escalated',
       priority: 'p1',
+      createdAt: new Date('2026-08-01T00:00:00Z'),
     });
-    const p1ResolvedRecent = await seedConversation({
+    const p1Newer = await seedConversation({
       workspaceId,
       playerId,
       status: 'resolved',
       priority: 'p1',
+      createdAt: new Date('2026-08-10T00:00:00Z'),
     });
     await seedResolutionCycle({
       workspaceId,
-      conversationId: p1ResolvedRecent,
+      conversationId: p1Newer,
       resolvedAt: new Date(),
     });
     const p1ResolvedStale = await seedConversation({
@@ -734,18 +750,12 @@ describe('GET /agent/conversations?status=all', () => {
       playerId,
       status: 'resolved',
       priority: 'p1',
+      createdAt: new Date('2026-08-02T00:00:00Z'),
     });
     await seedResolutionCycle({
       workspaceId,
       conversationId: p1ResolvedStale,
       resolvedAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000),
-    });
-    await seedMessage({
-      workspaceId,
-      conversationId: p1Escalated,
-      seq: 1,
-      authorType: 'agent',
-      body: 'checking on this',
     });
     const { token } = await setupAgent(workspaceId);
 
@@ -758,14 +768,84 @@ describe('GET /agent/conversations?status=all', () => {
 
     const ids = res.body.conversations.map((c: { id: string }) => c.id);
     expect(ids).toContain(p2Unassigned);
-    expect(ids).toContain(p1Escalated);
-    expect(ids).toContain(p1ResolvedRecent);
+    expect(ids).toContain(p1Older);
+    expect(ids).toContain(p1Newer);
     // Outside the 7-day resolved window — excluded exactly like the dedicated resolved queue.
     expect(ids).not.toContain(p1ResolvedStale);
-    // p1s before the p2, and among the p1s the one with the most recent
-    // activity (p1Escalated has a message just now) sorts before the other.
-    expect(ids.indexOf(p1Escalated)).toBeLessThan(ids.indexOf(p2Unassigned));
-    expect(ids.indexOf(p1Escalated)).toBeLessThan(ids.indexOf(p1ResolvedRecent));
+    // Both p1s sort before the p2 (priority is primary), and among the p1s
+    // the older-created one sorts first (created asc is the secondary key).
+    expect(ids.indexOf(p1Older)).toBeLessThan(ids.indexOf(p2Unassigned));
+    expect(ids.indexOf(p1Newer)).toBeLessThan(ids.indexOf(p2Unassigned));
+    expect(ids.indexOf(p1Older)).toBeLessThan(ids.indexOf(p1Newer));
+  });
+
+  it('sorts by an explicit two-key request (assignee desc, number asc)', async () => {
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const { agentId: bravoId } = await setupAssignedAgentNamed(workspaceId, 'Bravo');
+    const { agentId: alphaId } = await setupAssignedAgentNamed(workspaceId, 'Alpha');
+    const unassigned = await seedConversation({ workspaceId, playerId, status: 'open' });
+    const assignedToAlpha = await seedConversation({
+      workspaceId,
+      playerId,
+      status: 'open',
+      assignedAgentId: alphaId,
+    });
+    const assignedToBravo = await seedConversation({
+      workspaceId,
+      playerId,
+      status: 'open',
+      assignedAgentId: bravoId,
+    });
+    const { token } = await setupAgent(workspaceId);
+
+    const res = await request(app)
+      .get('/conversations')
+      .query({ status: 'all', sortBy: 'assignee', sortDir: 'desc', sortBy2: 'number', sortDir2: 'asc' })
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+
+    const ids = res.body.conversations.map((c: { id: string }) => c.id);
+    // desc + nulls-last: Bravo, then Alpha, then the unassigned (null) row last.
+    expect(ids.indexOf(assignedToBravo)).toBeLessThan(ids.indexOf(assignedToAlpha));
+    expect(ids.indexOf(assignedToAlpha)).toBeLessThan(ids.indexOf(unassigned));
+  });
+
+  it('paginates with a stable keyset cursor under a non-default sort', async () => {
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    for (let i = 0; i < 30; i++) {
+      await seedConversation({ workspaceId, playerId, status: 'open', priority: 'p3' });
+    }
+    const { token } = await setupAgent(workspaceId);
+
+    const page1 = await request(app)
+      .get('/conversations')
+      .query({ status: 'all', sortBy: 'created', sortDir: 'desc', sortBy2: 'number', sortDir2: 'desc' })
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+    expect(page1.body.conversations).toHaveLength(25);
+
+    const page2 = await request(app)
+      .get('/conversations')
+      .query({
+        status: 'all',
+        sortBy: 'created',
+        sortDir: 'desc',
+        sortBy2: 'number',
+        sortDir2: 'desc',
+        cursor: page1.body.nextCursor,
+      })
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+    expect(page2.body.conversations).toHaveLength(5);
+
+    const page1Ids = page1.body.conversations.map((c: { id: string }) => c.id);
+    const page2Ids = page2.body.conversations.map((c: { id: string }) => c.id);
+    expect(new Set([...page1Ids, ...page2Ids]).size).toBe(30);
   });
 
   it('restricts to the requested statuses subset', async () => {

@@ -630,6 +630,14 @@ registry.registerPath({
           ),
         ])
         .optional(),
+      sortBy: z
+        .enum(['player', 'status', 'priority', 'assignee', 'lastMessage', 'tags', 'created', 'subintent', 'number'])
+        .optional(),
+      sortDir: z.enum(['asc', 'desc']).optional(),
+      sortBy2: z
+        .enum(['player', 'status', 'priority', 'assignee', 'lastMessage', 'tags', 'created', 'subintent', 'number'])
+        .optional(),
+      sortDir2: z.enum(['asc', 'desc']).optional(),
     }),
   },
   responses: {

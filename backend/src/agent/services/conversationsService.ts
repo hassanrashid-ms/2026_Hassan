@@ -60,6 +60,10 @@ export type ConversationsListFilters = {
   createdFrom?: string;
   createdTo?: string;
   statuses?: Exclude<ConversationsFilter, 'all' | 'mine'>[];
+  sortBy?: SortKey;
+  sortDir?: 'asc' | 'desc';
+  sortBy2?: SortKey;
+  sortDir2?: 'asc' | 'desc';
 };
 
 export type ConversationsPage = {
@@ -170,7 +174,18 @@ function decodeStatusCursor(cursor: string): StatusCursor | null {
   }
 }
 
-type AllCursor = { priority: string; activity: string; id: string };
+export type SortKey =
+  | 'player'
+  | 'status'
+  | 'priority'
+  | 'assignee'
+  | 'lastMessage'
+  | 'tags'
+  | 'created'
+  | 'subintent'
+  | 'number';
+
+type AllCursor = { primary: string; secondary: string; id: string };
 
 function encodeAllCursor(payload: AllCursor): string {
   return Buffer.from(JSON.stringify(payload)).toString('base64url');
@@ -180,8 +195,8 @@ function decodeAllCursor(cursor: string): AllCursor | null {
   try {
     const parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
     if (
-      typeof parsed?.priority === 'string' &&
-      typeof parsed?.activity === 'string' &&
+      typeof parsed?.primary === 'string' &&
+      typeof parsed?.secondary === 'string' &&
       typeof parsed?.id === 'string'
     ) {
       return parsed as AllCursor;
@@ -362,29 +377,63 @@ export async function listConversations(
   });
 }
 
+const lastMessageAtExpr = sql<Date | null>`(select max(m.created_at) from ${message} m where m.conversation_id = ${conversation.id})`;
+const tagCountExpr = sql<number>`(select count(*) from ${conversationTag} ct where ct.conversation_id = ${conversation.id} and ct.removed_at is null)`;
+
+const SORT_COLUMNS: Record<SortKey, { expr: any; sqlType: string; nullsLast?: boolean }> = {
+  player: { expr: player.externalId, sqlType: 'text' },
+  status: { expr: conversation.status, sqlType: 'conversation_status' },
+  priority: { expr: conversation.priority, sqlType: 'conversation_priority' },
+  assignee: { expr: agent.displayName, sqlType: 'text', nullsLast: true },
+  lastMessage: { expr: lastMessageAtExpr, sqlType: 'timestamptz', nullsLast: true },
+  tags: { expr: tagCountExpr, sqlType: 'int' },
+  created: { expr: conversation.createdAt, sqlType: 'timestamptz' },
+  subintent: { expr: subintent.name, sqlType: 'text', nullsLast: true },
+  number: { expr: conversation.number, sqlType: 'int' },
+};
+
+function orderExpr(key: SortKey, dir: 'asc' | 'desc') {
+  const col = SORT_COLUMNS[key];
+  const direction = dir === 'asc' ? sql`asc` : sql`desc`;
+  const nulls = col.nullsLast ? sql`nulls last` : sql``;
+  return sql`${col.expr} ${direction} ${nulls}`;
+}
+
+// Generalizes the old fixed priority-asc/activity-desc/id-desc three-branch
+// OR (see git history) to any (primary, secondary, id) triple with
+// independent per-key directions. id is always the final tiebreaker, always
+// ascending, so the keyset stays total regardless of what's being sorted.
+function buildAllCursorCondition(
+  primaryKey: SortKey,
+  primaryDir: 'asc' | 'desc',
+  secondaryKey: SortKey,
+  secondaryDir: 'asc' | 'desc',
+  cursor: AllCursor,
+) {
+  const primary = SORT_COLUMNS[primaryKey];
+  const secondary = SORT_COLUMNS[secondaryKey];
+  const primaryOp = primaryDir === 'asc' ? sql`>` : sql`<`;
+  const secondaryOp = secondaryDir === 'asc' ? sql`>` : sql`<`;
+  return sql`(
+    ${primary.expr} ${primaryOp} ${cursor.primary}::${sql.raw(primary.sqlType)}
+    or (${primary.expr} = ${cursor.primary}::${sql.raw(primary.sqlType)} and ${secondary.expr} ${secondaryOp} ${cursor.secondary}::${sql.raw(secondary.sqlType)})
+    or (${primary.expr} = ${cursor.primary}::${sql.raw(primary.sqlType)} and ${secondary.expr} = ${cursor.secondary}::${sql.raw(secondary.sqlType)} and ${conversation.id} > ${cursor.id}::uuid)
+  )`;
+}
+
 async function listAllConversations(
   ctx: AgentContext,
   extra: ConversationsListFilters,
 ): Promise<ConversationsPage> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
     const statuses = extra.statuses?.length ? extra.statuses : ALL_QUEUE_STATUSES;
-    // "Most recent activity" falls back to conversation.createdAt when there
-    // are no messages yet — entering a state (creation) counts as activity
-    // (see CLAUDE.md), and it keeps the sort/cursor comparison total, with no
-    // NULLS-LAST branch to get wrong.
-    const activity = sql<Date>`coalesce((select max(m.created_at) from message m where m.conversation_id = ${conversation.id}), ${conversation.createdAt})`;
-    const activityMs = sql`date_trunc('millisecond', ${activity})`;
+    const primaryKey: SortKey = extra.sortBy ?? 'priority';
+    const primaryDir: 'asc' | 'desc' = extra.sortDir ?? 'asc';
+    const secondaryKey: SortKey = extra.sortBy2 ?? 'created';
+    const secondaryDir: 'asc' | 'desc' = extra.sortDir2 ?? 'asc';
     const cursor = extra.cursor ? decodeAllCursor(extra.cursor) : null;
-    // Priority ASC, activity DESC is a mixed-direction sort, so the keyset
-    // condition can't be one tuple comparison like the single-direction
-    // queues use — it's the three-branch OR form for a 2-column sort where
-    // the columns disagree on direction.
     const cursorCondition = cursor
-      ? sql`(
-          ${conversation.priority} > ${cursor.priority}::conversation_priority
-          or (${conversation.priority} = ${cursor.priority}::conversation_priority and ${activityMs} < ${cursor.activity}::timestamptz)
-          or (${conversation.priority} = ${cursor.priority}::conversation_priority and ${activityMs} = ${cursor.activity}::timestamptz and ${conversation.id} < ${cursor.id}::uuid)
-        )`
+      ? buildAllCursorCondition(primaryKey, primaryDir, secondaryKey, secondaryDir, cursor)
       : undefined;
 
     const rows = await tx
@@ -396,11 +445,12 @@ async function listAllConversations(
         assignedAgentId: conversation.assignedAgentId,
         assignedAgentName: agent.displayName,
         priority: conversation.priority,
-        activity,
         createdAt: conversation.createdAt,
         subintentId: subintent.id,
         subintentName: subintent.name,
         number: conversation.number,
+        primarySortValue: sql<string>`${SORT_COLUMNS[primaryKey].expr}::text`,
+        secondarySortValue: sql<string>`${SORT_COLUMNS[secondaryKey].expr}::text`,
       })
       .from(conversation)
       .innerJoin(player, eq(player.id, conversation.playerId))
@@ -413,7 +463,7 @@ async function listAllConversations(
           ...extraFilterConditions(extra),
         ),
       )
-      .orderBy(conversation.priority, desc(activityMs), desc(conversation.id))
+      .orderBy(orderExpr(primaryKey, primaryDir), orderExpr(secondaryKey, secondaryDir), conversation.id)
       .limit(PAGE_SIZE + 1);
 
     const hasMore = rows.length > PAGE_SIZE;
@@ -450,8 +500,8 @@ async function listAllConversations(
     const nextCursor =
       hasMore && lastRow
         ? encodeAllCursor({
-            priority: lastRow.priority,
-            activity: new Date(lastRow.activity).toISOString(),
+            primary: lastRow.primarySortValue,
+            secondary: lastRow.secondarySortValue,
             id: lastRow.id,
           })
         : null;

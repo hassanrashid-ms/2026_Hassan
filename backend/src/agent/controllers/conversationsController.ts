@@ -64,6 +64,14 @@ const ConversationsQuery = z.object({
     ])
     .optional()
     .transform((v) => (v ? (Array.isArray(v) ? v : [v]) : undefined)),
+  sortBy: z
+    .enum(['player', 'status', 'priority', 'assignee', 'lastMessage', 'tags', 'created', 'subintent', 'number'])
+    .optional(),
+  sortDir: z.enum(['asc', 'desc']).optional(),
+  sortBy2: z
+    .enum(['player', 'status', 'priority', 'assignee', 'lastMessage', 'tags', 'created', 'subintent', 'number'])
+    .optional(),
+  sortDir2: z.enum(['asc', 'desc']).optional(),
 });
 const ConversationIdParams = z.object({ id: z.uuid() });
 
