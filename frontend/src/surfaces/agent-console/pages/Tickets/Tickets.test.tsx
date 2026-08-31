@@ -154,3 +154,58 @@ describe('Tickets pagination', () => {
     );
   });
 });
+
+describe('Tickets view toggle', () => {
+  it('defaults to board view with all six columns visible', async () => {
+    vi.mocked(agentApi.fetchInbox).mockResolvedValue({ conversations: [], nextCursor: null });
+    renderTickets('/tickets');
+
+    await screen.findByText('Unassigned');
+    expect(screen.getByRole('button', { name: 'Board' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'List' })).toBeInTheDocument();
+  });
+
+  it('switches to list view and fetches the merged "all" filter', async () => {
+    const fetchInboxSpy = vi
+      .mocked(agentApi.fetchInbox)
+      .mockResolvedValue({ conversations: [], nextCursor: null });
+    renderTickets('/tickets?view=list');
+
+    await waitFor(() =>
+      expect(fetchInboxSpy).toHaveBeenCalledWith('tok', 'all', expect.anything(), undefined),
+    );
+    expect(screen.queryByText('Unassigned')).not.toBeInTheDocument();
+  });
+
+  it('hides board columns not in the Status filter', async () => {
+    vi.mocked(agentApi.fetchInbox).mockResolvedValue({ conversations: [], nextCursor: null });
+    renderTickets('/tickets?statuses=unassigned');
+
+    await screen.findByText('Unassigned');
+    expect(screen.queryByText('Bot Handling')).not.toBeInTheDocument();
+  });
+
+  it('renders a claim action only for unassigned rows in list view', async () => {
+    const row = (id: string, status: 'open' | 'escalated', assignedAgentId: string | null) => ({
+      id,
+      player: { external_player_id: id },
+      status,
+      confirm_phase: 'none' as const,
+      last_message_preview: null,
+      last_message_at: null,
+      assigned_agent_id: assignedAgentId,
+      assigned_agent_name: assignedAgentId ? 'Agent One' : null,
+      priority: 'p3' as const,
+      tags: [],
+    });
+    vi.mocked(agentApi.fetchInbox).mockResolvedValue({
+      conversations: [row('unassigned-1', 'open', null), row('escalated-1', 'escalated', 'a1')],
+      nextCursor: null,
+    });
+    renderTickets('/tickets?view=list');
+
+    await screen.findByText('unassigned-1');
+    const claimButtons = await screen.findAllByRole('button', { name: 'Claim' });
+    expect(claimButtons).toHaveLength(1);
+  });
+});

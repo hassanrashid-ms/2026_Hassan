@@ -9,6 +9,7 @@ import {
   type TicketsQueryFilters,
 } from '../../api/agentApi.ts';
 import { loadAgentSession } from '../../lib/agentSession.ts';
+import { cn } from '../../lib/cn.ts';
 import { createSocket } from '../../../../features/chat/api/socket.ts';
 import { handleSessionExpired } from '../../lib/authErrorHandling.ts';
 import { ConversationDetailPane } from '../../components/ConversationDetailPane.tsx';
@@ -51,12 +52,23 @@ function toQueryFilters(f: ReturnType<typeof useTicketsFilters>[0]): TicketsQuer
     subintentIds: f.subintentIds.length ? f.subintentIds : undefined,
     assigneeIds: f.assigneeIds.length ? f.assigneeIds : undefined,
     olderThanHours: f.olderThanHours ? Number(f.olderThanHours) : undefined,
+    statuses: f.statuses.length ? f.statuses : undefined,
+    createdFrom: f.createdFrom || undefined,
+    createdTo: f.createdTo || undefined,
   };
 }
 
 function hasActiveFilters(f: TicketsQueryFilters): boolean {
   return Boolean(
-    f.q || f.priority || f.labelIds || f.subintentIds || f.assigneeIds || f.olderThanHours,
+    f.q ||
+      f.priority ||
+      f.labelIds ||
+      f.subintentIds ||
+      f.assigneeIds ||
+      f.olderThanHours ||
+      f.statuses ||
+      f.createdFrom ||
+      f.createdTo,
   );
 }
 
@@ -203,6 +215,68 @@ function QueueColumn({
   );
 }
 
+function TicketsListView({
+  token,
+  queryFilters,
+  onSelect,
+}: {
+  token: string;
+  queryFilters: TicketsQueryFilters;
+  onSelect: (id: string) => void;
+}) {
+  const queryClient = useQueryClient();
+  const queue = useInfiniteQuery({
+    queryKey: ['tickets', 'all', queryFilters],
+    queryFn: ({ pageParam }: { pageParam: string | undefined }) =>
+      fetchInbox(token, 'all', queryFilters, pageParam),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+  });
+  const claim = useMutation({
+    mutationFn: (conversationId: string) => claimConversation(token, conversationId),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['tickets'] }),
+  });
+
+  const conversations = queue.data?.pages.flatMap((page) => page.conversations) ?? [];
+
+  function handleScroll(event: React.UIEvent<HTMLDivElement>) {
+    const el = event.currentTarget;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 200;
+    if (nearBottom && queue.hasNextPage && !queue.isFetchingNextPage) {
+      void queue.fetchNextPage();
+    }
+  }
+
+  return (
+    <div
+      style={{ height: '70vh' }}
+      className="min-h-0 flex-1 overflow-y-auto rounded-card border border-slate-200 bg-surface"
+      onScroll={handleScroll}
+    >
+      {conversations.length === 0 && !queue.isLoading && (
+        <p className="p-3 text-xs text-muted">No tickets match your filters.</p>
+      )}
+      {conversations.map((conversation) => {
+        const claimable =
+          conversation.assigned_agent_id === null &&
+          (conversation.status === 'open' || conversation.status === 'escalated');
+        return (
+          <ConversationRow
+            key={conversation.id}
+            conversation={conversation}
+            selected={false}
+            onSelect={() => onSelect(conversation.id)}
+            onClaim={claimable ? () => claim.mutate(conversation.id) : undefined}
+            claiming={claim.isPending}
+          />
+        );
+      })}
+      {queue.isFetchingNextPage && <p className="p-3 text-xs text-muted">Loading more...</p>}
+      {queue.isError && <p className="p-3 text-xs text-muted">Could not load tickets.</p>}
+    </div>
+  );
+}
+
 export function Tickets() {
   const { conversationId } = useParams<{ conversationId?: string }>();
   const navigate = useNavigate();
@@ -235,6 +309,7 @@ export function Tickets() {
                 : ['unassigned', 'agentAssigned', 'escalated'];
         for (const filter of filtersToInvalidate)
           void queryClient.invalidateQueries({ queryKey: ['tickets', filter] });
+        void queryClient.invalidateQueries({ queryKey: ['tickets', 'all'] });
         const changedId = payload.conversation_id;
         if (typeof changedId === 'string')
           void queryClient.invalidateQueries({ queryKey: ['conversation', changedId, 'detail'] });
@@ -312,49 +387,86 @@ export function Tickets() {
         <h1 className="text-lg font-semibold">Tickets</h1>
         <p className="text-sm text-muted">All active queues at a glance</p>
       </div>
-      <TicketsFilterBar token={session.token} filters={filters} onChange={updateFilters} />
-      {!filtersActive &&
-        summaryQueries.every((q) => q.data) &&
-        summaryQueries.every((q) => q.data!.conversations.length === 0) && (
-          <EmptyState message="Nothing to show" />
-        )}
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-        <SortableContext items={columnOrder} strategy={rectSortingStrategy}>
-          <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
-            {[
-              columnOrder.filter((_, i) => i % 2 === 0),
-              columnOrder.filter((_, i) => i % 2 === 1),
-            ].map((filters, columnIndex) => (
-              <div key={columnIndex} className="flex flex-col gap-4">
-                {filters.map((filter) => {
-                  const col = COLUMNS.find((c) => c.filter === filter)!;
-                  const queryIndex = COLUMNS.findIndex((c) => c.filter === filter);
-                  const summaryQuery = summaryQueries[queryIndex];
-                  const isHidden = Boolean(
-                    summaryQuery?.data &&
-                    summaryQuery.data.conversations.length === 0 &&
-                    !filtersActive,
-                  );
+      <div className="mb-4 flex items-center gap-4">
+        <TicketsFilterBar token={session.token} filters={filters} onChange={updateFilters} />
+        <div className="flex shrink-0 gap-1 rounded-md border border-slate-200 p-0.5">
+          <button
+            type="button"
+            aria-pressed={filters.view === 'board'}
+            className={cn(
+              'rounded px-2 py-1 text-xs font-medium',
+              filters.view === 'board' ? 'bg-accent-soft text-accent-fg' : 'text-muted',
+            )}
+            onClick={() => updateFilters({ view: 'board' })}
+          >
+            Board
+          </button>
+          <button
+            type="button"
+            aria-pressed={filters.view === 'list'}
+            className={cn(
+              'rounded px-2 py-1 text-xs font-medium',
+              filters.view === 'list' ? 'bg-accent-soft text-accent-fg' : 'text-muted',
+            )}
+            onClick={() => updateFilters({ view: 'list' })}
+          >
+            List
+          </button>
+        </div>
+      </div>
+      {filters.view === 'list' ? (
+        <TicketsListView
+          token={session.token}
+          queryFilters={queryFilters}
+          onSelect={(id) => navigate(`/tickets/${id}`)}
+        />
+      ) : (
+        <>
+          {!filtersActive &&
+            summaryQueries.every((q) => q.data) &&
+            summaryQueries.every((q) => q.data!.conversations.length === 0) && (
+              <EmptyState message="Nothing to show" />
+            )}
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={columnOrder} strategy={rectSortingStrategy}>
+              <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
+                {[
+                  columnOrder.filter((_, i) => i % 2 === 0),
+                  columnOrder.filter((_, i) => i % 2 === 1),
+                ].map((filters_, columnIndex) => (
+                  <div key={columnIndex} className="flex flex-col gap-4">
+                    {filters_.map((filter) => {
+                      const col = COLUMNS.find((c) => c.filter === filter)!;
+                      const queryIndex = COLUMNS.findIndex((c) => c.filter === filter);
+                      const summaryQuery = summaryQueries[queryIndex];
+                      const isHidden = Boolean(
+                        summaryQuery?.data &&
+                          summaryQuery.data.conversations.length === 0 &&
+                          !filtersActive,
+                      );
+                      const excludedByStatusFilter =
+                        filters.statuses.length > 0 && !filters.statuses.includes(filter);
+                      if (isHidden || excludedByStatusFilter) return null;
 
-                  if (isHidden) return null;
-
-                  return (
-                    <SortableQueueColumn
-                      key={filter}
-                      id={filter}
-                      col={col}
-                      token={session.token}
-                      queryFilters={queryFilters}
-                      filtersActive={filtersActive}
-                      onSelect={(id) => navigate(`/tickets/${id}`)}
-                    />
-                  );
-                })}
+                      return (
+                        <SortableQueueColumn
+                          key={filter}
+                          id={filter}
+                          col={col}
+                          token={session.token}
+                          queryFilters={queryFilters}
+                          filtersActive={filtersActive}
+                          onSelect={(id) => navigate(`/tickets/${id}`)}
+                        />
+                      );
+                    })}
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </SortableContext>
-      </DndContext>
+            </SortableContext>
+          </DndContext>
+        </>
+      )}
     </div>
   );
 }
