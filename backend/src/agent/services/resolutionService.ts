@@ -82,3 +82,57 @@ export async function askResolved(
     return { ok: true, posted };
   });
 }
+
+const FORCE_RESOLVE_BLOCKED_STATUSES = new Set(['resolved', 'closed']);
+
+export type ForceResolveOutcome =
+  | { ok: true }
+  | { ok: false; reason: 'not_found' | 'wrong_status' };
+
+/**
+ * Admin-only bypass of the ask/confirm cycle: skips straight to resolved with
+ * no message to the player and no player consent, unlike askResolved above.
+ * Allowed from any status except resolved/closed — broader than
+ * ASKABLE_STATUSES, since the stuck conversations this exists for (e.g.
+ * bot_active with an unreachable player) aren't limited to those three.
+ * Writes conversation_resolved_forced rather than conversation_resolved so
+ * resolution-rate and containment metrics, which assume conversation_resolved
+ * means an actual resolution occurred, aren't silently corrupted by an
+ * admin override.
+ */
+export async function forceResolve(
+  ctx: AgentContext,
+  conversationId: string,
+): Promise<ForceResolveOutcome> {
+  return withWorkspace(ctx.workspaceId, async (tx) => {
+    const [found] = await tx
+      .select({ status: conversation.status })
+      .from(conversation)
+      .where(eq(conversation.id, conversationId))
+      .limit(1)
+      .for('update');
+
+    // RLS makes "another workspace's" and "nonexistent" the same answer.
+    if (!found) return { ok: false, reason: 'not_found' };
+    if (FORCE_RESOLVE_BLOCKED_STATUSES.has(found.status)) {
+      return { ok: false, reason: 'wrong_status' };
+    }
+
+    await tx
+      .update(conversation)
+      .set({ status: 'resolved', confirmPhase: 'none' })
+      .where(eq(conversation.id, conversationId));
+
+    // No session_id: an agent-console request has no player session behind it.
+    await appendEvent(tx, {
+      workspaceId: ctx.workspaceId,
+      type: 'conversation_resolved_forced',
+      conversationId,
+      actorId: ctx.agentId,
+      actorType: 'agent',
+      payload: { admin_agent_id: ctx.agentId },
+    });
+
+    return { ok: true };
+  });
+}

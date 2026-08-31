@@ -1093,6 +1093,25 @@ registry.registerPath({
 
 registry.registerPath({
   method: 'post',
+  path: '/agent/conversations/{id}/force-resolve',
+  summary: 'Admin Force Resolve Conversation',
+  description:
+    'Admin-only bypass of ask-resolved: moves status straight to resolved and confirm_phase to none from any status except resolved or closed, with no message posted to the player and no player consent. Writes conversation_resolved_forced rather than conversation_resolved so resolution-rate and containment metrics are not affected by an admin override. Requires agent.is_admin.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: { params: z.object({ id: z.uuid() }) },
+  responses: {
+    200: {
+      description: 'Resolved',
+      content: { 'application/json': { schema: z.object({ resolved: z.boolean() }) } },
+    },
+    403: { description: 'Requires admin' },
+    404: { description: 'Conversation not found' },
+    409: { description: 'Already resolved or closed' },
+  },
+});
+
+registry.registerPath({
+  method: 'post',
   path: '/agent/conversations/{id}/escalate',
   summary: 'Agent Escalate Conversation',
   description:

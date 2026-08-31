@@ -217,6 +217,8 @@ export type ResolutionAnswerResponse = {
 
 export type AskResolvedResponse = { asked: boolean };
 
+export type ForceResolveResponse = { resolved: boolean };
+
 export type EscalateResponse = { escalated: boolean };
 
 export type UnescalateResponse = { unescalated: boolean };

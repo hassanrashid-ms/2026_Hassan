@@ -18,7 +18,7 @@ import {
   setConversationPriority,
   takeOverConversation,
 } from '../services/conversationsService.ts';
-import { askResolved } from '../services/resolutionService.ts';
+import { askResolved, forceResolve } from '../services/resolutionService.ts';
 import { escalateConversation, unescalateConversation } from '../services/escalationService.ts';
 import {
   getConversationContext,
@@ -274,6 +274,35 @@ export const askResolvedHandler: RequestHandler = async (req, res) => {
   });
 
   res.status(200).json({ asked: true });
+};
+
+const FORCE_RESOLVE_ERRORS = {
+  not_found: [404, 'Conversation not found.'],
+  wrong_status: [409, 'This conversation is already resolved or closed.'],
+} as const;
+
+export const forceResolveHandler: RequestHandler = async (req, res) => {
+  const ctx = req.agent!;
+  const params = ConversationIdParams.safeParse(req.params);
+  if (!params.success) {
+    sendError(res, 422, 'invalid_request', 'id must be a uuid.');
+    return;
+  }
+
+  const result = await forceResolve(ctx, params.data.id);
+  if (!result.ok) {
+    const [status, message] = FORCE_RESOLVE_ERRORS[result.reason];
+    sendError(res, status, result.reason, message);
+    return;
+  }
+
+  emitInboxChanged(getIo(), ctx.workspaceId, params.data.id, 'resolved');
+  emitPhaseChanged(getIo(), params.data.id, {
+    conversation_id: params.data.id,
+    confirm_phase: 'none',
+  });
+
+  res.status(200).json({ resolved: true });
 };
 
 const ESCALATION_ERRORS = {

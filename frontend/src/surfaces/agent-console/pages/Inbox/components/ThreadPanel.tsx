@@ -13,6 +13,7 @@ import {
   askResolved,
   detachTag,
   escalateConversation,
+  forceResolveConversation,
   fetchConversationContext,
   fetchConversationMessages,
   markAgentMessagesRead,
@@ -24,11 +25,12 @@ import {
   putFileToUploadUrl,
   cancelUpload,
 } from '../../../api/agentApi.ts';
+import { ConfirmDialog } from '../../../components/ConfirmDialog.tsx';
 import { TagPicker } from './TagPicker.tsx';
 import { AssignPicker } from './AssignPicker.tsx';
 import { SubintentPicker } from './SubintentPicker.tsx';
 import { PriorityPicker } from './PriorityPicker.tsx';
-import { loadAgentSession, canBuildForms } from '../../../lib/agentSession.ts';
+import { loadAgentSession, canBuildForms, isAdmin } from '../../../lib/agentSession.ts';
 import { createSocket } from '../../../../../features/chat/api/socket.ts';
 import { handleSessionExpired } from '../../../lib/authErrorHandling.ts';
 import { tagBadgeClassName } from '../../../lib/tagBadge.ts';
@@ -241,6 +243,29 @@ export function ThreadPanel({
     },
   });
 
+  const [confirmForceResolve, setConfirmForceResolve] = useState(false);
+  const forceResolve = useMutation({
+    mutationFn: () => forceResolveConversation(token, conversationId!),
+    onSuccess: () => {
+      setConfirmForceResolve(false);
+      // Status can move out of any queue bucket into resolved, so this needs
+      // the same breadth as invalidateAfterTakeOver below (detail + tickets +
+      // tickets-summary), not just the mine/unassigned pair ask/escalate use —
+      // ConversationDetailPane prefers a cached queue-row's status over
+      // detail's, so leaving tickets-summary stale left the header showing
+      // the old status until a manual reload.
+      void queryClient.invalidateQueries({
+        queryKey: ['conversation', conversationId, 'messages'],
+      });
+      void queryClient.invalidateQueries({ queryKey: ['conversation', conversationId, 'detail'] });
+      void queryClient.invalidateQueries({ queryKey: ['tickets'] });
+      void queryClient.invalidateQueries({ queryKey: ['tickets-summary'] });
+      void queryClient.invalidateQueries({ queryKey: ['inbox', 'mine'] });
+      void queryClient.invalidateQueries({ queryKey: ['inbox', 'unassigned'] });
+    },
+    onError: () => toast.error("Couldn't force resolve this conversation."),
+  });
+
   const invalidateAfterEscalationChange = () => {
     void queryClient.invalidateQueries({ queryKey: ['conversation', conversationId, 'messages'] });
     void queryClient.invalidateQueries({ queryKey: ['inbox', 'mine'] });
@@ -295,6 +320,11 @@ export function ThreadPanel({
   // must read "waiting" for both, or a clock-triggered ask looks like no ask.
   const waiting = confirmPhase === 'agent_ask' || confirmPhase === 'inactivity_ask';
   const escalatable = !readOnly && (status === 'open' || status === 'awaiting_player');
+  // Broader than askable on purpose: force-resolve exists for conversations
+  // stuck outside the three askable statuses (e.g. bot_active with an
+  // unreachable player), so it stays available anywhere short of terminal.
+  const forceResolvable =
+    !readOnly && isAdmin(loadAgentSession()) && status !== 'resolved' && status !== 'closed';
 
   // An optimistic bubble belongs to the thread it was typed in. Switching
   // conversations must drop it, or a send that is still in flight reappears
@@ -476,6 +506,17 @@ export function ThreadPanel({
                 Escalate
               </Button>
             )}
+            {forceResolvable && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={forceResolve.isPending}
+                onClick={() => setConfirmForceResolve(true)}
+              >
+                Force resolve
+              </Button>
+            )}
             {onToggleRail && (
               <Button
                 type="button"
@@ -578,6 +619,16 @@ export function ThreadPanel({
         />
       </div>
       <AttachmentLightbox attachment={expandedImage} onClose={() => setExpandedImage(null)} />
+      <ConfirmDialog
+        open={confirmForceResolve}
+        onOpenChange={setConfirmForceResolve}
+        title="Force resolve this conversation?"
+        description="The player is not asked and is not notified. This cannot be undone."
+        confirmLabel="Force resolve"
+        variant="destructive"
+        confirming={forceResolve.isPending}
+        onConfirm={() => forceResolve.mutate()}
+      />
     </>
   );
 }

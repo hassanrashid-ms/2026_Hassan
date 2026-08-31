@@ -31,6 +31,7 @@ import type {
   DeclaredFieldType,
   DetachTagResponse,
   EscalateResponse,
+  ForceResolveResponse,
   FormDetail,
   FormField,
   FormsListResponse,
@@ -670,6 +671,13 @@ export function setFormSubintents(
 
 export function askResolved(token: string, conversationId: string): Promise<AskResolvedResponse> {
   return call(`/agent/conversations/${conversationId}/ask-resolved`, token, { method: 'POST' });
+}
+
+export function forceResolveConversation(
+  token: string,
+  conversationId: string,
+): Promise<ForceResolveResponse> {
+  return call(`/agent/conversations/${conversationId}/force-resolve`, token, { method: 'POST' });
 }
 
 export function escalateConversation(
