@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from '../../components/ui/select.tsx';
 import { MultiSelectFilter } from '../../components/MultiSelectFilter.tsx';
+import { QUEUE_OPTIONS } from './queues.ts';
 import type { TicketsFilters } from './useTicketsFilters.ts';
 
 const PRIORITY_OPTIONS = [
@@ -19,6 +20,8 @@ const PRIORITY_OPTIONS = [
   { value: 'p3', label: 'P3' },
   { value: 'p4', label: 'P4' },
 ];
+
+const STATUS_OPTIONS = QUEUE_OPTIONS.map((q) => ({ value: q.value, label: q.title }));
 
 const AGE_OPTIONS = [
   { value: 'any', label: 'Any age' },
@@ -79,6 +82,12 @@ export function TicketsFilterBar({
         />
       </div>
       <MultiSelectFilter
+        label="Status"
+        options={STATUS_OPTIONS}
+        selected={filters.statuses}
+        onChange={(v) => onChange({ statuses: v })}
+      />
+      <MultiSelectFilter
         label="Priority"
         options={PRIORITY_OPTIONS}
         selected={filters.priority}
@@ -117,6 +126,26 @@ export function TicketsFilterBar({
           ))}
         </SelectContent>
       </Select>
+      <label className="flex items-center gap-1 text-xs text-muted">
+        Created from
+        <Input
+          aria-label="Created from"
+          type="date"
+          className="w-36"
+          value={filters.createdFrom}
+          onChange={(e) => onChange({ createdFrom: e.target.value })}
+        />
+      </label>
+      <label className="flex items-center gap-1 text-xs text-muted">
+        to
+        <Input
+          aria-label="Created to"
+          type="date"
+          className="w-36"
+          value={filters.createdTo}
+          onChange={(e) => onChange({ createdTo: e.target.value })}
+        />
+      </label>
     </div>
   );
 }

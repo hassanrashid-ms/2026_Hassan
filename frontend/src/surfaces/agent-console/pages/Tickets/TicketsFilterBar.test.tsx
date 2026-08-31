@@ -14,6 +14,10 @@ const EMPTY_FILTERS = {
   subintentIds: [],
   assigneeIds: [],
   olderThanHours: '',
+  statuses: [],
+  createdFrom: '',
+  createdTo: '',
+  view: 'board' as const,
 };
 
 function renderBar(onChange = vi.fn()) {
@@ -51,5 +55,26 @@ describe('TicketsFilterBar', () => {
     await userEvent.click(await screen.findByText('P1'));
 
     expect(onChange).toHaveBeenCalledWith({ priority: ['p1'] });
+  });
+
+  it('renders a Status filter control', () => {
+    renderBar();
+    expect(screen.getByRole('button', { name: /Status/ })).toBeInTheDocument();
+  });
+
+  it('toggling the Status Escalated option calls onChange with the selection', async () => {
+    const { onChange } = renderBar();
+    await userEvent.click(screen.getByRole('button', { name: /Status/ }));
+    await userEvent.click(await screen.findByText('Escalated'));
+
+    expect(onChange).toHaveBeenCalledWith({ statuses: ['escalated'] });
+  });
+
+  it('changing the Created-from date calls onChange', async () => {
+    const { onChange } = renderBar();
+    const [fromInput] = screen.getAllByLabelText(/Created from/i);
+    await userEvent.type(fromInput, '2026-08-01');
+
+    expect(onChange).toHaveBeenCalledWith({ createdFrom: '2026-08-01' });
   });
 });
