@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { BotConfigView } from '@support/types';
 import { ToolsTab } from './ToolsTab.tsx';
 import * as agentApi from '../../../api/agentApi.ts';
+import { BotConfigDraftProvider } from '../BotConfigDraftContext.tsx';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -42,7 +43,9 @@ function renderTab() {
   const queryClient = new QueryClient();
   return render(
     <QueryClientProvider client={queryClient}>
-      <ToolsTab token="t" config={CONFIG} />
+      <BotConfigDraftProvider config={CONFIG}>
+        <ToolsTab token="t" config={CONFIG} />
+      </BotConfigDraftProvider>
     </QueryClientProvider>,
   );
 }
@@ -65,7 +68,9 @@ describe('ToolsTab', () => {
     const queryClient = new QueryClient();
     render(
       <QueryClientProvider client={queryClient}>
-        <ToolsTab token="t" config={off} />
+        <BotConfigDraftProvider config={off}>
+          <ToolsTab token="t" config={off} />
+        </BotConfigDraftProvider>
       </QueryClientProvider>,
     );
     expect(screen.getByText(/Bot can never look anything up/)).toBeInTheDocument();

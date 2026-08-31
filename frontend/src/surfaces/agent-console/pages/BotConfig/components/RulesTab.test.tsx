@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { BotConfigView } from '@support/types';
 import { RulesTab } from './RulesTab.tsx';
 import * as agentApi from '../../../api/agentApi.ts';
+import { BotConfigDraftProvider } from '../BotConfigDraftContext.tsx';
 
 /*
  * vi.spyOn returns the SAME mock (with its accumulated `mock.calls` history)
@@ -59,7 +60,9 @@ function renderTab() {
   const queryClient = new QueryClient();
   return render(
     <QueryClientProvider client={queryClient}>
-      <RulesTab token="t" config={CONFIG} />
+      <BotConfigDraftProvider config={CONFIG}>
+        <RulesTab token="t" config={CONFIG} />
+      </BotConfigDraftProvider>
     </QueryClientProvider>,
   );
 }
@@ -74,25 +77,25 @@ describe('RulesTab', () => {
 
   it('never lists no_invented_facts, even when present in config', () => {
     const queryClient = new QueryClient();
+    const config = {
+      ...CONFIG,
+      rules: [
+        {
+          key: 'no_invented_facts',
+          text: 'Never invent a fact.',
+          enabled: true,
+          locked: true,
+          source: 'builtin' as const,
+          enforcement: 'code' as const,
+        },
+        ...CONFIG.rules,
+      ],
+    };
     render(
       <QueryClientProvider client={queryClient}>
-        <RulesTab
-          token="t"
-          config={{
-            ...CONFIG,
-            rules: [
-              {
-                key: 'no_invented_facts',
-                text: 'Never invent a fact.',
-                enabled: true,
-                locked: true,
-                source: 'builtin',
-                enforcement: 'code',
-              },
-              ...CONFIG.rules,
-            ],
-          }}
-        />
+        <BotConfigDraftProvider config={config}>
+          <RulesTab token="t" config={config} />
+        </BotConfigDraftProvider>
       </QueryClientProvider>,
     );
     expect(screen.queryByText('Never invent a fact.')).not.toBeInTheDocument();

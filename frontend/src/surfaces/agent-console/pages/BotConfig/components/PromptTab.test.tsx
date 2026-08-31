@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PromptTab } from './PromptTab.tsx';
 import * as agentApi from '../../../api/agentApi.ts';
+import { BotConfigDraftProvider } from '../BotConfigDraftContext.tsx';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -33,7 +34,9 @@ function renderTab(config = BASE_CONFIG) {
   const queryClient = new QueryClient();
   return render(
     <QueryClientProvider client={queryClient}>
-      <PromptTab token="t" config={config} />
+      <BotConfigDraftProvider config={config}>
+        <PromptTab token="t" config={config} />
+      </BotConfigDraftProvider>
     </QueryClientProvider>,
   );
 }
