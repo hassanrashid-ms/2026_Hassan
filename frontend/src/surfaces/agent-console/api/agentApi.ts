@@ -43,6 +43,8 @@ import type {
   RenameSubintentResponse,
   SaveBotConfigBodyValue,
   TagView,
+  TestBotTurnBodyValue,
+  BotTestTurnDecision,
   UnarchiveIntentResponse,
   UnarchiveSubintentResponse,
   UnescalateResponse,
@@ -724,6 +726,16 @@ export function saveBotConfig(
   patch: SaveBotConfigBodyValue,
 ): Promise<BotConfigView> {
   return call('/agent/bot-config', token, { method: 'POST', body: JSON.stringify(patch) });
+}
+
+export function testBotTurn(
+  token: string,
+  body: TestBotTurnBodyValue,
+): Promise<{ decision: BotTestTurnDecision }> {
+  return call('/agent/bot-config/test-turn', token, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
 }
 
 export function fetchBotConfigVersions(
