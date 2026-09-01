@@ -1,9 +1,17 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { closeDb } from '../src/shared/db/client.ts'
-import { getBotMetrics, getSpeedMetrics, getVolumeMetrics } from '../src/agent/services/analyticsService.ts'
+import { getBotMetrics, getSpeedMetrics, getTeamMetrics, getVolumeMetrics } from '../src/agent/services/analyticsService.ts'
 import { appendEvent } from '../src/shared/events/appendEvent.ts'
 import { withWorkspace } from '../src/shared/db/withWorkspace.ts'
-import { closeOwnerPool, seedConversation, seedPlayer, seedWorkspace, truncateAll } from './helpers/db.ts'
+import {
+  closeOwnerPool,
+  ownerPool,
+  seedConversation,
+  seedPlayer,
+  seedWorkspace,
+  seedWorkspaceMember,
+  truncateAll,
+} from './helpers/db.ts'
 
 afterAll(async () => {
   await closeDb()
@@ -177,5 +185,43 @@ describe('getBotMetrics', () => {
     const result = await getBotMetrics({ workspaceId }, RANGE)
 
     expect(result.articleHitRate).toBe(0.5)
+  })
+})
+
+describe('getTeamMetrics', () => {
+  it('divides assigned open conversations by active agent count', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const { rows } = await ownerPool.query<{ id: string }>(
+      `insert into agent (email, display_name) values ('agent1@example.test', 'Agent One') returning id`,
+    )
+    const agentId = rows[0]!.id
+    await seedWorkspaceMember({ workspaceId, agentId })
+    await seedConversation({ workspaceId, playerId, status: 'open', assignedAgentId: agentId })
+    await seedConversation({ workspaceId, playerId, status: 'open', assignedAgentId: agentId })
+
+    const result = await getTeamMetrics({ workspaceId }, RANGE)
+
+    expect(result.avgOpenPerActiveAgent).toBe(2)
+  })
+
+  it('counts unassigned queue depth per bucket for conversations opened but never assigned', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const conversationId = await seedConversation({ workspaceId, playerId, status: 'open' })
+
+    await withWorkspace(workspaceId, async (tx) => {
+      await appendEvent(tx, {
+        workspaceId,
+        type: 'conversation_opened',
+        conversationId,
+        actorType: 'system',
+        occurredAt: new Date('2026-08-05T10:00:00Z'),
+      })
+    })
+
+    const result = await getTeamMetrics({ workspaceId }, RANGE)
+
+    expect(result.unassignedQueueDepth.series).toEqual([{ bucket: '2026-08-05', depth: 1 }])
   })
 })

@@ -1,6 +1,6 @@
-import { and, asc, eq, gte, inArray, lte, notInArray, sql } from 'drizzle-orm'
+import { and, asc, eq, gte, inArray, isNotNull, isNull, lte, notInArray, sql } from 'drizzle-orm'
 import type { AnalyticsRange, AnalyticsResponse } from '@support/types'
-import { conversation, event } from '../../shared/db/schema/index.ts'
+import { conversation, event, workspaceMember } from '../../shared/db/schema/index.ts'
 import { withWorkspace, type Tx } from '../../shared/db/withWorkspace.ts'
 import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts'
 
@@ -243,6 +243,63 @@ export async function getBotMetrics(
         byReason: [...reasonCounts.entries()].map(([reason, count]) => ({ reason, count })),
       },
       articleHitRate: searchCount > 0 ? offeredCount / searchCount : null,
+    }
+  })
+}
+
+export async function getTeamMetrics(
+  ctx: Pick<AgentContext, 'workspaceId'>,
+  range: AnalyticsRange,
+): Promise<AnalyticsResponse['team']> {
+  return withWorkspace(ctx.workspaceId, async (tx) => {
+    const from = new Date(range.from)
+    const to = new Date(range.to)
+
+    const [assignedOpenRow] = await tx
+      .select({ assignedOpen: sql<number>`count(*)::int` })
+      .from(conversation)
+      .where(and(isNotNull(conversation.assignedAgentId), notInArray(conversation.status, ['resolved', 'closed'])))
+
+    const [activeAgentsRow] = await tx
+      .select({ activeAgents: sql<number>`count(*)::int` })
+      .from(workspaceMember)
+      .where(isNull(workspaceMember.deactivatedAt))
+
+    const assignedOpen = assignedOpenRow?.assignedOpen ?? 0
+    const activeAgents = activeAgentsRow?.activeAgents ?? 0
+
+    const opens = await tx
+      .select({ conversationId: event.conversationId, occurredAt: event.occurredAt })
+      .from(event)
+      .where(and(eq(event.type, 'conversation_opened'), gte(event.occurredAt, from), lte(event.occurredAt, to)))
+    const assigns = await tx
+      .select({ conversationId: event.conversationId, occurredAt: event.occurredAt })
+      .from(event)
+      .where(and(eq(event.type, 'conversation_assigned'), gte(event.occurredAt, from), lte(event.occurredAt, to)))
+      .orderBy(asc(event.occurredAt))
+
+    const assignedByConversation = new Map<string, Date>()
+    for (const row of assigns) {
+      if (row.conversationId && !assignedByConversation.has(row.conversationId)) {
+        assignedByConversation.set(row.conversationId, row.occurredAt)
+      }
+    }
+
+    const depthByBucket = new Map<string, number>()
+    for (const open of opens) {
+      if (!open.conversationId) continue
+      const bucket = open.occurredAt.toISOString().slice(0, 10)
+      const assignedAt = assignedByConversation.get(open.conversationId)
+      if (!assignedAt) depthByBucket.set(bucket, (depthByBucket.get(bucket) ?? 0) + 1)
+    }
+
+    return {
+      avgOpenPerActiveAgent: activeAgents > 0 ? assignedOpen / activeAgents : null,
+      unassignedQueueDepth: {
+        series: [...depthByBucket.entries()]
+          .map(([bucket, depth]) => ({ bucket, depth }))
+          .sort((a, b) => a.bucket.localeCompare(b.bucket)),
+      },
     }
   })
 }
