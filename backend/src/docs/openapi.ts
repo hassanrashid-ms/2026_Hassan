@@ -1022,6 +1022,27 @@ registry.registerPath({
 });
 
 registry.registerPath({
+  method: 'post',
+  path: '/agent/conversations/{id}/unassign',
+  summary: 'Agent Unassign Own Conversation',
+  description:
+    'Releases a conversation the caller is assigned to back to the unassigned queue. Owning agent only.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: {
+    params: z.object({ id: z.uuid() }),
+  },
+  responses: {
+    200: {
+      description: 'Unassign result',
+      content: { 'application/json': { schema: z.object({ unassigned: z.boolean() }) } },
+    },
+    403: { description: 'Forbidden — caller does not own this conversation' },
+    404: { description: 'Conversation not found' },
+    409: { description: 'Conversation is resolved or closed' },
+  },
+});
+
+registry.registerPath({
   method: 'patch',
   path: '/agent/conversations/{id}/assign',
   summary: 'Agent Reassign Conversation',

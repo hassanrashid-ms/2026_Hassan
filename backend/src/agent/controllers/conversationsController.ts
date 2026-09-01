@@ -17,6 +17,7 @@ import {
   reassignConversation,
   setConversationPriority,
   takeOverConversation,
+  unassignConversation,
 } from '../services/conversationsService.ts';
 import { askResolved, forceResolve } from '../services/resolutionService.ts';
 import { escalateConversation, unescalateConversation } from '../services/escalationService.ts';
@@ -170,6 +171,29 @@ export const reassignConversationHandler: RequestHandler = async (req, res) => {
     toAgentView(result.posted),
   );
   res.status(200).json({ reassigned: true });
+};
+
+const UNASSIGN_ERRORS = {
+  not_found: [404, 'Conversation not found.'],
+  not_owner: [403, 'You do not own this conversation.'],
+  invalid_status: [409, 'A resolved or closed conversation cannot be unassigned.'],
+} as const;
+
+export const unassignConversationHandler: RequestHandler = async (req, res) => {
+  const ctx = req.agent!;
+  const params = ConversationIdParams.safeParse(req.params);
+  if (!params.success) {
+    sendError(res, 422, 'invalid_request', 'id must be a uuid.');
+    return;
+  }
+  const result = await unassignConversation(ctx, params.data.id);
+  if (!result.ok) {
+    const [status, message] = UNASSIGN_ERRORS[result.reason];
+    sendError(res, status, result.reason, message);
+    return;
+  }
+  emitInboxChanged(getIo(), ctx.workspaceId, params.data.id, result.status);
+  res.status(200).json({ unassigned: true });
 };
 
 const ReclassifyBody = z.object({ subintentId: z.uuid() });

@@ -796,6 +796,49 @@ export async function reassignConversation(
   });
 }
 
+export type UnassignResult =
+  | { ok: true; status: string }
+  | { ok: false; reason: 'not_found' | 'not_owner' | 'invalid_status' };
+
+export async function unassignConversation(
+  ctx: AgentContext,
+  conversationId: string,
+): Promise<UnassignResult> {
+  return withWorkspace(ctx.workspaceId, async (tx) => {
+    const [conv] = await tx
+      .select({
+        id: conversation.id,
+        status: conversation.status,
+        assignedAgentId: conversation.assignedAgentId,
+      })
+      .from(conversation)
+      .where(eq(conversation.id, conversationId))
+      .limit(1);
+    if (!conv) return { ok: false, reason: 'not_found' };
+    if (conv.status === 'resolved' || conv.status === 'closed')
+      return { ok: false, reason: 'invalid_status' };
+    // Also covers "already unassigned": assignedAgentId is null there, and
+    // null !== ctx.agentId, so it falls into the same not-owned bucket.
+    if (conv.assignedAgentId !== ctx.agentId) return { ok: false, reason: 'not_owner' };
+
+    await tx
+      .update(conversation)
+      .set({ assignedAgentId: null })
+      .where(eq(conversation.id, conversationId));
+
+    await appendEvent(tx, {
+      workspaceId: ctx.workspaceId,
+      type: 'conversation_unassigned',
+      conversationId,
+      actorId: ctx.agentId,
+      actorType: 'agent',
+      payload: { previous_agent_id: ctx.agentId },
+    });
+
+    return { ok: true, status: conv.status };
+  });
+}
+
 export type ReclassifyResult =
   | { ok: true; subintentId: string; status: string }
   | { ok: false; reason: 'not_found' | 'invalid_subintent' };

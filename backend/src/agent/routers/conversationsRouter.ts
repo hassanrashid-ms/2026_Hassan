@@ -15,6 +15,7 @@ import {
   reassignConversationHandler,
   setConversationPriorityHandler,
   takeOverConversationHandler,
+  unassignConversationHandler,
   unescalateConversationHandler,
 } from '../controllers/conversationsController.ts';
 
@@ -34,6 +35,7 @@ conversationsRouter.post(
 );
 conversationsRouter.post('/conversations/:id/escalate', escalateConversationHandler);
 conversationsRouter.post('/conversations/:id/unescalate', unescalateConversationHandler);
+conversationsRouter.post('/conversations/:id/unassign', unassignConversationHandler);
 conversationsRouter.patch(
   '/conversations/:id/assign',
   requireTeamLeadOrAdmin,
