@@ -1701,6 +1701,30 @@ registry.registerPath({
 });
 
 registry.registerPath({
+  method: 'post',
+  path: '/agent/articles/bulk-import',
+  summary: 'Agent Bulk Import Articles',
+  description:
+    'Reads .md/.markdown files out of an uploaded zip and creates one draft article per file. Team Lead/Admin only.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: z.object({ key: z.string().min(1) }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: { description: 'Per-file import results' },
+    400: { description: 'invalid_zip | no_markdown_files | too_many_files' },
+    403: { description: 'Caller is not Team Lead or Admin' },
+    404: { description: 'Upload key not found' },
+  },
+});
+
+registry.registerPath({
   method: 'patch',
   path: '/agent/articles/{id}',
   summary: 'Agent Update Article',

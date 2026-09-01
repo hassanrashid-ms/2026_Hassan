@@ -2,6 +2,7 @@ import type { RequestHandler } from 'express';
 import { z } from 'zod';
 import {
   ArticleVersionsQuery,
+  BulkImportArticlesBody,
   CreateArticleBody,
   FinalizeArticleAttachmentBody,
   SaveArticleDraftBody,
@@ -11,6 +12,7 @@ import { sendError } from '../../errors.ts';
 import { deleteObject } from '../../shared/storage/presign.ts';
 import {
   archiveArticle,
+  bulkImportArticles,
   createArticle,
   discardArticleDraft,
   finalizeArticleAttachment,
@@ -293,6 +295,37 @@ export const finalizeArticleAttachmentHandler: RequestHandler = async (req, res)
     // an orphaned pending object is cheap and harmless.
   }
   res.status(200).json(result.attachment);
+};
+
+export const bulkImportArticlesHandler: RequestHandler = async (req, res) => {
+  const body = BulkImportArticlesBody.safeParse(req.body);
+  if (!body.success) {
+    sendError(res, 422, 'invalid_request', 'key is required.');
+    return;
+  }
+  const result = await bulkImportArticles(req.agent!, body.data.key);
+  if (!result.ok) {
+    if (result.reason === 'not_found') {
+      sendError(res, 404, 'not_found', 'Upload not found.');
+      return;
+    }
+    if (result.reason === 'invalid_zip') {
+      sendError(res, 400, 'invalid_zip', 'That file is not a valid zip archive.');
+      return;
+    }
+    if (result.reason === 'no_markdown_files') {
+      sendError(res, 400, 'no_markdown_files', 'The zip has no .md or .markdown files in it.');
+      return;
+    }
+    sendError(
+      res,
+      400,
+      'too_many_files',
+      'The zip has more than 200 markdown files — split it into smaller batches.',
+    );
+    return;
+  }
+  res.status(200).json({ results: result.results, summary: result.summary });
 };
 
 export const generateKeywordsHandler: RequestHandler = async (req, res) => {

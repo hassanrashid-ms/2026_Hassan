@@ -179,3 +179,63 @@ describe('bulkImportArticles', () => {
     expect(meta).toBeNull();
   });
 });
+
+describe('POST /agent/articles/bulk-import', () => {
+  it('imports over HTTP as a team lead', async () => {
+    const workspaceId = await seedWorkspace();
+    const { agentId, token } = await seedAgent(workspaceId, 'team_lead');
+    const key = await uploadFixtureZip(workspaceId, agentId, {
+      'a.md': '# Article A\n\nBody A.',
+    });
+
+    const res = await request(app)
+      .post('/articles/bulk-import')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ key })
+      .expect(200);
+
+    expect(res.body.summary).toEqual({ total: 1, created: 1, failed: 0 });
+    expect(res.body.results[0]).toMatchObject({ filename: 'a.md', status: 'created' });
+  });
+
+  it('403s for a plain agent (not team lead or admin)', async () => {
+    const workspaceId = await seedWorkspace();
+    const { agentId, token } = await seedAgent(workspaceId, 'agent');
+    const key = await uploadFixtureZip(workspaceId, agentId, { 'a.md': '# A\n\nBody.' });
+
+    await request(app)
+      .post('/articles/bulk-import')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ key })
+      .expect(403);
+  });
+
+  it('400s with no_markdown_files for a zip with no markdown', async () => {
+    const workspaceId = await seedWorkspace();
+    const { agentId, token } = await seedAgent(workspaceId, 'team_lead');
+    const key = await uploadFixtureZip(workspaceId, agentId, { 'readme.txt': 'no md' });
+
+    const res = await request(app)
+      .post('/articles/bulk-import')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ key })
+      .expect(400);
+    expect(res.body.error.code).toBe('no_markdown_files');
+  });
+
+  it('422s when key is missing', async () => {
+    const workspaceId = await seedWorkspace();
+    const { token } = await seedAgent(workspaceId, 'team_lead');
+
+    const res = await request(app)
+      .post('/articles/bulk-import')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({})
+      .expect(422);
+    expect(res.body.error.code).toBe('invalid_request');
+  });
+});
