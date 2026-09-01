@@ -23,7 +23,7 @@ export type { CannedReplyEntry, SystemMessageKey } from './templateCache.ts';
  * predates this feature (and every test that seeds a workspace via raw SQL,
  * bypassing any app-level provisioning) keeps behaving exactly as before.
  */
-const DEFAULT_SYSTEM_MESSAGES: Record<SystemMessageKey, string[]> = {
+export const DEFAULT_SYSTEM_MESSAGES: Record<SystemMessageKey, string[]> = {
   no_agents_online: [NO_AGENTS_ONLINE_MESSAGE],
   handoff: [...HANDOFF_PLAYER_MESSAGES],
   form_summary_completed: [FORM_SUMMARY_MESSAGES.completed],

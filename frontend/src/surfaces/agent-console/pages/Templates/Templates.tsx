@@ -172,7 +172,7 @@ function HandoffEditor({
   onUpdate,
   onRemove,
 }: {
-  variants: { id: string; body: string }[];
+  variants: { id: string | null; body: string }[];
   readOnly: boolean;
   onAdd: (body: string) => void;
   onUpdate: (id: string, body: string) => void;
@@ -185,46 +185,62 @@ function HandoffEditor({
       <label className="text-xs font-medium text-muted">
         Handoff (picked at random — leave empty to use the built-in defaults)
       </label>
-      {variants.map((variant) => (
-        <div key={variant.id} className="flex gap-2">
-          <Input
-            value={drafts[variant.id] ?? variant.body}
-            disabled={readOnly}
-            onChange={(e) => setDrafts({ ...drafts, [variant.id]: e.target.value })}
-          />
-          <Button
-            type="button"
-            size="sm"
-            disabled={readOnly || (drafts[variant.id] ?? variant.body) === variant.body}
-            onClick={() => onUpdate(variant.id, drafts[variant.id] ?? variant.body)}
-          >
-            Save
-          </Button>
-          <Button type="button" size="sm" variant="outline" disabled={readOnly} onClick={() => onRemove(variant.id)}>
-            Remove
-          </Button>
-        </div>
-      ))}
-      {!readOnly && (
-        <div className="flex gap-2">
-          <Input
-            placeholder="Add a variant…"
-            value={newVariant}
-            onChange={(e) => setNewVariant(e.target.value)}
-          />
-          <Button
-            type="button"
-            size="sm"
-            disabled={newVariant.trim().length === 0}
-            onClick={() => {
-              onAdd(newVariant.trim());
-              setNewVariant('');
-            }}
-          >
-            Add
-          </Button>
-        </div>
-      )}
+      {/* Indented under the Handoff label so the variant list reads as a
+          sub-list, distinct from the single-line system message rows above it. */}
+      <div className="flex flex-col gap-2 pl-4">
+        {variants.map((variant, index) => {
+          const draftKey = variant.id ?? `default-${index}`;
+          const value = drafts[draftKey] ?? variant.body;
+          const dirty = value !== variant.body;
+          return (
+            <div key={draftKey} className="flex gap-2">
+              <Input
+                value={value}
+                disabled={readOnly}
+                onChange={(e) => setDrafts({ ...drafts, [draftKey]: e.target.value })}
+              />
+              <Button
+                type="button"
+                size="sm"
+                disabled={readOnly || !dirty}
+                onClick={() => (variant.id ? onUpdate(variant.id, value) : onAdd(value))}
+              >
+                Save
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={readOnly || variant.id === null}
+                title={variant.id === null ? 'Built-in default — nothing to remove yet' : undefined}
+                onClick={() => variant.id && onRemove(variant.id)}
+              >
+                Remove
+              </Button>
+            </div>
+          );
+        })}
+        {!readOnly && (
+          <div className="flex gap-2">
+            <Input
+              placeholder="Add a variant…"
+              value={newVariant}
+              onChange={(e) => setNewVariant(e.target.value)}
+            />
+            <Button
+              type="button"
+              size="sm"
+              disabled={newVariant.trim().length === 0}
+              onClick={() => {
+                onAdd(newVariant.trim());
+                setNewVariant('');
+              }}
+            >
+              Add
+            </Button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

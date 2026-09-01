@@ -5,6 +5,7 @@ import {
   addHandoffVariant,
   createCannedReply,
   createSystemTemplate,
+  DEFAULT_SYSTEM_MESSAGES,
   getSystemMessage,
   loadTemplates,
   updateTemplate,
@@ -21,7 +22,10 @@ const SINGLETON_SYSTEM_KEYS = [
 ] as const;
 
 export type TemplatesAdminView = {
-  system: Record<SystemMessageKey, { id: string | null; body: string } | { id: string; body: string }[]>;
+  system: Record<
+    SystemMessageKey,
+    { id: string | null; body: string } | { id: string | null; body: string }[]
+  >;
   canned: { id: string; label: string; body: string }[];
 };
 
@@ -68,11 +72,19 @@ export async function getTemplatesForAdmin(ctx: AgentContext): Promise<Templates
       if (row.kind === 'system' && row.key && SINGLETON_SYSTEM_KEYS.includes(row.key as any)) {
         view.system[row.key as SystemMessageKey] = { id: row.id, body: row.body };
       } else if (row.kind === 'system' && row.key === 'handoff') {
-        (view.system.handoff as { id: string; body: string }[]).push({
+        (view.system.handoff as { id: string | null; body: string }[]).push({
           id: row.id,
           body: row.body,
         });
       }
+    }
+    // No custom variants yet — show the built-in defaults (id: null) so the
+    // admin sees what's actually live today, same "id: null means still on
+    // the default" convention as the singleton keys above. Saving an edit to
+    // one of these creates the first real row (see Templates.tsx).
+    const handoffRows = view.system.handoff as { id: string | null; body: string }[];
+    if (handoffRows.length === 0) {
+      view.system.handoff = DEFAULT_SYSTEM_MESSAGES.handoff.map((body) => ({ id: null, body }));
     }
     return view;
   });

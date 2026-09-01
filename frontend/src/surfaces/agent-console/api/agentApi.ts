@@ -732,7 +732,7 @@ export type TemplatesAdminView = {
     form_summary_completed: { id: string | null; body: string };
     form_summary_partial: { id: string | null; body: string };
     form_summary_skipped: { id: string | null; body: string };
-    handoff: { id: string; body: string }[];
+    handoff: { id: string | null; body: string }[];
   };
   canned: { id: string; label: string; body: string }[];
 };
