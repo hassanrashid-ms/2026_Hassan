@@ -5,9 +5,8 @@ import { withWorkspace } from '../src/shared/db/withWorkspace.ts';
 import { messageTemplate } from '../src/shared/db/schema/index.ts';
 import { closeTemplateCacheRedis } from '../src/domain/templates/templateCache.ts';
 import {
-  addHandoffVariant,
+  addSystemVariant,
   createCannedReply,
-  createSystemTemplate,
   getHandoffMessage,
   getSystemMessage,
   listCannedReplies,
@@ -150,32 +149,30 @@ describe('templateService write path', () => {
     return { agentId: rows[0]!.id, workspaceId };
   }
 
-  it('createSystemTemplate replaces the prior active row for a singleton key', async () => {
+  it('addSystemVariant appends rather than replacing, for any system key', async () => {
     const workspaceId = await seedWorkspace();
     const ctx = await ctxFor(workspaceId);
 
-    const first = await createSystemTemplate(ctx, {
-      key: 'no_agents_online',
-      body: 'First custom line.',
-    });
-    const second = await createSystemTemplate(ctx, {
-      key: 'no_agents_online',
-      body: 'Second custom line.',
-    });
-
+    const first = await addSystemVariant(ctx, 'no_agents_online', 'First custom line.');
+    const second = await addSystemVariant(ctx, 'no_agents_online', 'Second custom line.');
     expect(first.id).not.toBe(second.id);
-    const resolved = await withWorkspace(workspaceId, (tx) =>
-      getSystemMessage(tx, workspaceId, 'no_agents_online'),
-    );
-    expect(resolved).toBe('Second custom line.');
+
+    const seen = new Set<string>();
+    for (let i = 0; i < 30; i++) {
+      const message = await withWorkspace(workspaceId, (tx) =>
+        getSystemMessage(tx, workspaceId, 'no_agents_online'),
+      );
+      seen.add(message);
+    }
+    expect(seen).toEqual(new Set(['First custom line.', 'Second custom line.']));
   });
 
-  it('addHandoffVariant appends rather than replacing', async () => {
+  it('addSystemVariant on handoff appends rather than replacing', async () => {
     const workspaceId = await seedWorkspace();
     const ctx = await ctxFor(workspaceId);
 
-    await addHandoffVariant(ctx, 'Variant one.');
-    await addHandoffVariant(ctx, 'Variant two.');
+    await addSystemVariant(ctx, 'handoff', 'Variant one.');
+    await addSystemVariant(ctx, 'handoff', 'Variant two.');
 
     const seen = new Set<string>();
     for (let i = 0; i < 30; i++) {
@@ -215,7 +212,7 @@ describe('templateService write path', () => {
     await withWorkspace(workspaceId, (tx) => getSystemMessage(tx, workspaceId, 'no_agents_online'));
     expect(await getCachedTemplates(workspaceId)).not.toBeNull();
 
-    await createSystemTemplate(ctx, { key: 'no_agents_online', body: 'New line.' });
+    await addSystemVariant(ctx, 'no_agents_online', 'New line.');
     expect(await getCachedTemplates(workspaceId)).toBeNull();
   });
 });

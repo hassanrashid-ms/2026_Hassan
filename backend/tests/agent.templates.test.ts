@@ -64,8 +64,9 @@ describe('GET /templates', () => {
       .set('X-Workspace-Id', workspaceId)
       .expect(200);
 
-    expect(res.body.system.no_agents_online.id).toBeNull();
-    expect(typeof res.body.system.no_agents_online.body).toBe('string');
+    expect(res.body.system.no_agents_online.length).toBeGreaterThan(0);
+    expect(res.body.system.no_agents_online[0].id).toBeNull();
+    expect(typeof res.body.system.no_agents_online[0].body).toBe('string');
     expect(res.body.canned).toEqual([]);
     expect(res.body.system.handoff.length).toBeGreaterThan(0);
     expect(res.body.system.handoff.every((v: { id: string | null }) => v.id === null)).toBe(true);

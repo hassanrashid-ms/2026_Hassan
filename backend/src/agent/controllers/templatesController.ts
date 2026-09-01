@@ -5,17 +5,19 @@ import {
   createTemplate,
   getTemplatesForAdmin,
   updateTemplateForAdmin,
-  SINGLETON_SYSTEM_KEYS,
+  SYSTEM_MESSAGE_KEYS,
 } from '../services/templatesAdminService.ts';
 
 export const getTemplatesHandler: RequestHandler = async (req, res) => {
   res.status(200).json(await getTemplatesForAdmin(req.agent!));
 };
 
-const SYSTEM_KEYS = [...SINGLETON_SYSTEM_KEYS, 'handoff'] as const;
-
 const CreateTemplateBody = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('system'), key: z.enum(SYSTEM_KEYS), body: z.string().min(1) }),
+  z.object({
+    kind: z.literal('system'),
+    key: z.enum(SYSTEM_MESSAGE_KEYS),
+    body: z.string().min(1),
+  }),
   z.object({ kind: z.literal('canned'), label: z.string().min(1), body: z.string().min(1) }),
 ]);
 

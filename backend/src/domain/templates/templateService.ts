@@ -77,33 +77,29 @@ export async function loadTemplates(tx: Tx, workspaceId: string): Promise<Templa
   return payload;
 }
 
-/** For the four singleton system keys. Use getHandoffMessage for 'handoff'. */
+/**
+ * Every system key supports N variants, picked at random per call — same
+ * reasoning as the pre-feature pickHandoffMessage() in bot/messages.ts, now
+ * over a workspace-configurable list instead of a hardcoded one, and applied
+ * uniformly rather than singled out for 'handoff'. Callers must not cache the
+ * result across messages.
+ */
 export async function getSystemMessage(
   tx: Tx,
   workspaceId: string,
-  key: Exclude<SystemMessageKey, 'handoff'>,
+  key: SystemMessageKey,
 ): Promise<string> {
   const { system } = await loadTemplates(tx, workspaceId);
-  const active = system[key];
-  return active.length > 0 ? active[0]! : DEFAULT_SYSTEM_MESSAGES[key][0]!;
-}
-
-/**
- * Random rather than round-robin — same reasoning as the pre-feature
- * pickHandoffMessage() in bot/messages.ts, now over a workspace-configurable
- * list instead of the hardcoded one. Callers must not cache the result across
- * messages, same caveat as before.
- */
-export async function getHandoffMessage(tx: Tx, workspaceId: string): Promise<string> {
-  const { system } = await loadTemplates(tx, workspaceId);
-  const variants = system.handoff.length > 0 ? system.handoff : DEFAULT_SYSTEM_MESSAGES.handoff;
+  const variants = system[key].length > 0 ? system[key] : DEFAULT_SYSTEM_MESSAGES[key];
   return variants[Math.floor(Math.random() * variants.length)]!;
 }
 
-export async function listCannedReplies(
-  tx: Tx,
-  workspaceId: string,
-): Promise<CannedReplyEntry[]> {
+/** Thin alias kept for call-site clarity at the handoff sites. */
+export async function getHandoffMessage(tx: Tx, workspaceId: string): Promise<string> {
+  return getSystemMessage(tx, workspaceId, 'handoff');
+}
+
+export async function listCannedReplies(tx: Tx, workspaceId: string): Promise<CannedReplyEntry[]> {
   const { canned } = await loadTemplates(tx, workspaceId);
   return canned;
 }
@@ -131,45 +127,13 @@ function toView(row: typeof messageTemplate.$inferSelect): TemplateRowView {
 }
 
 /**
- * Singleton system keys (everything except 'handoff'): a new row replaces
- * the prior active one rather than adding a second, so getSystemMessage's
- * "first active row wins" never has to arbitrate between two live rows for
- * the same key.
+ * Every system key (not just 'handoff') supports N variants: a new row is
+ * appended rather than replacing the prior active one, matching
+ * getSystemMessage's random-pick-among-active-rows read path.
  */
-export async function createSystemTemplate(
+export async function addSystemVariant(
   ctx: Pick<AgentContext, 'agentId' | 'workspaceId'>,
-  args: { key: Exclude<SystemMessageKey, 'handoff'>; body: string },
-): Promise<TemplateRowView> {
-  return withWorkspace(ctx.workspaceId, async (tx) => {
-    await tx
-      .update(messageTemplate)
-      .set({ isActive: false, updatedAt: new Date() })
-      .where(
-        and(
-          eq(messageTemplate.workspaceId, ctx.workspaceId),
-          eq(messageTemplate.kind, 'system'),
-          eq(messageTemplate.key, args.key),
-          eq(messageTemplate.isActive, true),
-        ),
-      );
-    const [created] = await tx
-      .insert(messageTemplate)
-      .values({
-        workspaceId: ctx.workspaceId,
-        kind: 'system',
-        key: args.key,
-        body: args.body,
-        sortOrder: 0,
-        createdByAgentId: ctx.agentId,
-      })
-      .returning();
-    await invalidateCachedTemplates(ctx.workspaceId);
-    return toView(created!);
-  });
-}
-
-export async function addHandoffVariant(
-  ctx: Pick<AgentContext, 'agentId' | 'workspaceId'>,
+  key: SystemMessageKey,
   body: string,
 ): Promise<TemplateRowView> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
@@ -180,7 +144,7 @@ export async function addHandoffVariant(
         and(
           eq(messageTemplate.workspaceId, ctx.workspaceId),
           eq(messageTemplate.kind, 'system'),
-          eq(messageTemplate.key, 'handoff'),
+          eq(messageTemplate.key, key),
         ),
       )
       .orderBy(asc(messageTemplate.sortOrder))
@@ -190,7 +154,7 @@ export async function addHandoffVariant(
       .values({
         workspaceId: ctx.workspaceId,
         kind: 'system',
-        key: 'handoff',
+        key,
         body,
         sortOrder: (maxRow?.sortOrder ?? -1) + 1,
         createdByAgentId: ctx.agentId,
@@ -239,9 +203,7 @@ export async function updateTemplate(
     const [updated] = await tx
       .update(messageTemplate)
       .set({ ...patch, updatedAt: new Date() })
-      .where(
-        and(eq(messageTemplate.id, id), eq(messageTemplate.workspaceId, ctx.workspaceId)),
-      )
+      .where(and(eq(messageTemplate.id, id), eq(messageTemplate.workspaceId, ctx.workspaceId)))
       .returning();
     if (!updated) throw new Error('Template not found in this workspace');
     await invalidateCachedTemplates(ctx.workspaceId);

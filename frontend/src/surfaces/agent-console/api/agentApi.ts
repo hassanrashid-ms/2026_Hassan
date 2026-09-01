@@ -712,6 +712,7 @@ export function saveWorkspaceSettings(
  */
 export type SystemMessageKey =
   | 'no_agents_online'
+  | 'handoff'
   | 'form_summary_completed'
   | 'form_summary_partial'
   | 'form_summary_skipped';
@@ -727,13 +728,7 @@ export type TemplateRowView = {
 };
 
 export type TemplatesAdminView = {
-  system: {
-    no_agents_online: { id: string | null; body: string };
-    form_summary_completed: { id: string | null; body: string };
-    form_summary_partial: { id: string | null; body: string };
-    form_summary_skipped: { id: string | null; body: string };
-    handoff: { id: string | null; body: string }[];
-  };
+  system: Record<SystemMessageKey, { id: string | null; body: string }[]>;
   canned: { id: string; label: string; body: string }[];
 };
 
@@ -744,7 +739,7 @@ export function fetchTemplates(token: string): Promise<TemplatesAdminView> {
 export function createTemplate(
   token: string,
   args:
-    | { kind: 'system'; key: SystemMessageKey | 'handoff'; body: string }
+    | { kind: 'system'; key: SystemMessageKey; body: string }
     | { kind: 'canned'; label: string; body: string },
 ): Promise<TemplateRowView> {
   return call('/agent/templates', token, { method: 'POST', body: JSON.stringify(args) });

@@ -13,6 +13,7 @@ import { Input } from '../../components/ui/input.tsx';
 
 const SYSTEM_LABELS: Record<SystemMessageKey, string> = {
   no_agents_online: 'No agents online',
+  handoff: 'Handoff',
   form_summary_completed: 'Form completed',
   form_summary_partial: 'Form partially answered',
   form_summary_skipped: 'Form skipped',
@@ -31,27 +32,19 @@ export function Templates() {
 
   const invalidate = () => void queryClient.invalidateQueries({ queryKey: ['templates'] });
 
-  const saveSystem = useMutation({
-    mutationFn: ({ id, key, body }: { id: string | null; key: SystemMessageKey; body: string }) =>
-      id
-        ? updateTemplate(session!.token, id, { body })
-        : createTemplate(session!.token, { kind: 'system', key, body }),
+  const addSystemVariant = useMutation({
+    mutationFn: ({ key, body }: { key: SystemMessageKey; body: string }) =>
+      createTemplate(session!.token, { kind: 'system', key, body }),
     onSuccess: invalidate,
   });
 
-  const addHandoffVariant = useMutation({
-    mutationFn: (body: string) =>
-      createTemplate(session!.token, { kind: 'system', key: 'handoff', body }),
-    onSuccess: invalidate,
-  });
-
-  const updateHandoffVariant = useMutation({
+  const updateSystemVariant = useMutation({
     mutationFn: ({ id, body }: { id: string; body: string }) =>
       updateTemplate(session!.token, id, { body }),
     onSuccess: invalidate,
   });
 
-  const removeHandoffVariant = useMutation({
+  const removeSystemVariant = useMutation({
     mutationFn: (id: string) => updateTemplate(session!.token, id, { isActive: false }),
     onSuccess: invalidate,
   });
@@ -95,21 +88,21 @@ export function Templates() {
             System Messages
           </h3>
           {(Object.keys(SYSTEM_LABELS) as SystemMessageKey[]).map((key) => (
-            <SystemMessageEditor
+            <VariantListEditor
               key={key}
               label={SYSTEM_LABELS[key]}
-              row={data.system[key]}
+              hint={
+                key === 'handoff'
+                  ? 'Picked at random — leave empty to use the built-in defaults'
+                  : undefined
+              }
+              variants={data.system[key]}
               readOnly={readOnly}
-              onSave={(body) => saveSystem.mutate({ id: data.system[key].id, key, body })}
+              onAdd={(body) => addSystemVariant.mutate({ key, body })}
+              onUpdate={(id, body) => updateSystemVariant.mutate({ id, body })}
+              onRemove={(id) => removeSystemVariant.mutate(id)}
             />
           ))}
-          <HandoffEditor
-            variants={data.system.handoff}
-            readOnly={readOnly}
-            onAdd={(body) => addHandoffVariant.mutate(body)}
-            onUpdate={(id, body) => updateHandoffVariant.mutate({ id, body })}
-            onRemove={(id) => removeHandoffVariant.mutate(id)}
-          />
         </section>
         <section className="flex flex-col gap-3">
           <h3 className="text-xs font-semibold tracking-wide text-muted uppercase">
@@ -135,43 +128,17 @@ export function Templates() {
   );
 }
 
-function SystemMessageEditor({
+function VariantListEditor({
   label,
-  row,
-  readOnly,
-  onSave,
-}: {
-  label: string;
-  row: { id: string | null; body: string };
-  readOnly: boolean;
-  onSave: (body: string) => void;
-}) {
-  const [value, setValue] = useState(row.body);
-  return (
-    <div className="flex flex-col gap-1">
-      <label className="text-xs font-medium text-muted">{label}</label>
-      <div className="flex gap-2">
-        <Input value={value} disabled={readOnly} onChange={(e) => setValue(e.target.value)} />
-        <Button
-          type="button"
-          size="sm"
-          disabled={readOnly || value === row.body}
-          onClick={() => onSave(value)}
-        >
-          Save
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function HandoffEditor({
+  hint,
   variants,
   readOnly,
   onAdd,
   onUpdate,
   onRemove,
 }: {
+  label: string;
+  hint?: string;
   variants: { id: string | null; body: string }[];
   readOnly: boolean;
   onAdd: (body: string) => void;
@@ -183,10 +150,11 @@ function HandoffEditor({
   return (
     <div className="flex flex-col gap-2">
       <label className="text-xs font-medium text-muted">
-        Handoff (picked at random — leave empty to use the built-in defaults)
+        {label}
+        {hint ? ` (${hint})` : ''}
       </label>
-      {/* Indented under the Handoff label so the variant list reads as a
-          sub-list, distinct from the single-line system message rows above it. */}
+      {/* Indented under the label so the variant list reads as a sub-list,
+          distinguishable from the other message rows around it. */}
       <div className="flex flex-col gap-2 pl-4">
         {variants.map((variant, index) => {
           const draftKey = variant.id ?? `default-${index}`;
