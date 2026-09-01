@@ -16,6 +16,7 @@ import { presenceRouter } from './routers/presenceRouter.ts';
 import { membershipsRouter } from './routers/membershipsRouter.ts';
 import { globalInboxRouter } from './routers/globalInboxRouter.ts';
 import { uploadsRouter } from './routers/uploadsRouter.ts';
+import { analyticsRouter } from './routers/analyticsRouter.ts';
 
 export const agentRouter = Router();
 
@@ -38,3 +39,4 @@ agentRouter.use(messagesRouter);
 agentRouter.use(uploadsRouter);
 agentRouter.use(agentsRouter);
 agentRouter.use(presenceRouter);
+agentRouter.use(analyticsRouter);
