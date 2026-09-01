@@ -24,6 +24,7 @@ import {
   requestUpload,
   putFileToUploadUrl,
   cancelUpload,
+  fetchTemplates,
 } from '../../../api/agentApi.ts';
 import { ConfirmDialog } from '../../../components/ConfirmDialog.tsx';
 import { TagPicker } from './TagPicker.tsx';
@@ -35,6 +36,7 @@ import { createSocket } from '../../../../../features/chat/api/socket.ts';
 import { handleSessionExpired } from '../../../lib/authErrorHandling.ts';
 import { tagBadgeClassName } from '../../../lib/tagBadge.ts';
 import { ChatThread } from '../../../../../features/chat/components/ChatThread.tsx';
+import { resolveTemplateBody } from '../../../../../features/chat/lib/resolveTemplateBody.ts';
 import {
   reconcilePending,
   type PendingMessage,
@@ -154,6 +156,18 @@ export function ThreadPanel({
     queryFn: () => fetchConversationContext(token, conversationId!),
     enabled: conversationId !== null,
     staleTime: 5 * 60_000,
+  });
+  const session = loadAgentSession();
+  const templatesQuery = useQuery({
+    queryKey: ['canned-replies'],
+    queryFn: () => fetchTemplates(token),
+    enabled: session !== null,
+    select: (data) =>
+      data.canned.map((reply) => ({
+        id: reply.id,
+        label: reply.label,
+        body: resolveTemplateBody(reply.body, session!.displayName),
+      })),
   });
   // The context payload has no top-level subintent — the rail's `tickets` list
   // includes the current conversation's own row (see AgentConversationContextResponse),
@@ -611,6 +625,7 @@ export function ThreadPanel({
           onSend={(body, visibility, attachment) => send.mutate({ body, visibility, attachment })}
           allowVisibilityToggle
           allowAttachments
+          cannedReplies={templatesQuery.data ?? []}
           onUpload={async (file, onProgress) => {
             const { key, upload_url } = await requestUpload(token, {
               filename: file.name,

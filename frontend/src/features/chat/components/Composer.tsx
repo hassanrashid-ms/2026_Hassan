@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Paperclip, X } from 'lucide-react';
+import { NotebookText, Paperclip, X } from 'lucide-react';
 import { AttachmentThumbnail } from './AttachmentThumbnail.tsx';
 
 // Mirrors backend/src/shared/storage/presign.ts's ALLOWED_CHAT_ATTACHMENT_MIME_TYPES /
@@ -46,6 +46,8 @@ type ComposerProps = {
   allowAttachments?: boolean;
   onUpload?: (file: File, onProgress?: (percent: number) => void) => Promise<UploadedAttachment>;
   onCancelUpload?: (key: string) => void;
+  /** Only the agent console passes this — the player surface's usage omits it. Bodies are already {{agent_name}}-resolved by the caller. */
+  cannedReplies?: { id: string; label: string; body: string }[];
 };
 
 /**
@@ -61,8 +63,10 @@ export function Composer({
   allowAttachments,
   onUpload,
   onCancelUpload,
+  cannedReplies,
 }: ComposerProps) {
   const [value, setValue] = useState('');
+  const [templatesOpen, setTemplatesOpen] = useState(false);
   const [visibility, setVisibility] = useState<'public' | 'internal'>('public');
   const [pendingAttachment, setPendingAttachment] = useState<UploadedAttachment | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -184,6 +188,36 @@ export function Composer({
             >
               Internal
             </button>
+          </div>
+        )}
+        {cannedReplies && cannedReplies.length > 0 && (
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setTemplatesOpen((open) => !open)}
+              className="flex size-9 shrink-0 items-center justify-center rounded-md border border-muted/20 text-muted"
+              aria-label="Insert template"
+              aria-expanded={templatesOpen}
+            >
+              <NotebookText className="size-4" />
+            </button>
+            {templatesOpen && (
+              <div className="absolute bottom-full left-0 mb-1 w-64 rounded-md border border-muted/20 bg-bg p-1 shadow-md">
+                {cannedReplies.map((reply) => (
+                  <button
+                    key={reply.id}
+                    type="button"
+                    onClick={() => {
+                      setValue(reply.body);
+                      setTemplatesOpen(false);
+                    }}
+                    className="block w-full rounded px-2 py-1.5 text-left text-sm hover:bg-accent-soft"
+                  >
+                    {reply.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
         {allowAttachments && (
