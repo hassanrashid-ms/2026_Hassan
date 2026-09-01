@@ -2090,6 +2090,92 @@ registry.registerPath({
   },
 });
 
+const TemplateRowSchema = z.object({
+  id: z.uuid(),
+  kind: z.enum(['system', 'canned']),
+  key: z.string().nullable(),
+  label: z.string().nullable(),
+  body: z.string(),
+  sort_order: z.number().int(),
+  is_active: z.boolean(),
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/agent/templates',
+  summary: 'Agent List Message Templates',
+  description:
+    'Configurable system messages (no_agents_online, handoff variants, form summaries) and the workspace canned-reply library. Team Lead or Admin.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  responses: {
+    200: { description: 'Current templates, system messages default-backed when unset' },
+    403: { description: 'Forbidden — Team Lead or Admin role required' },
+  },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/agent/templates',
+  summary: 'Agent Create Message Template',
+  description:
+    'Creates a canned reply, adds a handoff variant, or replaces a singleton system message. Admin-only.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: z.union([
+            z.object({
+              kind: z.literal('system'),
+              key: z.enum([
+                'no_agents_online',
+                'form_summary_completed',
+                'form_summary_partial',
+                'form_summary_skipped',
+                'handoff',
+              ]),
+              body: z.string().min(1),
+            }),
+            z.object({ kind: z.literal('canned'), label: z.string().min(1), body: z.string().min(1) }),
+          ]),
+        },
+      },
+    },
+  },
+  responses: {
+    201: { description: 'The created template row', content: { 'application/json': { schema: TemplateRowSchema } } },
+    403: { description: 'Forbidden — admin role required' },
+    422: { description: 'Missing or invalid kind/key/label/body' },
+  },
+});
+
+registry.registerPath({
+  method: 'patch',
+  path: '/agent/templates/{id}',
+  summary: 'Agent Update Message Template',
+  description: 'Edits body/label, or deactivates a template (is_active:false). Admin-only.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: {
+    params: z.object({ id: z.uuid() }),
+    body: {
+      content: {
+        'application/json': {
+          schema: z.object({
+            body: z.string().min(1).optional(),
+            label: z.string().min(1).optional(),
+            isActive: z.boolean().optional(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: { description: 'The updated template row', content: { 'application/json': { schema: TemplateRowSchema } } },
+    403: { description: 'Forbidden — admin role required' },
+    422: { description: 'No recognised field to update' },
+  },
+});
+
 const BotConfigVersionSummarySchema = z.object({
   version: z.number().int(),
   actor: z.object({ id: z.uuid(), display_name: z.string(), email: z.string() }),
