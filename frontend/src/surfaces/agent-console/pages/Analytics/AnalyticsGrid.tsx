@@ -38,7 +38,17 @@ export function AnalyticsGrid({ layout, data, isLoading, onLayoutChange }: Analy
           rowHeight={100}
           dragConfig={{ handle: '.tile-drag-handle' }}
           onLayoutChange={(current) => {
-            onLayoutChange(current.map((item) => ({ i: item.i, x: item.x, y: item.y, w: item.w, h: item.h })))
+            onLayoutChange(
+              current.map((item) => ({
+                i: item.i,
+                x: item.x,
+                y: item.y,
+                w: item.w,
+                h: item.h,
+                minW: item.minW,
+                minH: item.minH,
+              })),
+            )
           }}
         >
           {visibleItems.map((item) => (

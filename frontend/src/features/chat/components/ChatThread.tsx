@@ -26,6 +26,8 @@ type ChatThreadProps = {
    * the agent console currently renders it.
    */
   onImageClick?: (attachment: ChatAttachment) => void;
+  /** Mirrors the webview's ChatBubbles typing indicator — same markup, shared tokens. */
+  isTyping?: boolean;
 };
 
 /**
@@ -53,6 +55,7 @@ export function ChatThread({
   onRetry,
   playerLabel,
   onImageClick,
+  isTyping,
 }: ChatThreadProps) {
   const { ref, showJump, missed, onAtBottomChange, jump } = useJumpToLatest(messages.length);
 
@@ -88,8 +91,33 @@ export function ChatThread({
           // correctly.
           initialTopMostItemIndex={messages.length > 0 ? messages.length - 1 : 0}
           // A short spacer so the newest bubble never sits flush against whatever
-          // the caller puts underneath — in the agent console, the composer.
-          components={{ Footer: () => <div className="h-3" /> }}
+          // the caller puts underneath — in the agent console, the composer. The
+          // typing bubble, when present, replaces the plain spacer with the same
+          // bouncing-dots markup as the webview's ChatBubbles — bare Tailwind on
+          // the shared bg-surface/text-muted tokens so it re-themes per surface.
+          components={{
+            Footer: () =>
+              isTyping ? (
+                <div className="flex w-full px-3 py-1.5 justify-start">
+                  <div className="flex items-center rounded-card rounded-bl-sm bg-surface px-4 py-3 text-text">
+                    <span className="flex gap-1">
+                      <span className="size-1.5 animate-bounce rounded-full bg-muted"></span>
+                      <span
+                        className="size-1.5 animate-bounce rounded-full bg-muted"
+                        style={{ animationDelay: '150ms' }}
+                      ></span>
+                      <span
+                        className="size-1.5 animate-bounce rounded-full bg-muted"
+                        style={{ animationDelay: '300ms' }}
+                      ></span>
+                    </span>
+                    <span className="ml-2 text-sm text-muted font-medium">Bot is typing...</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="h-3" />
+              ),
+          }}
           followOutput="auto"
           itemContent={(_index, chatMessage) => {
             const isOwn = chatMessage.authorType === currentAuthorType;

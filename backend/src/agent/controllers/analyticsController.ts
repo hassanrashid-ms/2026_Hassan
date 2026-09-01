@@ -2,7 +2,7 @@ import type { RequestHandler } from 'express'
 import { z } from 'zod'
 import { sendError } from '../../errors.ts'
 import { getDashboardLayout, saveDashboardLayout } from '../services/dashboardLayoutService.ts'
-import { getBotMetrics, getSpeedMetrics, getTeamMetrics, getVolumeMetrics } from '../services/analyticsService.ts'
+import { getBotMetrics, getSpeedMetrics, getTeamMetrics, getTopArticles, getVolumeMetrics } from '../services/analyticsService.ts'
 
 const DashboardLayoutItemSchema = z.object({
   i: z.string().min(1),
@@ -10,6 +10,8 @@ const DashboardLayoutItemSchema = z.object({
   y: z.number().int().nonnegative(),
   w: z.number().int().positive(),
   h: z.number().int().positive(),
+  minW: z.number().int().positive().optional(),
+  minH: z.number().int().positive().optional(),
 })
 
 const SaveLayoutBody = z.object({
@@ -50,11 +52,12 @@ export const getAnalyticsHandler: RequestHandler = async (req, res) => {
     return
   }
   const range = query.data
-  const [volume, speed, bot, team] = await Promise.all([
+  const [volume, speed, bot, team, articles] = await Promise.all([
     getVolumeMetrics(ctx, range),
     getSpeedMetrics(ctx, range),
     getBotMetrics(ctx, range),
     getTeamMetrics(ctx, range),
+    getTopArticles(ctx, range),
   ])
-  res.status(200).json({ range, volume, speed, bot, team })
+  res.status(200).json({ range, volume, speed, bot, team, articles })
 }

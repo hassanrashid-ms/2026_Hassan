@@ -41,9 +41,21 @@ export type AnalyticsResponse = {
     avgOpenPerActiveAgent: number | null
     unassignedQueueDepth: { series: Array<{ bucket: string; depth: number }> }
   }
+  articles: {
+    topCited: Array<{ articleId: string; title: string; count: number }>
+    topRead: Array<{ articleId: string; title: string; count: number }>
+  }
 }
 
-export type DashboardLayoutItem = { i: string; x: number; y: number; w: number; h: number }
+export type DashboardLayoutItem = {
+  i: string
+  x: number
+  y: number
+  w: number
+  h: number
+  minW?: number
+  minH?: number
+}
 
 export type DashboardLayout = {
   items: DashboardLayoutItem[]

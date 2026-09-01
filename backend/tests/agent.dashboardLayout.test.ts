@@ -8,6 +8,7 @@ import { errorMiddleware } from '../src/errors.ts';
 import { signAgentSession } from '../src/shared/auth/agentSession.ts';
 import { analyticsRouter } from '../src/agent/routers/analyticsRouter.ts';
 import { closeOwnerPool, ownerPool, seedWorkspace, truncateAll } from './helpers/db.ts';
+import { DEFAULT_LAYOUT } from '../src/agent/services/dashboardLayoutService.ts';
 
 const app = express();
 app.use(express.json());
@@ -51,10 +52,32 @@ describe('GET /agent/analytics/layout', () => {
 });
 
 describe('PUT /agent/analytics/layout', () => {
-  it('round-trips a saved layout', async () => {
+  it('round-trips a saved layout that already has every default tile', async () => {
     const workspaceId = await seedWorkspace();
     const { token } = await setupAgent(workspaceId);
-    const layout = {
+
+    await request(app)
+      .put('/analytics/layout')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ layout: DEFAULT_LAYOUT })
+      .expect(200);
+    const res = await request(app)
+      .get('/analytics/layout')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+
+    expect(res.body.layout).toEqual(DEFAULT_LAYOUT);
+  });
+
+  it('merges newly added default tiles into an older saved layout that predates them', async () => {
+    // Simulates an agent who saved a layout (by dragging/resizing anything)
+    // before a new tile id was added to DEFAULT_LAYOUT — GET must still surface
+    // it, or every future tile addition would need a manual layout edit.
+    const workspaceId = await seedWorkspace();
+    const { token } = await setupAgent(workspaceId);
+    const staleLayout = {
       items: [{ i: 'volume-series', x: 0, y: 0, w: 4, h: 2 }],
       visibleTileIds: ['volume-series'],
     };
@@ -63,7 +86,7 @@ describe('PUT /agent/analytics/layout', () => {
       .put('/analytics/layout')
       .set('Authorization', `Bearer ${token}`)
       .set('X-Workspace-Id', workspaceId)
-      .send({ layout })
+      .send({ layout: staleLayout })
       .expect(200);
     const res = await request(app)
       .get('/analytics/layout')
@@ -71,7 +94,12 @@ describe('PUT /agent/analytics/layout', () => {
       .set('X-Workspace-Id', workspaceId)
       .expect(200);
 
-    expect(res.body.layout).toEqual(layout);
+    expect(res.body.layout.visibleTileIds).toContain('volume-series');
+    expect(res.body.layout.visibleTileIds).toContain('top-cited-articles');
+    expect(res.body.layout.visibleTileIds).toContain('top-read-articles');
+    expect(res.body.layout.items).toEqual(
+      expect.arrayContaining(DEFAULT_LAYOUT.items.filter((i) => i.i !== 'volume-series')),
+    );
   });
 
   it("does not affect another agent's layout in the same workspace", async () => {

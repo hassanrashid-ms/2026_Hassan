@@ -194,7 +194,7 @@ export function BotTestPanel({ token }: { token: string }) {
         )}
       </div>
       <div className="min-h-0 flex-1">
-        <ChatThread messages={messages} currentAuthorType="agent" />
+        <ChatThread messages={messages} currentAuthorType="agent" isTyping={sending} />
         {messages.map(
           (m) =>
             m.toolActivity && (

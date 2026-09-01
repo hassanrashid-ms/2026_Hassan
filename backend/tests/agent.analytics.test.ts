@@ -2,7 +2,13 @@ import express from 'express'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { req as request } from './helpers/http.ts'
 import { closeDb } from '../src/shared/db/client.ts'
-import { getBotMetrics, getSpeedMetrics, getTeamMetrics, getVolumeMetrics } from '../src/agent/services/analyticsService.ts'
+import {
+  getBotMetrics,
+  getSpeedMetrics,
+  getTeamMetrics,
+  getTopArticles,
+  getVolumeMetrics,
+} from '../src/agent/services/analyticsService.ts'
 import { appendEvent } from '../src/shared/events/appendEvent.ts'
 import { withWorkspace } from '../src/shared/db/withWorkspace.ts'
 import { requireAgentSession } from '../src/shared/middleware/requireAgentSession.ts'
@@ -13,6 +19,8 @@ import { analyticsRouter } from '../src/agent/routers/analyticsRouter.ts'
 import {
   closeOwnerPool,
   ownerPool,
+  seedAgent,
+  seedArticle,
   seedConversation,
   seedPlayer,
   seedWorkspace,
@@ -261,6 +269,119 @@ describe('getTeamMetrics', () => {
   })
 })
 
+describe('getTopArticles', () => {
+  it('ranks articles by bot_article_offered count, using the snapshotted payload title, limited to 3', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const conversationId = await seedConversation({ workspaceId, playerId, status: 'bot_active' })
+
+    await withWorkspace(workspaceId, async (tx) => {
+      for (let i = 0; i < 3; i++) {
+        await appendEvent(tx, {
+          workspaceId,
+          type: 'bot_article_offered',
+          conversationId,
+          actorType: 'bot',
+          payload: { article_id: 'article-a', article_title: 'Reset your password' },
+          occurredAt: new Date('2026-08-05T10:00:00Z'),
+        })
+      }
+      await appendEvent(tx, {
+        workspaceId,
+        type: 'bot_article_offered',
+        conversationId,
+        actorType: 'bot',
+        payload: { article_id: 'article-b', article_title: 'Redeem a gift code' },
+        occurredAt: new Date('2026-08-05T10:00:00Z'),
+      })
+    })
+
+    const result = await getTopArticles({ workspaceId }, RANGE)
+
+    expect(result.topCited).toEqual([
+      { articleId: 'article-a', title: 'Reset your password', count: 3 },
+      { articleId: 'article-b', title: 'Redeem a gift code', count: 1 },
+    ])
+  })
+
+  it('ranks articles by article_read count, joining the live article table for the title', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const conversationId = await seedConversation({ workspaceId, playerId, status: 'open' })
+    const agentId = await seedAgent()
+    const articleId = await seedArticle({ workspaceId, createdBy: agentId, title: 'Reset your password' })
+
+    await withWorkspace(workspaceId, async (tx) => {
+      await appendEvent(tx, {
+        workspaceId,
+        type: 'article_read',
+        conversationId,
+        actorType: 'player',
+        payload: { article_id: articleId },
+        occurredAt: new Date('2026-08-05T10:00:00Z'),
+      })
+      await appendEvent(tx, {
+        workspaceId,
+        type: 'article_read',
+        conversationId,
+        actorType: 'player',
+        payload: { article_id: articleId },
+        occurredAt: new Date('2026-08-06T10:00:00Z'),
+      })
+    })
+
+    const result = await getTopArticles({ workspaceId }, RANGE)
+
+    expect(result.topRead).toEqual([{ articleId, title: 'Reset your password', count: 2 }])
+  })
+
+  it('does not throw when other events carry a non-uuid article_id-shaped payload value', async () => {
+    // bot_search/bot_handoff payloads never carry article_id, but nothing stops a
+    // future event type from reusing the key with a non-uuid value — the ::uuid
+    // cast in getTopArticles must never see those rows, only article_read ones.
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const conversationId = await seedConversation({ workspaceId, playerId, status: 'open' })
+
+    await withWorkspace(workspaceId, async (tx) => {
+      await appendEvent(tx, {
+        workspaceId,
+        type: 'bot_search',
+        conversationId,
+        actorType: 'bot',
+        payload: { article_id: 'not-a-uuid' },
+        occurredAt: new Date('2026-08-05T10:00:00Z'),
+      })
+    })
+
+    await expect(getTopArticles({ workspaceId }, RANGE)).resolves.toEqual({ topCited: [], topRead: [] })
+  })
+
+  it("never reflects another workspace's article reads", async () => {
+    const workspaceA = await seedWorkspace()
+    const workspaceB = await seedWorkspace()
+    const playerB = await seedPlayer(workspaceB)
+    const conversationId = await seedConversation({ workspaceId: workspaceB, playerId: playerB, status: 'open' })
+    const agentId = await seedAgent()
+    const articleId = await seedArticle({ workspaceId: workspaceB, createdBy: agentId })
+
+    await withWorkspace(workspaceB, async (tx) => {
+      await appendEvent(tx, {
+        workspaceId: workspaceB,
+        type: 'article_read',
+        conversationId,
+        actorType: 'player',
+        payload: { article_id: articleId },
+        occurredAt: new Date('2026-08-05T10:00:00Z'),
+      })
+    })
+
+    const result = await getTopArticles({ workspaceId: workspaceA }, RANGE)
+
+    expect(result.topRead).toEqual([])
+  })
+})
+
 describe('GET /agent/analytics', () => {
   const app = express()
   app.use(express.json())
@@ -290,6 +411,7 @@ describe('GET /agent/analytics', () => {
     expect(res.body).toHaveProperty('speed')
     expect(res.body).toHaveProperty('bot')
     expect(res.body).toHaveProperty('team')
+    expect(res.body).toHaveProperty('articles')
   })
 
   it('422s on an invalid granularity', async () => {

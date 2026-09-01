@@ -18,6 +18,10 @@ const DATA: AnalyticsResponse = {
   },
   bot: { containmentRate: 0.4, selfServeRate: 0.7, handoff: { rate: 0.6, byReason: [] }, articleHitRate: 0.5 },
   team: { avgOpenPerActiveAgent: 4.2, unassignedQueueDepth: { series: [] } },
+  articles: {
+    topCited: [{ articleId: 'a1', title: 'Reset your password', count: 5 }],
+    topRead: [{ articleId: 'a2', title: 'Redeem a gift code', count: 8 }],
+  },
 }
 
 describe('tileCatalog', () => {

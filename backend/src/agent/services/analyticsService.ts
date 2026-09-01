@@ -1,6 +1,6 @@
-import { and, asc, eq, gte, inArray, isNotNull, isNull, lte, notInArray, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, notInArray, sql } from 'drizzle-orm'
 import type { AnalyticsRange, AnalyticsResponse } from '@support/types'
-import { conversation, event, workspaceMember } from '../../shared/db/schema/index.ts'
+import { article, conversation, event, workspaceMember } from '../../shared/db/schema/index.ts'
 import { withWorkspace, type Tx } from '../../shared/db/withWorkspace.ts'
 import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts'
 
@@ -258,6 +258,67 @@ export async function getBotMetrics(
         byReason: [...reasonCounts.entries()].map(([reason, count]) => ({ reason, count })),
       },
       articleHitRate: searchCount > 0 ? offeredCount / searchCount : null,
+    }
+  })
+}
+
+export async function getTopArticles(
+  ctx: Pick<AgentContext, 'workspaceId'>,
+  range: AnalyticsRange,
+): Promise<AnalyticsResponse['articles']> {
+  return withWorkspace(ctx.workspaceId, async (tx) => {
+    const from = new Date(range.from)
+    const to = new Date(range.to)
+
+    // bot_article_offered snapshots article_title in its own payload — never join
+    // article for this one, per the "payload values are snapshotted, never live
+    // pointers" convention (a renamed/archived article must not rewrite history).
+    const topCitedRows = await tx
+      .select({
+        articleId: sql<string>`${event.payload}->>'article_id'`,
+        title: sql<string>`${event.payload}->>'article_title'`,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(event)
+      .where(and(eq(event.type, 'bot_article_offered'), gte(event.occurredAt, from), lte(event.occurredAt, to)))
+      .groupBy(sql`1`, sql`2`)
+      .orderBy(desc(sql`count(*)`))
+      .limit(3)
+
+    // article_read only carries article_id — no title snapshot — so this one
+    // joins the live, workspace-scoped article table for its current title.
+    // Filtered into a subquery first, with a UUID-shape guard on the payload
+    // value: Postgres does not guarantee the type/range WHERE runs before the
+    // join's ::uuid cast, so any unrelated event row (or a malformed legacy
+    // article_id) reached by the cast throws and fails the entire query.
+    const articleReadEvents = tx
+      .select({ articleId: sql<string>`${event.payload}->>'article_id'`.as('article_id') })
+      .from(event)
+      .where(
+        and(
+          eq(event.type, 'article_read'),
+          gte(event.occurredAt, from),
+          lte(event.occurredAt, to),
+          sql`${event.payload}->>'article_id' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'`,
+        ),
+      )
+      .as('article_read_events')
+
+    const topReadRows = await tx
+      .select({
+        articleId: article.id,
+        title: article.title,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(articleReadEvents)
+      .innerJoin(article, eq(article.id, sql`(${articleReadEvents.articleId})::uuid`))
+      .groupBy(article.id, article.title)
+      .orderBy(desc(sql`count(*)`))
+      .limit(3)
+
+    return {
+      topCited: topCitedRows.map((r) => ({ articleId: r.articleId, title: r.title, count: r.count })),
+      topRead: topReadRows.map((r) => ({ articleId: r.articleId, title: r.title, count: r.count })),
     }
   })
 }

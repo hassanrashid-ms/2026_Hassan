@@ -2819,10 +2819,24 @@ const AnalyticsResponseSchema = z.object({
     avgOpenPerActiveAgent: z.number().nullable(),
     unassignedQueueDepth: z.object({ series: z.array(z.object({ bucket: z.string(), depth: z.number() })) }),
   }),
+  articles: z.object({
+    topCited: z.array(z.object({ articleId: z.string(), title: z.string(), count: z.number() })),
+    topRead: z.array(z.object({ articleId: z.string(), title: z.string(), count: z.number() })),
+  }),
 })
 
 const DashboardLayoutSchema = z.object({
-  items: z.array(z.object({ i: z.string(), x: z.number(), y: z.number(), w: z.number(), h: z.number() })),
+  items: z.array(
+    z.object({
+      i: z.string(),
+      x: z.number(),
+      y: z.number(),
+      w: z.number(),
+      h: z.number(),
+      minW: z.number().optional(),
+      minH: z.number().optional(),
+    }),
+  ),
   visibleTileIds: z.array(z.string()),
 })
 

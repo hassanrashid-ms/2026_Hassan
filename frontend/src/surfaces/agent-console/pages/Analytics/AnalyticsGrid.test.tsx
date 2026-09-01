@@ -18,6 +18,7 @@ const DATA: AnalyticsResponse = {
   },
   bot: { containmentRate: null, selfServeRate: null, handoff: { rate: null, byReason: [] }, articleHitRate: null },
   team: { avgOpenPerActiveAgent: null, unassignedQueueDepth: { series: [] } },
+  articles: { topCited: [], topRead: [] },
 }
 
 describe('AnalyticsGrid', () => {

@@ -26,6 +26,10 @@ describe('analytics types', () => {
         avgOpenPerActiveAgent: 4.2,
         unassignedQueueDepth: { series: [{ bucket: '2026-08-01', depth: 5 }] },
       },
+      articles: {
+        topCited: [{ articleId: 'a1', title: 'Reset your password', count: 5 }],
+        topRead: [{ articleId: 'a2', title: 'Redeem a gift code', count: 8 }],
+      },
     }
     expect(sample.range.granularity).toBe('day')
   })

@@ -4,6 +4,7 @@ import { NumberTile } from './tiles/NumberTile.tsx'
 import { LineChartTile } from './tiles/LineChartTile.tsx'
 import { DonutChartTile } from './tiles/DonutChartTile.tsx'
 import { BarChartTile } from './tiles/BarChartTile.tsx'
+import { RankedListTile } from './tiles/RankedListTile.tsx'
 
 // Keep in sync by hand with DEFAULT_LAYOUT.visibleTileIds in
 // backend/src/agent/services/dashboardLayoutService.ts — the backend has no
@@ -22,6 +23,8 @@ export const TILE_IDS = [
   'article-hit-rate',
   'avg-open-per-agent',
   'unassigned-queue-depth',
+  'top-cited-articles',
+  'top-read-articles',
 ] as const
 
 export function renderTile(id: string, data: AnalyticsResponse): ReactNode {
@@ -68,6 +71,20 @@ export function renderTile(id: string, data: AnalyticsResponse): ReactNode {
           title="Unassigned queue depth"
           series={data.team.unassignedQueueDepth.series.map((p) => ({ bucket: p.bucket, depth: p.depth }))}
           dataKeys={['depth']}
+        />
+      )
+    case 'top-cited-articles':
+      return (
+        <RankedListTile
+          title="Top cited by bot"
+          items={data.articles.topCited.map((a) => ({ id: a.articleId, label: a.title, count: a.count }))}
+        />
+      )
+    case 'top-read-articles':
+      return (
+        <RankedListTile
+          title="Top read by players"
+          items={data.articles.topRead.map((a) => ({ id: a.articleId, label: a.title, count: a.count }))}
         />
       )
     default:
