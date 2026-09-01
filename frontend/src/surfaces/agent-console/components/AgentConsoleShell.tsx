@@ -13,6 +13,7 @@ import {
   SlidersHorizontal,
   Tags,
   Gauge,
+  MessageSquare,
 } from 'lucide-react';
 // agent-console.css is imported HERE and nowhere else — never from main.tsx or
 // any statically-reachable module, so its Tailwind preflight never leaks into
@@ -96,6 +97,16 @@ const WORKSPACE_SETTINGS_NAV_ITEM = {
   to: '/workspace-settings',
   label: 'Workspace Settings',
   icon: SlidersHorizontal,
+  group: 'Manage',
+};
+
+// Team Lead + Admin can read, same gate as Bot Config/Workspace Settings —
+// only Admin can write, enforced client-side inside the page itself and again
+// by the API on POST/PATCH.
+const TEMPLATES_NAV_ITEM = {
+  to: '/templates',
+  label: 'Templates',
+  icon: MessageSquare,
   group: 'Manage',
 };
 
@@ -229,6 +240,7 @@ export function AgentConsoleShell() {
         WORKLOAD_NAV_ITEM,
         BOT_CONFIG_NAV_ITEM,
         WORKSPACE_SETTINGS_NAV_ITEM,
+        TEMPLATES_NAV_ITEM,
       ]
     : NAV_ITEMS;
 

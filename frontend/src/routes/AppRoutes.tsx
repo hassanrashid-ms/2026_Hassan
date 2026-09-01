@@ -10,6 +10,7 @@ import {
   importInbox,
   importKnowledgeBase,
   importTaxonomy,
+  importTemplates,
   importTickets,
   importWorkload,
   importWorkspaceSettings,
@@ -43,6 +44,7 @@ const BotConfigPage = lazy(async () => ({ default: (await importBotConfig()).Bot
 const WorkspaceSettingsPage = lazy(async () => ({
   default: (await importWorkspaceSettings()).WorkspaceSettings,
 }));
+const TemplatesPage = lazy(async () => ({ default: (await importTemplates()).Templates }));
 const AgentNotFound = lazy(async () => ({
   default: (await import('../surfaces/agent-console/pages/NotFound.tsx')).NotFound,
 }));
@@ -133,6 +135,14 @@ export function AppRoutes() {
           element={
             <RequireRole allow={canBuildForms}>
               <WorkspaceSettingsPage />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="templates"
+          element={
+            <RequireRole allow={canBuildForms}>
+              <TemplatesPage />
             </RequireRole>
           }
         />
