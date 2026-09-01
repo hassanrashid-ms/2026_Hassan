@@ -1,6 +1,7 @@
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import mindstormLogo from '@/assets/mindstorm_logo.png';
 import {
   Inbox as InboxIcon,
   Globe,
@@ -269,9 +270,7 @@ export function AgentConsoleShell() {
     <div className="flex h-screen w-screen bg-bg text-text">
       <aside className="relative z-10 flex w-60 shrink-0 flex-col bg-surface shadow-[1px_0_0_0_var(--color-border),2px_0_12px_0_rgb(15_23_42_/_0.04)]">
         <div className="flex items-center gap-2.5 px-4 py-4">
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent text-sm font-semibold text-accent-fg shadow-[0_1px_2px_0_rgb(234_88_12_/_0.35)]">
-            S
-          </div>
+          <img src={mindstormLogo} alt="" className="size-8 shrink-0 rounded-lg object-contain" />
           <div className="flex min-w-0 flex-col">
             <span className="truncate text-sm font-semibold text-text">Support</span>
             <span className="truncate text-xs text-muted">Agent Console</span>

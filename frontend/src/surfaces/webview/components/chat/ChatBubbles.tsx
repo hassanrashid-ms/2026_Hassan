@@ -117,21 +117,21 @@ function ChatBubble({
           <div className="flex shrink-0 items-center justify-center mt-6">
             <span
               className={cn(
-                'flex size-8 items-center justify-center rounded-full',
+                'flex size-9 items-center justify-center rounded-full ring-1 shadow-sm',
                 isBot
-                  ? 'bg-muted/20'
+                  ? 'bg-muted text-accent-fg ring-black/10'
                   : message.authorType === 'agent'
-                    ? 'bg-accent/20'
-                    : 'bg-muted/20',
+                    ? 'bg-accent text-accent-fg ring-black/10'
+                    : 'bg-accent-soft text-muted ring-border',
               )}
               aria-hidden="true"
             >
               {isBot ? (
-                <Bot className="size-5" />
+                <Bot className="size-4" />
               ) : message.authorType === 'agent' ? (
-                <Headset className="size-5" />
+                <Headset className="size-4" />
               ) : (
-                <CircleUserRound className="size-5" />
+                <CircleUserRound className="size-4" />
               )}
             </span>
           </div>

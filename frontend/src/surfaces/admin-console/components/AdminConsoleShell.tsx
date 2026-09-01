@@ -1,6 +1,7 @@
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { LayoutGrid, LogOut, ShieldCheck } from 'lucide-react';
+import mindstormLogo from '@/assets/mindstorm_logo.png';
 // admin-console.css is imported HERE and nowhere else — never from main.tsx or
 // any statically-reachable module, so its Tailwind preflight never leaks into
 // the other two surfaces (mirrors AgentConsoleShell.tsx / WebviewShell.tsx).
@@ -74,9 +75,7 @@ export function AdminConsoleShell() {
     <div className="flex h-screen w-screen bg-bg text-text">
       <aside className="flex w-60 shrink-0 flex-col border-r border-border bg-surface">
         <div className="flex items-center gap-2.5 px-4 py-4">
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent-deep text-sm font-semibold text-accent-fg">
-            S
-          </div>
+          <img src={mindstormLogo} alt="" className="size-8 shrink-0 rounded-lg object-contain" />
           <div className="flex min-w-0 flex-col">
             <span className="truncate text-sm font-semibold text-text">Support</span>
             <span className="truncate text-xs text-muted">Admin Console</span>

@@ -157,21 +157,21 @@ export function ChatThread({
                   <div className="flex shrink-0 items-center justify-center mt-6">
                     <span
                       className={[
-                        'flex size-8 items-center justify-center rounded-full',
+                        'flex size-9 items-center justify-center rounded-full ring-1 shadow-sm',
                         isBot
-                          ? 'bg-muted/25'
+                          ? 'bg-muted text-accent-fg ring-black/10'
                           : chatMessage.authorType === 'agent'
-                            ? 'bg-accent-deep/25'
-                            : 'bg-muted/25',
+                            ? 'bg-accent-deep text-accent-fg ring-black/10'
+                            : 'bg-accent-soft text-muted ring-border',
                       ].join(' ')}
                       aria-hidden="true"
                     >
                       {isBot ? (
-                        <Bot className="size-5" />
+                        <Bot className="size-4" />
                       ) : chatMessage.authorType === 'agent' ? (
-                        <Headset className="size-5" />
+                        <Headset className="size-4" />
                       ) : (
-                        <CircleUserRound className="size-5" />
+                        <CircleUserRound className="size-4" />
                       )}
                     </span>
                   </div>
