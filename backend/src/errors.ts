@@ -31,7 +31,10 @@ export type ErrorCode =
   | 'not_connected'
   | 'unsupported_media_type'
   | 'attachment_not_found'
-  | 'attachment_mismatch';
+  | 'attachment_mismatch'
+  | 'invalid_zip'
+  | 'no_markdown_files'
+  | 'too_many_files';
 
 export function sendError(res: Response, status: number, code: ErrorCode, message: string): void {
   res.status(status).json({ error: { code, message } });

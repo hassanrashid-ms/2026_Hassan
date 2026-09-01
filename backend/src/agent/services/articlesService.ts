@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { and, desc, eq, inArray, isNotNull, isNull, lt, or } from 'drizzle-orm';
+import JSZip from 'jszip';
 import type {
   AgentArticleDetail,
   AgentArticlesResponse,
@@ -8,6 +9,7 @@ import type {
   ArticleVersionedField,
   ArticleVersionSnapshotView,
   ArticleVersionsListResponse,
+  BulkImportArticleResult,
   FinalizeArticleAttachmentBody,
 } from '@support/types';
 import type { z } from 'zod';
@@ -18,10 +20,13 @@ import {
   ALLOWED_IMAGE_MIME_TYPES,
   MAX_ATTACHMENT_BYTES,
   copyObject,
+  deleteObject,
+  getObjectBuffer,
   headObject,
   presignGetObject,
 } from '../../shared/storage/presign.ts';
 import { deleteArticleObject, upsertArticleObject } from '../../shared/weaviate/articlesIndex.ts';
+import { parseMarkdownEntry, MAX_IMPORT_FILES } from './articleMarkdownImport.ts';
 
 function toDetail(row: typeof article.$inferSelect): Omit<AgentArticleDetail, 'attachments' | 'draft'> {
   return {
@@ -179,6 +184,83 @@ export async function createArticle(
     // against an id that didn't exist a moment ago.
     return { ok: true, article: { ...toDetail(row!), attachments: [], draft: null } };
   });
+}
+
+export type BulkImportArticlesResult =
+  | {
+      ok: true;
+      results: BulkImportArticleResult[];
+      summary: { total: number; created: number; failed: number };
+    }
+  | { ok: false; reason: 'not_found' | 'invalid_zip' | 'no_markdown_files' | 'too_many_files' };
+
+/**
+ * Best-effort, one createArticle() transaction per entry — a bad file must
+ * never roll back the good ones in the same batch. The pending zip is deleted
+ * after it's read regardless of outcome; it is never needed again.
+ */
+export async function bulkImportArticles(
+  ctx: AgentContext,
+  key: string,
+): Promise<BulkImportArticlesResult> {
+  const expectedPrefix = `pending/${ctx.workspaceId}/${ctx.agentId}/`;
+  if (!key.startsWith(expectedPrefix)) return { ok: false, reason: 'not_found' };
+
+  const meta = await headObject(key);
+  if (!meta) return { ok: false, reason: 'not_found' };
+
+  const buffer = await getObjectBuffer(key);
+  await deleteObject(key);
+
+  let zip: JSZip;
+  try {
+    zip = await JSZip.loadAsync(buffer);
+  } catch {
+    return { ok: false, reason: 'invalid_zip' };
+  }
+
+  const entries = Object.values(zip.files).filter(
+    (f) => !f.dir && /\.(md|markdown)$/i.test(f.name),
+  );
+  if (entries.length === 0) return { ok: false, reason: 'no_markdown_files' };
+  if (entries.length > MAX_IMPORT_FILES) return { ok: false, reason: 'too_many_files' };
+
+  const results: BulkImportArticleResult[] = [];
+  for (const entry of entries) {
+    const filename = entry.name.split('/').pop()!;
+    try {
+      const content = await entry.async('string');
+      const parsed = parseMarkdownEntry(content, filename);
+      if (parsed.error !== null) {
+        results.push({ filename, status: 'error', reason: parsed.error });
+        continue;
+      }
+      const created = await createArticle(ctx, {
+        title: parsed.title,
+        body: parsed.body,
+        keywords: parsed.keywords,
+      });
+      if (!created.ok) {
+        results.push({ filename, status: 'error', reason: created.reason });
+        continue;
+      }
+      results.push({
+        filename,
+        status: 'created',
+        title: parsed.title,
+        article_id: created.article.id,
+      });
+    } catch {
+      results.push({ filename, status: 'error', reason: 'unreadable_entry' });
+    }
+  }
+
+  const created = results.filter((r) => r.status === 'created').length;
+  return {
+    ok: true,
+    results,
+    summary: { total: results.length, created, failed: results.length - created },
+  };
 }
 
 export type UpdateArticleInput = {
