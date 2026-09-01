@@ -6,6 +6,7 @@ import { getBotMetrics, getSpeedMetrics, getTeamMetrics, getVolumeMetrics } from
 import { appendEvent } from '../src/shared/events/appendEvent.ts'
 import { withWorkspace } from '../src/shared/db/withWorkspace.ts'
 import { requireAgentSession } from '../src/shared/middleware/requireAgentSession.ts'
+import { resolveConsoleWorkspace } from '../src/shared/middleware/resolveConsoleWorkspace.ts'
 import { errorMiddleware } from '../src/errors.ts'
 import { signAgentSession } from '../src/shared/auth/agentSession.ts'
 import { analyticsRouter } from '../src/agent/routers/analyticsRouter.ts'
@@ -235,7 +236,7 @@ describe('getTeamMetrics', () => {
 describe('GET /agent/analytics', () => {
   const app = express()
   app.use(express.json())
-  app.use(requireAgentSession, analyticsRouter)
+  app.use(requireAgentSession, resolveConsoleWorkspace, analyticsRouter)
   app.use(errorMiddleware)
 
   it('returns every metric group for the given range', async () => {
@@ -248,12 +249,13 @@ describe('GET /agent/analytics', () => {
       workspaceId,
       agentId,
     ])
-    const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId })
+    const token = await signAgentSession({ agent_id: agentId })
 
     const res = await request(app)
       .get('/analytics')
       .query({ from: '2026-08-01', to: '2026-08-31', granularity: 'day' })
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(200)
 
     expect(res.body).toHaveProperty('volume')
@@ -272,12 +274,13 @@ describe('GET /agent/analytics', () => {
       workspaceId,
       agentId,
     ])
-    const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId })
+    const token = await signAgentSession({ agent_id: agentId })
 
     await request(app)
       .get('/analytics')
       .query({ from: '2026-08-01', to: '2026-08-31', granularity: 'month' })
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
       .expect(422)
   })
 })
