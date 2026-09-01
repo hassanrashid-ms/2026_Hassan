@@ -343,6 +343,18 @@ describe('ThreadPanel read-only tickets', () => {
     );
   });
 
+  it('names the forcing admin for a force-resolved conversation', async () => {
+    fakeSocket();
+    vi.mocked(fetchConversationMessages).mockResolvedValue({ messages: [agentMessage()] } as never);
+
+    renderPanel({ ...RESOLVED, resolutionSource: 'admin_forced', resolvedByAgentName: 'Priya' });
+
+    expect(await screen.findByLabelText('Message')).toHaveAttribute(
+      'placeholder',
+      'Force-resolved by Priya',
+    );
+  });
+
   it('falls back to Closed when no resolution source is recorded', async () => {
     fakeSocket();
     vi.mocked(fetchConversationMessages).mockResolvedValue({ messages: [agentMessage()] } as never);

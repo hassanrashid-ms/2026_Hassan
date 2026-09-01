@@ -56,7 +56,7 @@ async function setupAgent(workspaceId: string) {
 
 async function conversationRow(id: string) {
   const { rows } = await ownerPool.query(
-    `select status, confirm_phase from conversation where id = $1`,
+    `select status, confirm_phase, resolution_source, assigned_agent_id from conversation where id = $1`,
     [id],
   );
   return rows[0];
@@ -96,6 +96,8 @@ describe('POST /agent/conversations/:id/force-resolve', () => {
     const row = await conversationRow(conversationId);
     expect(row.status).toBe('resolved');
     expect(row.confirm_phase).toBe('none');
+    expect(row.resolution_source).toBe('admin_forced');
+    expect(row.assigned_agent_id).toBe(agentId);
     expect(await messagesFor(conversationId)).toEqual([]);
     const events = await eventsFor(conversationId);
     expect(events).toEqual([

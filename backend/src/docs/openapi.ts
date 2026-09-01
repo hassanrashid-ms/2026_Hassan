@@ -857,7 +857,9 @@ const AgentConversationDetailSchema = z.object({
   ]),
   subintent: AgentSubintentSchema,
   assigned_agent: z.object({ id: z.uuid(), display_name: z.string() }).nullable(),
-  resolution_source: z.enum(['bot', 'agent']).nullable(),
+  resolution_source: z
+    .enum(['bot', 'agent', 'player_confirmed', 'timed_out', 'player_stated', 'admin_forced'])
+    .nullable(),
   resolved_by_agent_name: z.string().nullable(),
   created_at: z.string(),
 });
@@ -931,7 +933,9 @@ const AgentTicketSummarySchema = z.object({
     'closed',
   ]),
   subintent: AgentSubintentSchema,
-  resolution_source: z.enum(['bot', 'agent']).nullable(),
+  resolution_source: z
+    .enum(['bot', 'agent', 'player_confirmed', 'timed_out', 'player_stated', 'admin_forced'])
+    .nullable(),
   resolved_by_agent_name: z.string().nullable(),
   reopen_count: z.number().int(),
 });

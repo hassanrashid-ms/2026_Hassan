@@ -2,8 +2,14 @@ import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { resolutionCycle, workspace } from '../../shared/db/schema/index.ts';
 import type { Tx } from '../../shared/db/withWorkspace.ts';
 
-/** The five terminal outcomes a cycle can record. Mirrors the resolution_source enum. */
-export type ResolutionKind = 'bot' | 'agent' | 'player_confirmed' | 'timed_out' | 'player_stated';
+/** The six terminal outcomes a cycle can record. Mirrors the resolution_source enum. */
+export type ResolutionKind =
+  | 'bot'
+  | 'agent'
+  | 'player_confirmed'
+  | 'timed_out'
+  | 'player_stated'
+  | 'admin_forced';
 
 /** Both stages of the clock use the same window: N hours of silence before the ask, N more before the timeout. */
 export function nextInactivityDueAt(from: Date, windowHours: number): Date {

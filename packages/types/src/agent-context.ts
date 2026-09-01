@@ -5,7 +5,12 @@ import type { TagView } from './tags.ts';
 
 /** The resolving side. Mirrors the `resolution_source` pg enum. */
 export type ResolutionSourceValue =
-  'bot' | 'agent' | 'player_confirmed' | 'timed_out' | 'player_stated';
+  | 'bot'
+  | 'agent'
+  | 'player_confirmed'
+  | 'timed_out'
+  | 'player_stated'
+  | 'admin_forced';
 
 /**
  * The header row for one conversation, fetched by id.

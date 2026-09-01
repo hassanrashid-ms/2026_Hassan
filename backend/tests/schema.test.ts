@@ -465,6 +465,7 @@ describe('resolution_cycle', () => {
       'player_confirmed',
       'timed_out',
       'player_stated',
+      'admin_forced',
     ]);
   });
 

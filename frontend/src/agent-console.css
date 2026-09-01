@@ -12,8 +12,8 @@
 
 @theme {
   --color-bg: #ffffff;
-  --color-surface: #f8fafc; /* slate-50, agent-console's neutral card background */
-  --color-border: #e2e8f0; /* slate-200 */
+  --color-surface: #ffffff; /* pure white — panels read as white cards lifted by shadow-card/border, not a grey fill */
+  --color-border: #eceef1; /* soft hairline, crisp on a white-on-white surface */
   --color-accent: #ea580c; /* orange-600 — bright orange, not the rust-leaning orange-700 */
   --color-accent-deep: #9a3412; /* orange-800 */
   --color-accent-soft: #fff7ed; /* orange-50, selected row / active tab background */
@@ -21,7 +21,7 @@
   --color-text: #0f172a; /* slate-900 */
   --color-muted: #64748b; /* slate-500 */
   --radius-card: 0.75rem;
-  --shadow-card: 0 1px 2px 0 rgb(15 23 42 / 0.06), 0 1px 1px 0 rgb(15 23 42 / 0.04);
+  --shadow-card: 0 1px 3px 0 rgb(15 23 42 / 0.08), 0 1px 2px -1px rgb(15 23 42 / 0.06);
 }
 
 body {

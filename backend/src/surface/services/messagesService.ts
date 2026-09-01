@@ -244,10 +244,13 @@ export async function sendPlayerMessage(
               ? prior.assignedAgentId
               : await assignOnHandoff(tx, ctx.workspaceId);
         } else {
-          // Bot-resolved (never assigned to anyone), or no resolution_source
-          // recorded at all (a `closed` conversation with no bot/agent
-          // resolve event behind it — defensive, not expected once this
-          // slice ships) — both take the same path.
+          // Bot-resolved (never assigned to anyone), admin-forced (deliberately
+          // excluded from AGENT_OWNED_RESOLUTIONS — see forceResolve's docstring
+          // in resolutionService.ts, the admin who forced it may not triage
+          // support tickets), or no resolution_source recorded at all (a
+          // `closed` conversation with no bot/agent resolve event behind it —
+          // defensive, not expected once this slice ships) — all take the same
+          // path.
           nextAssignedAgentId = await assignOnHandoff(tx, ctx.workspaceId);
         }
 

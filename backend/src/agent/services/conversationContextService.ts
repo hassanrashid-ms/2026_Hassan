@@ -87,7 +87,10 @@ export async function getConversationDetail(
           ? { id: row.assignedAgentId, display_name: row.assignedAgentName }
           : null,
       resolution_source: row.resolutionSource,
-      resolved_by_agent_name: row.resolutionSource === 'agent' ? row.assignedAgentName : null,
+      resolved_by_agent_name:
+        row.resolutionSource === 'agent' || row.resolutionSource === 'admin_forced'
+          ? row.assignedAgentName
+          : null,
       created_at: row.createdAt.toISOString(),
     };
   });
@@ -243,7 +246,10 @@ export async function getTicketHistory(
           }
         : null,
     resolution_source: row.resolutionSource,
-    resolved_by_agent_name: row.resolutionSource === 'agent' ? row.assignedAgentName : null,
+    resolved_by_agent_name:
+      row.resolutionSource === 'agent' || row.resolutionSource === 'admin_forced'
+        ? row.assignedAgentName
+        : null,
     reopen_count: reopenById.get(row.id) ?? 0,
   }));
 

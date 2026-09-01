@@ -93,6 +93,7 @@ function resolverLabel(
   agentName: string | null | undefined,
 ): string {
   if (source === 'agent') return `Resolved by ${agentName ?? 'an agent'}`;
+  if (source === 'admin_forced') return `Force-resolved by ${agentName ?? 'an admin'}`;
   if (source === 'bot') return 'Resolved by the bot';
   if (source === 'player_confirmed') return 'Resolved by the player';
   if (source === 'player_stated') return 'Resolved — player asked to close it';

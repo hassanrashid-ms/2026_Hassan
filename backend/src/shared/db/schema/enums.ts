@@ -77,7 +77,10 @@ export const confirmPhase = pgEnum('confirm_phase', [
  * report them separately — conflating `player_stated` into `player_confirmed`
  * would count "player asked us to close it" the same as "player let a 24h
  * silence clock resolve it for them", which are opposite signals about how
- * engaged the player was.
+ * engaged the player was. `admin_forced` (an admin used force-resolve to
+ * bypass the ask/confirm cycle) is likewise its own value rather than
+ * reusing 'agent' — see resolutionService.ts's `forceResolve` for why
+ * conflating the two would corrupt resolution-rate metrics.
  */
 export const resolutionSource = pgEnum('resolution_source', [
   'bot',
@@ -85,6 +88,7 @@ export const resolutionSource = pgEnum('resolution_source', [
   'player_confirmed',
   'timed_out',
   'player_stated',
+  'admin_forced',
 ]);
 
 /**

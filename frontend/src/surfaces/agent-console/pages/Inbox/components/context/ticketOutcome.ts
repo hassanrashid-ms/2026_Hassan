@@ -31,7 +31,18 @@ export function ticketOutcome(
   if (!FINISHED.has(status)) {
     return `${LIVE_LABEL[status as keyof typeof LIVE_LABEL]}${reopenSuffix(reopenCount)}`;
   }
-  if (resolutionSource === null) return `Closed${reopenSuffix(reopenCount)}`;
+  if (resolutionSource === 'admin_forced') {
+    return `Force-resolved by ${resolvedByAgentName ?? 'an admin'}${reopenSuffix(reopenCount)}`;
+  }
+  if (resolutionSource === null) {
+    // Rows force-resolved before resolutionService.ts started stamping
+    // 'admin_forced' (it used to leave this null) still read as an outcome
+    // rather than falling into "Closed" — new force-resolves never hit this
+    // branch with status === 'resolved', only pre-migration history does.
+    return status === 'resolved'
+      ? `Resolved by an admin${reopenSuffix(reopenCount)}`
+      : `Closed${reopenSuffix(reopenCount)}`;
+  }
   const by = resolutionSource === 'agent' ? (resolvedByAgentName ?? 'an agent') : 'the bot';
   return `Resolved by ${by}${reopenSuffix(reopenCount)}`;
 }

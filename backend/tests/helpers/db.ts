@@ -168,7 +168,14 @@ export async function seedConversation(args: {
   status?: 'new' | 'bot_active' | 'open' | 'awaiting_player' | 'escalated' | 'resolved' | 'closed';
   confirmPhase?: 'none' | 'bot_article' | 'agent_ask' | 'form' | 'inactivity_ask' | 'player_stated';
   assignedAgentId?: string | null;
-  resolutionSource?: 'bot' | 'agent' | 'player_confirmed' | 'timed_out' | 'player_stated' | null;
+  resolutionSource?:
+    | 'bot'
+    | 'agent'
+    | 'player_confirmed'
+    | 'timed_out'
+    | 'player_stated'
+    | 'admin_forced'
+    | null;
   priority?: 'p1' | 'p2' | 'p3' | 'p4';
   priorityManuallySet?: boolean;
   subintentId?: string | null;

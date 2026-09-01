@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm';
 import {
+  closeResolutionCycle,
   postMessage,
   RESOLUTION_CHECK_MESSAGE,
   type PostedMessageRow,
@@ -99,6 +100,17 @@ export type ForceResolveOutcome =
  * resolution-rate and containment metrics, which assume conversation_resolved
  * means an actual resolution occurred, aren't silently corrupted by an
  * admin override.
+ *
+ * `resolutionSource` is stamped `'admin_forced'`, never left null and never
+ * reused as `'agent'`: null read as "closed" in the console's outcome label
+ * (ticketOutcome.ts), and reusing `'agent'` would make a forced override
+ * indistinguishable from a real agent resolution in resolution-rate metrics —
+ * the same corruption this function exists to avoid for `conversation_resolved`.
+ * `assignedAgentId` is stamped to the admin who forced it purely for display
+ * (ticketOutcome's "Resolved by {name}"); it is deliberately NOT added to
+ * `AGENT_OWNED_RESOLUTIONS` in surface/services/messagesService.ts, so a
+ * reopen reassigns normally via `assignOnHandoff` rather than routing back to
+ * an admin who may not triage support tickets.
  */
 export async function forceResolve(
   ctx: AgentContext,
@@ -120,8 +132,24 @@ export async function forceResolve(
 
     await tx
       .update(conversation)
-      .set({ status: 'resolved', confirmPhase: 'none' })
+      .set({
+        status: 'resolved',
+        confirmPhase: 'none',
+        resolutionSource: 'admin_forced',
+        assignedAgentId: ctx.agentId,
+      })
       .where(eq(conversation.id, conversationId));
+
+    // Every other path to `resolved` closes the open cycle in the same
+    // transaction (resolutionAnswer.ts, inactivityClock.ts, applyBotTurn.ts).
+    // Skipping it here left resolution_cycle's row permanently "open"
+    // (resolved_at IS NULL), so the next reopen's openResolutionCycle hit
+    // resolution_cycle_open_uk and 500'd on the player's next message.
+    await closeResolutionCycle(tx, {
+      conversationId,
+      kind: 'admin_forced',
+      now: new Date(),
+    });
 
     // No session_id: an agent-console request has no player session behind it.
     await appendEvent(tx, {

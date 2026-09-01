@@ -17,9 +17,15 @@ Add a second, admin-only path that transitions a conversation straight to `resol
 - Effect, in the same transaction pattern every other state change uses (conversation + event together):
   - `status → 'resolved'`
   - `confirmPhase → 'none'`
+  - `resolutionSource → 'admin_forced'` — its own value in the `resolution_source` pg enum (`shared/db/schema/enums.ts`), not `null` and not reused as `'agent'`. **Revision 2026-09-01:** this was originally shipped leaving `resolutionSource` `null`, which read as `"Closed"` in the agent console's ticket-outcome label (`ticketOutcome.ts`) — indistinguishable from an auto-closed ticket, and the whole point of a distinct event type below. `'admin_forced'` fixes that while still keeping resolution-rate metrics honest, since it is neither `null` (reads as no resolution) nor `'agent'` (reads as a real agent resolution).
+  - `assignedAgentId → ctx.agentId` — the forcing admin, stamped purely so the console can show "Force-resolved by {name}". Deliberately **not** added to `AGENT_OWNED_RESOLUTIONS` in `surface/services/messagesService.ts`: on reopen, an admin override reassigns normally via `assignOnHandoff` rather than routing back to an admin who may not triage support tickets.
   - No message is posted to the player. The close is silent from the player's perspective.
 - New event type `conversation_resolved_forced`, payload `{ admin_agent_id: uuid }`. This is a distinct event type, not `conversation_resolved` with a new `source` value, because every consumer of `conversation_resolved` (resolution-rate and bot-containment metrics) currently assumes that event means the player or the bot actually reached a resolution. Overloading it with an admin override would silently corrupt those metrics. Anything reading "was this conversation ever force-resolved" checks for this event type instead.
-- Register the route + Zod schema in `backend/src/docs/openapi.ts` per repo convention.
+- Register the route + Zod schema in `backend/src/docs/openapi.ts` per repo convention. `resolution_source` there must list every enum value (`bot`, `agent`, `player_confirmed`, `timed_out`, `player_stated`, `admin_forced`) — it had drifted to just `['bot', 'agent']` and was fixed alongside `'admin_forced'`'s addition.
+- Console display, two independent spots, both fixed in the same revision:
+  - `ticketOutcome.ts` (`agent-console/pages/Inbox/components/context/`, the ticket list rail) renders `resolutionSource === 'admin_forced'` as `"Force-resolved by {name}"`. Rows written before this revision (still `null`) fall back to `"Resolved by an admin"` rather than `"Closed"` — legacy-only, new force-resolves never hit that branch.
+  - `resolverLabel()` in `ThreadPanel.tsx` (the thread header's read-only tooltip) renders the same case as `"Force-resolved by {name}"`. No status param there to give legacy `null` rows the same fallback — they still read `"Closed"`, same as before this revision, since this function only ever runs once `readOnly` (i.e. resolved-or-closed) already gates it.
+- Migration: `backend/drizzle/0030_sparkling_storm.sql` — `ALTER TYPE "public"."resolution_source" ADD VALUE 'admin_forced'`.
 
 ### Frontend
 

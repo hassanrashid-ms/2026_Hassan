@@ -18,6 +18,18 @@ describe('ticketOutcome', () => {
     expect(ticketOutcome('closed', null, null, 0)).toBe('Closed');
   });
 
+  it('names the forcing admin for a force-resolved ticket', () => {
+    expect(ticketOutcome('resolved', 'admin_forced', 'Priya', 0)).toBe('Force-resolved by Priya');
+  });
+
+  it('falls back when the forcing admin name is missing', () => {
+    expect(ticketOutcome('resolved', 'admin_forced', null, 0)).toBe('Force-resolved by an admin');
+  });
+
+  it('reads Resolved by an admin for legacy force-resolved rows with no resolution source', () => {
+    expect(ticketOutcome('resolved', null, null, 0)).toBe('Resolved by an admin');
+  });
+
   // The rail now lists the ticket the agent is currently reading, which is
   // usually live. Branching on resolution_source alone labelled every one of
   // these "Closed".

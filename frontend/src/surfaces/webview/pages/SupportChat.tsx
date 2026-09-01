@@ -217,6 +217,27 @@ export function SupportChat() {
     send.mutate({ body: failed.body });
   };
 
+  /**
+   * A closed conversation can never become "the player's latest" again once
+   * openNewTicket runs (see newTicketService.ts), so typing into a closed
+   * thread has to open a fresh ticket first — otherwise sendPlayerMessage's
+   * own reopen path (messagesService.ts REOPENABLE_STATUSES) would silently
+   * revive the old, already-closed conversation instead of starting a new one.
+   */
+  const onComposerSend = (
+    body: string,
+    attachment?: UploadedAttachment,
+    formFieldKey?: string,
+  ) => {
+    if (closed) {
+      newTicket.mutate(undefined, {
+        onSuccess: () => send.mutate({ body, attachment, formFieldKey }),
+      });
+      return;
+    }
+    send.mutate({ body, attachment, formFieldKey });
+  };
+
   useEffect(() => {
     if (!boot) return;
     const socket = createSocket(boot.token, 'player');
@@ -259,8 +280,12 @@ export function SupportChat() {
     messagesQuery.data?.messages.filter((m) => !m.form_field_key).map(toChatMessage) ?? [];
   const chatMessages = reconcilePending(serverMessages, pending);
 
-  const settled =
-    messagesQuery.data?.status === 'resolved' || messagesQuery.data?.status === 'closed';
+  // 'closed' is deliberately excluded: a closed conversation can never become
+  // the player's latest again once a new ticket is opened (see
+  // newTicketService.ts), so it must never show the "still open?" banner or
+  // block the composer — it renders as a brand-new thread instead, below.
+  const settled = messagesQuery.data?.status === 'resolved';
+  const closed = messagesQuery.data?.status === 'closed';
   // Explicit, not `!== 'none'`. The old check made every future enum value render
   // the yes/no banner by default, and 'form' is the value that proved it: the
   // banner would have appeared underneath the form card asking about an article
@@ -350,7 +375,7 @@ export function SupportChat() {
       {/* min-h-0 is load-bearing: without it a flex child refuses to shrink below
           its content and the composer is pushed off the bottom of the viewport. */}
       <div className="min-h-0 flex-1">
-        {messagesQuery.isPending ? null : chatMessages.length === 0 ? (
+        {messagesQuery.isPending ? null : chatMessages.length === 0 || closed ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 px-8 text-center">
             <p className="text-lg font-semibold text-text">Say hello</p>
             <p className="text-base text-muted">
@@ -475,13 +500,11 @@ export function SupportChat() {
           conversation mid-decision. */}
       <ChatComposer
         onSend={(body, attachment) =>
-          send.mutate({
-            body,
-            attachment,
-            formFieldKey: activeFormAttachmentFieldKey,
-          })
+          onComposerSend(body, attachment, activeFormAttachmentFieldKey)
         }
-        disabled={send.isPending || confirmPending || activeForm !== null || settled}
+        disabled={
+          send.isPending || newTicket.isPending || confirmPending || activeForm !== null || settled
+        }
         // The bot can't read images: while it is the active responder there is
         // no path for an attached photo to reach anyone who can act on it, so
         // the control is not offered at all — the same UI-only gating pattern

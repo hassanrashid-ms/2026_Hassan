@@ -1,0 +1,1 @@
+ALTER TYPE "public"."resolution_source" ADD VALUE 'admin_forced';

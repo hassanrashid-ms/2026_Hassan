@@ -192,9 +192,9 @@ function QueueColumn({
     <section
       ref={sectionRef}
       style={{ height, minHeight: '150px' }}
-      className="flex min-h-0 flex-col rounded-card border border-slate-200 bg-surface resize-y overflow-hidden pb-1"
+      className="flex min-h-0 flex-col rounded-card border border-border bg-surface shadow-card resize-y overflow-hidden pb-1"
     >
-      <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-3 py-2">
+      <div className="flex shrink-0 items-center justify-between rounded-t-card border-b border-border bg-accent-soft/40 px-3 py-2">
         <div className="flex items-center gap-2">
           {dragHandleProps && (
             <div
@@ -268,12 +268,12 @@ function TicketsListView({
   return (
     <div
       style={{ height: '70vh' }}
-      className="min-h-0 flex-1 overflow-auto rounded-card border border-slate-200 bg-bg"
+      className="min-h-0 flex-1 overflow-auto rounded-card border border-border bg-bg shadow-card"
       onScroll={handleScroll}
     >
       <table className="w-full min-w-[860px] border-collapse text-sm">
-        <thead className="sticky top-0 z-10 bg-surface">
-          <tr className="border-b border-slate-200 text-left text-xs font-semibold tracking-wide text-muted uppercase">
+        <thead className="sticky top-0 z-10 bg-accent-soft/40">
+          <tr className="border-b border-border text-left text-xs font-semibold tracking-wide text-muted uppercase">
             <SortableHeader label="Player" sortKey="player" sort={sort} onSort={onSort} />
             <SortableHeader label="Status" sortKey="status" sort={sort} onSort={onSort} />
             <SortableHeader label="Priority" sortKey="priority" sort={sort} onSort={onSort} />
@@ -306,7 +306,7 @@ function TicketsListView({
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') onSelect(conversation.id);
                   }}
-                  className="cursor-pointer border-b border-slate-100 transition-colors last:border-b-0 hover:bg-accent-soft/50"
+                  className="cursor-pointer border-b border-border transition-colors last:border-b-0 hover:bg-accent-soft/50"
                 >
                   <td className="max-w-40 truncate px-4 py-2.5 font-medium">
                     {conversation.player.external_player_id}
@@ -492,7 +492,7 @@ export function Tickets() {
           <h1 className="text-lg font-semibold">Tickets</h1>
           <p className="text-sm text-muted">All active queues at a glance</p>
         </div>
-        <div className="flex shrink-0 gap-1 rounded-md border border-slate-200 bg-surface p-0.5">
+        <div className="flex shrink-0 gap-1 rounded-md border border-border bg-bg p-0.5 shadow-xs">
           <button
             type="button"
             aria-pressed={filters.view === 'board'}

@@ -265,9 +265,9 @@ export function AgentConsoleShell() {
 
   return (
     <div className="flex h-screen w-screen bg-bg text-text">
-      <aside className="flex w-60 shrink-0 flex-col border-r border-border bg-surface">
+      <aside className="relative z-10 flex w-60 shrink-0 flex-col bg-surface shadow-[1px_0_0_0_var(--color-border),2px_0_12px_0_rgb(15_23_42_/_0.04)]">
         <div className="flex items-center gap-2.5 px-4 py-4">
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent-deep text-sm font-semibold text-accent-fg">
+          <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent text-sm font-semibold text-accent-fg shadow-[0_1px_2px_0_rgb(234_88_12_/_0.35)]">
             S
           </div>
           <div className="flex min-w-0 flex-col">
@@ -296,7 +296,7 @@ export function AgentConsoleShell() {
                     cn(
                       'flex items-center gap-2 rounded-md border-l-2 py-2 pr-3 pl-2.5 text-sm font-medium transition-colors',
                       isActive
-                        ? 'border-accent bg-accent-soft text-accent-deep'
+                        ? 'border-accent bg-accent-soft text-accent-deep shadow-xs'
                         : 'border-transparent text-muted hover:bg-accent-soft/60 hover:text-text',
                     )
                   }
