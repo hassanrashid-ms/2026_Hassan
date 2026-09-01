@@ -12,8 +12,7 @@ import {
 import { appendEvent } from '../../shared/events/appendEvent.ts';
 import { assignOnHandoff } from '../bot/assignOnHandoff.ts';
 import { postMessage, type PostedMessageRow } from '../conversations/postMessage.ts';
-import { formSummaryMessage } from './messages.ts';
-import { NO_AGENTS_ONLINE_MESSAGE } from '../bot/messages.ts';
+import { getSystemMessage } from '../templates/templateService.ts';
 
 export type FormTerminationReason = 'submit' | 'skip' | 'timeout';
 export type TerminalFormStatus = 'completed' | 'partial' | 'skipped';
@@ -128,7 +127,7 @@ export async function completeFormAndHandoff(
           conversationId: ctx.conversationId,
           authorType: 'system',
           actorId: null,
-          body: NO_AGENTS_ONLINE_MESSAGE,
+          body: await getSystemMessage(tx, ctx.workspaceId, 'no_agents_online'),
           visibility: 'public',
         })
       : null;
@@ -174,7 +173,7 @@ export async function completeFormAndHandoff(
     conversationId: ctx.conversationId,
     authorType: 'system',
     actorId: null,
-    body: formSummaryMessage(formStatus),
+    body: await getSystemMessage(tx, ctx.workspaceId, `form_summary_${formStatus}` as const),
     visibility: 'public',
   });
 

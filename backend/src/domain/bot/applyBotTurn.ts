@@ -1,7 +1,8 @@
 import { and, eq, isNull } from 'drizzle-orm';
 import type { BotTurnDecision } from './botTurn.ts';
 import { SILENT_UNAVAILABLE_REASONS } from './botTurn.ts';
-import { botFailureNote, pickHandoffMessage, NO_AGENTS_ONLINE_MESSAGE } from './messages.ts';
+import { botFailureNote } from './messages.ts';
+import { getHandoffMessage, getSystemMessage } from '../templates/templateService.ts';
 import { assignOnHandoff } from './assignOnHandoff.ts';
 import { postMessage, type PostedMessageRow } from '../conversations/postMessage.ts';
 import { closeResolutionCycle } from '../conversations/resolutionCycle.ts';
@@ -141,7 +142,7 @@ export async function applyBotTurn(
         conversationId: ctx.conversationId,
         authorType: 'system',
         actorId: null,
-        body: pickHandoffMessage(),
+        body: await getHandoffMessage(tx, ctx.workspaceId),
         visibility: 'public',
       });
       if (decision.subintentId) await classifyIfUnset(tx, ctx, decision.subintentId);
@@ -240,7 +241,7 @@ export async function applyBotTurn(
             conversationId: ctx.conversationId,
             authorType: 'system',
             actorId: null,
-            body: NO_AGENTS_ONLINE_MESSAGE,
+            body: await getSystemMessage(tx, ctx.workspaceId, 'no_agents_online'),
             visibility: 'public',
           }),
         );
@@ -255,7 +256,7 @@ export async function applyBotTurn(
           conversationId: ctx.conversationId,
           authorType: 'system',
           actorId: null,
-          body: pickHandoffMessage(),
+          body: await getHandoffMessage(tx, ctx.workspaceId),
           visibility: 'public',
         }),
       ];
@@ -291,7 +292,7 @@ export async function applyBotTurn(
             conversationId: ctx.conversationId,
             authorType: 'system',
             actorId: null,
-            body: NO_AGENTS_ONLINE_MESSAGE,
+            body: await getSystemMessage(tx, ctx.workspaceId, 'no_agents_online'),
             visibility: 'public',
           }),
         );

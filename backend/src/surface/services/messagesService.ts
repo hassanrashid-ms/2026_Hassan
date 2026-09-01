@@ -20,12 +20,8 @@ import {
   toPlayerView,
   type PostedMessageRow,
 } from '../../domain/conversations/index.ts';
-import {
-  applyBotTurn,
-  assignOnHandoff,
-  pickHandoffMessage,
-  resolveBotConfig,
-} from '../../domain/bot/index.ts';
+import { applyBotTurn, assignOnHandoff, resolveBotConfig } from '../../domain/bot/index.ts';
+import { getHandoffMessage } from '../../domain/templates/templateService.ts';
 import { appendEvent } from '../../shared/events/appendEvent.ts';
 import {
   agent,
@@ -415,7 +411,7 @@ export async function sendPlayerMessage(
         conversationId,
         authorType: 'system',
         actorId: null,
-        body: pickHandoffMessage(),
+        body: await getHandoffMessage(tx, ctx.workspaceId),
         visibility: 'public',
       });
     }
