@@ -5,10 +5,15 @@ import { withWorkspace } from '../src/shared/db/withWorkspace.ts';
 import { messageTemplate } from '../src/shared/db/schema/index.ts';
 import { closeTemplateCacheRedis } from '../src/domain/templates/templateCache.ts';
 import {
+  addHandoffVariant,
+  createCannedReply,
+  createSystemTemplate,
   getHandoffMessage,
   getSystemMessage,
   listCannedReplies,
+  updateTemplate,
 } from '../src/domain/templates/templateService.ts';
+import { getCachedTemplates } from '../src/domain/templates/templateCache.ts';
 import { HANDOFF_PLAYER_MESSAGES, NO_AGENTS_ONLINE_MESSAGE } from '../src/domain/bot/messages.ts';
 import { closeOwnerPool, seedWorkspace, truncateAll } from './helpers/db.ts';
 
@@ -131,5 +136,86 @@ describe('templateService read path', () => {
       getSystemMessage(tx, workspaceId, 'no_agents_online'),
     );
     expect(second).toBe(first);
+  });
+});
+
+describe('templateService write path', () => {
+  async function ctxFor(workspaceId: string) {
+    const { rows } = await (await import('./helpers/db.ts')).ownerPool.query<{ id: string }>(
+      `insert into agent (email, display_name, is_admin) values ($1, 'Test Admin', true) returning id`,
+      [`admin-${randomUUID()}@example.test`],
+    );
+    return { agentId: rows[0]!.id, workspaceId };
+  }
+
+  it('createSystemTemplate replaces the prior active row for a singleton key', async () => {
+    const workspaceId = await seedWorkspace();
+    const ctx = await ctxFor(workspaceId);
+
+    const first = await createSystemTemplate(ctx, {
+      key: 'no_agents_online',
+      body: 'First custom line.',
+    });
+    const second = await createSystemTemplate(ctx, {
+      key: 'no_agents_online',
+      body: 'Second custom line.',
+    });
+
+    expect(first.id).not.toBe(second.id);
+    const resolved = await withWorkspace(workspaceId, (tx) =>
+      getSystemMessage(tx, workspaceId, 'no_agents_online'),
+    );
+    expect(resolved).toBe('Second custom line.');
+  });
+
+  it('addHandoffVariant appends rather than replacing', async () => {
+    const workspaceId = await seedWorkspace();
+    const ctx = await ctxFor(workspaceId);
+
+    await addHandoffVariant(ctx, 'Variant one.');
+    await addHandoffVariant(ctx, 'Variant two.');
+
+    const seen = new Set<string>();
+    for (let i = 0; i < 30; i++) {
+      const message = await withWorkspace(workspaceId, (tx) => getHandoffMessage(tx, workspaceId));
+      seen.add(message);
+    }
+    expect(seen).toEqual(new Set(['Variant one.', 'Variant two.']));
+  });
+
+  it('createCannedReply then updateTemplate edits its body', async () => {
+    const workspaceId = await seedWorkspace();
+    const ctx = await ctxFor(workspaceId);
+
+    const created = await createCannedReply(ctx, { label: 'Intro', body: 'Hi there.' });
+    await updateTemplate(ctx, created.id, { body: 'Hi, {{agent_name}} here.' });
+
+    const replies = await withWorkspace(workspaceId, (tx) => listCannedReplies(tx, workspaceId));
+    expect(replies).toEqual([
+      { id: created.id, label: 'Intro', body: 'Hi, {{agent_name}} here.' },
+    ]);
+  });
+
+  it('updateTemplate with isActive:false removes it from the active list', async () => {
+    const workspaceId = await seedWorkspace();
+    const ctx = await ctxFor(workspaceId);
+
+    const created = await createCannedReply(ctx, { label: 'Intro', body: 'Hi there.' });
+    await updateTemplate(ctx, created.id, { isActive: false });
+
+    const replies = await withWorkspace(workspaceId, (tx) => listCannedReplies(tx, workspaceId));
+    expect(replies).toEqual([]);
+  });
+
+  it('any write invalidates the Redis cache for that workspace', async () => {
+    const workspaceId = await seedWorkspace();
+    const ctx = await ctxFor(workspaceId);
+
+    // Warm the cache
+    await withWorkspace(workspaceId, (tx) => getSystemMessage(tx, workspaceId, 'no_agents_online'));
+    expect(await getCachedTemplates(workspaceId)).not.toBeNull();
+
+    await createSystemTemplate(ctx, { key: 'no_agents_online', body: 'New line.' });
+    expect(await getCachedTemplates(workspaceId)).toBeNull();
   });
 });

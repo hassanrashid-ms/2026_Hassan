@@ -1,8 +1,10 @@
 import { and, asc, eq } from 'drizzle-orm';
-import type { Tx } from '../../shared/db/withWorkspace.ts';
+import { withWorkspace, type Tx } from '../../shared/db/withWorkspace.ts';
 import { messageTemplate } from '../../shared/db/schema/index.ts';
+import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts';
 import {
   getCachedTemplates,
+  invalidateCachedTemplates,
   setCachedTemplates,
   type CannedReplyEntry,
   type SystemMessageKey,
@@ -104,4 +106,145 @@ export async function listCannedReplies(
 ): Promise<CannedReplyEntry[]> {
   const { canned } = await loadTemplates(tx, workspaceId);
   return canned;
+}
+
+export type TemplateRowView = {
+  id: string;
+  kind: 'system' | 'canned';
+  key: string | null;
+  label: string | null;
+  body: string;
+  sort_order: number;
+  is_active: boolean;
+};
+
+function toView(row: typeof messageTemplate.$inferSelect): TemplateRowView {
+  return {
+    id: row.id,
+    kind: row.kind,
+    key: row.key,
+    label: row.label,
+    body: row.body,
+    sort_order: row.sortOrder,
+    is_active: row.isActive,
+  };
+}
+
+/**
+ * Singleton system keys (everything except 'handoff'): a new row replaces
+ * the prior active one rather than adding a second, so getSystemMessage's
+ * "first active row wins" never has to arbitrate between two live rows for
+ * the same key.
+ */
+export async function createSystemTemplate(
+  ctx: Pick<AgentContext, 'agentId' | 'workspaceId'>,
+  args: { key: Exclude<SystemMessageKey, 'handoff'>; body: string },
+): Promise<TemplateRowView> {
+  return withWorkspace(ctx.workspaceId, async (tx) => {
+    await tx
+      .update(messageTemplate)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(
+        and(
+          eq(messageTemplate.workspaceId, ctx.workspaceId),
+          eq(messageTemplate.kind, 'system'),
+          eq(messageTemplate.key, args.key),
+          eq(messageTemplate.isActive, true),
+        ),
+      );
+    const [created] = await tx
+      .insert(messageTemplate)
+      .values({
+        workspaceId: ctx.workspaceId,
+        kind: 'system',
+        key: args.key,
+        body: args.body,
+        sortOrder: 0,
+        createdByAgentId: ctx.agentId,
+      })
+      .returning();
+    await invalidateCachedTemplates(ctx.workspaceId);
+    return toView(created!);
+  });
+}
+
+export async function addHandoffVariant(
+  ctx: Pick<AgentContext, 'agentId' | 'workspaceId'>,
+  body: string,
+): Promise<TemplateRowView> {
+  return withWorkspace(ctx.workspaceId, async (tx) => {
+    const [maxRow] = await tx
+      .select({ sortOrder: messageTemplate.sortOrder })
+      .from(messageTemplate)
+      .where(
+        and(
+          eq(messageTemplate.workspaceId, ctx.workspaceId),
+          eq(messageTemplate.kind, 'system'),
+          eq(messageTemplate.key, 'handoff'),
+        ),
+      )
+      .orderBy(asc(messageTemplate.sortOrder))
+      .limit(1);
+    const [created] = await tx
+      .insert(messageTemplate)
+      .values({
+        workspaceId: ctx.workspaceId,
+        kind: 'system',
+        key: 'handoff',
+        body,
+        sortOrder: (maxRow?.sortOrder ?? -1) + 1,
+        createdByAgentId: ctx.agentId,
+      })
+      .returning();
+    await invalidateCachedTemplates(ctx.workspaceId);
+    return toView(created!);
+  });
+}
+
+export async function createCannedReply(
+  ctx: Pick<AgentContext, 'agentId' | 'workspaceId'>,
+  args: { label: string; body: string },
+): Promise<TemplateRowView> {
+  return withWorkspace(ctx.workspaceId, async (tx) => {
+    const [maxRow] = await tx
+      .select({ sortOrder: messageTemplate.sortOrder })
+      .from(messageTemplate)
+      .where(
+        and(eq(messageTemplate.workspaceId, ctx.workspaceId), eq(messageTemplate.kind, 'canned')),
+      )
+      .orderBy(asc(messageTemplate.sortOrder))
+      .limit(1);
+    const [created] = await tx
+      .insert(messageTemplate)
+      .values({
+        workspaceId: ctx.workspaceId,
+        kind: 'canned',
+        label: args.label,
+        body: args.body,
+        sortOrder: (maxRow?.sortOrder ?? -1) + 1,
+        createdByAgentId: ctx.agentId,
+      })
+      .returning();
+    await invalidateCachedTemplates(ctx.workspaceId);
+    return toView(created!);
+  });
+}
+
+export async function updateTemplate(
+  ctx: Pick<AgentContext, 'workspaceId'>,
+  id: string,
+  patch: { body?: string; label?: string; isActive?: boolean },
+): Promise<TemplateRowView> {
+  return withWorkspace(ctx.workspaceId, async (tx) => {
+    const [updated] = await tx
+      .update(messageTemplate)
+      .set({ ...patch, updatedAt: new Date() })
+      .where(
+        and(eq(messageTemplate.id, id), eq(messageTemplate.workspaceId, ctx.workspaceId)),
+      )
+      .returning();
+    if (!updated) throw new Error('Template not found in this workspace');
+    await invalidateCachedTemplates(ctx.workspaceId);
+    return toView(updated);
+  });
 }
