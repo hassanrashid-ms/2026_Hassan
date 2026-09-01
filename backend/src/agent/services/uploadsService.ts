@@ -2,9 +2,9 @@ import { randomUUID } from 'node:crypto';
 import type { z } from 'zod';
 import type { RequestUploadBody, RequestUploadResponse } from '@support/types';
 import {
-  ALLOWED_CHAT_ATTACHMENT_MIME_TYPES,
+  isAllowedUploadMimeType,
+  maxBytesForUpload,
   deleteObject,
-  maxBytesForAttachment,
   presignPutObject,
 } from '../../shared/storage/presign.ts';
 import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts';
@@ -23,6 +23,9 @@ export function extensionFor(contentType: string): string {
       return 'mp4';
     case 'video/webm':
       return 'webm';
+    case 'application/zip':
+    case 'application/x-zip-compressed':
+      return 'zip';
     default:
       return 'bin';
   }
@@ -41,14 +44,10 @@ export async function requestUpload(
   ctx: AgentContext,
   body: z.infer<typeof RequestUploadBody>,
 ): Promise<RequestUploadResult> {
-  if (
-    !ALLOWED_CHAT_ATTACHMENT_MIME_TYPES.includes(
-      body.content_type as (typeof ALLOWED_CHAT_ATTACHMENT_MIME_TYPES)[number],
-    )
-  ) {
+  if (!isAllowedUploadMimeType(body.content_type)) {
     return { outcome: 'invalid_media_type' };
   }
-  if (body.byte_size > maxBytesForAttachment(body.content_type)) {
+  if (body.byte_size > maxBytesForUpload(body.content_type)) {
     return { outcome: 'too_large' };
   }
 

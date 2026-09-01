@@ -35,6 +35,29 @@ export function maxBytesForAttachment(contentType: string): number {
     : MAX_ATTACHMENT_BYTES;
 }
 
+export const ALLOWED_IMPORT_MIME_TYPES = [
+  'application/zip',
+  'application/x-zip-compressed',
+] as const;
+
+export const MAX_IMPORT_ZIP_BYTES = 20 * 1024 * 1024;
+
+/** Every content type POST /uploads is willing to presign a PUT for. */
+export function isAllowedUploadMimeType(contentType: string): boolean {
+  return (
+    (ALLOWED_CHAT_ATTACHMENT_MIME_TYPES as readonly string[]).includes(contentType) ||
+    (ALLOWED_IMPORT_MIME_TYPES as readonly string[]).includes(contentType)
+  );
+}
+
+/** Size cap for POST /uploads, branching by which allowlist the content type falls in. */
+export function maxBytesForUpload(contentType: string): number {
+  if ((ALLOWED_IMPORT_MIME_TYPES as readonly string[]).includes(contentType)) {
+    return MAX_IMPORT_ZIP_BYTES;
+  }
+  return maxBytesForAttachment(contentType);
+}
+
 const PUT_TTL_SECONDS = 5 * 60;
 const GET_TTL_SECONDS = 10 * 60;
 
@@ -109,4 +132,19 @@ export async function deleteObject(key: string): Promise<void> {
   } catch (error) {
     if (!(error instanceof NotFound)) throw error;
   }
+}
+
+/**
+ * Reads an object fully into memory. Only used for the bulk-import zip path —
+ * every other consumer of this module streams via presigned URLs and never
+ * touches the bytes from Node. Zips are capped at MAX_IMPORT_ZIP_BYTES, so an
+ * in-memory buffer is fine here.
+ */
+export async function getObjectBuffer(key: string): Promise<Buffer> {
+  const env = getEnv();
+  const result = await getS3Client().send(
+    new GetObjectCommand({ Bucket: env.S3_BUCKET, Key: key }),
+  );
+  const bytes = await result.Body!.transformToByteArray();
+  return Buffer.from(bytes);
 }

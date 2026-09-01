@@ -10,6 +10,7 @@ import { signAgentSession } from '../src/shared/auth/agentSession.ts';
 import { closeWsAuthRedis } from '../src/shared/auth/wsAuthCache.ts';
 import { uploadsRouter } from '../src/agent/routers/uploadsRouter.ts';
 import { headObject } from '../src/shared/storage/presign.ts';
+import { requestUpload } from '../src/agent/services/uploadsService.ts';
 import { closeOwnerPool, ownerPool, seedWorkspace, truncateAll } from './helpers/db.ts';
 
 const app = express();
@@ -149,5 +150,47 @@ describe('DELETE /agent/uploads/:key', () => {
       .set('Authorization', `Bearer ${token}`)
       .set('X-Workspace-Id', workspaceId)
       .expect(404);
+  });
+});
+
+describe('requestUpload — zip imports', () => {
+  it('accepts application/zip up to the import size cap', async () => {
+    const ctx = { agentId: 'a', workspaceId: 'w', isAdmin: false };
+    const result = await requestUpload(ctx, {
+      filename: 'articles.zip',
+      content_type: 'application/zip',
+      byte_size: 10 * 1024 * 1024,
+    });
+    expect(result.outcome).toBe('ok');
+  });
+
+  it('rejects application/zip over the 20MB import cap', async () => {
+    const ctx = { agentId: 'a', workspaceId: 'w', isAdmin: false };
+    const result = await requestUpload(ctx, {
+      filename: 'articles.zip',
+      content_type: 'application/zip',
+      byte_size: 21 * 1024 * 1024,
+    });
+    expect(result.outcome).toBe('too_large');
+  });
+
+  it('still rejects unrelated mime types', async () => {
+    const ctx = { agentId: 'a', workspaceId: 'w', isAdmin: false };
+    const result = await requestUpload(ctx, {
+      filename: 'notes.txt',
+      content_type: 'text/plain',
+      byte_size: 100,
+    });
+    expect(result.outcome).toBe('invalid_media_type');
+  });
+
+  it('still accepts images under the existing 10MB cap unchanged', async () => {
+    const ctx = { agentId: 'a', workspaceId: 'w', isAdmin: false };
+    const result = await requestUpload(ctx, {
+      filename: 'photo.png',
+      content_type: 'image/png',
+      byte_size: 5 * 1024 * 1024,
+    });
+    expect(result.outcome).toBe('ok');
   });
 });

@@ -1,7 +1,7 @@
 import type { RequestHandler } from 'express';
 import { RequestUploadBody } from '@support/types';
 import { sendError } from '../../errors.ts';
-import { maxBytesForAttachment } from '../../shared/storage/presign.ts';
+import { maxBytesForUpload } from '../../shared/storage/presign.ts';
 import { cancelUpload, requestUpload } from '../services/uploadsService.ts';
 
 export const postUploadRequestHandler: RequestHandler = async (req, res) => {
@@ -11,7 +11,7 @@ export const postUploadRequestHandler: RequestHandler = async (req, res) => {
     sendError(res, 422, 'invalid_request', 'filename, content_type and byte_size are required.');
     return;
   }
-  if (body.data.byte_size > maxBytesForAttachment(body.data.content_type)) {
+  if (body.data.byte_size > maxBytesForUpload(body.data.content_type)) {
     sendError(res, 422, 'invalid_request', 'byte_size exceeds the size limit for this file type.');
     return;
   }
