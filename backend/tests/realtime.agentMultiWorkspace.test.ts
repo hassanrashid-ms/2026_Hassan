@@ -42,7 +42,8 @@ describe('agent socket joins one inbox room per active membership', () => {
       const conversationId = await seedConversation({
         workspaceId: workspaceB,
         playerId: playerB,
-        status: 'open',
+        status: 'escalated',
+        assignedAgentId: agentId,
       });
       const token = await signAgentSession({ agent_id: agentId });
 
