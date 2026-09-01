@@ -758,6 +758,29 @@ registry.registerPath({
 });
 
 registry.registerPath({
+  method: 'post',
+  path: '/agent/conversations/sweep-assign',
+  summary: 'Agent Sweep-Assign Unassigned Queue',
+  description:
+    'Drains the unassigned queue (priority, then age) into whichever eligible online agents are under their ticket cap, one ticket at a time so load interleaves across agents. Team lead or admin role required.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  responses: {
+    200: {
+      description: 'Sweep result',
+      content: {
+        'application/json': {
+          schema: z.object({
+            assignedCount: z.number().int(),
+            conversationIds: z.array(z.uuid()),
+          }),
+        },
+      },
+    },
+    403: { description: 'Forbidden — team lead or admin role required' },
+  },
+});
+
+registry.registerPath({
   method: 'patch',
   path: '/agent/presence',
   summary: 'Agent Set Own Presence',

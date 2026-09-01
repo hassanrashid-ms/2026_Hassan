@@ -25,6 +25,7 @@ import {
   getConversationContext,
   getConversationDetail,
 } from '../services/conversationContextService.ts';
+import { sweepUnassignedQueue } from '../../domain/routing/sweepUnassignedQueue.ts';
 
 const ConversationsQuery = z.object({
   status: z.enum([
@@ -420,6 +421,18 @@ export const getWorkspaceWorkloadHandler: RequestHandler = async (req, res) => {
   const ctx = req.agent!;
   const workload = await getWorkspaceWorkload(ctx);
   res.status(200).json(workload);
+};
+
+export const sweepAssignHandler: RequestHandler = async (req, res) => {
+  const ctx = req.agent!;
+  const { assignedCount, assignments } = await sweepUnassignedQueue(ctx.workspaceId);
+  for (const a of assignments) {
+    emitInboxChanged(getIo(), ctx.workspaceId, a.conversationId, a.status);
+  }
+  res.status(200).json({
+    assignedCount,
+    conversationIds: assignments.map((a) => a.conversationId),
+  });
 };
 
 export const getConversationContextHandler: RequestHandler = async (req, res) => {

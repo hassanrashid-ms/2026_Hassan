@@ -14,6 +14,7 @@ import {
   reclassifyConversationHandler,
   reassignConversationHandler,
   setConversationPriorityHandler,
+  sweepAssignHandler,
   takeOverConversationHandler,
   unassignConversationHandler,
   unescalateConversationHandler,
@@ -22,6 +23,11 @@ import {
 export const conversationsRouter = Router();
 conversationsRouter.get('/conversations', listConversationsHandler);
 conversationsRouter.get('/workload', requireTeamLeadOrAdmin, getWorkspaceWorkloadHandler);
+conversationsRouter.post(
+  '/conversations/sweep-assign',
+  requireTeamLeadOrAdmin,
+  sweepAssignHandler,
+);
 conversationsRouter.get('/conversations/:id', getConversationDetailHandler);
 conversationsRouter.get('/conversations/:id/context', getConversationContextHandler);
 conversationsRouter.post('/conversations/:id/claim', claimConversationHandler);
