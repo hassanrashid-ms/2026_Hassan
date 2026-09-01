@@ -141,7 +141,9 @@ describe('templateService read path', () => {
 
 describe('templateService write path', () => {
   async function ctxFor(workspaceId: string) {
-    const { rows } = await (await import('./helpers/db.ts')).ownerPool.query<{ id: string }>(
+    const { rows } = await (
+      await import('./helpers/db.ts')
+    ).ownerPool.query<{ id: string }>(
       `insert into agent (email, display_name, is_admin) values ($1, 'Test Admin', true) returning id`,
       [`admin-${randomUUID()}@example.test`],
     );
@@ -191,9 +193,7 @@ describe('templateService write path', () => {
     await updateTemplate(ctx, created.id, { body: 'Hi, {{agent_name}} here.' });
 
     const replies = await withWorkspace(workspaceId, (tx) => listCannedReplies(tx, workspaceId));
-    expect(replies).toEqual([
-      { id: created.id, label: 'Intro', body: 'Hi, {{agent_name}} here.' },
-    ]);
+    expect(replies).toEqual([{ id: created.id, label: 'Intro', body: 'Hi, {{agent_name}} here.' }]);
   });
 
   it('updateTemplate with isActive:false removes it from the active list', async () => {
