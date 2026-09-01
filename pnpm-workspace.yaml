@@ -3,7 +3,7 @@ packages:
   - backend
   - frontend
 allowBuilds:
-  '@scarf/scarf': set this to true or false
+  '@scarf/scarf': true
   esbuild: true
   msgpackr-extract: true
   protobufjs: true
