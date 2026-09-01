@@ -15,6 +15,7 @@ Separately, agents have no library of canned replies (e.g. an intro message) the
 - Every string above becomes an editable, workspace-scoped template.
 - Handoff keeps its "pick one of N variants at random" behavior; admins manage the variant list.
 - A shared, workspace-wide library of canned replies agents can insert into the chat composer.
+- Canned replies support a `{{agent_name}}` placeholder, resolved to the sending agent's name at insert time.
 - Hot-path reads (every bot turn, every handoff) never hit Postgres directly — Redis-backed.
 
 ## Non-goals
@@ -102,7 +103,7 @@ No DELETE route — deactivation is a PATCH, consistent with the no-hard-deletes
 - Two sections on the page:
   - **System Messages** — no-agents-online (single), handoff (list of variants: add/edit/remove/reorder), form summaries (completed/partial/skipped).
   - **Canned Replies** — label + body list; admin add/edit/deactivate.
-- Inbox chat composer gets an "Insert Template" picker (`listCannedReplies`, fetched via TanStack Query and cached client-side). Selecting one inserts `body` into the composer's text input for the agent to review/edit before sending — it does not auto-send.
+- Inbox chat composer gets an "Insert Template" picker (`listCannedReplies`, fetched via TanStack Query and cached client-side). Selecting one resolves `{{agent_name}}` in `body` against the logged-in agent's `displayName` (from the existing agent session, client-side only — never stored resolved), then inserts the result into the composer's text input for the agent to review/edit before sending. This is the same `{{...}}` placeholder syntax `defaultPrompt.ts` already uses for bot-prompt placeholders (`{{subintents}}`, `{{articles}}`, etc.), kept consistent rather than introducing a second syntax.
 
 ## Rollout
 
