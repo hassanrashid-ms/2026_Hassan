@@ -26,7 +26,8 @@ ticket exists and picking an agent by hand.
 - Assignment must not dogpile the first agent to log in — load should interleave
   across whoever is online and under cap, not fill one agent to their cap before
   anyone else gets a ticket.
-- An agent should be able to manually trigger the same sweep on demand.
+- A Team Lead/Admin should be able to manually trigger the same sweep on demand
+  from the Tickets tab.
 - An agent should be able to release one of their own tickets back to the
   unassigned queue.
 
@@ -87,11 +88,14 @@ considered.
    sweep for that agent's workspace. This is fire-and-forget relative to the
    presence update itself — the sweep runs after, does not block the presence
    write.
-2. **Manual button.** `POST /conversations/sweep-assign` (any authenticated,
-   online agent) runs `sweepUnassignedQueue` for the caller's workspace
-   synchronously and returns the count of conversations assigned. Surfaced in
-   the agent-console inbox as an "Assign next" action with a toast reporting how
-   many tickets were picked up (including zero).
+2. **Manual button.** `POST /conversations/sweep-assign`, restricted to Team
+   Lead/Admin via `requireTeamLeadOrAdmin` (same guard as
+   `PATCH /conversations/:id/assign` and `GET /workload`), runs
+   `sweepUnassignedQueue` for the caller's workspace synchronously and returns
+   the count of conversations assigned. Surfaced in the agent-console **Tickets**
+   tab (not the inbox) as an "Assign next" action, visible only to Team
+   Lead/Admin, with a toast reporting how many tickets were picked up (including
+   zero).
 
 A sweep triggered by one agent's presence change or button click is **not**
 scoped to that agent — it drains the queue across all currently-online eligible
@@ -120,7 +124,7 @@ requirement beyond ownership.
 | Method | Path | Handler | Notes |
 |---|---|---|---|
 | `POST` | `/conversations/:id/unassign` | `unassignConversationHandler` | 403 if caller isn't the assigned agent |
-| `POST` | `/conversations/sweep-assign` | `sweepAssignHandler` | Returns `{ assignedCount: number, conversationIds: string[] }` |
+| `POST` | `/conversations/sweep-assign` | `sweepAssignHandler` | `requireTeamLeadOrAdmin`; returns `{ assignedCount: number, conversationIds: string[] }` |
 
 Both must be registered in `backend/src/docs/openapi.ts` per repo convention.
 
@@ -133,8 +137,10 @@ convention).
 
 ## Frontend
 
-- New "Assign next" button in the agent-console inbox (near existing queue
-  controls), calling `POST /conversations/sweep-assign`, showing a toast with the
+- New "Assign next" button in the agent-console **Tickets** tab
+  (`frontend/src/surfaces/agent-console/pages/Tickets/Tickets.tsx`), gated the
+  same way `GET /workload` already is on the frontend (Team Lead/Admin only),
+  calling `POST /conversations/sweep-assign` and showing a toast with the
   assigned count.
 - New "Release ticket" action in `ThreadPanel.tsx` (or wherever claim/take-over
   actions currently live), visible only when `conversation.assigned_agent_id`
