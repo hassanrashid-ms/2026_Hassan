@@ -9,7 +9,7 @@
  * and none is empty: postMessage refuses a blank body at the choke point, and a
  * blank system card would record nothing anywhere.
  */
-const FORM_SUMMARY_MESSAGES = {
+export const FORM_SUMMARY_MESSAGES = {
   completed: 'Thanks — your answers are with the team now.',
   partial: 'Thanks — what you answered is with the team now.',
   skipped: 'No problem — this is with the team now.',
