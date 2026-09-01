@@ -27,6 +27,19 @@ export const CreateArticleBody = z.object({
   intent_id: z.uuid().optional(),
 });
 
+export const BulkImportArticlesBody = z.object({
+  key: z.string().min(1),
+});
+
+export type BulkImportArticleResult =
+  | { filename: string; status: 'created'; title: string; article_id: string }
+  | { filename: string; status: 'error'; reason: string };
+
+export type BulkImportArticlesResponse = {
+  results: BulkImportArticleResult[];
+  summary: { total: number; created: number; failed: number };
+};
+
 export const UpdateArticleBody = z.object({
   title: z.string().max(200).optional(),
   body: z.string().optional(),
