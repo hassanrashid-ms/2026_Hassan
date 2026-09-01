@@ -1,8 +1,14 @@
+import express from 'express'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
+import { req as request } from './helpers/http.ts'
 import { closeDb } from '../src/shared/db/client.ts'
 import { getBotMetrics, getSpeedMetrics, getTeamMetrics, getVolumeMetrics } from '../src/agent/services/analyticsService.ts'
 import { appendEvent } from '../src/shared/events/appendEvent.ts'
 import { withWorkspace } from '../src/shared/db/withWorkspace.ts'
+import { requireAgentSession } from '../src/shared/middleware/requireAgentSession.ts'
+import { errorMiddleware } from '../src/errors.ts'
+import { signAgentSession } from '../src/shared/auth/agentSession.ts'
+import { analyticsRouter } from '../src/agent/routers/analyticsRouter.ts'
 import {
   closeOwnerPool,
   ownerPool,
@@ -223,5 +229,55 @@ describe('getTeamMetrics', () => {
     const result = await getTeamMetrics({ workspaceId }, RANGE)
 
     expect(result.unassignedQueueDepth.series).toEqual([{ bucket: '2026-08-05', depth: 1 }])
+  })
+})
+
+describe('GET /agent/analytics', () => {
+  const app = express()
+  app.use(express.json())
+  app.use(requireAgentSession, analyticsRouter)
+  app.use(errorMiddleware)
+
+  it('returns every metric group for the given range', async () => {
+    const workspaceId = await seedWorkspace()
+    const { rows } = await ownerPool.query<{ id: string }>(
+      `insert into agent (email, display_name) values ('agent1@example.test', 'Agent One') returning id`,
+    )
+    const agentId = rows[0]!.id
+    await ownerPool.query(`insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`, [
+      workspaceId,
+      agentId,
+    ])
+    const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId })
+
+    const res = await request(app)
+      .get('/analytics')
+      .query({ from: '2026-08-01', to: '2026-08-31', granularity: 'day' })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+
+    expect(res.body).toHaveProperty('volume')
+    expect(res.body).toHaveProperty('speed')
+    expect(res.body).toHaveProperty('bot')
+    expect(res.body).toHaveProperty('team')
+  })
+
+  it('422s on an invalid granularity', async () => {
+    const workspaceId = await seedWorkspace()
+    const { rows } = await ownerPool.query<{ id: string }>(
+      `insert into agent (email, display_name) values ('agent1@example.test', 'Agent One') returning id`,
+    )
+    const agentId = rows[0]!.id
+    await ownerPool.query(`insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`, [
+      workspaceId,
+      agentId,
+    ])
+    const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId })
+
+    await request(app)
+      .get('/analytics')
+      .query({ from: '2026-08-01', to: '2026-08-31', granularity: 'month' })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(422)
   })
 })

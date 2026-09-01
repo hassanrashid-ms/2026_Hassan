@@ -4,6 +4,7 @@ import { ownerPool, closeOwnerPool, seedWorkspace, seedPlayer } from './helpers/
 
 const EXPECTED_TABLES = [
   'agent',
+  'agent_dashboard_layout',
   'article',
   'article_attachment',
   'article_version',

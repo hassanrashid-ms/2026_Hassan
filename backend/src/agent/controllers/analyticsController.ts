@@ -2,6 +2,7 @@ import type { RequestHandler } from 'express'
 import { z } from 'zod'
 import { sendError } from '../../errors.ts'
 import { getDashboardLayout, saveDashboardLayout } from '../services/dashboardLayoutService.ts'
+import { getBotMetrics, getSpeedMetrics, getTeamMetrics, getVolumeMetrics } from '../services/analyticsService.ts'
 
 const DashboardLayoutItemSchema = z.object({
   i: z.string().min(1),
@@ -33,4 +34,27 @@ export const saveDashboardLayoutHandler: RequestHandler = async (req, res) => {
   }
   await saveDashboardLayout(ctx, body.data.layout)
   res.status(200).json({ ok: true })
+}
+
+const AnalyticsQuery = z.object({
+  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  granularity: z.enum(['day', 'week']).default('day'),
+})
+
+export const getAnalyticsHandler: RequestHandler = async (req, res) => {
+  const ctx = req.agent!
+  const query = AnalyticsQuery.safeParse(req.query)
+  if (!query.success) {
+    sendError(res, 422, 'invalid_request', 'from/to must be YYYY-MM-DD and granularity must be day or week.')
+    return
+  }
+  const range = query.data
+  const [volume, speed, bot, team] = await Promise.all([
+    getVolumeMetrics(ctx, range),
+    getSpeedMetrics(ctx, range),
+    getBotMetrics(ctx, range),
+    getTeamMetrics(ctx, range),
+  ])
+  res.status(200).json({ range, volume, speed, bot, team })
 }

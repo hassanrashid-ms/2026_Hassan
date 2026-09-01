@@ -2779,6 +2779,95 @@ registry.registerPath({
   },
 });
 
+// --- 5. ANALYTICS ---
+const AnalyticsRangeSchema = z.object({
+  from: z.string().openapi({ example: '2026-08-01' }),
+  to: z.string().openapi({ example: '2026-08-31' }),
+  granularity: z.enum(['day', 'week']),
+})
+
+const AnalyticsResponseSchema = z.object({
+  range: AnalyticsRangeSchema,
+  volume: z.object({
+    series: z.array(z.object({ bucket: z.string(), opened: z.number(), resolved: z.number() })),
+    byStatus: z.array(z.object({ status: z.string(), count: z.number() })),
+    openTotal: z.number(),
+    byPriority: z.array(z.object({ priority: z.string(), count: z.number() })),
+  }),
+  speed: z.object({
+    firstResponse: z.object({
+      avgSeconds: z.number().nullable(),
+      p50Seconds: z.number().nullable(),
+      p90Seconds: z.number().nullable(),
+      series: z.array(z.object({ bucket: z.string(), seconds: z.number().nullable() })),
+    }),
+    resolution: z.object({
+      avgSeconds: z.number().nullable(),
+      p50Seconds: z.number().nullable(),
+      p90Seconds: z.number().nullable(),
+      series: z.array(z.object({ bucket: z.string(), seconds: z.number().nullable() })),
+    }),
+    timeToClaim: z.object({ series: z.array(z.object({ bucket: z.string(), seconds: z.number().nullable() })) }),
+  }),
+  bot: z.object({
+    containmentRate: z.number().nullable(),
+    handoff: z.object({ rate: z.number().nullable(), byReason: z.array(z.object({ reason: z.string(), count: z.number() })) }),
+    articleHitRate: z.number().nullable(),
+  }),
+  team: z.object({
+    avgOpenPerActiveAgent: z.number().nullable(),
+    unassignedQueueDepth: z.object({ series: z.array(z.object({ bucket: z.string(), depth: z.number() })) }),
+  }),
+})
+
+const DashboardLayoutSchema = z.object({
+  items: z.array(z.object({ i: z.string(), x: z.number(), y: z.number(), w: z.number(), h: z.number() })),
+  visibleTileIds: z.array(z.string()),
+})
+
+registry.registerPath({
+  method: 'get',
+  path: '/agent/analytics',
+  summary: 'Workspace analytics dashboard data',
+  description:
+    'One aggregate response covering volume/status, speed, bot performance and team metric groups for a date range.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: {
+    query: z.object({ from: z.string(), to: z.string(), granularity: z.enum(['day', 'week']).optional() }),
+  },
+  responses: {
+    200: { description: 'Analytics data', content: { 'application/json': { schema: AnalyticsResponseSchema } } },
+    422: { description: 'Invalid range or granularity' },
+  },
+})
+
+registry.registerPath({
+  method: 'get',
+  path: '/agent/analytics/layout',
+  summary: "Get the caller's saved dashboard tile layout",
+  security: [{ [bearerAgentJwt.name]: [] }],
+  responses: {
+    200: {
+      description: 'Saved or default layout',
+      content: { 'application/json': { schema: z.object({ layout: DashboardLayoutSchema }) } },
+    },
+  },
+})
+
+registry.registerPath({
+  method: 'put',
+  path: '/agent/analytics/layout',
+  summary: "Save the caller's dashboard tile layout",
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: {
+    body: { content: { 'application/json': { schema: z.object({ layout: DashboardLayoutSchema }) } } },
+  },
+  responses: {
+    200: { description: 'Saved' },
+    422: { description: 'Invalid layout shape' },
+  },
+})
+
 // Build Document
 const generator = new OpenApiGeneratorV3(registry.definitions);
 
