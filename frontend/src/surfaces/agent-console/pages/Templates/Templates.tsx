@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   createTemplate,
@@ -10,6 +10,9 @@ import {
 import { isAdmin, loadAgentSession } from '../../lib/agentSession.ts';
 import { Button } from '../../components/ui/button.tsx';
 import { Input } from '../../components/ui/input.tsx';
+import { Textarea } from '../../components/ui/textarea.tsx';
+import { Card, CardContent, CardFooter, CardHeader } from '../../components/ui/card.tsx';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs.tsx';
 
 const SYSTEM_LABELS: Record<SystemMessageKey, string> = {
   no_agents_online: 'No agents online',
@@ -18,6 +21,56 @@ const SYSTEM_LABELS: Record<SystemMessageKey, string> = {
   form_summary_partial: 'Form partially answered',
   form_summary_skipped: 'Form skipped',
 };
+
+/** Same {{...}} syntax as the bot prompt's placeholders (PromptTab.tsx) — the
+ * only one canned replies resolve today, client-side at insert time. */
+const CANNED_PLACEHOLDERS = [{ tag: '{{agent_name}}', desc: "the sending agent's display name" }];
+
+function insertAtCursor(
+  el: HTMLTextAreaElement | null,
+  value: string,
+  setValue: (next: string) => void,
+  insert: string,
+) {
+  if (!el) {
+    setValue(value + insert);
+    return;
+  }
+  const start = el.selectionStart ?? value.length;
+  const end = el.selectionEnd ?? value.length;
+  setValue(value.slice(0, start) + insert + value.slice(end));
+  requestAnimationFrame(() => {
+    el.focus();
+    const pos = start + insert.length;
+    el.setSelectionRange(pos, pos);
+  });
+}
+
+function PlaceholderChips({
+  onInsert,
+  disabled,
+}: {
+  onInsert: (tag: string) => void;
+  disabled: boolean;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {CANNED_PLACEHOLDERS.map((p) => (
+        <button
+          key={p.tag}
+          type="button"
+          disabled={disabled}
+          onClick={() => onInsert(p.tag)}
+          title={p.desc}
+          className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-slate-700 hover:bg-slate-200 disabled:pointer-events-none disabled:opacity-50"
+        >
+          {p.tag}
+        </button>
+      ))}
+      <span className="text-[10px] text-muted">click to insert</span>
+    </div>
+  );
+}
 
 export function Templates() {
   const session = loadAgentSession();
@@ -82,48 +135,50 @@ export function Templates() {
       <div className="flex items-center justify-between border-b border-slate-200 p-3">
         <span className="text-sm font-semibold">Templates</span>
       </div>
-      <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-auto p-3">
-        <section className="flex flex-col gap-3">
-          <h3 className="text-xs font-semibold tracking-wide text-muted uppercase">
-            System Messages
-          </h3>
-          {(Object.keys(SYSTEM_LABELS) as SystemMessageKey[]).map((key) => (
-            <VariantListEditor
-              key={key}
-              label={SYSTEM_LABELS[key]}
-              hint={
-                key === 'handoff'
-                  ? 'Picked at random — leave empty to use the built-in defaults'
-                  : undefined
-              }
-              variants={data.system[key]}
-              readOnly={readOnly}
-              onAdd={(body) => addSystemVariant.mutate({ key, body })}
-              onUpdate={(id, body) => updateSystemVariant.mutate({ id, body })}
-              onRemove={(id) => removeSystemVariant.mutate(id)}
-            />
-          ))}
-        </section>
-        <section className="flex flex-col gap-3">
-          <h3 className="text-xs font-semibold tracking-wide text-muted uppercase">
-            Canned Replies
-          </h3>
-          {data.canned.map((reply) => (
-            <CannedReplyEditor
-              key={reply.id}
-              reply={reply}
-              readOnly={readOnly}
-              onUpdate={(label, body) => updateCannedReply.mutate({ id: reply.id, label, body })}
-              onRemove={() => removeCannedReply.mutate(reply.id)}
-            />
-          ))}
-          {!readOnly && (
-            <NewCannedReplyForm
-              onAdd={(label, body) => addCannedReply.mutate({ label, body })}
-            />
-          )}
-        </section>
-      </div>
+      <Tabs defaultValue="system" className="min-h-0 min-w-0 flex-1 gap-0 p-3">
+        <TabsList>
+          <TabsTrigger value="system">System Messages</TabsTrigger>
+          <TabsTrigger value="canned">Canned Replies</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="system" className="min-h-0 overflow-auto pt-3">
+          <div className="flex flex-col gap-4">
+            {(Object.keys(SYSTEM_LABELS) as SystemMessageKey[]).map((key) => (
+              <VariantListEditor
+                key={key}
+                label={SYSTEM_LABELS[key]}
+                hint={
+                  key === 'handoff'
+                    ? 'Picked at random — leave empty to use the built-in defaults'
+                    : undefined
+                }
+                variants={data.system[key]}
+                readOnly={readOnly}
+                onAdd={(body) => addSystemVariant.mutate({ key, body })}
+                onUpdate={(id, body) => updateSystemVariant.mutate({ id, body })}
+                onRemove={(id) => removeSystemVariant.mutate(id)}
+              />
+            ))}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="canned" className="min-h-0 overflow-auto pt-3">
+          <div className="flex flex-col gap-3">
+            {data.canned.map((reply) => (
+              <CannedReplyCard
+                key={reply.id}
+                reply={reply}
+                readOnly={readOnly}
+                onUpdate={(label, body) => updateCannedReply.mutate({ id: reply.id, label, body })}
+                onRemove={() => removeCannedReply.mutate(reply.id)}
+              />
+            ))}
+            {!readOnly && (
+              <NewCannedReplyCard onAdd={(label, body) => addCannedReply.mutate({ label, body })} />
+            )}
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
@@ -213,7 +268,7 @@ function VariantListEditor({
   );
 }
 
-function CannedReplyEditor({
+function CannedReplyCard({
   reply,
   readOnly,
   onUpdate,
@@ -226,60 +281,90 @@ function CannedReplyEditor({
 }) {
   const [label, setLabel] = useState(reply.label);
   const [body, setBody] = useState(reply.body);
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
   const dirty = label !== reply.label || body !== reply.body;
   return (
-    <div className="flex flex-col gap-1 rounded-md border border-muted/20 p-2">
-      <div className="flex gap-2">
+    <Card>
+      <CardHeader className="pb-2">
         <Input
-          className="max-w-48"
+          className="max-w-64 border-none px-0 text-sm font-semibold shadow-none focus-visible:ring-0"
           value={label}
           disabled={readOnly}
+          placeholder="Label, e.g. Intro"
           onChange={(e) => setLabel(e.target.value)}
         />
-        <Input value={body} disabled={readOnly} onChange={(e) => setBody(e.target.value)} />
-      </div>
-      <div className="flex gap-2">
-        <Button type="button" size="sm" disabled={readOnly || !dirty} onClick={() => onUpdate(label, body)}>
-          Save
-        </Button>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-2 pt-0">
+        <PlaceholderChips
+          disabled={readOnly}
+          onInsert={(tag) => insertAtCursor(bodyRef.current, body, setBody, tag)}
+        />
+        <Textarea
+          ref={bodyRef}
+          value={body}
+          disabled={readOnly}
+          onChange={(e) => setBody(e.target.value)}
+          className="min-h-20 text-sm"
+        />
+      </CardContent>
+      <CardFooter className="justify-end gap-2 pt-0">
         <Button type="button" size="sm" variant="outline" disabled={readOnly} onClick={onRemove}>
           Remove
         </Button>
-      </div>
-    </div>
+        <Button
+          type="button"
+          size="sm"
+          disabled={readOnly || !dirty || !label.trim() || !body.trim()}
+          onClick={() => onUpdate(label.trim(), body.trim())}
+        >
+          Save
+        </Button>
+      </CardFooter>
+    </Card>
   );
 }
 
-function NewCannedReplyForm({ onAdd }: { onAdd: (label: string, body: string) => void }) {
+function NewCannedReplyCard({ onAdd }: { onAdd: (label: string, body: string) => void }) {
   const [label, setLabel] = useState('');
   const [body, setBody] = useState('');
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
   return (
-    <div className="flex flex-col gap-1 rounded-md border border-dashed border-muted/40 p-2">
-      <div className="flex gap-2">
+    <Card className="border-dashed">
+      <CardHeader className="pb-2">
         <Input
-          className="max-w-48"
+          className="max-w-64 border-none px-0 text-sm font-semibold shadow-none focus-visible:ring-0"
           placeholder="Label, e.g. Intro"
           value={label}
           onChange={(e) => setLabel(e.target.value)}
         />
-        <Input
-          placeholder="Body — use {{agent_name}} for the agent's name"
+      </CardHeader>
+      <CardContent className="flex flex-col gap-2 pt-0">
+        <PlaceholderChips
+          disabled={false}
+          onInsert={(tag) => insertAtCursor(bodyRef.current, body, setBody, tag)}
+        />
+        <Textarea
+          ref={bodyRef}
+          placeholder="Hi, this is {{agent_name}}! How can I help?"
           value={body}
           onChange={(e) => setBody(e.target.value)}
+          className="min-h-20 text-sm"
         />
-      </div>
-      <Button
-        type="button"
-        size="sm"
-        disabled={label.trim().length === 0 || body.trim().length === 0}
-        onClick={() => {
-          onAdd(label.trim(), body.trim());
-          setLabel('');
-          setBody('');
-        }}
-      >
-        Add canned reply
-      </Button>
-    </div>
+      </CardContent>
+      <CardFooter className="justify-end pt-0">
+        <Button
+          type="button"
+          size="sm"
+          disabled={label.trim().length === 0 || body.trim().length === 0}
+          onClick={() => {
+            onAdd(label.trim(), body.trim());
+            setLabel('');
+            setBody('');
+          }}
+        >
+          Add canned reply
+        </Button>
+      </CardFooter>
+    </Card>
   );
 }
