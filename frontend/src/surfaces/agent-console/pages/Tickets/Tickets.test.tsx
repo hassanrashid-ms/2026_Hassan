@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { Toaster } from 'sonner';
 import { Tickets } from './Tickets.tsx';
 import { loadAgentSession } from '../../lib/agentSession.ts';
 import * as agentApi from '../../api/agentApi.ts';
@@ -19,11 +20,13 @@ vi.mock('../../../../features/chat/api/socket.ts', () => ({
 vi.mock('../../api/agentApi.ts');
 
 function renderTickets(path = '/tickets') {
-  vi.mocked(loadAgentSession).mockReturnValue({
-    token: 'tok',
-    agentId: 'agent-1',
-    workspaceId: 'ws-1',
-  } as never);
+  if (!vi.mocked(loadAgentSession).getMockImplementation()) {
+    vi.mocked(loadAgentSession).mockReturnValue({
+      token: 'tok',
+      agentId: 'agent-1',
+      workspaceId: 'ws-1',
+    } as never);
+  }
   vi.mocked(agentApi.fetchTags).mockResolvedValue([]);
   vi.mocked(agentApi.fetchIntents).mockResolvedValue({ intents: [] });
   vi.mocked(agentApi.fetchWorkspaceAgents).mockResolvedValue({ agents: [] });
@@ -31,6 +34,7 @@ function renderTickets(path = '/tickets') {
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[path]}>
+        <Toaster />
         <Routes>
           <Route path="/tickets" element={<Tickets />} />
           <Route path="/tickets/:conversationId" element={<Tickets />} />
@@ -268,5 +272,44 @@ describe('Tickets view toggle', () => {
         undefined,
       ),
     );
+  });
+});
+
+describe('Assign next (sweep)', () => {
+  it('shows the button for a team lead and reports the assigned count on click', async () => {
+    vi.mocked(agentApi.fetchInbox).mockResolvedValue({ conversations: [], nextCursor: null });
+    const sweepSpy = vi
+      .mocked(agentApi.sweepAssign)
+      .mockResolvedValue({ assignedCount: 3, conversationIds: ['c1', 'c2', 'c3'] });
+    vi.mocked(loadAgentSession).mockReturnValue({
+      token: 'tok',
+      agentId: 'agent-1',
+      workspaceId: 'ws-1',
+      role: 'team_lead',
+    } as never);
+    const user = userEvent.setup();
+
+    renderTickets('/tickets');
+
+    const button = await screen.findByRole('button', { name: 'Assign next' });
+    await user.click(button);
+
+    await waitFor(() => expect(sweepSpy).toHaveBeenCalledWith('tok'));
+    await screen.findByText('Assigned 3 tickets.');
+  });
+
+  it('hides the button for a plain agent', async () => {
+    vi.mocked(agentApi.fetchInbox).mockResolvedValue({ conversations: [], nextCursor: null });
+    vi.mocked(loadAgentSession).mockReturnValue({
+      token: 'tok',
+      agentId: 'agent-1',
+      workspaceId: 'ws-1',
+      role: 'agent',
+    } as never);
+
+    renderTickets('/tickets');
+
+    await waitFor(() => expect(agentApi.fetchInbox).toHaveBeenCalled());
+    expect(screen.queryByRole('button', { name: 'Assign next' })).not.toBeInTheDocument();
   });
 });

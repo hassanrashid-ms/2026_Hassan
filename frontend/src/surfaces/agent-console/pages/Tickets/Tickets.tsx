@@ -6,11 +6,13 @@ import { useNavigate, useParams } from 'react-router-dom';
 import {
   claimConversation,
   fetchInbox,
+  sweepAssign,
   type ConversationListFilter,
   type TicketsQueryFilters,
 } from '../../api/agentApi.ts';
-import { loadAgentSession } from '../../lib/agentSession.ts';
+import { loadAgentSession, canBuildForms } from '../../lib/agentSession.ts';
 import { cn } from '../../lib/cn.ts';
+import { toast } from 'sonner';
 import { createSocket } from '../../../../features/chat/api/socket.ts';
 import { handleSessionExpired } from '../../lib/authErrorHandling.ts';
 import { ConversationDetailPane } from '../../components/ConversationDetailPane.tsx';
@@ -386,6 +388,15 @@ export function Tickets() {
   const navigate = useNavigate();
   const session = loadAgentSession();
   const queryClient = useQueryClient();
+  const sweep = useMutation({
+    mutationFn: () => sweepAssign(session!.token),
+    onSuccess: (result) => {
+      void queryClient.invalidateQueries({ queryKey: ['tickets'] });
+      void queryClient.invalidateQueries({ queryKey: ['tickets-summary'] });
+      toast.success(`Assigned ${result.assignedCount} tickets.`);
+    },
+    onError: () => toast.error("Couldn't run the assignment sweep."),
+  });
   const [filters, updateFilters] = useTicketsFilters();
   const queryFilters = toQueryFilters(filters);
   const filtersActive = hasActiveFilters(queryFilters);
@@ -520,6 +531,17 @@ export function Tickets() {
             List
           </button>
         </div>
+        {session && canBuildForms(session) && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={sweep.isPending}
+            onClick={() => sweep.mutate()}
+          >
+            Assign next
+          </Button>
+        )}
       </div>
       <div className="mb-4">
         <TicketsFilterBar token={session.token} filters={filters} onChange={updateFilters} />
