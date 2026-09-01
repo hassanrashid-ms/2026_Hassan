@@ -1,6 +1,8 @@
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ArticleStateValue } from '@support/types';
 import { fetchArticles } from '../../../api/agentApi.ts';
+import { canBuildForms, loadAgentSession } from '../../../lib/agentSession.ts';
 import { Badge } from '../../../components/ui/badge.tsx';
 import { Button } from '../../../components/ui/button.tsx';
 import { EmptyState } from '../../../components/ui/empty-state.tsx';
@@ -13,6 +15,7 @@ import {
   TableRow,
 } from '../../../components/ui/table.tsx';
 import { cn } from '../../../lib/cn.ts';
+import { BulkImportDialog } from './BulkImportDialog.tsx';
 
 const STATE_BADGE_VARIANT: Record<ArticleStateValue, 'secondary' | 'success' | 'outline'> = {
   draft: 'secondary',
@@ -37,15 +40,30 @@ export function ArticleTable({
   onSelect: (id: string) => void;
   onNew: () => void;
 }) {
+  const queryClient = useQueryClient();
+  const [bulkImportOpen, setBulkImportOpen] = useState(false);
+  const session = loadAgentSession();
   const articles = useQuery({ queryKey: ['admin-articles'], queryFn: () => fetchArticles(token) });
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex items-center justify-between border-b border-slate-200 p-3">
         <span className="text-sm font-semibold">Articles</span>
-        <Button type="button" size="sm" onClick={onNew}>
-          + New
-        </Button>
+        <div className="flex items-center gap-2">
+          {canBuildForms(session) && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setBulkImportOpen(true)}
+            >
+              Bulk Import
+            </Button>
+          )}
+          <Button type="button" size="sm" onClick={onNew}>
+            + New
+          </Button>
+        </div>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
         {articles.data?.articles.length === 0 ? (
@@ -96,6 +114,16 @@ export function ArticleTable({
           </Table>
         )}
       </div>
+      <BulkImportDialog
+        open={bulkImportOpen}
+        onOpenChange={setBulkImportOpen}
+        token={token}
+        onImported={(response) => {
+          if (response.summary.created > 0) {
+            void queryClient.invalidateQueries({ queryKey: ['admin-articles'] });
+          }
+        }}
+      />
     </div>
   );
 }
