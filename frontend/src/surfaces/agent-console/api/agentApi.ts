@@ -704,3 +704,56 @@ export function saveWorkspaceSettings(
     body: JSON.stringify(patch),
   });
 }
+
+/**
+ * Mirrors backend/src/agent/services/templatesAdminService.ts's TemplatesAdminView
+ * and TemplateRowView. Local frontend-side contract, same convention as
+ * WorkspaceSettingsView above — not sourced from @support/types.
+ */
+export type SystemMessageKey =
+  | 'no_agents_online'
+  | 'form_summary_completed'
+  | 'form_summary_partial'
+  | 'form_summary_skipped';
+
+export type TemplateRowView = {
+  id: string;
+  kind: 'system' | 'canned';
+  key: string | null;
+  label: string | null;
+  body: string;
+  sort_order: number;
+  is_active: boolean;
+};
+
+export type TemplatesAdminView = {
+  system: {
+    no_agents_online: { id: string | null; body: string };
+    form_summary_completed: { id: string | null; body: string };
+    form_summary_partial: { id: string | null; body: string };
+    form_summary_skipped: { id: string | null; body: string };
+    handoff: { id: string; body: string }[];
+  };
+  canned: { id: string; label: string; body: string }[];
+};
+
+export function fetchTemplates(token: string): Promise<TemplatesAdminView> {
+  return call('/agent/templates', token);
+}
+
+export function createTemplate(
+  token: string,
+  args:
+    | { kind: 'system'; key: SystemMessageKey | 'handoff'; body: string }
+    | { kind: 'canned'; label: string; body: string },
+): Promise<TemplateRowView> {
+  return call('/agent/templates', token, { method: 'POST', body: JSON.stringify(args) });
+}
+
+export function updateTemplate(
+  token: string,
+  id: string,
+  patch: { body?: string; label?: string; isActive?: boolean },
+): Promise<TemplateRowView> {
+  return call(`/agent/templates/${id}`, token, { method: 'PATCH', body: JSON.stringify(patch) });
+}
