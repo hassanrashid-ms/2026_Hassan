@@ -49,7 +49,6 @@ export function Analytics() {
             data={data}
             isLoading={isLoading || layoutLoading}
             onLayoutChange={(items) => updateLayout({ ...layout, items })}
-            onRemoveTile={(id) => updateLayout({ ...layout, visibleTileIds: layout.visibleTileIds.filter((t) => t !== id) })}
           />
         )
       )}

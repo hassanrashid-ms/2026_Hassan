@@ -20,10 +20,9 @@ type AnalyticsGridProps = {
   data: AnalyticsResponse | undefined
   isLoading: boolean
   onLayoutChange: (items: DashboardLayoutItem[]) => void
-  onRemoveTile: (id: string) => void
 }
 
-export function AnalyticsGrid({ layout, data, isLoading, onLayoutChange, onRemoveTile }: AnalyticsGridProps) {
+export function AnalyticsGrid({ layout, data, isLoading, onLayoutChange }: AnalyticsGridProps) {
   const { width, containerRef, mounted } = useContainerWidth()
   const visibleItems = layout.items.filter((item) => layout.visibleTileIds.includes(item.i))
 
@@ -47,7 +46,7 @@ export function AnalyticsGrid({ layout, data, isLoading, onLayoutChange, onRemov
               {isLoading || !data ? (
                 <TileSkeleton kind={NUMBER_TILE_IDS.has(item.i) ? 'number' : 'chart'} />
               ) : (
-                renderTile(item.i, data, () => onRemoveTile(item.i))
+                renderTile(item.i, data)
               )}
             </div>
           ))}

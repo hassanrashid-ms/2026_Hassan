@@ -33,6 +33,7 @@ export type AnalyticsResponse = {
   }
   bot: {
     containmentRate: number | null
+    selfServeRate: number | null
     handoff: { rate: number | null; byReason: Array<{ reason: string; count: number }> }
     articleHitRate: number | null
   }

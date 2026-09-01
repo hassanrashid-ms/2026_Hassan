@@ -5,12 +5,11 @@ import { paletteColor } from './chartPalette.ts'
 type BarChartTileProps = {
   title: string
   data: Array<{ label: string; value: number }>
-  onRemove?: () => void
 }
 
-export function BarChartTile({ title, data, onRemove }: BarChartTileProps) {
+export function BarChartTile({ title, data }: BarChartTileProps) {
   return (
-    <TileFrame title={title} onRemove={onRemove}>
+    <TileFrame title={title}>
       {data.length === 0 ? (
         <div className="flex h-full items-center justify-center text-sm text-muted">No data in this range</div>
       ) : (

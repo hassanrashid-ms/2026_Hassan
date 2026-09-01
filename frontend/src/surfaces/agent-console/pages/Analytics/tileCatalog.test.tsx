@@ -16,20 +16,20 @@ const DATA: AnalyticsResponse = {
     resolution: { avgSeconds: 3600, p50Seconds: 2000, p90Seconds: 9000, series: [] },
     timeToClaim: { series: [] },
   },
-  bot: { containmentRate: 0.4, handoff: { rate: 0.6, byReason: [] }, articleHitRate: 0.5 },
+  bot: { containmentRate: 0.4, selfServeRate: 0.7, handoff: { rate: 0.6, byReason: [] }, articleHitRate: 0.5 },
   team: { avgOpenPerActiveAgent: 4.2, unassignedQueueDepth: { series: [] } },
 }
 
 describe('tileCatalog', () => {
   it('every declared tile id renders without throwing', () => {
     for (const id of TILE_IDS) {
-      render(<div>{renderTile(id, DATA, () => {})}</div>)
+      render(<div>{renderTile(id, DATA)}</div>)
     }
     expect(screen.getAllByText(/./).length).toBeGreaterThan(0)
   })
 
   it('renders the open-total tile with the correct value', () => {
-    render(<div>{renderTile('open-total', DATA, () => {})}</div>)
+    render(<div>{renderTile('open-total', DATA)}</div>)
     expect(screen.getByText('2')).toBeInTheDocument()
   })
 })

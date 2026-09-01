@@ -16,18 +16,18 @@ const DATA: AnalyticsResponse = {
     resolution: { avgSeconds: null, p50Seconds: null, p90Seconds: null, series: [] },
     timeToClaim: { series: [] },
   },
-  bot: { containmentRate: null, handoff: { rate: null, byReason: [] }, articleHitRate: null },
+  bot: { containmentRate: null, selfServeRate: null, handoff: { rate: null, byReason: [] }, articleHitRate: null },
   team: { avgOpenPerActiveAgent: null, unassignedQueueDepth: { series: [] } },
 }
 
 describe('AnalyticsGrid', () => {
   it('renders skeletons for every layout item while loading', () => {
-    render(<AnalyticsGrid layout={LAYOUT} data={undefined} isLoading onLayoutChange={vi.fn()} onRemoveTile={vi.fn()} />)
+    render(<AnalyticsGrid layout={LAYOUT} data={undefined} isLoading onLayoutChange={vi.fn()} />)
     expect(screen.queryByText('5')).not.toBeInTheDocument()
   })
 
   it('renders real tile content once data has loaded', () => {
-    render(<AnalyticsGrid layout={LAYOUT} data={DATA} isLoading={false} onLayoutChange={vi.fn()} onRemoveTile={vi.fn()} />)
+    render(<AnalyticsGrid layout={LAYOUT} data={DATA} isLoading={false} onLayoutChange={vi.fn()} />)
     expect(screen.getByText('5')).toBeInTheDocument()
   })
 })

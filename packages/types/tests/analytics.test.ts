@@ -18,6 +18,7 @@ describe('analytics types', () => {
       },
       bot: {
         containmentRate: 0.4,
+        selfServeRate: 0.7,
         handoff: { rate: 0.6, byReason: [{ reason: 'article_rejected', count: 3 }] },
         articleHitRate: 0.5,
       },

@@ -17,68 +17,57 @@ export const TILE_IDS = [
   'resolution-time',
   'time-to-claim',
   'bot-containment',
+  'self-serve-rate',
   'handoff-reasons',
   'article-hit-rate',
   'avg-open-per-agent',
   'unassigned-queue-depth',
 ] as const
 
-export function renderTile(id: string, data: AnalyticsResponse, onRemove: () => void): ReactNode {
+export function renderTile(id: string, data: AnalyticsResponse): ReactNode {
   switch (id) {
     case 'volume-series':
-      return <LineChartTile title="New vs. resolved" series={data.volume.series} dataKeys={['opened', 'resolved']} onRemove={onRemove} />
+      return <LineChartTile title="New vs. resolved" series={data.volume.series} dataKeys={['opened', 'resolved']} />
     case 'status-breakdown':
       return (
-        <DonutChartTile
-          title="Status breakdown"
-          data={data.volume.byStatus.map((s) => ({ label: s.status, value: s.count }))}
-          onRemove={onRemove}
-        />
+        <DonutChartTile title="Status breakdown" data={data.volume.byStatus.map((s) => ({ label: s.status, value: s.count }))} />
       )
     case 'open-total':
-      return <NumberTile title="Open tickets" value={data.volume.openTotal} onRemove={onRemove} />
+      return <NumberTile title="Open tickets" value={data.volume.openTotal} />
     case 'volume-by-priority':
       return (
-        <BarChartTile
-          title="Volume by priority"
-          data={data.volume.byPriority.map((p) => ({ label: p.priority, value: p.count }))}
-          onRemove={onRemove}
-        />
+        <BarChartTile title="Volume by priority" data={data.volume.byPriority.map((p) => ({ label: p.priority, value: p.count }))} />
       )
     case 'first-response-time':
-      return <NumberTile title="First response (avg)" value={data.speed.firstResponse.avgSeconds} format="duration" onRemove={onRemove} />
+      return <NumberTile title="First response (avg)" value={data.speed.firstResponse.avgSeconds} format="duration" />
     case 'resolution-time':
-      return <NumberTile title="Resolution time (avg)" value={data.speed.resolution.avgSeconds} format="duration" onRemove={onRemove} />
+      return <NumberTile title="Resolution time (avg)" value={data.speed.resolution.avgSeconds} format="duration" />
     case 'time-to-claim':
       return (
         <LineChartTile
           title="Time to claim"
           series={data.speed.timeToClaim.series.map((p) => ({ bucket: p.bucket, seconds: p.seconds ?? 0 }))}
           dataKeys={['seconds']}
-          onRemove={onRemove}
         />
       )
     case 'bot-containment':
-      return <NumberTile title="Bot containment" value={data.bot.containmentRate} format="percent" onRemove={onRemove} />
+      return <NumberTile title="Bot containment" value={data.bot.containmentRate} format="percent" />
+    case 'self-serve-rate':
+      return <NumberTile title="Self-serve rate" value={data.bot.selfServeRate} format="percent" />
     case 'handoff-reasons':
       return (
-        <DonutChartTile
-          title="Handoff reasons"
-          data={data.bot.handoff.byReason.map((r) => ({ label: r.reason, value: r.count }))}
-          onRemove={onRemove}
-        />
+        <DonutChartTile title="Handoff reasons" data={data.bot.handoff.byReason.map((r) => ({ label: r.reason, value: r.count }))} />
       )
     case 'article-hit-rate':
-      return <NumberTile title="Article hit rate" value={data.bot.articleHitRate} format="percent" onRemove={onRemove} />
+      return <NumberTile title="Article hit rate" value={data.bot.articleHitRate} format="percent" />
     case 'avg-open-per-agent':
-      return <NumberTile title="Avg open per agent" value={data.team.avgOpenPerActiveAgent} onRemove={onRemove} />
+      return <NumberTile title="Avg open per agent" value={data.team.avgOpenPerActiveAgent} />
     case 'unassigned-queue-depth':
       return (
         <LineChartTile
           title="Unassigned queue depth"
           series={data.team.unassignedQueueDepth.series.map((p) => ({ bucket: p.bucket, depth: p.depth }))}
           dataKeys={['depth']}
-          onRemove={onRemove}
         />
       )
     default:

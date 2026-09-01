@@ -200,8 +200,16 @@ export async function getBotMetrics(
     // enough to have closed — undercounting non-bot resolutions far more than
     // recent bot ones and skewing containment toward 100%. Both statuses are
     // terminal-resolved; only 'reopened' escapes back to 'open'.
+    // Self-serve = resolved without an agent ever acting on it: the bot closed
+    // it, the player confirmed/stated it themselves, or it timed out waiting on
+    // the player. `admin_forced` is deliberately excluded — an admin is staff
+    // action, not the player serving themselves — see resolutionSource's enum
+    // comment for why that value stays distinct from 'agent'.
     const [botResolvedRow] = await tx
-      .select({ botResolved: sql<number>`count(*) filter (where ${conversation.resolutionSource} = 'bot')::int` })
+      .select({
+        botResolved: sql<number>`count(*) filter (where ${conversation.resolutionSource} = 'bot')::int`,
+        selfServeResolved: sql<number>`count(*) filter (where ${conversation.resolutionSource} in ('bot', 'player_confirmed', 'player_stated', 'timed_out'))::int`,
+      })
       .from(conversation)
       .where(inArray(conversation.status, ['resolved', 'closed']))
     const [totalResolvedRow] = await tx
@@ -210,6 +218,7 @@ export async function getBotMetrics(
       .where(inArray(conversation.status, ['resolved', 'closed']))
 
     const botResolved = botResolvedRow?.botResolved ?? 0
+    const selfServeResolved = botResolvedRow?.selfServeResolved ?? 0
     const totalResolved = totalResolvedRow?.totalResolved ?? 0
 
     const [handoffCountRow] = await tx
@@ -243,6 +252,7 @@ export async function getBotMetrics(
 
     return {
       containmentRate: totalResolved > 0 ? botResolved / totalResolved : null,
+      selfServeRate: totalResolved > 0 ? selfServeResolved / totalResolved : null,
       handoff: {
         rate: totalResolved + handoffCount > 0 ? handoffCount / (totalResolved + handoffCount) : null,
         byReason: [...reasonCounts.entries()].map(([reason, count]) => ({ reason, count })),

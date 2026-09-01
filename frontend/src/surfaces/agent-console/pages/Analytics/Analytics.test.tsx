@@ -17,7 +17,7 @@ const EMPTY_DATA = {
     resolution: { avgSeconds: null, p50Seconds: null, p90Seconds: null, series: [] },
     timeToClaim: { series: [] },
   },
-  bot: { containmentRate: null, handoff: { rate: null, byReason: [] }, articleHitRate: null },
+  bot: { containmentRate: null, selfServeRate: null, handoff: { rate: null, byReason: [] }, articleHitRate: null },
   team: { avgOpenPerActiveAgent: null, unassignedQueueDepth: { series: [] } },
 }
 

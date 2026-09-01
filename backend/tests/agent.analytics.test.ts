@@ -154,6 +154,21 @@ describe('getBotMetrics', () => {
     expect(result.containmentRate).toBe(0.25)
   })
 
+  it('computes self-serve rate as bot/player-driven resolutions over total resolved, excluding agent and admin_forced', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    await seedConversation({ workspaceId, playerId, status: 'resolved', resolutionSource: 'bot' })
+    await seedConversation({ workspaceId, playerId, status: 'closed', resolutionSource: 'player_confirmed' })
+    await seedConversation({ workspaceId, playerId, status: 'closed', resolutionSource: 'player_stated' })
+    await seedConversation({ workspaceId, playerId, status: 'closed', resolutionSource: 'timed_out' })
+    await seedConversation({ workspaceId, playerId, status: 'closed', resolutionSource: 'agent' })
+    await seedConversation({ workspaceId, playerId, status: 'closed', resolutionSource: 'admin_forced' })
+
+    const result = await getBotMetrics({ workspaceId }, RANGE)
+
+    expect(result.selfServeRate).toBe(4 / 6)
+  })
+
   it('groups handoffs by reason from the event payload', async () => {
     const workspaceId = await seedWorkspace()
     const playerId = await seedPlayer(workspaceId)

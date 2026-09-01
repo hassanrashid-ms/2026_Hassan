@@ -21,15 +21,14 @@ type NumberTileProps = {
   value: number | null
   format?: Format
   previousValue?: number | null
-  onRemove?: () => void
 }
 
-export function NumberTile({ title, value, format = 'count', previousValue, onRemove }: NumberTileProps) {
+export function NumberTile({ title, value, format = 'count', previousValue }: NumberTileProps) {
   const delta = value !== null && previousValue != null ? value - previousValue : null
 
   return (
-    <TileFrame title={title} onRemove={onRemove}>
-      <div className="flex h-full flex-col justify-center">
+    <TileFrame title={title}>
+      <div className="flex h-full flex-col items-center justify-center text-center">
         <span className="text-2xl font-semibold text-text">{value === null ? '—' : formatValue(value, format)}</span>
         {delta !== null && (
           <span className={delta >= 0 ? 'text-xs text-emerald-600' : 'text-xs text-red-600'}>

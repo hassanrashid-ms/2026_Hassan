@@ -5,12 +5,11 @@ import { paletteColor } from './chartPalette.ts'
 type DonutChartTileProps = {
   title: string
   data: Array<{ label: string; value: number }>
-  onRemove?: () => void
 }
 
-export function DonutChartTile({ title, data, onRemove }: DonutChartTileProps) {
+export function DonutChartTile({ title, data }: DonutChartTileProps) {
   return (
-    <TileFrame title={title} onRemove={onRemove}>
+    <TileFrame title={title}>
       {data.length === 0 ? (
         <div className="flex h-full items-center justify-center text-sm text-muted">No data in this range</div>
       ) : (

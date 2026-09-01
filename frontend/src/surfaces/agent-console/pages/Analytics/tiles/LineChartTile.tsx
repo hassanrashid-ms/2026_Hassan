@@ -6,12 +6,11 @@ type LineChartTileProps = {
   title: string
   series: Array<{ bucket: string; [key: string]: string | number }>
   dataKeys: string[]
-  onRemove?: () => void
 }
 
-export function LineChartTile({ title, series, dataKeys, onRemove }: LineChartTileProps) {
+export function LineChartTile({ title, series, dataKeys }: LineChartTileProps) {
   return (
-    <TileFrame title={title} onRemove={onRemove}>
+    <TileFrame title={title}>
       {series.length === 0 ? (
         <div className="flex h-full items-center justify-center text-sm text-muted">No data in this range</div>
       ) : (

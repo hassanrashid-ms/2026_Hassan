@@ -2811,6 +2811,7 @@ const AnalyticsResponseSchema = z.object({
   }),
   bot: z.object({
     containmentRate: z.number().nullable(),
+    selfServeRate: z.number().nullable(),
     handoff: z.object({ rate: z.number().nullable(), byReason: z.array(z.object({ reason: z.string(), count: z.number() })) }),
     articleHitRate: z.number().nullable(),
   }),
