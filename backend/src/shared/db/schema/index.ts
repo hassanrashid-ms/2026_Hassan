@@ -11,3 +11,4 @@ export * from './audit.ts';
 export * from './forms.ts';
 export * from './tags.ts';
 export * from './templates.ts';
+export * from './analytics.ts';
