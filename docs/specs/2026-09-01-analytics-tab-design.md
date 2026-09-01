@@ -117,8 +117,10 @@ Analytics/
 - **Charts**: built with Recharts (already the repo's chart library) following the `dataviz` skill's
   palette and mark-spec guidance for consistent, theme-aware colors — invoked at implementation time,
   not re-derived here.
-- **Loading**: skeleton tiles shaped like their final content (not a full-page spinner), so the grid
-  doesn't jump on load.
+- **Loading**: the saved layout (positions/sizes) loads first and renders immediately as skeleton
+  tiles — each skeleton takes the exact `{x, y, w, h}` grid slot and tile-type shape (number vs.
+  chart) of the tile that will render there, so nothing jumps or reflows once data arrives; only the
+  tile's inner content swaps from skeleton to real. Not a full-page spinner.
 - **Empty state**: zero conversations in the selected range → single centered `EmptyState` message,
   tiles hidden, time-range bar still usable to pick a different range.
 - **Error**: query failure → inline retry banner above the grid; existing (last-good) layout and any
