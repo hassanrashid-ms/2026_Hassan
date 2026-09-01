@@ -141,6 +141,19 @@ describe('getBotMetrics', () => {
     expect(result.containmentRate).toBe(0.5)
   })
 
+  it('counts closed conversations too, since resolved auto-transitions to closed', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    await seedConversation({ workspaceId, playerId, status: 'resolved', resolutionSource: 'bot' })
+    await seedConversation({ workspaceId, playerId, status: 'closed', resolutionSource: 'agent' })
+    await seedConversation({ workspaceId, playerId, status: 'closed', resolutionSource: 'player_confirmed' })
+    await seedConversation({ workspaceId, playerId, status: 'closed', resolutionSource: 'admin_forced' })
+
+    const result = await getBotMetrics({ workspaceId }, RANGE)
+
+    expect(result.containmentRate).toBe(0.25)
+  })
+
   it('groups handoffs by reason from the event payload', async () => {
     const workspaceId = await seedWorkspace()
     const playerId = await seedPlayer(workspaceId)

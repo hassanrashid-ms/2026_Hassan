@@ -195,14 +195,19 @@ export async function getBotMetrics(
     const from = new Date(range.from)
     const to = new Date(range.to)
 
+    // 'resolved' auto-transitions to 'closed' after workspace.autoCloseDays, so
+    // restricting to status='resolved' alone silently drops every ticket old
+    // enough to have closed — undercounting non-bot resolutions far more than
+    // recent bot ones and skewing containment toward 100%. Both statuses are
+    // terminal-resolved; only 'reopened' escapes back to 'open'.
     const [botResolvedRow] = await tx
       .select({ botResolved: sql<number>`count(*) filter (where ${conversation.resolutionSource} = 'bot')::int` })
       .from(conversation)
-      .where(eq(conversation.status, 'resolved'))
+      .where(inArray(conversation.status, ['resolved', 'closed']))
     const [totalResolvedRow] = await tx
       .select({ totalResolved: sql<number>`count(*)::int` })
       .from(conversation)
-      .where(eq(conversation.status, 'resolved'))
+      .where(inArray(conversation.status, ['resolved', 'closed']))
 
     const botResolved = botResolvedRow?.botResolved ?? 0
     const totalResolved = totalResolvedRow?.totalResolved ?? 0
