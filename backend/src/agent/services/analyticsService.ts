@@ -186,3 +186,63 @@ export async function getSpeedMetrics(
     }
   })
 }
+
+export async function getBotMetrics(
+  ctx: Pick<AgentContext, 'workspaceId'>,
+  range: AnalyticsRange,
+): Promise<AnalyticsResponse['bot']> {
+  return withWorkspace(ctx.workspaceId, async (tx) => {
+    const from = new Date(range.from)
+    const to = new Date(range.to)
+
+    const [botResolvedRow] = await tx
+      .select({ botResolved: sql<number>`count(*) filter (where ${conversation.resolutionSource} = 'bot')::int` })
+      .from(conversation)
+      .where(eq(conversation.status, 'resolved'))
+    const [totalResolvedRow] = await tx
+      .select({ totalResolved: sql<number>`count(*)::int` })
+      .from(conversation)
+      .where(eq(conversation.status, 'resolved'))
+
+    const botResolved = botResolvedRow?.botResolved ?? 0
+    const totalResolved = totalResolvedRow?.totalResolved ?? 0
+
+    const [handoffCountRow] = await tx
+      .select({ handoffCount: sql<number>`count(*)::int` })
+      .from(event)
+      .where(and(eq(event.type, 'bot_handoff'), gte(event.occurredAt, from), lte(event.occurredAt, to)))
+    const handoffCount = handoffCountRow?.handoffCount ?? 0
+
+    const handoffRows = await tx
+      .select({ payload: event.payload })
+      .from(event)
+      .where(and(eq(event.type, 'bot_handoff'), gte(event.occurredAt, from), lte(event.occurredAt, to)))
+
+    const reasonCounts = new Map<string, number>()
+    for (const row of handoffRows) {
+      const reason = typeof row.payload.reason === 'string' ? row.payload.reason : 'unknown'
+      reasonCounts.set(reason, (reasonCounts.get(reason) ?? 0) + 1)
+    }
+
+    const [searchCountRow] = await tx
+      .select({ searchCount: sql<number>`count(*)::int` })
+      .from(event)
+      .where(and(eq(event.type, 'bot_search'), gte(event.occurredAt, from), lte(event.occurredAt, to)))
+    const [offeredCountRow] = await tx
+      .select({ offeredCount: sql<number>`count(*)::int` })
+      .from(event)
+      .where(and(eq(event.type, 'bot_article_offered'), gte(event.occurredAt, from), lte(event.occurredAt, to)))
+
+    const searchCount = searchCountRow?.searchCount ?? 0
+    const offeredCount = offeredCountRow?.offeredCount ?? 0
+
+    return {
+      containmentRate: totalResolved > 0 ? botResolved / totalResolved : null,
+      handoff: {
+        rate: totalResolved + handoffCount > 0 ? handoffCount / (totalResolved + handoffCount) : null,
+        byReason: [...reasonCounts.entries()].map(([reason, count]) => ({ reason, count })),
+      },
+      articleHitRate: searchCount > 0 ? offeredCount / searchCount : null,
+    }
+  })
+}

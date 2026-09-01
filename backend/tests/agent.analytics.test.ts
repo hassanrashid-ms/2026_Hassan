@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { closeDb } from '../src/shared/db/client.ts'
-import { getSpeedMetrics, getVolumeMetrics } from '../src/agent/services/analyticsService.ts'
+import { getBotMetrics, getSpeedMetrics, getVolumeMetrics } from '../src/agent/services/analyticsService.ts'
 import { appendEvent } from '../src/shared/events/appendEvent.ts'
 import { withWorkspace } from '../src/shared/db/withWorkspace.ts'
 import { closeOwnerPool, seedConversation, seedPlayer, seedWorkspace, truncateAll } from './helpers/db.ts'
@@ -111,5 +111,71 @@ describe('getSpeedMetrics', () => {
     const result = await getSpeedMetrics({ workspaceId }, RANGE)
 
     expect(result.timeToClaim.series).toEqual([{ bucket: '2026-08-05', seconds: 60 }])
+  })
+})
+
+describe('getBotMetrics', () => {
+  it('computes containment rate as bot-resolved over total resolved', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    await seedConversation({ workspaceId, playerId, status: 'resolved', resolutionSource: 'bot' })
+    await seedConversation({ workspaceId, playerId, status: 'resolved', resolutionSource: 'agent' })
+
+    const result = await getBotMetrics({ workspaceId }, RANGE)
+
+    expect(result.containmentRate).toBe(0.5)
+  })
+
+  it('groups handoffs by reason from the event payload', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const conversationId = await seedConversation({ workspaceId, playerId, status: 'escalated' })
+    await withWorkspace(workspaceId, async (tx) => {
+      await appendEvent(tx, {
+        workspaceId,
+        type: 'bot_handoff',
+        conversationId,
+        actorType: 'bot',
+        payload: { reason: 'article_rejected' },
+        occurredAt: new Date('2026-08-05T10:00:00Z'),
+      })
+    })
+
+    const result = await getBotMetrics({ workspaceId }, RANGE)
+
+    expect(result.handoff.byReason).toEqual([{ reason: 'article_rejected', count: 1 }])
+  })
+
+  it('computes article hit rate as offered over searched', async () => {
+    const workspaceId = await seedWorkspace()
+    const playerId = await seedPlayer(workspaceId)
+    const conversationId = await seedConversation({ workspaceId, playerId, status: 'bot_active' })
+    await withWorkspace(workspaceId, async (tx) => {
+      await appendEvent(tx, {
+        workspaceId,
+        type: 'bot_search',
+        conversationId,
+        actorType: 'bot',
+        occurredAt: new Date('2026-08-05T10:00:00Z'),
+      })
+      await appendEvent(tx, {
+        workspaceId,
+        type: 'bot_search',
+        conversationId,
+        actorType: 'bot',
+        occurredAt: new Date('2026-08-05T10:01:00Z'),
+      })
+      await appendEvent(tx, {
+        workspaceId,
+        type: 'bot_article_offered',
+        conversationId,
+        actorType: 'bot',
+        occurredAt: new Date('2026-08-05T10:01:00Z'),
+      })
+    })
+
+    const result = await getBotMetrics({ workspaceId }, RANGE)
+
+    expect(result.articleHitRate).toBe(0.5)
   })
 })
