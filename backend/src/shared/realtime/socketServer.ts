@@ -11,6 +11,8 @@ import { withWorkspace } from '../db/withWorkspace.ts';
 import { listActiveMembershipsForAgent, listAllWorkspaces } from '../db/workspaceMembership.ts';
 import { agentRoom, inboxRoom, playerRoom } from './rooms.ts';
 import { decrementPresence, flushStalePresence, incrementPresence } from './presence.ts';
+import { emitInboxChanged } from './emit.ts';
+import { sweepUnassignedQueue } from '../../domain/routing/sweepUnassignedQueue.ts';
 import { logger } from '../logging/logger.ts';
 
 export type PlayerSocketData = { role: 'player'; workspaceId: string; playerId: string };
@@ -154,6 +156,27 @@ export function createSocketServer(httpServer: HttpServer): Server {
                 agentId: data.agentId,
                 status: 'online',
               });
+            }
+            // Fire-and-forget: draining the queue must never block or fail
+            // the socket connect itself. Runs once per workspace this agent
+            // belongs to, so a multi-workspace admin's connect drains every
+            // workspace's queue against everyone currently online there.
+            for (const workspaceId of data.workspaceIds) {
+              void sweepUnassignedQueue(workspaceId)
+                .then(({ assignments }) => {
+                  if (closing) return;
+                  for (const a of assignments) {
+                    emitInboxChanged(io, workspaceId, a.conversationId, a.status);
+                  }
+                })
+                .catch((error) => {
+                  logger.error(
+                    'presence',
+                    `sweepUnassignedQueue failed for workspace ${workspaceId}: ${
+                      error instanceof Error ? error.message : String(error)
+                    }`,
+                  );
+                });
             }
           }
         })
