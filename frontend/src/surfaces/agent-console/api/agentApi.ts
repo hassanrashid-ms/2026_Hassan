@@ -162,6 +162,19 @@ export function reassignConversation(
   });
 }
 
+export function unassignConversation(
+  token: string,
+  conversationId: string,
+): Promise<{ unassigned: boolean }> {
+  return call(`/agent/conversations/${conversationId}/unassign`, token, { method: 'POST' });
+}
+
+export function sweepAssign(
+  token: string,
+): Promise<{ assignedCount: number; conversationIds: string[] }> {
+  return call('/agent/conversations/sweep-assign', token, { method: 'POST' });
+}
+
 export function reclassifyConversation(
   token: string,
   conversationId: string,
