@@ -15,6 +15,7 @@ export const importBotConfig = () => import('../pages/BotConfig/BotConfig.tsx');
 export const importWorkspaceSettings = () =>
   import('../pages/WorkspaceSettings/WorkspaceSettings.tsx');
 export const importTemplates = () => import('../pages/Templates/Templates.tsx');
+export const importAnalytics = () => import('../pages/Analytics/Analytics.tsx');
 
 // Keyed by the NavLink `to` path AgentConsoleShell renders.
 export const agentRoutePreload: Record<string, () => Promise<unknown>> = {
@@ -28,4 +29,5 @@ export const agentRoutePreload: Record<string, () => Promise<unknown>> = {
   '/bot-config': importBotConfig,
   '/workspace-settings': importWorkspaceSettings,
   '/templates': importTemplates,
+  '/analytics': importAnalytics,
 };

@@ -4,6 +4,7 @@ import { Login } from './Login.tsx';
 import { RequireRole } from '../surfaces/agent-console/components/RequireRole.tsx';
 import { canBuildForms } from '../surfaces/agent-console/lib/agentSession.ts';
 import {
+  importAnalytics,
   importBotConfig,
   importForms,
   importGlobalInbox,
@@ -45,6 +46,7 @@ const WorkspaceSettingsPage = lazy(async () => ({
   default: (await importWorkspaceSettings()).WorkspaceSettings,
 }));
 const TemplatesPage = lazy(async () => ({ default: (await importTemplates()).Templates }));
+const Analytics = lazy(async () => ({ default: (await importAnalytics()).Analytics }));
 const AgentNotFound = lazy(async () => ({
   default: (await import('../surfaces/agent-console/pages/NotFound.tsx')).NotFound,
 }));
@@ -146,6 +148,7 @@ export function AppRoutes() {
             </RequireRole>
           }
         />
+        <Route path="analytics" element={<Analytics />} />
         <Route path="*" element={<AgentNotFound />} />
       </Route>
 

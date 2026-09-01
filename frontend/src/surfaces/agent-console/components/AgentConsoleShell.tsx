@@ -14,6 +14,7 @@ import {
   Tags,
   Gauge,
   MessageSquare,
+  BarChart3,
 } from 'lucide-react';
 // agent-console.css is imported HERE and nowhere else — never from main.tsx or
 // any statically-reachable module, so its Tailwind preflight never leaks into
@@ -66,6 +67,7 @@ const NAV_ITEMS = [
   { to: '/global-inbox', label: 'Global Inbox', icon: Globe, group: 'Workspace' },
   { to: '/tickets', label: 'Tickets', icon: ClipboardList, group: 'Workspace' },
   { to: '/articles', label: 'Knowledge Base', icon: BookOpen, group: 'Workspace' },
+  { to: '/analytics', label: 'Analytics', icon: BarChart3, group: 'Workspace' },
   { to: '/taxonomy', label: 'Taxonomy', icon: Tags, group: 'Workspace' },
 ];
 
