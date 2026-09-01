@@ -17,6 +17,7 @@ import type {
   BotConfigView,
   BotConfigVersionsListResponse,
   BotConfigVersionSnapshotView,
+  BulkImportArticlesResponse,
   ClaimResponse,
   TakeOverResponse,
   ConversationPriority,
@@ -247,11 +248,12 @@ export function putFileToUploadUrl(
   uploadUrl: string,
   file: File,
   onProgress?: (percent: number) => void,
+  contentTypeOverride?: string,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('PUT', uploadUrl);
-    xhr.setRequestHeader('Content-Type', file.type);
+    xhr.setRequestHeader('Content-Type', contentTypeOverride ?? file.type);
     xhr.upload.onprogress = (event) => {
       if (onProgress && event.lengthComputable) {
         onProgress(Math.round((event.loaded / event.total) * 100));
@@ -481,6 +483,16 @@ export function createArticle(
   input: { title: string; body: string; keywords?: string[]; intent_id?: string },
 ): Promise<AgentArticleDetail> {
   return call('/agent/articles', token, { method: 'POST', body: JSON.stringify(input) });
+}
+
+export function bulkImportArticles(
+  token: string,
+  input: { key: string },
+): Promise<BulkImportArticlesResponse> {
+  return call('/agent/articles/bulk-import', token, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
 }
 
 export function generateKeywords(
