@@ -275,9 +275,30 @@ describe('Tickets view toggle', () => {
   });
 });
 
-describe('Assign next (sweep)', () => {
-  it('shows the button for a team lead and reports the assigned count on click', async () => {
-    vi.mocked(agentApi.fetchInbox).mockResolvedValue({ conversations: [], nextCursor: null });
+describe('Bulk assign (sweep)', () => {
+  const unassignedRow = {
+    id: 'c1',
+    player: { external_player_id: 'p1' },
+    status: 'open' as const,
+    confirm_phase: 'none' as const,
+    last_message_preview: null,
+    last_message_at: null,
+    assigned_agent_id: null,
+    assigned_agent_name: null,
+    priority: 'p3' as const,
+    tags: [],
+    created_at: '2026-08-01T00:00:00.000Z',
+    subintent: null,
+    number: 1,
+  };
+
+  it('shows Bulk assign on the Unassigned column header in board view, for a team lead, and reports the assigned count on click', async () => {
+    vi.mocked(agentApi.fetchInbox).mockImplementation((_token, status) =>
+      Promise.resolve({
+        conversations: status === 'unassigned' ? [unassignedRow] : [],
+        nextCursor: null,
+      }),
+    );
     const sweepSpy = vi
       .mocked(agentApi.sweepAssign)
       .mockResolvedValue({ assignedCount: 3, conversationIds: ['c1', 'c2', 'c3'] });
@@ -291,15 +312,41 @@ describe('Assign next (sweep)', () => {
 
     renderTickets('/tickets');
 
-    const button = await screen.findByRole('button', { name: 'Assign next' });
+    await screen.findByText('Unassigned');
+    const button = await screen.findByRole('button', { name: 'Bulk assign' });
     await user.click(button);
 
     await waitFor(() => expect(sweepSpy).toHaveBeenCalledWith('tok'));
     await screen.findByText('Assigned 3 tickets.');
   });
 
-  it('hides the button for a plain agent', async () => {
-    vi.mocked(agentApi.fetchInbox).mockResolvedValue({ conversations: [], nextCursor: null });
+  it('shows Bulk assign above the list in list view, for a team lead', async () => {
+    vi.mocked(agentApi.fetchInbox).mockResolvedValue({
+      conversations: [unassignedRow],
+      nextCursor: null,
+    });
+    vi.mocked(loadAgentSession).mockReturnValue({
+      token: 'tok',
+      agentId: 'agent-1',
+      workspaceId: 'ws-1',
+      role: 'team_lead',
+    } as never);
+
+    renderTickets('/tickets?view=list');
+
+    await screen.findByText('Unassigned queue');
+    expect(screen.getByRole('button', { name: 'Bulk assign' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Board' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'List' })).toBeInTheDocument();
+  });
+
+  it('hides the button for a plain agent, in both board and list view', async () => {
+    vi.mocked(agentApi.fetchInbox).mockImplementation((_token, status) =>
+      Promise.resolve({
+        conversations: status === 'unassigned' || status === 'all' ? [unassignedRow] : [],
+        nextCursor: null,
+      }),
+    );
     vi.mocked(loadAgentSession).mockReturnValue({
       token: 'tok',
       agentId: 'agent-1',
@@ -307,9 +354,13 @@ describe('Assign next (sweep)', () => {
       role: 'agent',
     } as never);
 
-    renderTickets('/tickets');
+    const { unmount } = renderTickets('/tickets');
+    await screen.findByText('Unassigned');
+    expect(screen.queryByRole('button', { name: 'Bulk assign' })).not.toBeInTheDocument();
+    unmount();
 
-    await waitFor(() => expect(agentApi.fetchInbox).toHaveBeenCalled());
-    expect(screen.queryByRole('button', { name: 'Assign next' })).not.toBeInTheDocument();
+    renderTickets('/tickets?view=list');
+    await screen.findByText('p1');
+    expect(screen.queryByRole('button', { name: 'Bulk assign' })).not.toBeInTheDocument();
   });
 });

@@ -95,6 +95,9 @@ function SortableQueueColumn({
   queryFilters,
   filtersActive,
   onSelect,
+  bulkAssignAvailable,
+  bulkAssignPending,
+  onBulkAssign,
 }: {
   id: string;
   col: (typeof COLUMNS)[0];
@@ -102,6 +105,9 @@ function SortableQueueColumn({
   queryFilters: TicketsQueryFilters;
   filtersActive: boolean;
   onSelect: (id: string) => void;
+  bulkAssignAvailable: boolean;
+  bulkAssignPending: boolean;
+  onBulkAssign: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id,
@@ -123,6 +129,9 @@ function SortableQueueColumn({
         queryFilters={queryFilters}
         filtersActive={filtersActive}
         onSelect={onSelect}
+        bulkAssignAvailable={bulkAssignAvailable}
+        bulkAssignPending={bulkAssignPending}
+        onBulkAssign={onBulkAssign}
       />
     </div>
   );
@@ -137,6 +146,9 @@ function QueueColumn({
   claimable = false,
   dragHandleProps,
   onSelect,
+  bulkAssignAvailable,
+  bulkAssignPending,
+  onBulkAssign,
 }: {
   token: string;
   title: string;
@@ -146,6 +158,9 @@ function QueueColumn({
   claimable?: boolean;
   dragHandleProps?: Record<string, any>;
   onSelect: (id: string) => void;
+  bulkAssignAvailable: boolean;
+  bulkAssignPending: boolean;
+  onBulkAssign: () => void;
 }) {
   const queryClient = useQueryClient();
   const queue = useInfiniteQuery({
@@ -208,7 +223,20 @@ function QueueColumn({
           )}
           <h2 className="text-sm font-semibold">{title}</h2>
         </div>
-        <span className="text-xs text-muted">{conversations.length}</span>
+        <div className="flex items-center gap-2">
+          {filter === 'unassigned' && bulkAssignAvailable && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={bulkAssignPending}
+              onClick={onBulkAssign}
+            >
+              Bulk assign
+            </Button>
+          )}
+          <span className="text-xs text-muted">{conversations.length}</span>
+        </div>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto" onScroll={handleScroll}>
         {conversations.length === 0 && filtersActive && (
@@ -237,12 +265,18 @@ function TicketsListView({
   sort,
   onSort,
   onSelect,
+  bulkAssignAvailable,
+  bulkAssignPending,
+  onBulkAssign,
 }: {
   token: string;
   queryFilters: TicketsQueryFilters;
   sort: SortState;
   onSort: (next: SortState) => void;
   onSelect: (id: string) => void;
+  bulkAssignAvailable: boolean;
+  bulkAssignPending: boolean;
+  onBulkAssign: () => void;
 }) {
   const queryClient = useQueryClient();
   const queue = useInfiniteQuery({
@@ -268,12 +302,27 @@ function TicketsListView({
   }
 
   return (
-    <div
-      style={{ height: '70vh' }}
-      className="min-h-0 flex-1 overflow-auto rounded-card border border-border bg-bg shadow-card"
-      onScroll={handleScroll}
-    >
-      <table className="w-full min-w-[860px] border-collapse text-sm">
+    <div className="flex min-h-0 flex-1 flex-col">
+      {bulkAssignAvailable && (
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="text-sm font-semibold">Unassigned queue</h2>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={bulkAssignPending}
+            onClick={onBulkAssign}
+          >
+            Bulk assign
+          </Button>
+        </div>
+      )}
+      <div
+        style={{ height: '70vh' }}
+        className="min-h-0 flex-1 overflow-auto rounded-card border border-border bg-bg shadow-card"
+        onScroll={handleScroll}
+      >
+        <table className="w-full min-w-[860px] border-collapse text-sm">
         <thead className="sticky top-0 z-10 bg-accent-soft/40">
           <tr className="border-b border-border text-left text-xs font-semibold tracking-wide text-muted uppercase">
             <SortableHeader label="Player" sortKey="player" sort={sort} onSort={onSort} />
@@ -376,9 +425,10 @@ function TicketsListView({
             })
           )}
         </tbody>
-      </table>
-      {queue.isFetchingNextPage && <p className="p-3 text-xs text-muted">Loading more...</p>}
-      {queue.isError && <p className="p-3 text-xs text-muted">Could not load tickets.</p>}
+        </table>
+        {queue.isFetchingNextPage && <p className="p-3 text-xs text-muted">Loading more...</p>}
+        {queue.isError && <p className="p-3 text-xs text-muted">Could not load tickets.</p>}
+      </div>
     </div>
   );
 }
@@ -397,6 +447,7 @@ export function Tickets() {
     },
     onError: () => toast.error("Couldn't run the assignment sweep."),
   });
+  const canBulkAssign = Boolean(session && canBuildForms(session));
   const [filters, updateFilters] = useTicketsFilters();
   const queryFilters = toQueryFilters(filters);
   const filtersActive = hasActiveFilters(queryFilters);
@@ -531,17 +582,6 @@ export function Tickets() {
             List
           </button>
         </div>
-        {session && canBuildForms(session) && (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={sweep.isPending}
-            onClick={() => sweep.mutate()}
-          >
-            Assign next
-          </Button>
-        )}
       </div>
       <div className="mb-4">
         <TicketsFilterBar token={session.token} filters={filters} onChange={updateFilters} />
@@ -565,6 +605,9 @@ export function Tickets() {
             })
           }
           onSelect={(id) => navigate(`/tickets/${id}`)}
+          bulkAssignAvailable={canBulkAssign}
+          bulkAssignPending={sweep.isPending}
+          onBulkAssign={() => sweep.mutate()}
         />
       ) : (
         <>
@@ -603,6 +646,9 @@ export function Tickets() {
                           queryFilters={queryFilters}
                           filtersActive={filtersActive}
                           onSelect={(id) => navigate(`/tickets/${id}`)}
+                          bulkAssignAvailable={canBulkAssign}
+                          bulkAssignPending={sweep.isPending}
+                          onBulkAssign={() => sweep.mutate()}
                         />
                       );
                     })}
