@@ -24,6 +24,7 @@ const SCOPED_TABLES = [
   'form_submission',
   'form_version',
   'form',
+  'message_template',
   'change_log',
   'bot_config',
   'event',

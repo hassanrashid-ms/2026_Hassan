@@ -204,6 +204,13 @@
       "when": 1788170247444,
       "tag": "0028_past_snowbird",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1788241977452,
+      "tag": "0029_flimsy_supreme_intelligence",
+      "breakpoints": true
     }
   ]
 }

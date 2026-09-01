@@ -29,6 +29,7 @@ const SCOPED_TABLES = [
   'form_version',
   'form_submission',
   'form_answer',
+  'message_template',
 ];
 
 beforeAll(async () => {
@@ -475,6 +476,11 @@ describe('WITH CHECK on every scoped table', () => {
         sql: `insert into form_answer (workspace_id, form_submission_id, field_key, field_type, value)
               values ($1, $2, 'store', 'short_text', '"Other"'::jsonb)`,
         params: [WS_B, submissionAId],
+      },
+      {
+        table: 'message_template',
+        sql: `insert into message_template (workspace_id, kind, key, body) values ($1, 'system', 'no_agents_online', 'Smuggled')`,
+        params: [WS_B],
       },
     ];
 
