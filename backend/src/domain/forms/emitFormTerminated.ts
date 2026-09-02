@@ -3,6 +3,7 @@ import { toAgentView, toPlayerView } from '../conversations/serializers.ts';
 import {
   emitInboxChanged,
   emitMessageToRooms,
+  emitNotificationNew,
   emitPhaseChanged,
 } from '../../shared/realtime/emit.ts';
 import { getIo } from '../../shared/realtime/socketServer.ts';
@@ -50,4 +51,7 @@ export function emitFormTerminated(workspaceId: string, result: CompleteFormResu
     confirm_phase: 'none',
   });
   emitInboxChanged(io, workspaceId, result.conversationId, 'open');
+  if (result.notification) {
+    emitNotificationNew(io, result.notification.agent_id, result.notification);
+  }
 }

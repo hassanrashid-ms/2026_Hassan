@@ -8,11 +8,12 @@ import { withWorkspace, type Tx } from '../../shared/db/withWorkspace.ts';
 import {
   emitInboxChanged,
   emitMessageToRooms,
+  emitNotificationNew,
   emitPhaseChanged,
 } from '../../shared/realtime/emit.ts';
 import { getIo } from '../../shared/realtime/socketServer.ts';
 import { logger } from '../../shared/logging/logger.ts';
-import type { ConfirmPhaseValue, PlayerMessageView } from '@support/types';
+import type { ConfirmPhaseValue, NotificationView, PlayerMessageView } from '@support/types';
 
 export type { BotTurnInput };
 
@@ -86,6 +87,7 @@ function emitApplied(
     posted: PostedMessageRow[];
     statusChanged: boolean;
     phaseChanged: ConfirmPhaseValue | null;
+    notification: NotificationView | null;
   },
 ): void {
   let io: Server;
@@ -114,6 +116,9 @@ function emitApplied(
   if (result.statusChanged) {
     emitInboxChanged(io, workspaceId, conversationId, 'open');
   }
+  if (result.notification) {
+    emitNotificationNew(io, result.notification.agent_id, result.notification);
+  }
 }
 
 export type ApplyIfBotActiveResult =
@@ -122,6 +127,7 @@ export type ApplyIfBotActiveResult =
       posted: PostedMessageRow[];
       statusChanged: boolean;
       phaseChanged: ConfirmPhaseValue | null;
+      notification: NotificationView | null;
     }
   | { applied: false };
 

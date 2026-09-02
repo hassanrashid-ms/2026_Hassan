@@ -18,7 +18,8 @@ import {
   subintent,
 } from '../../shared/db/schema/index.ts';
 import { resolveSubintentForm } from '../forms/resolveSubintentForm.ts';
-import type { ConfirmPhaseValue } from '@support/types';
+import { notifyAgent } from '../notifications/notifyAgent.ts';
+import type { ConfirmPhaseValue, NotificationView } from '@support/types';
 
 export type ApplyBotTurnContext = {
   workspaceId: string;
@@ -37,6 +38,8 @@ export type ApplyBotTurnResult = {
    * one is a behaviour change, and the no-form handoff must stay byte-identical.
    */
   phaseChanged: ConfirmPhaseValue | null;
+  /** Set only when this turn assigned an agent (handoff or unavailable branches). */
+  notification: NotificationView | null;
 };
 
 /**
@@ -54,7 +57,7 @@ export async function applyBotTurn(
 
   switch (decision.kind) {
     case 'noop':
-      return { posted: [], statusChanged: false, phaseChanged: null };
+      return { posted: [], statusChanged: false, phaseChanged: null, notification: null };
 
     case 'answer': {
       const posted = await postMessage(tx, {
@@ -86,7 +89,7 @@ export async function applyBotTurn(
           payload: { article_id: decision.articleId, article_title: row?.title ?? null },
         });
       }
-      return { posted: [posted], statusChanged: false, phaseChanged: null };
+      return { posted: [posted], statusChanged: false, phaseChanged: null, notification: null };
     }
 
     case 'confirm_player_resolution': {
@@ -111,7 +114,7 @@ export async function applyBotTurn(
         actorType: 'bot',
         payload: { quoted_text: decision.quotedText },
       });
-      return { posted: [posted], statusChanged: false, phaseChanged: 'player_stated' };
+      return { posted: [posted], statusChanged: false, phaseChanged: 'player_stated', notification: null };
     }
 
     case 'resolve': {
@@ -133,7 +136,7 @@ export async function applyBotTurn(
         actorType: 'bot',
         payload: { source: 'bot', confirmed_by: 'player' },
       });
-      return { posted: [], statusChanged: true, phaseChanged: null };
+      return { posted: [], statusChanged: true, phaseChanged: null, notification: null };
     }
 
     case 'handoff': {
@@ -204,7 +207,7 @@ export async function applyBotTurn(
           // Status stays bot_active, no agent is assigned, and no bot_handoff is
           // written. completeFormAndHandoff does all three at terminate — that
           // gate is what keeps a half-filled ticket out of the queue.
-          return { posted: [posted], statusChanged: false, phaseChanged: 'form' };
+          return { posted: [posted], statusChanged: false, phaseChanged: 'form', notification: null };
         }
       }
 
@@ -233,6 +236,14 @@ export async function applyBotTurn(
         // agent exists, and that is explicitly not an error.
         payload: { reason: decision.reason, assigned_agent_id: assignedAgentId },
       });
+      const notification = assignedAgentId
+        ? await notifyAgent(tx, {
+            workspaceId: ctx.workspaceId,
+            agentId: assignedAgentId,
+            conversationId: ctx.conversationId,
+            via: 'bot_handoff',
+          })
+        : null;
       const finalPosted = [posted];
       if (assignedAgentId === null) {
         finalPosted.push(
@@ -246,7 +257,7 @@ export async function applyBotTurn(
           }),
         );
       }
-      return { posted: finalPosted, statusChanged: true, phaseChanged: null };
+      return { posted: finalPosted, statusChanged: true, phaseChanged: null, notification };
     }
 
     case 'unavailable': {
@@ -285,6 +296,14 @@ export async function applyBotTurn(
         actorType: 'bot',
         payload: { reason: decision.reason },
       });
+      const notification = assignedAgentId
+        ? await notifyAgent(tx, {
+            workspaceId: ctx.workspaceId,
+            agentId: assignedAgentId,
+            conversationId: ctx.conversationId,
+            via: 'bot_handoff',
+          })
+        : null;
       if (assignedAgentId === null) {
         posted.push(
           await postMessage(tx, {
@@ -297,7 +316,7 @@ export async function applyBotTurn(
           }),
         );
       }
-      return { posted, statusChanged: true, phaseChanged: null };
+      return { posted, statusChanged: true, phaseChanged: null, notification };
     }
   }
 }

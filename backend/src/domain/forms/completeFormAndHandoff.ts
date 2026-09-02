@@ -13,6 +13,8 @@ import { appendEvent } from '../../shared/events/appendEvent.ts';
 import { assignOnHandoff } from '../bot/assignOnHandoff.ts';
 import { postMessage, type PostedMessageRow } from '../conversations/postMessage.ts';
 import { getSystemMessage } from '../templates/templateService.ts';
+import { notifyAgent } from '../notifications/notifyAgent.ts';
+import type { NotificationView } from '@support/types';
 
 export type FormTerminationReason = 'submit' | 'skip' | 'timeout';
 export type TerminalFormStatus = 'completed' | 'partial' | 'skipped';
@@ -33,6 +35,7 @@ export type CompleteFormResult = {
   answeredCount: number;
   fieldCount: number;
   assignedAgentId: string | null;
+  notification: NotificationView | null;
   posted: PostedMessageRow;
   /** Set only when assignOnHandoff found nobody online — a second public line. */
   noAgentsOnlinePosted: PostedMessageRow | null;
@@ -152,6 +155,14 @@ export async function completeFormAndHandoff(
     actorType: 'bot',
     payload: { reason, assigned_agent_id: assignedAgentId },
   });
+  const notification = assignedAgentId
+    ? await notifyAgent(tx, {
+        workspaceId: ctx.workspaceId,
+        agentId: assignedAgentId,
+        conversationId: ctx.conversationId,
+        via: 'bot_handoff',
+      })
+    : null;
 
   await appendEvent(tx, {
     workspaceId: ctx.workspaceId,
@@ -255,6 +266,7 @@ export async function completeFormAndHandoff(
     answeredCount,
     fieldCount,
     assignedAgentId,
+    notification,
     posted,
     noAgentsOnlinePosted,
   };
