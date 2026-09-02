@@ -7,7 +7,7 @@ import { ChatComposer } from '@/surfaces/webview/components/chat/ChatComposer';
 import { SupportButton } from '@/surfaces/webview/components/SupportButton';
 import { BootstrapFailedScreen } from '@/surfaces/webview/components/StateScreens';
 import { useSupport } from '@/surfaces/webview/components/SupportContext';
-import { FormCard } from '@/surfaces/webview/components/chat/FormCard';
+import { FormCard } from '@/features/forms/components/FormCard';
 import { ArticleSheet } from '@/surfaces/webview/components/ArticleSheet';
 import { useCloseOverlay } from '@/surfaces/webview/hooks/useCloseOverlay';
 import {
