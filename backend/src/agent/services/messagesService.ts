@@ -27,8 +27,11 @@ export type SendAgentMessageResult =
   | { outcome: 'ok'; message: AgentMessageView }
   | { outcome: 'forbidden' }
   | { outcome: 'not_found' }
+  | { outcome: 'wrong_status' }
   | { outcome: 'attachment_not_found' }
   | { outcome: 'attachment_mismatch' };
+
+const BLOCKED_SEND_STATUSES = new Set(['resolved', 'closed']);
 
 export async function sendAgentMessage(
   ctx: AgentContext,
@@ -91,6 +94,7 @@ export async function sendAgentMessage(
 
     if (!found) return { outcome: 'not_found' } as const;
     if (found.assignedAgentId !== ctx.agentId) return { outcome: 'forbidden' } as const;
+    if (BLOCKED_SEND_STATUSES.has(found.status)) return { outcome: 'wrong_status' } as const;
 
     const posted = await postMessage(tx, {
       workspaceId: ctx.workspaceId,

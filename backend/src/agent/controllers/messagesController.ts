@@ -37,6 +37,10 @@ export const postAgentMessageHandler: RequestHandler = async (req, res) => {
     sendError(res, 403, 'forbidden', 'This conversation is not assigned to you.');
     return;
   }
+  if (result.outcome === 'wrong_status') {
+    sendError(res, 409, 'wrong_status', 'Cannot send a message to a resolved or closed conversation.');
+    return;
+  }
   res.status(200).json({ message: result.message });
 };
 

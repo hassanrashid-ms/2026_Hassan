@@ -1324,6 +1324,7 @@ registry.registerPath({
   },
   responses: {
     200: { description: 'Agent message or internal note sent' },
+    409: { description: 'Conversation is resolved or closed' },
     422: {
       description:
         'attachment_not_found (key missing, or not owned by this agent/workspace) or attachment_mismatch (declared mime_type/byte_size disagrees with the real object, or fails the allowlist/size cap)',
