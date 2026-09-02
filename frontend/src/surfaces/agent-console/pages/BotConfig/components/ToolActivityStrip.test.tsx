@@ -32,6 +32,7 @@ describe('ToolActivityStrip', () => {
       kind: 'handoff',
       reason: 'unhelped_cap',
       subintent_id: null,
+      form: null,
     };
     render(<ToolActivityStrip decision={decision} />);
     expect(screen.getByText('Gave up after too many unhelpful replies')).toBeInTheDocument();
@@ -48,6 +49,7 @@ describe('ToolActivityStrip', () => {
       kind: 'handoff',
       reason: 'no_article',
       subintent_id: null,
+      form: null,
       searches: [{ query: 'refund', results: [{ id: 'a1', title: 'Refund policy' }] }],
     };
     render(<ToolActivityStrip decision={decision} />);
