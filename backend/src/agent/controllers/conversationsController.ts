@@ -434,6 +434,7 @@ export const sweepAssignHandler: RequestHandler = async (req, res) => {
   );
   for (const a of assignments) {
     emitInboxChanged(getIo(), ctx.workspaceId, a.conversationId, a.status);
+    emitNotificationNew(getIo(), a.agentId, a.notification);
   }
   res.status(200).json({
     assignedCount,

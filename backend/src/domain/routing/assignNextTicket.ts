@@ -1,9 +1,11 @@
 // backend/src/domain/routing/assignNextTicket.ts
 import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
+import type { NotificationView } from '@support/types';
 import { conversation } from '../../shared/db/schema/index.ts';
 import { withWorkspace } from '../../shared/db/withWorkspace.ts';
 import { appendEvent } from '../../shared/events/appendEvent.ts';
-import { pickEligibleAgent } from './pickEligibleAgent.ts';
+import { notifyAgent } from '../notifications/notifyAgent.ts';
+import { pickEligibleAgent, type PickEligibleAgentStopReason } from './pickEligibleAgent.ts';
 
 // Same as conversationsService.ts's UNASSIGNED_STATUSES — 'awaiting_player'
 // always carries an assignee already, so it never appears in this queue.
@@ -13,18 +15,25 @@ export type AssignNextTicketResult = {
   conversationId: string;
   agentId: string;
   status: (typeof UNASSIGNED_STATUSES)[number];
+  notification: NotificationView;
 };
+
+export type AssignNextTicketStopReason = 'queue_empty' | PickEligibleAgentStopReason;
+
+export type AssignNextTicketOutcome =
+  | { assigned: true; result: AssignNextTicketResult }
+  | { assigned: false; reason: AssignNextTicketStopReason };
 
 /**
  * Assigns at most one conversation: the highest-priority, oldest unassigned
- * ticket in the workspace, to the least-loaded eligible online agent. Returns
- * null (no-op) when either side of that pair doesn't exist — an empty queue
- * or no eligible agent are both normal stop conditions for the caller's loop,
- * never errors. See docs/specs/2026-09-01-ticket-assignment-sweep-design.md.
+ * ticket in the workspace, to the least-loaded eligible online agent. Reports
+ * `assigned: false` (no-op) when either side of that pair doesn't exist — an
+ * empty queue or no eligible agent are both normal stop conditions for the
+ * caller's loop, never errors. See
+ * docs/specs/2026-09-01-ticket-assignment-sweep-design.md and
+ * docs/specs/2026-09-02-bulk-assign-toast-detail-design.md.
  */
-export async function assignNextTicket(
-  workspaceId: string,
-): Promise<AssignNextTicketResult | null> {
+export async function assignNextTicket(workspaceId: string): Promise<AssignNextTicketOutcome> {
   return withWorkspace(workspaceId, async (tx) => {
     const [next] = await tx
       .select({
@@ -38,10 +47,11 @@ export async function assignNextTicket(
       .orderBy(asc(conversation.priority), asc(conversation.createdAt), asc(conversation.id))
       .limit(1);
 
-    if (!next) return null;
+    if (!next) return { assigned: false, reason: 'queue_empty' };
 
-    const agentId = await pickEligibleAgent(tx, workspaceId);
-    if (!agentId) return null;
+    const picked = await pickEligibleAgent(tx, workspaceId);
+    if (picked.agentId === null) return { assigned: false, reason: picked.reason };
+    const agentId = picked.agentId;
 
     await tx
       .update(conversation)
@@ -57,10 +67,21 @@ export async function assignNextTicket(
       payload: { agent_id: agentId, via: 'sweep' },
     });
 
-    return {
-      conversationId: next.id,
+    const notification = await notifyAgent(tx, {
+      workspaceId,
       agentId,
-      status: next.status as AssignNextTicketResult['status'],
+      conversationId: next.id,
+      via: 'sweep',
+    });
+
+    return {
+      assigned: true,
+      result: {
+        conversationId: next.id,
+        agentId,
+        status: next.status as AssignNextTicketResult['status'],
+        notification,
+      },
     };
   });
 }

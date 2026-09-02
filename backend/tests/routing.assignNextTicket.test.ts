@@ -48,7 +48,14 @@ describe('assignNextTicket', () => {
     const high = await seedConversation({ workspaceId, playerId, status: 'open', priority: 'p1' });
 
     const result = await assignNextTicket(workspaceId);
-    expect(result).toEqual({ conversationId: high, agentId, status: 'open' });
+    expect(result.assigned).toBe(true);
+    if (!result.assigned) throw new Error('unreachable');
+    expect(result.result).toMatchObject({ conversationId: high, agentId, status: 'open' });
+    expect(result.result.notification).toMatchObject({
+      agent_id: agentId,
+      conversation_id: high,
+      payload: { via: 'sweep' },
+    });
 
     const row = await conversationRow(high);
     expect(row.assigned_agent_id).toBe(agentId);
@@ -79,7 +86,7 @@ describe('assignNextTicket', () => {
     });
 
     const result = await assignNextTicket(workspaceId);
-    expect(result?.conversationId).toBe(older);
+    expect(result.assigned && result.result.conversationId).toBe(older);
   });
 
   it('writes a conversation_assigned event', async () => {
@@ -98,23 +105,23 @@ describe('assignNextTicket', () => {
     expect(events[0].payload).toMatchObject({ agent_id: agentId, via: 'sweep' });
   });
 
-  it('returns null and assigns nothing when the queue is empty', async () => {
+  it('reports queue_empty and assigns nothing when the queue is empty', async () => {
     const workspaceId = await seedWorkspace();
     const agentId = await seedAgent();
     await seedWorkspaceMember({ workspaceId, agentId });
     await incrementPresence(agentId);
 
     const result = await assignNextTicket(workspaceId);
-    expect(result).toBeNull();
+    expect(result).toEqual({ assigned: false, reason: 'queue_empty' });
   });
 
-  it('returns null and leaves the conversation unassigned when no agent is eligible', async () => {
+  it('forwards the agent stop reason and leaves the conversation unassigned when no agent is eligible', async () => {
     const workspaceId = await seedWorkspace();
     const playerId = await seedPlayer(workspaceId);
     const conversationId = await seedConversation({ workspaceId, playerId, status: 'open' });
 
     const result = await assignNextTicket(workspaceId);
-    expect(result).toBeNull();
+    expect(result).toEqual({ assigned: false, reason: 'no_active_agents' });
     const row = await conversationRow(conversationId);
     expect(row.assigned_agent_id).toBeNull();
   });
@@ -134,6 +141,6 @@ describe('assignNextTicket', () => {
     );
 
     const result = await assignNextTicket(workspaceId);
-    expect(result).toBeNull();
+    expect(result).toEqual({ assigned: false, reason: 'queue_empty' });
   });
 });
