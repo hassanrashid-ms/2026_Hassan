@@ -9,7 +9,7 @@ import {
 } from '../../domain/conversations/index.ts';
 import { conversation, player, session } from '../../shared/db/schema/index.ts';
 import { withWorkspace } from '../../shared/db/withWorkspace.ts';
-import { emitInboxChanged } from '../../shared/realtime/emit.ts';
+import { emitInboxChanged, emitPhaseChanged } from '../../shared/realtime/emit.ts';
 import { getIo } from '../../shared/realtime/socketServer.ts';
 import type { PlayerContext } from '../../shared/middleware/requirePlayerToken.ts';
 
@@ -140,6 +140,13 @@ export async function openNewTicket(ctx: PlayerContext, body: Body): Promise<Ope
   // move anything in an agent's inbox.
   emitInboxChanged(getIo(), ctx.workspaceId, result.closedConversationId, 'closed');
   emitInboxChanged(getIo(), ctx.workspaceId, result.conversationId, result.status);
+  // emitInboxChanged only reaches the workspace inbox room. An agent who
+  // already has the old ticket open in ThreadPanel isn't in that room, so
+  // without this its composer/banner would stay stale until a manual reload.
+  emitPhaseChanged(getIo(), result.closedConversationId, {
+    conversation_id: result.closedConversationId,
+    confirm_phase: 'none',
+  });
 
   return { ok: true, conversationId: result.conversationId, status: result.status };
 }
