@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { FormField } from './forms.ts';
 
 /**
  * NOT part of the frozen SDK contract — ships with the server, same as
@@ -147,7 +148,12 @@ export type BotTestTurnDecision = (
       grounding?: { score: number; ungrounded: string[] };
     }
   | { kind: 'resolve'; subintent_id: string | null }
-  | { kind: 'handoff'; reason: BotTestTurnHandoffReason; subintent_id: string | null }
+  | {
+      kind: 'handoff';
+      reason: BotTestTurnHandoffReason;
+      subintent_id: string | null;
+      form: { form_id: string; form_name: string; version: number; fields: FormField[] } | null;
+    }
   | { kind: 'unavailable'; reason: BotTestTurnUnavailableReason }
   | { kind: 'confirm_player_resolution'; subintent_id: string | null; quoted_text: string }
 ) & { searches?: BotTestTurnSearch[] };
