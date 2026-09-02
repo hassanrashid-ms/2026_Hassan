@@ -36,9 +36,16 @@ export function WorkspaceSwitcher({ session }: { session: StoredAgentSession }) 
     window.location.assign('/inbox');
   }
 
-  // Nothing to switch between — the badge/name already shown elsewhere in
-  // the header is enough.
-  if (memberships.length <= 1) return null;
+  // Nothing to switch between — show the workspace name as plain text so the
+  // header's left slot still occupies space and the avatar/logout button on
+  // the right stays pinned there (the header is `justify-between`).
+  if (memberships.length <= 1) {
+    return (
+      <span className="text-sm font-medium text-text">
+        {current?.workspace_name ?? session.workspaceSlug}
+      </span>
+    );
+  }
 
   return (
     <DropdownMenu>

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher.tsx';
@@ -30,7 +30,7 @@ beforeEach(() => {
 });
 
 describe('WorkspaceSwitcher', () => {
-  it('renders nothing when the agent has zero or one membership', async () => {
+  it('shows the workspace name as plain text, with no dropdown, when the agent has one membership', async () => {
     vi.spyOn(agentApi, 'fetchMemberships').mockResolvedValue({
       memberships: [
         {
@@ -42,10 +42,10 @@ describe('WorkspaceSwitcher', () => {
       ],
     });
 
-    const { container } = renderWithClient(SESSION);
+    renderWithClient(SESSION);
 
-    await waitFor(() => expect(agentApi.fetchMemberships).toHaveBeenCalled());
-    expect(container).toBeEmptyDOMElement();
+    await screen.findByText('Workspace A');
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
   it('lists every membership and switches on selection', async () => {
