@@ -2,6 +2,7 @@ import type { RequestHandler } from 'express';
 import { z } from 'zod';
 import {
   ArticleVersionsQuery,
+  BulkExportArticlesBody,
   BulkImportArticlesBody,
   CreateArticleBody,
   FinalizeArticleAttachmentBody,
@@ -12,6 +13,7 @@ import { sendError } from '../../errors.ts';
 import { deleteObject } from '../../shared/storage/presign.ts';
 import {
   archiveArticle,
+  bulkExportArticles,
   bulkImportArticles,
   createArticle,
   discardArticleDraft,
@@ -326,6 +328,23 @@ export const bulkImportArticlesHandler: RequestHandler = async (req, res) => {
     return;
   }
   res.status(200).json({ results: result.results, summary: result.summary });
+};
+
+export const bulkExportArticlesHandler: RequestHandler = async (req, res) => {
+  const body = BulkExportArticlesBody.safeParse(req.body);
+  if (!body.success) {
+    sendError(res, 422, 'invalid_request', 'ids is required.');
+    return;
+  }
+  const result = await bulkExportArticles(req.agent!, body.data.ids);
+  if (!result.ok) {
+    sendError(res, 404, 'not_found', 'None of the given article ids were found.');
+    return;
+  }
+  res.status(200);
+  res.set('Content-Type', 'application/zip');
+  res.set('Content-Disposition', 'attachment; filename="articles-export.zip"');
+  res.send(result.zip);
 };
 
 export const generateKeywordsHandler: RequestHandler = async (req, res) => {

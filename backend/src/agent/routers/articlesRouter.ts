@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { requireTeamLeadOrAdmin } from '../../shared/middleware/requireTeamLeadOrAdmin.ts';
 import {
   archiveArticleHandler,
+  bulkExportArticlesHandler,
   bulkImportArticlesHandler,
   createArticleHandler,
   discardArticleDraftHandler,
@@ -37,5 +38,6 @@ articlesRouter.post('/articles/:id/publish', requireTeamLeadOrAdmin, publishArti
 articlesRouter.post('/articles/:id/archive', requireTeamLeadOrAdmin, archiveArticleHandler);
 articlesRouter.post('/articles/:id/unarchive', requireTeamLeadOrAdmin, unarchiveArticleHandler);
 articlesRouter.post('/articles/bulk-import', requireTeamLeadOrAdmin, bulkImportArticlesHandler);
+articlesRouter.post('/articles/bulk-export', requireTeamLeadOrAdmin, bulkExportArticlesHandler);
 articlesRouter.post('/articles/:id/attachments', finalizeArticleAttachmentHandler);
 articlesRouter.post('/articles/generate-keywords', generateKeywordsHandler);

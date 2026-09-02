@@ -263,6 +263,64 @@ export async function bulkImportArticles(
   };
 }
 
+function slugifyForExportFilename(title: string): string {
+  const slug = title
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return slug || 'untitled';
+}
+
+function toMarkdownExport(a: { title: string; body: string; keywords: string[]; state: string }): string {
+  const tagsLine =
+    a.keywords.length > 0 ? `tags: [${a.keywords.map((k) => JSON.stringify(k)).join(', ')}]\n` : '';
+  return `---\ntitle: ${JSON.stringify(a.title)}\n${tagsLine}state: ${a.state}\n---\n\n${a.body}\n`;
+}
+
+export type BulkExportArticlesResult = { ok: true; zip: Buffer } | { ok: false; reason: 'not_found' };
+
+/**
+ * Export is read-only and best-effort at the id level: an id that doesn't
+ * resolve to a row in this workspace (wrong workspace, already-removed) is
+ * silently dropped from the zip rather than failing the whole export — the
+ * caller picked these ids off a list it just fetched, so a mismatch here
+ * means the list changed underneath them, not that the request is malformed.
+ */
+export async function bulkExportArticles(
+  ctx: AgentContext,
+  ids: string[],
+): Promise<BulkExportArticlesResult> {
+  const rows = await withWorkspace(ctx.workspaceId, (tx) =>
+    tx
+      .select({
+        title: article.title,
+        body: article.body,
+        keywords: article.keywords,
+        state: article.state,
+      })
+      .from(article)
+      .where(inArray(article.id, ids)),
+  );
+  if (rows.length === 0) return { ok: false, reason: 'not_found' };
+
+  const zip = new JSZip();
+  const usedNames = new Set<string>();
+  for (const row of rows) {
+    const base = slugifyForExportFilename(row.title);
+    let filename = `${base}.md`;
+    let n = 2;
+    while (usedNames.has(filename)) {
+      filename = `${base}-${n}.md`;
+      n++;
+    }
+    usedNames.add(filename);
+    zip.file(filename, toMarkdownExport(row));
+  }
+  const buffer = await zip.generateAsync({ type: 'nodebuffer' });
+  return { ok: true, zip: buffer };
+}
+
 export type UpdateArticleInput = {
   title?: string;
   body?: string;

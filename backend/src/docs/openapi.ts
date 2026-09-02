@@ -1725,6 +1725,29 @@ registry.registerPath({
 });
 
 registry.registerPath({
+  method: 'post',
+  path: '/agent/articles/bulk-export',
+  summary: 'Agent Bulk Export Articles',
+  description:
+    'Exports the given article ids as a zip of .md files, one per article, with title/tags/state as frontmatter. Team Lead/Admin only.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: z.object({ ids: z.array(z.string()).min(1) }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: { description: 'application/zip binary of the exported articles' },
+    403: { description: 'Caller is not Team Lead or Admin' },
+    404: { description: 'None of the given article ids were found' },
+  },
+});
+
+registry.registerPath({
   method: 'patch',
   path: '/agent/articles/{id}',
   summary: 'Agent Update Article',

@@ -40,6 +40,10 @@ export type BulkImportArticlesResponse = {
   summary: { total: number; created: number; failed: number };
 };
 
+export const BulkExportArticlesBody = z.object({
+  ids: z.array(z.string()).min(1),
+});
+
 export const UpdateArticleBody = z.object({
   title: z.string().max(200).optional(),
   body: z.string().optional(),
