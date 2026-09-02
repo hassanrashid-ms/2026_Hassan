@@ -15,6 +15,7 @@ import { agentsRouter } from './routers/agentsRouter.ts';
 import { presenceRouter } from './routers/presenceRouter.ts';
 import { membershipsRouter } from './routers/membershipsRouter.ts';
 import { globalInboxRouter } from './routers/globalInboxRouter.ts';
+import { notificationsRouter } from './routers/notificationsRouter.ts';
 import { uploadsRouter } from './routers/uploadsRouter.ts';
 import { analyticsRouter } from './routers/analyticsRouter.ts';
 
@@ -26,6 +27,7 @@ agentRouter.use(authRouter);
 agentRouter.use(requireAgentSession);
 agentRouter.use(membershipsRouter);
 agentRouter.use(globalInboxRouter);
+agentRouter.use(notificationsRouter);
 agentRouter.use(resolveConsoleWorkspace);
 agentRouter.use(taxonomyRouter);
 agentRouter.use(tagsRouter);

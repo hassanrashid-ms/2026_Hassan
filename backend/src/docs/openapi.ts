@@ -772,6 +772,8 @@ registry.registerPath({
           schema: z.object({
             assignedCount: z.number().int(),
             conversationIds: z.array(z.uuid()),
+            remainingCount: z.number().int(),
+            stopReason: z.enum(['queue_empty', 'no_active_agents', 'all_at_capacity', 'none_online']),
           }),
         },
       },
@@ -1088,6 +1090,65 @@ registry.registerPath({
     403: { description: 'Forbidden — team lead or admin role required' },
     404: { description: 'Conversation not found or target agent not found' },
     409: { description: 'Conversation status invalid or target agent not active' },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/agent/notifications',
+  summary: 'List My Notifications',
+  description:
+    'Returns the latest 20 notifications for the calling agent, scattered across every workspace they belong to, newest first, plus a total unread count.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  responses: {
+    200: {
+      description: 'Notifications and unread count',
+      content: {
+        'application/json': {
+          schema: z.object({
+            notifications: z.array(
+              z.object({
+                id: z.uuid(),
+                workspace_id: z.uuid(),
+                agent_id: z.uuid(),
+                type: z.string(),
+                conversation_id: z.uuid().nullable(),
+                payload: z.record(z.string(), z.unknown()),
+                read_at: z.string().nullable(),
+                created_at: z.string(),
+              }),
+            ),
+            unread_count: z.number(),
+          }),
+        },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'patch',
+  path: '/agent/notifications/{id}/read',
+  summary: 'Mark Notification Read',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: { params: z.object({ id: z.uuid() }) },
+  responses: {
+    200: { description: 'Marked read', content: { 'application/json': { schema: z.object({ read: z.boolean() }) } } },
+    404: { description: 'Notification not found' },
+  },
+});
+
+registry.registerPath({
+  method: 'patch',
+  path: '/agent/notifications/read-all',
+  summary: 'Mark All Notifications Read',
+  description: 'Marks every unread notification for the calling agent read, across all their workspaces.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  responses: {
+    200: {
+      description: 'Count of notifications marked read',
+      content: { 'application/json': { schema: z.object({ updated: z.number() }) } },
+    },
   },
 });
 

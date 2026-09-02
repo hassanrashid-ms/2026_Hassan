@@ -22,6 +22,8 @@ const EXPECTED_TABLES = [
   'form_version',
   'intent',
   'message',
+  'message_template',
+  'notification',
   'player',
   'player_state_snapshot',
   'resolution_cycle',
