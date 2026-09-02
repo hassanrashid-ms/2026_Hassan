@@ -1,0 +1,138 @@
+import { Bell } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import type { NotificationsResponse, NotificationView, TicketAssignedPayload } from '@support/types';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from './ui/dropdown-menu.tsx';
+import { Badge } from './ui/badge.tsx';
+import {
+  fetchNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
+} from '../api/agentApi.ts';
+import {
+  loadAgentSession,
+  saveAgentSession,
+  saveLastActiveWorkspaceId,
+  type StoredAgentSession,
+} from '../lib/agentSession.ts';
+
+export function NotificationBell({ session }: { session: StoredAgentSession }) {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  const { data } = useQuery({
+    queryKey: ['notifications'],
+    queryFn: () => fetchNotifications(session.token),
+  });
+
+  const notifications = data?.notifications ?? [];
+  const unreadCount = data?.unread_count ?? 0;
+
+  async function handleSelect(n: NotificationView) {
+    await markNotificationRead(session.token, n.id);
+    queryClient.setQueryData<NotificationsResponse>(['notifications'], (old) =>
+      old
+        ? {
+            unread_count: Math.max(0, old.unread_count - (n.read_at ? 0 : 1)),
+            notifications: old.notifications.map((existing) =>
+              existing.id === n.id ? { ...existing, read_at: new Date().toISOString() } : existing,
+            ),
+          }
+        : old,
+    );
+
+    const payload = n.payload as TicketAssignedPayload;
+    const current = loadAgentSession();
+    if (current && payload.workspace_slug && current.workspaceSlug !== payload.workspace_slug) {
+      saveAgentSession({ ...current, workspaceSlug: payload.workspace_slug, workspaceId: undefined });
+      saveLastActiveWorkspaceId(''); // cleared; AgentConsoleShell's membership-fallback effect re-resolves workspaceId from the slug on next load
+      if (n.conversation_id) {
+        window.location.assign(`/tickets/${n.conversation_id}`);
+      } else {
+        window.location.reload();
+      }
+      return;
+    }
+    if (n.conversation_id) navigate(`/tickets/${n.conversation_id}`);
+  }
+
+  async function handleMarkAllRead() {
+    await markAllNotificationsRead(session.token);
+    queryClient.setQueryData<NotificationsResponse>(['notifications'], (old) =>
+      old
+        ? {
+            unread_count: 0,
+            notifications: old.notifications.map((n) => ({
+              ...n,
+              read_at: n.read_at ?? new Date().toISOString(),
+            })),
+          }
+        : old,
+    );
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className="relative flex size-8 items-center justify-center rounded-md text-muted hover:bg-accent-soft/60 hover:text-text"
+        >
+          <Bell className="size-4.5" />
+          {unreadCount > 0 && (
+            <Badge
+              variant="destructive"
+              className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full border-none bg-red-500 px-1 text-[10px] text-white"
+            >
+              {unreadCount > 9 ? '9+' : unreadCount}
+            </Badge>
+          )}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-80">
+        <div className="flex items-center justify-between px-2 py-1.5">
+          <DropdownMenuLabel className="p-0">Notifications</DropdownMenuLabel>
+          {unreadCount > 0 && (
+            <button
+              type="button"
+              onClick={() => void handleMarkAllRead()}
+              className="text-xs font-medium text-accent hover:underline"
+            >
+              Mark all as read
+            </button>
+          )}
+        </div>
+        <DropdownMenuSeparator />
+        {notifications.length === 0 && (
+          <div className="px-2 py-6 text-center text-sm text-muted">No notifications yet.</div>
+        )}
+        {notifications.map((n) => {
+          const payload = n.payload as TicketAssignedPayload;
+          return (
+            <DropdownMenuItem
+              key={n.id}
+              onSelect={() => void handleSelect(n)}
+              className={n.read_at ? undefined : 'bg-accent-soft/60'}
+            >
+              <div className="flex flex-col gap-0.5">
+                <span className="text-sm font-medium text-text">
+                  Ticket #{payload.ticket_number} assigned to you
+                </span>
+                <span className="text-xs text-muted">
+                  {payload.workspace_name} · {payload.priority?.toUpperCase()}
+                </span>
+              </div>
+            </DropdownMenuItem>
+          );
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
