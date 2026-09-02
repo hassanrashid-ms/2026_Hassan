@@ -31,7 +31,7 @@ export function MobilePreviewFrame({ children }: { children: ReactNode }) {
     <div
       data-testid="mobile-preview-frame"
       style={{ ...WEBVIEW_THEME_VARS, fontSize: '16px' }}
-      className="mx-auto flex max-h-[700px] w-[375px] flex-col gap-4 overflow-y-auto rounded-[2rem] border border-black/10 bg-[var(--color-bg)] p-4 text-[var(--color-text)]"
+      className="mx-auto flex max-h-[700px] w-full max-w-[375px] flex-col gap-4 overflow-y-auto rounded-[2rem] border border-black/10 bg-[var(--color-bg)] p-4 text-[var(--color-text)]"
     >
       {children}
     </div>

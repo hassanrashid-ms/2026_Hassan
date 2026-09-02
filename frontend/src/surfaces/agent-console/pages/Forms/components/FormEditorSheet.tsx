@@ -69,7 +69,10 @@ export function FormEditorSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="flex flex-col gap-0 p-0 sm:max-w-2xl">
+      <SheetContent
+        side="right"
+        className="flex w-full flex-col gap-0 p-0 sm:max-w-2xl lg:max-w-4xl"
+      >
         <SheetHeader>
           <SheetTitle>{formId ? 'Edit Form' : 'New Form'}</SheetTitle>
         </SheetHeader>
@@ -225,8 +228,8 @@ function FormEditorForm({
 
   return (
     <>
-      <div className="flex min-h-0 flex-1">
-        <div className="flex min-w-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
+        <div className="flex min-w-0 flex-1 flex-col gap-4 p-4 lg:overflow-y-auto">
         {archived && (
           <p className="rounded-md bg-amber-100 px-3 py-2 text-xs text-amber-900">
             This form is archived and can no longer be edited.
@@ -251,9 +254,9 @@ function FormEditorForm({
           <div className="flex flex-col gap-2">
             {fields.map((field, index) => (
               <div key={field.key} className="rounded-card border border-slate-200 bg-surface p-2">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <Input
-                    className="h-8"
+                    className="h-8 min-w-32 flex-1"
                     value={field.label}
                     disabled={archived}
                     onChange={(e) => updateFieldAt(field.key, { label: e.target.value })}
@@ -334,7 +337,7 @@ function FormEditorForm({
                         {(field.options ?? []).map((option, optIndex) => (
                           <div key={optIndex} className="flex items-center gap-2">
                             <Input
-                              className="h-8"
+                              className="h-8 min-w-0 flex-1"
                               value={option}
                               disabled={archived}
                               onChange={(e) => {
@@ -443,7 +446,7 @@ function FormEditorForm({
 
         <div
           data-testid="form-live-preview-panel"
-          className="w-[375px] shrink-0 overflow-y-auto border-l border-slate-200 p-4"
+          className="w-full shrink-0 overflow-y-auto border-t border-slate-200 p-4 lg:w-[375px] lg:border-t-0 lg:border-l"
         >
           <FormLivePreview formName={name} fields={fields} />
         </div>
