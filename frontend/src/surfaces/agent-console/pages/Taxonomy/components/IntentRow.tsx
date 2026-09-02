@@ -68,15 +68,18 @@ export function IntentRow({
   });
 
   const hasActiveSubintents = intent.subintents.some((s) => s.archivedAt === null);
-  const archiveDisabled = intent.isSystem || hasActiveSubintents;
+  const archiveDisabled = !admin || intent.isSystem || hasActiveSubintents;
   // A published-article block is the third condition in the design spec, but
   // detecting it here would mean fetching articles this tree never loads —
   // that case surfaces through archive.error's server message instead.
-  const archiveDisabledReason = intent.isSystem
-    ? 'The "Other" intent can never be archived.'
-    : hasActiveSubintents
-      ? 'Archive or move every subintent under this intent first.'
-      : undefined;
+  const archiveDisabledReason = !admin
+    ? 'Only an admin can manage intents.'
+    : intent.isSystem
+      ? 'The "Other" intent can never be archived.'
+      : hasActiveSubintents
+        ? 'Archive or move every subintent under this intent first.'
+        : undefined;
+  const roleDisabledReason = !admin ? 'Only an admin can manage intents.' : undefined;
 
   return (
     <li className={intent.archivedAt !== null ? 'opacity-60' : undefined}>
@@ -102,19 +105,30 @@ export function IntentRow({
             {intent.archivedAt !== null && <Badge variant="secondary">Archived</Badge>}
           </>
         )}
-        {admin && !editing && intent.archivedAt === null && (
+        {!editing && intent.archivedAt === null && (
           <div className="ml-auto flex items-center gap-1">
-            <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(true)}>
-              Rename
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              onClick={() => setAddingSubintent(true)}
-            >
-              + Add subintent
-            </Button>
+            <span title={roleDisabledReason}>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => setEditing(true)}
+                disabled={!admin}
+              >
+                Rename
+              </Button>
+            </span>
+            <span title={roleDisabledReason}>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => setAddingSubintent(true)}
+                disabled={!admin}
+              >
+                + Add subintent
+              </Button>
+            </span>
             <span title={archiveDisabledReason}>
               <Button
                 type="button"
@@ -128,17 +142,19 @@ export function IntentRow({
             </span>
           </div>
         )}
-        {admin && !editing && intent.archivedAt !== null && (
+        {!editing && intent.archivedAt !== null && (
           <div className="ml-auto flex items-center gap-1">
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => unarchive.mutate()}
-              disabled={unarchive.isPending}
-            >
-              Unarchive
-            </Button>
+            <span title={roleDisabledReason}>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => unarchive.mutate()}
+                disabled={!admin || unarchive.isPending}
+              >
+                Unarchive
+              </Button>
+            </span>
           </div>
         )}
       </div>

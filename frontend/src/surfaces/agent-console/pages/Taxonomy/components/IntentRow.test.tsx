@@ -44,7 +44,7 @@ const other: IntentView = {
 const allSubintents: (IntentSubintentView & { intentId: string; intentName: string })[] = [];
 
 describe('IntentRow', () => {
-  it('shows admin-only controls for an admin and hides them for an agent', async () => {
+  it('shows admin-only controls enabled for an admin, disabled for an agent', async () => {
     const { rerender } = renderWithClient(
       <IntentRow
         token="t"
@@ -55,8 +55,8 @@ describe('IntentRow', () => {
       />,
     );
     expect(await screen.findByText('Billing')).toBeInTheDocument();
-    expect(screen.getByText('Rename')).toBeInTheDocument();
-    expect(screen.getByText('Archive')).toBeInTheDocument();
+    expect(screen.getByText('Rename')).not.toBeDisabled();
+    expect(screen.getByText('Archive')).not.toBeDisabled();
 
     rerender(
       <QueryClientProvider client={new QueryClient()}>
@@ -69,8 +69,18 @@ describe('IntentRow', () => {
         />
       </QueryClientProvider>,
     );
-    expect(screen.queryByText('Rename')).not.toBeInTheDocument();
-    expect(screen.queryByText('Archive')).not.toBeInTheDocument();
+    const renameButton = screen.getByText('Rename');
+    const archiveButton = screen.getByText('Archive');
+    expect(renameButton).toBeDisabled();
+    expect(archiveButton).toBeDisabled();
+    expect(renameButton.closest('span')).toHaveAttribute(
+      'title',
+      'Only an admin can manage intents.',
+    );
+    expect(archiveButton.closest('span')).toHaveAttribute(
+      'title',
+      'Only an admin can manage intents.',
+    );
   });
 
   it('disables Archive for the system intent with an explanatory title', () => {

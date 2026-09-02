@@ -90,7 +90,7 @@ describe('Taxonomy', () => {
     ).toBeTruthy();
   });
 
-  it('hides "+ Add intent" for a non-admin', async () => {
+  it('shows "+ Add intent" disabled for a non-admin, with an explanatory title', async () => {
     vi.spyOn(agentSession, 'loadAgentSession').mockReturnValue({
       token: 't',
       agentId: 'a1',
@@ -103,6 +103,11 @@ describe('Taxonomy', () => {
     renderWithClient(<Taxonomy />);
 
     await screen.findByText('Taxonomy');
-    expect(screen.queryByText('+ Add intent')).not.toBeInTheDocument();
+    const addButton = screen.getByText('+ Add intent');
+    expect(addButton).toBeDisabled();
+    expect(addButton.closest('[title]')).toHaveAttribute(
+      'title',
+      'Only an admin can add intents.',
+    );
   });
 });

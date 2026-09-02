@@ -10,7 +10,6 @@ import type {
 import mindstormLogo from '@/assets/mindstorm_logo.png';
 import {
   Inbox as InboxIcon,
-  Globe,
   BookOpen,
   ClipboardList,
   ChevronDown,
@@ -75,7 +74,6 @@ const PRESENCE_OPTIONS: { value: 'online' | 'away'; label: string; dotClassName:
 // (canBuildForms) — they encode the real permission boundary, not decoration.
 const NAV_ITEMS = [
   { to: '/inbox', label: 'Inbox', icon: InboxIcon, group: 'Workspace' },
-  { to: '/global-inbox', label: 'Global Inbox', icon: Globe, group: 'Workspace' },
   { to: '/tickets', label: 'Tickets', icon: ClipboardList, group: 'Workspace' },
   { to: '/articles', label: 'Knowledge Base', icon: BookOpen, group: 'Workspace' },
   { to: '/analytics', label: 'Analytics', icon: BarChart3, group: 'Workspace' },

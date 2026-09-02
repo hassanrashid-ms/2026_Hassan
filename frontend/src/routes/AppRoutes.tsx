@@ -7,7 +7,6 @@ import {
   importAnalytics,
   importBotConfig,
   importForms,
-  importGlobalInbox,
   importInbox,
   importKnowledgeBase,
   importTaxonomy,
@@ -33,7 +32,6 @@ const AgentConsoleShell = lazy(async () => ({
 }));
 
 const Inbox = lazy(async () => ({ default: (await importInbox()).Inbox }));
-const GlobalInbox = lazy(async () => ({ default: (await importGlobalInbox()).GlobalInbox }));
 const Tickets = lazy(async () => ({ default: (await importTickets()).Tickets }));
 const KnowledgeBase = lazy(async () => ({
   default: (await importKnowledgeBase()).KnowledgeBase,
@@ -90,7 +88,9 @@ export function AppRoutes() {
       >
         <Route path="inbox" element={<Inbox />} />
         <Route path="inbox/:conversationId" element={<Inbox />} />
-        <Route path="global-inbox" element={<GlobalInbox />} />
+        {/* Global Inbox is now the second tab inside Inbox — this keeps old
+            bookmarks/links working instead of 404ing. */}
+        <Route path="global-inbox" element={<Navigate to="/inbox" replace />} />
         <Route path="tickets" element={<Tickets />} />
         <Route path="tickets/:conversationId" element={<Tickets />} />
         <Route path="articles" element={<KnowledgeBase />} />

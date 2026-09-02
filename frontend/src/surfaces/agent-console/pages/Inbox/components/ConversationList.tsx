@@ -1,12 +1,15 @@
 import { useEffect } from 'react';
 import type { AgentConversationsResponse, ConversationStatusValue } from '@support/types';
-import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
-import { fetchInbox } from '../../../api/agentApi.ts';
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
+import { fetchGlobalInbox, fetchInbox } from '../../../api/agentApi.ts';
 import { createSocket } from '../../../../../features/chat/api/socket.ts';
 import { handleSessionExpired } from '../../../lib/authErrorHandling.ts';
 import { ScrollArea } from '../../../components/ui/scroll-area.tsx';
 import { EmptyState } from '../../../components/ui/empty-state.tsx';
+import { Badge } from '../../../components/ui/badge.tsx';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../components/ui/tabs.tsx';
 import { ConversationRow } from './ConversationRow.tsx';
+import { GlobalInboxTab } from './GlobalInboxTab.tsx';
 
 type InboxPages = { pages: AgentConversationsResponse[]; pageParams: (string | undefined)[] };
 
@@ -97,6 +100,18 @@ function ConversationQueue({
   );
 }
 
+function TabBadge({ count }: { count: number }) {
+  if (count === 0) return null;
+  return (
+    <Badge
+      variant="destructive"
+      className="flex h-4 min-w-4 items-center justify-center rounded-full border-none bg-red-500 px-1 text-[10px] text-white"
+    >
+      {count > 9 ? '9+' : count}
+    </Badge>
+  );
+}
+
 export function ConversationList({
   token,
   selectedId,
@@ -124,6 +139,15 @@ export function ConversationList({
 
   const mineConversations = mine.data?.pages.flatMap((page) => page.conversations) ?? [];
   const escalatedConversations = escalated.data?.pages.flatMap((page) => page.conversations) ?? [];
+
+  // Shares its cache with GlobalInboxTab's own query (same key) — this one
+  // exists purely to size the tab badge, so it stays live even while that
+  // tab's content is unmounted.
+  const globalInbox = useQuery({
+    queryKey: ['global-inbox'],
+    queryFn: () => fetchGlobalInbox(token),
+  });
+  const globalInboxCount = globalInbox.data?.conversations.length ?? 0;
 
   useEffect(() => {
     const socket = createSocket(token, 'agent');
@@ -207,36 +231,53 @@ export function ConversationList({
     mineConversations.length === 0 &&
     escalatedConversations.length === 0;
 
+  const workspaceCount = mineConversations.length + escalatedConversations.length;
+
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-y-auto">
-      {bothLoadedAndEmpty ? (
-        <EmptyState message="Nothing to show" />
-      ) : (
-        <>
-          <ConversationQueue
-            title="My tickets"
-            testId="conversation-list-scroll-mine"
-            conversations={mineConversations}
-            selectedId={selectedId}
-            onSelect={onSelect}
-            emptyLabel="No open tickets."
-            hasNextPage={mine.hasNextPage}
-            isFetchingNextPage={mine.isFetchingNextPage}
-            fetchNextPage={() => void mine.fetchNextPage()}
-          />
-          <ConversationQueue
-            title="Escalated tickets"
-            testId="conversation-list-scroll-escalated"
-            conversations={escalatedConversations}
-            selectedId={selectedId}
-            onSelect={onSelect}
-            emptyLabel="No escalated tickets."
-            hasNextPage={escalated.hasNextPage}
-            isFetchingNextPage={escalated.isFetchingNextPage}
-            fetchNextPage={() => void escalated.fetchNextPage()}
-          />
-        </>
-      )}
-    </div>
+    <Tabs defaultValue="inbox" className="h-full min-h-0 gap-0">
+      <TabsList className="mx-2 mt-2">
+        <TabsTrigger value="inbox" className="gap-1.5">
+          Inbox
+          <TabBadge count={workspaceCount} />
+        </TabsTrigger>
+        <TabsTrigger value="global" className="gap-1.5">
+          Global Inbox
+          <TabBadge count={globalInboxCount} />
+        </TabsTrigger>
+      </TabsList>
+      <TabsContent value="inbox" className="min-h-0 overflow-y-auto">
+        {bothLoadedAndEmpty ? (
+          <EmptyState message="Nothing to show" />
+        ) : (
+          <>
+            <ConversationQueue
+              title="My tickets"
+              testId="conversation-list-scroll-mine"
+              conversations={mineConversations}
+              selectedId={selectedId}
+              onSelect={onSelect}
+              emptyLabel="No open tickets."
+              hasNextPage={mine.hasNextPage}
+              isFetchingNextPage={mine.isFetchingNextPage}
+              fetchNextPage={() => void mine.fetchNextPage()}
+            />
+            <ConversationQueue
+              title="Escalated tickets"
+              testId="conversation-list-scroll-escalated"
+              conversations={escalatedConversations}
+              selectedId={selectedId}
+              onSelect={onSelect}
+              emptyLabel="No escalated tickets."
+              hasNextPage={escalated.hasNextPage}
+              isFetchingNextPage={escalated.isFetchingNextPage}
+              fetchNextPage={() => void escalated.fetchNextPage()}
+            />
+          </>
+        )}
+      </TabsContent>
+      <TabsContent value="global" className="min-h-0">
+        <GlobalInboxTab />
+      </TabsContent>
+    </Tabs>
   );
 }

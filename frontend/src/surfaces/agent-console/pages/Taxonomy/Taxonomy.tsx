@@ -29,6 +29,7 @@ export function Taxonomy() {
 
   if (!session) return null;
 
+  const admin = isAdmin(session);
   const intents = intentsQuery.data?.intents ?? [];
   const allSubintents = intents.flatMap((i) =>
     i.subintents.map((s) => ({ ...s, intentId: i.id, intentName: i.name })),
@@ -40,24 +41,26 @@ export function Taxonomy() {
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex items-center justify-between border-b border-slate-200 p-3">
         <span className="text-sm font-semibold">Taxonomy</span>
-        {isAdmin(session) && (
-          <div className="flex items-center gap-2">
-            <Input
-              placeholder="New intent name"
-              value={newIntentName}
-              onChange={(e) => setNewIntentName(e.target.value)}
-              className="h-8 w-48"
-            />
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => addIntent.mutate()}
-              disabled={addIntent.isPending || !newIntentName}
-            >
-              + Add intent
-            </Button>
-          </div>
-        )}
+        <div
+          className="flex items-center gap-2"
+          title={admin ? undefined : 'Only an admin can add intents.'}
+        >
+          <Input
+            placeholder="New intent name"
+            value={newIntentName}
+            onChange={(e) => setNewIntentName(e.target.value)}
+            className="h-8 w-48"
+            disabled={!admin}
+          />
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => addIntent.mutate()}
+            disabled={!admin || addIntent.isPending || !newIntentName}
+          >
+            + Add intent
+          </Button>
+        </div>
       </div>
       <ScrollArea className="min-h-0 flex-1 p-3">
         {intentsQuery.data && intents.length === 0 ? (

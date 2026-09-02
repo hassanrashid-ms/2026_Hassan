@@ -96,13 +96,18 @@ export function SubintentRow({
 
   const moveTargets = allIntents.filter((i) => i.archivedAt === null && i.id !== parentIntent.id);
   const mergeTargets = allSubintents.filter((s) => s.archivedAt === null && s.id !== subintent.id);
-  const disabledTitle = isOther
-    ? 'The "Other" subintent can never be archived, merged, or moved.'
-    : undefined;
+  const roleDisabledReason = !admin ? 'Only an admin can manage intents.' : undefined;
+  const disabledTitle = !admin
+    ? roleDisabledReason
+    : isOther
+      ? 'The "Other" subintent can never be archived, merged, or moved.'
+      : undefined;
   const parentArchived = parentIntent.archivedAt !== null;
-  const unarchiveDisabledReason = parentArchived
-    ? 'Unarchive the parent intent first.'
-    : undefined;
+  const unarchiveDisabledReason = !admin
+    ? roleDisabledReason
+    : parentArchived
+      ? 'Unarchive the parent intent first.'
+      : undefined;
 
   return (
     <li className="flex flex-col gap-1">
@@ -133,23 +138,26 @@ export function SubintentRow({
           </>
         )}
 
-        {admin && !editing && subintent.archivedAt === null && (
+        {!editing && subintent.archivedAt === null && (
           <div className="ml-auto flex items-center gap-1">
-            <Select
-              value={subintent.defaultPriority ?? undefined}
-              onValueChange={(value) => setPriority.mutate(value as ConversationPriority)}
-            >
-              <SelectTrigger className="h-7 w-20 text-xs">
-                <SelectValue placeholder="Priority" />
-              </SelectTrigger>
-              <SelectContent>
-                {PRIORITIES.map((p) => (
-                  <SelectItem key={p} value={p}>
-                    {p}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <span title={roleDisabledReason}>
+              <Select
+                value={subintent.defaultPriority ?? undefined}
+                onValueChange={(value) => setPriority.mutate(value as ConversationPriority)}
+                disabled={!admin}
+              >
+                <SelectTrigger className="h-7 w-20 text-xs">
+                  <SelectValue placeholder="Priority" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PRIORITIES.map((p) => (
+                    <SelectItem key={p} value={p}>
+                      {p}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </span>
 
             <span title={disabledTitle}>
               <Button
@@ -157,14 +165,14 @@ export function SubintentRow({
                 size="sm"
                 variant="outline"
                 onClick={() => setEditing(true)}
-                disabled={isOther}
+                disabled={!admin || isOther}
               >
                 Rename
               </Button>
             </span>
 
             <span title={disabledTitle}>
-              <Select disabled={isOther} onValueChange={(intentId) => move.mutate(intentId)}>
+              <Select disabled={!admin || isOther} onValueChange={(intentId) => move.mutate(intentId)}>
                 <SelectTrigger className="h-7 w-28 text-xs">
                   <SelectValue placeholder="Move to…" />
                 </SelectTrigger>
@@ -181,7 +189,7 @@ export function SubintentRow({
             <span title={disabledTitle}>
               <Select
                 key={mergeSelectKey}
-                disabled={isOther}
+                disabled={!admin || isOther}
                 onValueChange={(intoId) => {
                   const target = mergeTargets.find((s) => s.id === intoId);
                   if (target) setMergeTarget({ id: target.id, name: target.name });
@@ -206,14 +214,14 @@ export function SubintentRow({
                 size="sm"
                 variant="outline"
                 onClick={() => setConfirmArchive(true)}
-                disabled={isOther || archive.isPending}
+                disabled={!admin || isOther || archive.isPending}
               >
                 Archive
               </Button>
             </span>
           </div>
         )}
-        {admin && !editing && subintent.archivedAt !== null && (
+        {!editing && subintent.archivedAt !== null && (
           <div className="ml-auto flex items-center gap-1">
             <span title={unarchiveDisabledReason}>
               <Button
@@ -221,7 +229,7 @@ export function SubintentRow({
                 size="sm"
                 variant="outline"
                 onClick={() => unarchive.mutate()}
-                disabled={parentArchived || unarchive.isPending}
+                disabled={!admin || parentArchived || unarchive.isPending}
               >
                 Unarchive
               </Button>
