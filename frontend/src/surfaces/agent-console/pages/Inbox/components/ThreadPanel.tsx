@@ -35,6 +35,7 @@ import { loadAgentSession, canBuildForms, isAdmin } from '../../../lib/agentSess
 import { createSocket } from '../../../../../features/chat/api/socket.ts';
 import { handleSessionExpired } from '../../../lib/authErrorHandling.ts';
 import { tagBadgeClassName } from '../../../lib/tagBadge.ts';
+import { ApiError } from '../../../../../lib/httpClient.ts';
 import { ChatThread } from '../../../../../features/chat/components/ChatThread.tsx';
 import { resolveTemplateBody } from '../../../../../features/chat/lib/resolveTemplateBody.ts';
 import {
@@ -50,6 +51,7 @@ import { Badge } from '../../../components/ui/badge.tsx';
 import { Button } from '../../../components/ui/button.tsx';
 import { AttachmentLightbox } from '../../../components/AttachmentLightbox.tsx';
 import { STATUS_BADGE_VARIANT, formatStatus } from './ConversationRow.tsx';
+import { useAutoCloseCountdown } from './autoCloseCountdown.ts';
 
 function toChatMessage(m: AgentMessageView): ChatMessage {
   return {
@@ -112,6 +114,8 @@ export function ThreadPanel({
   ticketNumber,
   resolutionSource,
   resolvedByAgentName,
+  resolvedAt,
+  autoCloseDays,
   openedAt,
   railOpen = false,
   onToggleRail,
@@ -131,6 +135,8 @@ export function ThreadPanel({
   ticketNumber?: number;
   resolutionSource?: ResolutionSourceValue | null;
   resolvedByAgentName?: string | null;
+  resolvedAt?: string | null;
+  autoCloseDays?: number;
   openedAt?: string;
   railOpen?: boolean;
   onToggleRail?: () => void;
@@ -143,6 +149,7 @@ export function ThreadPanel({
   const queryClient = useQueryClient();
   const [pending, setPending] = useState<PendingMessage[]>([]);
   const [expandedImage, setExpandedImage] = useState<ChatAttachment | null>(null);
+  const countdownLabel = useAutoCloseCountdown(resolvedAt, autoCloseDays);
 
   const messagesQuery = useQuery({
     queryKey: ['conversation', conversationId, 'messages'],
@@ -240,10 +247,14 @@ export function ThreadPanel({
         queryKey: ['conversation', conversationId, 'messages'],
       });
     },
-    onError: (_error, _variables, context) => {
+    onError: (error, _variables, context) => {
       setPending((current) =>
         current.map((p) => (p.tempId === context?.tempId ? { ...p, deliveryState: 'failed' } : p)),
       );
+      if (error instanceof ApiError && error.status === 409) {
+        toast.error('This ticket was just resolved — your message was not sent.');
+        void queryClient.invalidateQueries({ queryKey: ['conversation', conversationId, 'detail'] });
+      }
     },
   });
 
@@ -383,6 +394,9 @@ export function ThreadPanel({
     // The player's answer arrives as a message; this is what tells the panel the
     // question is no longer outstanding, which no message body states.
     socket.on('conversation:phase_changed', () => {
+      void queryClient.invalidateQueries({ queryKey: ['conversation', conversationId, 'detail'] });
+      void queryClient.invalidateQueries({ queryKey: ['tickets'] });
+      void queryClient.invalidateQueries({ queryKey: ['tickets-summary'] });
       void queryClient.invalidateQueries({ queryKey: ['inbox', 'mine'] });
       void queryClient.invalidateQueries({ queryKey: ['inbox', 'unassigned'] });
     });
@@ -569,12 +583,10 @@ export function ThreadPanel({
             className="flex shrink-0 items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-900"
           >
             <Archive className="size-3.5 shrink-0" />
-            Viewing an earlier ticket
+            {status === 'resolved' ? 'Viewing resolved ticket' : 'Viewing closed ticket'}
             {ticketNumber != null && ` · #${ticketNumber}`}
-            {/* "opened", not "resolved": the only date the API carries is
-              created_at, and labelling it with the ticket's status would put a
-              date in front of the agent that is not the date of that status. */}
-            {openedAt && ` · ${status ?? 'resolved'} · opened ${formatTicketDate(openedAt)}`}
+            {` · ${resolverLabel(resolutionSource, resolvedByAgentName)}`}
+            {status === 'resolved' && countdownLabel && ` · ${countdownLabel}`}
           </div>
         )}
         <div className="min-h-0 flex-1">

@@ -77,7 +77,8 @@ export function ConversationDetailPane({
         ticketNumber={detail.data?.number}
         resolutionSource={detail.data?.resolution_source}
         resolvedByAgentName={detail.data?.resolved_by_agent_name}
-        // There is no resolved_at column; created_at is what the detail carries.
+        resolvedAt={detail.data?.resolved_at}
+        autoCloseDays={detail.data?.auto_close_days}
         openedAt={detail.data?.created_at}
         railOpen={railOpen}
         onToggleRail={toggleRail}

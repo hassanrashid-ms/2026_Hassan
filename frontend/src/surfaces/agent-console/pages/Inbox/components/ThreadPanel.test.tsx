@@ -4,7 +4,9 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { AgentMessageView } from '@support/types';
+import { Toaster } from 'sonner';
 import { ThreadPanel } from './ThreadPanel.tsx';
+import { ApiError } from '../../../../../lib/httpClient.ts';
 import {
   claimConversation,
   detachTag,
@@ -104,6 +106,7 @@ function renderPanel(overrides: PanelProps = {}) {
         confirmPhase="none"
         {...overrides}
       />
+      <Toaster />
     </QueryClientProvider>,
   );
 }
@@ -173,6 +176,39 @@ describe('ThreadPanel take over', () => {
   });
 });
 
+describe('ThreadPanel live resolution', () => {
+  it('invalidates the conversation detail query when phase_changed fires, not just the inbox lists', async () => {
+    const handlers = fakeSocket();
+    vi.mocked(fetchConversationMessages).mockResolvedValue({ messages: [] } as never);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ThreadPanel
+          token="t"
+          conversationId="c1"
+          playerExternalId="p-1"
+          status="open"
+          confirmPhase="none"
+        />
+      </QueryClientProvider>,
+    );
+    await screen.findByLabelText('Message');
+    invalidateSpy.mockClear();
+
+    handlers['conversation:phase_changed']?.({ conversation_id: 'c1', confirm_phase: 'none' });
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['conversation', 'c1', 'detail'],
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['tickets'] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['tickets-summary'] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['inbox', 'mine'] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['inbox', 'unassigned'] });
+  });
+});
+
 describe('ThreadPanel room membership', () => {
   it('joins the conversation room on every connect, not once at setup', async () => {
     const handlers = fakeSocket();
@@ -232,6 +268,24 @@ describe('ThreadPanel optimistic sends', () => {
     expect(await screen.findByText('Failed to send.')).toBeInTheDocument();
     expect(screen.getByText('still here?')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+  });
+
+  it('toasts and refetches detail when a send loses the race to a resolve (409)', async () => {
+    fakeSocket();
+    vi.mocked(fetchConversationMessages).mockResolvedValue({ messages: [] } as never);
+    vi.mocked(sendAgentMessage).mockRejectedValue(
+      new ApiError('Cannot send a message to a resolved or closed conversation.', 409),
+    );
+
+    renderPanel();
+    await screen.findByLabelText('Message');
+
+    await userEvent.type(screen.getByLabelText('Message'), 'sneaking in');
+    await userEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    expect(
+      await screen.findByText('This ticket was just resolved — your message was not sent.'),
+    ).toBeInTheDocument();
   });
 
   it('drops the optimistic bubble once the refetched thread contains it', async () => {
@@ -379,16 +433,32 @@ describe('ThreadPanel read-only tickets', () => {
     expect(screen.queryByRole('button', { name: 'Ask if resolved' })).not.toBeInTheDocument();
   });
 
-  it('banners which ticket is on screen, so the transcript is not mistaken for the live one', async () => {
+  it('banners "Viewing resolved ticket" with who resolved it and when it auto-closes', async () => {
     fakeSocket();
     vi.mocked(fetchConversationMessages).mockResolvedValue({ messages: [agentMessage()] } as never);
 
-    renderPanel(RESOLVED);
+    renderPanel({
+      ...RESOLVED,
+      resolvedAt: '2026-08-30T00:00:00.000Z',
+      autoCloseDays: 7,
+    });
 
     const banner = await screen.findByRole('status');
-    expect(banner).toHaveTextContent('Viewing an earlier ticket');
+    expect(banner).toHaveTextContent('Viewing resolved ticket');
     expect(banner).toHaveTextContent('#1039');
-    expect(banner).toHaveTextContent('resolved');
+    expect(banner).toHaveTextContent('Resolved by Sam');
+    expect(banner).toHaveTextContent('closes in');
+  });
+
+  it('banners "Viewing closed ticket" with no countdown for a closed conversation', async () => {
+    fakeSocket();
+    vi.mocked(fetchConversationMessages).mockResolvedValue({ messages: [agentMessage()] } as never);
+
+    renderPanel({ ...RESOLVED, status: 'closed' });
+
+    const banner = await screen.findByRole('status');
+    expect(banner).toHaveTextContent('Viewing closed ticket');
+    expect(banner).not.toHaveTextContent('closes in');
   });
 
   // The one that matters: read_at is set once and never rewritten, so a glance
