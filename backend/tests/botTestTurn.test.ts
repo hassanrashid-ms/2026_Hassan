@@ -18,7 +18,17 @@ vi.mock('../src/shared/weaviate/articlesIndex.ts', () => ({
 import { closeDb } from '../src/shared/db/client.ts';
 import { runTestBotTurn } from '../src/domain/bot/botTestTurn.ts';
 import type { TestBotTurnBodyValue } from '@support/types';
-import { closeOwnerPool, ownerPool, seedAgent, seedWorkspace, truncateAll } from './helpers/db.ts';
+import {
+  closeOwnerPool,
+  ownerPool,
+  seedAgent,
+  seedForm,
+  seedFormVersion,
+  seedIntent,
+  seedSubintent,
+  seedWorkspace,
+  truncateAll,
+} from './helpers/db.ts';
 
 afterAll(async () => {
   await closeDb();
@@ -114,5 +124,87 @@ describe('runTestBotTurn', () => {
     expect(bodies).toContain('first message');
     expect(bodies).toContain('first reply');
     expect(bodies).toContain('second message');
+  });
+
+  it('resolves and attaches a published form when the handoff subintent has one', async () => {
+    const workspaceId = await seedWorkspace();
+    const agentId = await seedAgent(workspaceId);
+    const intentId = await seedIntent(workspaceId);
+    const formId = await seedForm({ workspaceId, name: 'Purchase receipt' });
+    await seedFormVersion({
+      workspaceId,
+      formId,
+      version: 1,
+      fields: [
+        { key: 'store', label: 'Store', type: 'choice', isRequired: true, position: 0, options: ['A', 'B'] },
+      ],
+      publishedAt: new Date(),
+    });
+    const subintentId = await seedSubintent({ workspaceId, intentId, formId });
+
+    mockCallModel.mockResolvedValueOnce({
+      toolCalls: [{ id: 't1', name: 'handoff', arguments: '{"reason":"no_article"}' }],
+      text: null,
+    });
+
+    const decision = await runTestBotTurn(
+      { agentId, workspaceId, isAdmin: true },
+      baseBody({ subintent_id: subintentId }),
+    );
+
+    expect(decision).toMatchObject({
+      kind: 'handoff',
+      reason: 'no_article',
+      subintent_id: subintentId,
+      form: { form_id: formId, form_name: 'Purchase receipt', version: 1 },
+    });
+  });
+
+  it('returns form: null when the handoff subintent has no published form', async () => {
+    const workspaceId = await seedWorkspace();
+    const agentId = await seedAgent(workspaceId);
+    const intentId = await seedIntent(workspaceId);
+    const subintentId = await seedSubintent({ workspaceId, intentId });
+
+    mockCallModel.mockResolvedValueOnce({
+      toolCalls: [{ id: 't1', name: 'handoff', arguments: '{"reason":"no_article"}' }],
+      text: null,
+    });
+
+    const decision = await runTestBotTurn(
+      { agentId, workspaceId, isAdmin: true },
+      baseBody({ subintent_id: subintentId }),
+    );
+
+    expect(decision).toMatchObject({ kind: 'handoff', form: null });
+  });
+
+  it('never attaches a form when the handoff reason is asked_for_person, even with a published form', async () => {
+    const workspaceId = await seedWorkspace();
+    const agentId = await seedAgent(workspaceId);
+    const intentId = await seedIntent(workspaceId);
+    const formId = await seedForm({ workspaceId, name: 'Purchase receipt' });
+    await seedFormVersion({
+      workspaceId,
+      formId,
+      version: 1,
+      fields: [
+        { key: 'store', label: 'Store', type: 'choice', isRequired: true, position: 0, options: ['A', 'B'] },
+      ],
+      publishedAt: new Date(),
+    });
+    const subintentId = await seedSubintent({ workspaceId, intentId, formId });
+
+    mockCallModel.mockResolvedValueOnce({
+      toolCalls: [{ id: 't1', name: 'handoff', arguments: '{"reason":"asked_for_person"}' }],
+      text: null,
+    });
+
+    const decision = await runTestBotTurn(
+      { agentId, workspaceId, isAdmin: true },
+      baseBody({ subintent_id: subintentId }),
+    );
+
+    expect(decision).toMatchObject({ kind: 'handoff', reason: 'asked_for_person', form: null });
   });
 });

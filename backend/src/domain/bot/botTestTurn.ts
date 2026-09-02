@@ -3,6 +3,8 @@ import { resolved } from './botConfig.ts';
 import { toolLoopDecider } from './toolLoop.ts';
 import type { ChatRole } from './contextAssembly.ts';
 import type { BotTurnDecision, BotTurnInput } from './botTurn.ts';
+import { withWorkspace } from '../../shared/db/withWorkspace.ts';
+import { resolveSubintentForm, type ResolvedForm } from '../forms/resolveSubintentForm.ts';
 import type { BotTestTurnDecision, PlayerMessageView, TestBotTurnBodyValue } from '@support/types';
 
 /**
@@ -73,10 +75,21 @@ export async function runTestBotTurn(
   };
 
   const decision = await toolLoopDecider(input, { config, transcript });
-  return toWireDecision(decision);
+
+  const resolvedForm =
+    decision.kind === 'handoff' &&
+    decision.subintentId !== null &&
+    decision.reason !== 'asked_for_person'
+      ? await withWorkspace(ctx.workspaceId, (tx) => resolveSubintentForm(tx, decision.subintentId!))
+      : null;
+
+  return toWireDecision(decision, resolvedForm);
 }
 
-function toWireDecision(decision: BotTurnDecision): BotTestTurnDecision {
+function toWireDecision(
+  decision: BotTurnDecision,
+  resolvedForm: ResolvedForm | null,
+): BotTestTurnDecision {
   const base: Omit<BotTestTurnDecision, 'searches'> = (() => {
     switch (decision.kind) {
       case 'noop':
@@ -92,7 +105,19 @@ function toWireDecision(decision: BotTurnDecision): BotTestTurnDecision {
       case 'resolve':
         return { kind: 'resolve', subintent_id: decision.subintentId };
       case 'handoff':
-        return { kind: 'handoff', reason: decision.reason, subintent_id: decision.subintentId };
+        return {
+          kind: 'handoff',
+          reason: decision.reason,
+          subintent_id: decision.subintentId,
+          form: resolvedForm
+            ? {
+                form_id: resolvedForm.formId,
+                form_name: resolvedForm.formName,
+                version: resolvedForm.version,
+                fields: resolvedForm.fields,
+              }
+            : null,
+        };
       case 'unavailable':
         return { kind: 'unavailable', reason: decision.reason };
       case 'confirm_player_resolution':
