@@ -886,6 +886,8 @@ const AgentConversationDetailSchema = z.object({
     .enum(['bot', 'agent', 'player_confirmed', 'timed_out', 'player_stated', 'admin_forced'])
     .nullable(),
   resolved_by_agent_name: z.string().nullable(),
+  resolved_at: z.string().nullable(),
+  auto_close_days: z.number().int(),
   created_at: z.string(),
 });
 

@@ -35,6 +35,13 @@ export type AgentConversationDetail = {
    * knows.
    */
   resolved_by_agent_name: string | null;
+  /**
+   * From the most recent resolution_cycle row's resolved_at. Null whenever
+   * there is no closed cycle yet (i.e. status isn't resolved/closed).
+   */
+  resolved_at: string | null;
+  /** The workspace's auto-close window in days — always present, not gated. */
+  auto_close_days: number;
   created_at: string;
 };
 

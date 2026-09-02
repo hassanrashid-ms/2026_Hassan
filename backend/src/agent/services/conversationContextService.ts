@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, isNotNull, sql } from 'drizzle-orm';
 import type {
   AgentConversationContextResponse,
   AgentConversationDetail,
@@ -22,7 +22,9 @@ import {
   intent,
   player,
   playerStateSnapshot,
+  resolutionCycle,
   subintent,
+  workspace,
 } from '../../shared/db/schema/index.ts';
 import { withWorkspace } from '../../shared/db/withWorkspace.ts';
 import type { Tx } from '../../shared/db/withWorkspace.ts';
@@ -57,13 +59,25 @@ export async function getConversationDetail(
         subintentId: subintent.id,
         assignedAgentId: agent.id,
         assignedAgentName: agent.displayName,
+        resolvedAt: resolutionCycle.resolvedAt,
+        autoCloseDays: workspace.autoCloseDays,
       })
       .from(conversation)
       .innerJoin(player, eq(player.id, conversation.playerId))
       .leftJoin(subintent, eq(subintent.id, conversation.subintentId))
       .leftJoin(intent, eq(intent.id, subintent.intentId))
       .leftJoin(agent, eq(agent.id, conversation.assignedAgentId))
+      .innerJoin(workspace, eq(workspace.id, conversation.workspaceId))
+      // At most one open cycle exists (resolution_cycle_open_uk), and once
+      // resolved it stays resolved — ordering by resolvedAt desc + limit 1
+      // on the outer query picks the most recent closed cycle regardless of
+      // how many past cycles a reopened conversation has.
+      .leftJoin(
+        resolutionCycle,
+        and(eq(resolutionCycle.conversationId, conversation.id), isNotNull(resolutionCycle.resolvedAt)),
+      )
       .where(eq(conversation.id, conversationId))
+      .orderBy(desc(resolutionCycle.resolvedAt))
       .limit(1);
 
     if (!row) return null;
@@ -91,6 +105,8 @@ export async function getConversationDetail(
         row.resolutionSource === 'agent' || row.resolutionSource === 'admin_forced'
           ? row.assignedAgentName
           : null,
+      resolved_at: row.resolvedAt ? row.resolvedAt.toISOString() : null,
+      auto_close_days: row.autoCloseDays,
       created_at: row.createdAt.toISOString(),
     };
   });
