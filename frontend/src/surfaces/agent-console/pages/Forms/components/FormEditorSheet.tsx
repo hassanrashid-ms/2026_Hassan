@@ -40,7 +40,7 @@ import {
   SheetTitle,
 } from '../../../components/ui/sheet.tsx';
 import { Skeleton } from '../../../components/ui/skeleton.tsx';
-import { FormLivePreview } from './FormLivePreview.tsx';
+import { FormLivePreview } from '../../../components/FormLivePreview.tsx';
 import { ShownForPicker } from './ShownForPicker.tsx';
 
 export function FormEditorSheet({
