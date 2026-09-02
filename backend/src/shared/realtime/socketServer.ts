@@ -9,7 +9,7 @@ import { InvalidPlayerToken, verifyPlayerToken } from '../auth/playerToken.ts';
 import { conversation } from '../db/schema/index.ts';
 import { withWorkspace } from '../db/withWorkspace.ts';
 import { listActiveMembershipsForAgent, listAllWorkspaces } from '../db/workspaceMembership.ts';
-import { agentRoom, inboxRoom, playerRoom } from './rooms.ts';
+import { agentNotificationRoom, agentRoom, inboxRoom, playerRoom } from './rooms.ts';
 import { decrementPresence, flushStalePresence, incrementPresence } from './presence.ts';
 import { emitInboxChanged } from './emit.ts';
 import { sweepUnassignedQueue } from '../../domain/routing/sweepUnassignedQueue.ts';
@@ -146,6 +146,7 @@ export function createSocketServer(httpServer: HttpServer): Server {
       for (const workspaceId of data.workspaceIds) {
         socket.join(inboxRoom(workspaceId));
       }
+      socket.join(agentNotificationRoom(data.agentId));
       // Reconnecting always lands back on online, never restores a prior
       // away — a fresh session defaults to present.
       void incrementPresence(data.agentId)

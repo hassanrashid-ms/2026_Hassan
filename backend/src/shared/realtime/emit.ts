@@ -1,6 +1,6 @@
 import type { Server } from 'socket.io';
-import type { ConversationPhaseChangedEvent, MessageReadEvent } from '@support/types';
-import { agentRoom, inboxRoom, playerRoom } from './rooms.ts';
+import type { ConversationPhaseChangedEvent, MessageReadEvent, NotificationView } from '@support/types';
+import { agentNotificationRoom, agentRoom, inboxRoom, playerRoom } from './rooms.ts';
 
 /**
  * Payloads are `unknown` on purpose: this module is transport, not
@@ -66,4 +66,12 @@ export function emitPhaseChanged(
 ): void {
   io.to(agentRoom(conversationId)).emit('conversation:phase_changed', payload);
   io.to(playerRoom(conversationId)).emit('conversation:phase_changed', payload);
+}
+
+export function emitNotificationNew(
+  io: Server,
+  agentId: string,
+  notificationView: NotificationView,
+): void {
+  io.to(agentNotificationRoom(agentId)).emit('notification:new', notificationView);
 }
