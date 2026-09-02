@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ArticleTable } from './ArticleTable.tsx';
 import * as agentApi from '../../../api/agentApi.ts';
@@ -154,7 +154,7 @@ describe('ArticleTable bulk selection', () => {
     vi.unstubAllGlobals();
   });
 
-  it('publishes each selected article and clears the selection', async () => {
+  it('asks for confirmation before publishing, then publishes each selected article', async () => {
     vi.spyOn(agentApi, 'fetchArticles').mockResolvedValue({ articles: TWO_ARTICLES });
     const publishSpy = vi.spyOn(agentApi, 'publishArticle').mockResolvedValue({} as never);
 
@@ -166,9 +166,31 @@ describe('ArticleTable bulk selection', () => {
     (await screen.findByLabelText('Select Getting Started')).click();
     (await screen.findByRole('button', { name: 'Publish' })).click();
 
+    // Clicking the toolbar's Publish only opens the confirm dialog — nothing
+    // should have been published yet.
+    const dialogTitle = await screen.findByText('Publish 2 articles?');
+    expect(publishSpy).not.toHaveBeenCalled();
+
+    const dialog = dialogTitle.closest('[role="dialog"]') ?? document.body;
+    within(dialog).getByRole('button', { name: 'Publish' }).click();
+
     await waitFor(() => expect(publishSpy).toHaveBeenCalledTimes(2));
     expect(publishSpy).toHaveBeenCalledWith('tok', 'art-1');
     expect(publishSpy).toHaveBeenCalledWith('tok', 'art-2');
     await waitFor(() => expect(screen.queryByText(/selected/)).not.toBeInTheDocument());
+  });
+
+  it('disables bulk Archive once every selected article is already archived', async () => {
+    vi.spyOn(agentApi, 'fetchArticles').mockResolvedValue({
+      articles: [{ ...TWO_ARTICLES[0]!, state: 'archived' }],
+    });
+
+    renderWithClient(
+      <ArticleTable token="tok" selectedId={null} onSelect={() => {}} onNew={() => {}} />,
+    );
+
+    (await screen.findByLabelText('Select Refund Policy')).click();
+
+    expect(await screen.findByRole('button', { name: 'Archive' })).toBeDisabled();
   });
 });
