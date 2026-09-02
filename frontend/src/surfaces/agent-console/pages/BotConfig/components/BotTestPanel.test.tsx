@@ -117,4 +117,71 @@ describe('BotTestPanel', () => {
     expect(secondBody.subintent_id).toBe('sub-1');
     expect(secondBody.confirm_phase).toBe('bot_article');
   });
+
+  it('renders the resolved form when a handoff decision carries one', async () => {
+    vi.mocked(testBotTurn).mockResolvedValueOnce({
+      decision: {
+        kind: 'handoff',
+        reason: 'no_article',
+        subintent_id: 'sub-1',
+        form: {
+          form_id: 'form-1',
+          form_name: 'Purchase receipt',
+          version: 1,
+          fields: [
+            { key: 'store', label: 'Store', type: 'choice', isRequired: true, position: 0, options: ['A', 'B'] },
+          ],
+        },
+      },
+    });
+
+    renderPanel();
+    const input = await screen.findByLabelText('Message');
+    await userEvent.type(input, 'my purchase is missing');
+    await userEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    expect(await screen.findByTestId('mobile-preview-frame')).toBeInTheDocument();
+    expect(screen.getByText('Store')).toBeInTheDocument();
+  });
+
+  it('renders no form panel when a handoff decision carries none', async () => {
+    vi.mocked(testBotTurn).mockResolvedValueOnce({
+      decision: { kind: 'handoff', reason: 'unsure', subintent_id: null, form: null },
+    });
+
+    renderPanel();
+    const input = await screen.findByLabelText('Message');
+    await userEvent.type(input, 'hello');
+    await userEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await waitFor(() => expect(testBotTurn).toHaveBeenCalledTimes(1));
+    expect(screen.queryByTestId('mobile-preview-frame')).not.toBeInTheDocument();
+  });
+
+  it('clears the form panel on reset', async () => {
+    vi.mocked(testBotTurn).mockResolvedValueOnce({
+      decision: {
+        kind: 'handoff',
+        reason: 'no_article',
+        subintent_id: 'sub-1',
+        form: {
+          form_id: 'form-1',
+          form_name: 'Purchase receipt',
+          version: 1,
+          fields: [
+            { key: 'store', label: 'Store', type: 'choice', isRequired: true, position: 0, options: ['A', 'B'] },
+          ],
+        },
+      },
+    });
+
+    renderPanel();
+    const input = await screen.findByLabelText('Message');
+    await userEvent.type(input, 'my purchase is missing');
+    await userEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await screen.findByTestId('mobile-preview-frame');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Reset' }));
+    expect(screen.queryByTestId('mobile-preview-frame')).not.toBeInTheDocument();
+  });
 });

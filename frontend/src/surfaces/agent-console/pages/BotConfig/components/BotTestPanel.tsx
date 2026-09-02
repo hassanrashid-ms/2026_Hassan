@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { RotateCcw } from 'lucide-react';
-import type { BotTestTurnDecision, ConfirmPhaseValue } from '@support/types';
+import type { BotTestTurnDecision, ConfirmPhaseValue, FormField } from '@support/types';
 import { testBotTurn, fetchIntents } from '../../../api/agentApi.ts';
 import { useBotConfigDraft } from '../BotConfigDraftContext.tsx';
 import { ChatThread } from '@/features/chat/components/ChatThread.tsx';
 import { Composer } from '@/features/chat/components/Composer.tsx';
 import type { ChatMessage } from '@/features/chat/components/types.ts';
 import { ToolActivityStrip } from './ToolActivityStrip.tsx';
+import { FormLivePreview } from '../../../components/FormLivePreview.tsx';
 import { Badge } from '../../../components/ui/badge.tsx';
 import { Button } from '../../../components/ui/button.tsx';
 import {
@@ -32,13 +33,10 @@ const NO_SUBINTENT = '__none__';
 type TestMessage = ChatMessage & { toolActivity?: React.ReactNode };
 
 /**
- * Mirrors applyBotTurn.ts's confirm_phase transitions closely enough to keep
- * the simulated conversation state moving turn to turn — but it's an
- * approximation, not a copy: the `handoff` → `confirm_phase: 'form'` branch
- * depends on a real subintent's published form (resolveSubintentForm, a DB
- * lookup applyBotTurn does that this wire decision never carries), so a
- * handoff here always resolves to 'none' even when the real path would have
- * offered a form. Every other branch matches applyBotTurn.ts exactly.
+ * Mirrors applyBotTurn.ts's confirm_phase transitions. The `handoff` branch now
+ * matches the real path exactly: a handoff whose subintent resolved to a
+ * published form maps to 'form', same as a real conversation's column: any
+ * other handoff maps to 'none'.
  */
 function nextConfirmPhase(
   decision: BotTestTurnDecision,
@@ -49,8 +47,9 @@ function nextConfirmPhase(
       return decision.article_id ? 'bot_article' : current;
     case 'confirm_player_resolution':
       return 'player_stated';
-    case 'resolve':
     case 'handoff':
+      return decision.form ? 'form' : 'none';
+    case 'resolve':
     case 'unavailable':
       return 'none';
     case 'noop':
@@ -70,6 +69,10 @@ export function BotTestPanel({ token }: { token: string }) {
   const [subintentId, setSubintentId] = useState<string | null>(null);
   const [confirmPhase, setConfirmPhase] = useState<ConfirmPhaseValue>('none');
   const [sending, setSending] = useState(false);
+  const [activeTestForm, setActiveTestForm] = useState<{
+    formName: string;
+    fields: FormField[];
+  } | null>(null);
 
   const intentsQuery = useQuery({ queryKey: ['intents'], queryFn: () => fetchIntents(token) });
   const subintentOptions = (intentsQuery.data?.intents ?? []).flatMap((intent) =>
@@ -81,6 +84,7 @@ export function BotTestPanel({ token }: { token: string }) {
     setMessages([]);
     setSubintentId(null);
     setConfirmPhase('none');
+    setActiveTestForm(null);
   };
 
   const send = async (body: string) => {
@@ -120,6 +124,11 @@ export function BotTestPanel({ token }: { token: string }) {
       setMessages((prev) => [...prev, botMessage]);
       setSubintentId((prev) => nextSubintentId(decision, prev));
       setConfirmPhase((prev) => nextConfirmPhase(decision, prev));
+      setActiveTestForm(
+        decision.kind === 'handoff' && decision.form
+          ? { formName: decision.form.form_name, fields: decision.form.fields }
+          : null,
+      );
     } catch {
       const errorMessage: TestMessage = {
         id: `test-error-${messages.length}`,
@@ -204,6 +213,11 @@ export function BotTestPanel({ token }: { token: string }) {
             ),
         )}
       </div>
+      {activeTestForm && (
+        <div className="border-t border-slate-200 p-4">
+          <FormLivePreview formName={activeTestForm.formName} fields={activeTestForm.fields} />
+        </div>
+      )}
       <Composer onSend={(body) => void send(body)} disabled={sending || !draft} />
     </div>
   );
