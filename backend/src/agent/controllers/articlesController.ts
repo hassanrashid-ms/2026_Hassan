@@ -229,7 +229,11 @@ export const archiveArticleHandler: RequestHandler = async (req, res) => {
   }
   const result = await archiveArticle(req.agent!, params.data.id);
   if (!result.ok) {
-    sendError(res, 404, 'not_found', 'Article not found.');
+    if (result.reason === 'not_found') {
+      sendError(res, 404, 'not_found', 'Article not found.');
+      return;
+    }
+    sendError(res, 409, 'invalid_request', 'Only a published article can be archived.');
     return;
   }
   res.status(200).json(result.article);

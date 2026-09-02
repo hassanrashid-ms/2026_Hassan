@@ -605,7 +605,7 @@ function ArticleEditorForm({
             Unarchive
           </Button>
         )}
-        {canPublishOrArchive && state !== 'archived' && (
+        {canPublishOrArchive && state === 'published' && (
           <Button
             type="button"
             variant="outline"

@@ -201,7 +201,7 @@ describe('draft -> publish -> archive', () => {
       .expect(409);
   });
 
-  it('archive succeeds from any state, unlike patch and publish', async () => {
+  it('archives a published article', async () => {
     const workspaceId = await seedWorkspace();
     const { agentId } = await seedAgent(workspaceId);
     const { rows } = await ownerPool.query<{ id: string }>(
@@ -216,6 +216,22 @@ describe('draft -> publish -> archive', () => {
       .set('Authorization', `Bearer ${token}`)
       .set('X-Workspace-Id', workspaceId)
       .expect(200);
+  });
+
+  it('409s archiving a draft — a draft was never live, so there is nothing to archive', async () => {
+    const workspaceId = await seedWorkspace();
+    const { agentId, token } = await seedAgent(workspaceId, 'team_lead');
+    const { rows } = await ownerPool.query<{ id: string }>(
+      `insert into article (workspace_id, title, body, state, created_by) values ($1, 'X', 'Y', 'draft', $2) returning id`,
+      [workspaceId, agentId],
+    );
+
+    const res = await request(app)
+      .post(`/articles/${rows[0]!.id}/archive`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(409);
+    expect(res.body.error.code).toBe('invalid_request');
   });
 
   it('upserts the Weaviate object on publish and deletes it on archive', async () => {

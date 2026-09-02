@@ -7,6 +7,7 @@ import {
   bulkExportArticles,
   fetchArticles,
   publishArticle,
+  unarchiveArticle,
 } from '../../../api/agentApi.ts';
 import { canBuildForms, loadAgentSession } from '../../../lib/agentSession.ts';
 import { ConfirmDialog } from '../../../components/ConfirmDialog.tsx';
@@ -25,7 +26,7 @@ import { cn } from '../../../lib/cn.ts';
 import { BulkImportDialog } from './BulkImportDialog.tsx';
 
 type ArticleRow = AgentArticlesResponse['articles'][number];
-type BulkAction = 'publish' | 'archive' | 'export';
+type BulkAction = 'publish' | 'archive' | 'unarchive' | 'export';
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -37,18 +38,27 @@ function downloadBlob(blob: Blob, filename: string) {
 }
 
 /**
- * All-or-nothing on purpose: if even one selected article is already
- * published, the bulk Publish button is disabled entirely rather than
- * quietly re-publishing the rest and skipping that one — same for Archive
- * against an already-archived article. A mixed selection means the agent
- * picked the wrong rows, not that the action should partially apply.
+ * All-or-nothing on purpose: if even one selected article isn't eligible,
+ * the whole bulk button is disabled rather than quietly acting on a subset
+ * and skipping the rest — a mixed selection means the agent picked the
+ * wrong rows, not that the action should partially apply.
+ *
+ * Archive requires every selected article to be `published` — the same
+ * draft -> archived edge the single-article editor sheet refuses. A draft
+ * was never live, so there's nothing for archiving to remove from
+ * player-facing search or the bot's knowledge base; discarding a draft is
+ * the correct action for abandoning one, not archiving it.
  */
 function canBulkPublish(rows: ArticleRow[]): boolean {
   return rows.length > 0 && rows.every((a) => a.state === 'draft');
 }
 
 function canBulkArchive(rows: ArticleRow[]): boolean {
-  return rows.length > 0 && rows.every((a) => a.state !== 'archived');
+  return rows.length > 0 && rows.every((a) => a.state === 'published');
+}
+
+function canBulkUnarchive(rows: ArticleRow[]): boolean {
+  return rows.length > 0 && rows.every((a) => a.state === 'archived');
 }
 
 const STATE_BADGE_VARIANT: Record<ArticleStateValue, 'secondary' | 'success' | 'outline'> = {
@@ -78,7 +88,9 @@ export function ArticleTable({
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [busyAction, setBusyAction] = useState<BulkAction | null>(null);
-  const [confirmAction, setConfirmAction] = useState<'publish' | 'archive' | null>(null);
+  const [confirmAction, setConfirmAction] = useState<'publish' | 'archive' | 'unarchive' | null>(
+    null,
+  );
   const session = loadAgentSession();
   const canBulkAct = canBuildForms(session);
   const articles = useQuery({ queryKey: ['admin-articles'], queryFn: () => fetchArticles(token) });
@@ -87,6 +99,7 @@ export function ArticleTable({
   const selectedRows = rows.filter((a) => selectedIds.has(a.id));
   const publishAllowed = canBulkPublish(selectedRows);
   const archiveAllowed = canBulkArchive(selectedRows);
+  const unarchiveAllowed = canBulkUnarchive(selectedRows);
 
   function toggleRow(id: string) {
     setSelectedIds((prev) => {
@@ -117,7 +130,8 @@ export function ArticleTable({
     const ids = [...selectedIds];
     setBusyAction(action);
     try {
-      const call = action === 'publish' ? publishArticle : archiveArticle;
+      const call =
+        action === 'publish' ? publishArticle : action === 'archive' ? archiveArticle : unarchiveArticle;
       await Promise.allSettled(ids.map((id) => call(token, id)));
       setSelectedIds(new Set());
       void queryClient.invalidateQueries({ queryKey: ['admin-articles'] });
@@ -180,6 +194,16 @@ export function ArticleTable({
             >
               {busyAction === 'archive' && <Loader2 className="size-3.5 animate-spin" />}
               Archive
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={busyAction !== null || !unarchiveAllowed}
+              onClick={() => setConfirmAction('unarchive')}
+            >
+              {busyAction === 'unarchive' && <Loader2 className="size-3.5 animate-spin" />}
+              Unarchive
             </Button>
             <Button
               type="button"
@@ -290,6 +314,15 @@ export function ArticleTable({
         confirmLabel="Archive"
         variant="destructive"
         confirming={busyAction === 'archive'}
+        onConfirm={() => void runConfirmedAction()}
+      />
+      <ConfirmDialog
+        open={confirmAction === 'unarchive'}
+        onOpenChange={(open) => !open && setConfirmAction(null)}
+        title={`Unarchive ${selectedRows.length} article${selectedRows.length === 1 ? '' : 's'}?`}
+        description="They go back to published with their existing content and re-enter the bot's knowledge base immediately."
+        confirmLabel="Unarchive"
+        confirming={busyAction === 'unarchive'}
         onConfirm={() => void runConfirmedAction()}
       />
     </div>

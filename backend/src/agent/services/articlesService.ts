@@ -896,23 +896,33 @@ export async function publishArticle(ctx: AgentContext, id: string): Promise<Pub
 }
 
 export type ArchiveArticleResult =
-  { ok: true; article: AgentArticleDetail } | { ok: false; reason: 'not_found' };
+  | { ok: true; article: AgentArticleDetail }
+  | { ok: false; reason: 'not_found' | 'not_published' };
 
+/**
+ * Archive only ever applies to a published article — a draft was never live,
+ * so there's nothing for archiving to remove from player-facing search or
+ * the bot's knowledge base. That draft -> archived edge must not exist: an
+ * agent wanting to abandon a draft uses discard, not archive.
+ */
 export async function archiveArticle(ctx: AgentContext, id: string): Promise<ArchiveArticleResult> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
+    const [existing] = await tx.select().from(article).where(eq(article.id, id)).limit(1);
+    if (!existing) return { ok: false, reason: 'not_found' };
+    if (existing.state !== 'published') return { ok: false, reason: 'not_published' };
+
     const [row] = await tx
       .update(article)
       .set({ state: 'archived' })
       .where(eq(article.id, id))
       .returning();
-    if (!row) return { ok: false, reason: 'not_found' };
-    await deleteArticleObject(row.id);
+    await deleteArticleObject(row!.id);
     return {
       ok: true,
       article: {
-        ...toDetail(row),
-        attachments: await attachmentsFor(tx, row.id),
-        draft: await draftFor(tx, row.id),
+        ...toDetail(row!),
+        attachments: await attachmentsFor(tx, row!.id),
+        draft: await draftFor(tx, row!.id),
       },
     };
   });

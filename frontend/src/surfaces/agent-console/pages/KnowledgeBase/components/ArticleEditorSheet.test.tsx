@@ -401,7 +401,7 @@ describe('ArticleEditorSheet publish/archive role gating', () => {
     expect(screen.queryByRole('button', { name: 'Archive' })).toBeNull();
   });
 
-  it('shows Publish and Archive for a team lead', async () => {
+  it('shows Publish for a team lead, but hides Archive for a draft — archive only ever applies to a published article', async () => {
     vi.spyOn(agentApi, 'fetchArticle').mockResolvedValue(EXISTING_ARTICLE);
     vi.spyOn(agentApi, 'fetchIntents').mockResolvedValue({ intents: [] });
 
@@ -419,15 +419,40 @@ describe('ArticleEditorSheet publish/archive role gating', () => {
     await screen.findByDisplayValue('Refunds');
 
     expect(screen.getByRole('button', { name: 'Publish' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Archive' })).toBeNull();
+  });
+
+  it('shows Archive for a published article', async () => {
+    const published = {
+      ...EXISTING_ARTICLE,
+      state: 'published' as const,
+      published_by: 'agent-1',
+      published_at: '2026-08-02T00:00:00Z',
+    };
+    vi.spyOn(agentApi, 'fetchArticle').mockResolvedValue(published);
+    vi.spyOn(agentApi, 'fetchIntents').mockResolvedValue({ intents: [] });
+
+    renderWithClient(
+      <ArticleEditorSheet
+        token="tok"
+        session={SESSION}
+        articleId="art-1"
+        open
+        onOpenChange={() => {}}
+        onCreated={() => {}}
+      />,
+    );
+
+    await screen.findByDisplayValue('Refunds');
+
     expect(screen.getByRole('button', { name: 'Archive' })).toBeInTheDocument();
   });
 
-  it('requires confirming before Publish/Archive actually call the API', async () => {
+  it('requires confirming before Publish actually calls the API', async () => {
     const user = userEvent.setup();
     vi.spyOn(agentApi, 'fetchArticle').mockResolvedValue(EXISTING_ARTICLE);
     vi.spyOn(agentApi, 'fetchIntents').mockResolvedValue({ intents: [] });
     const publishSpy = vi.spyOn(agentApi, 'publishArticle').mockResolvedValue(EXISTING_ARTICLE);
-    const archiveSpy = vi.spyOn(agentApi, 'archiveArticle').mockResolvedValue(EXISTING_ARTICLE);
 
     renderWithClient(
       <ArticleEditorSheet
@@ -443,14 +468,39 @@ describe('ArticleEditorSheet publish/archive role gating', () => {
 
     await user.click(screen.getByRole('button', { name: 'Publish' }));
     expect(publishSpy).not.toHaveBeenCalled();
-    let dialog = screen.getByRole('dialog');
+    const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByText('Publish this article?')).toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: 'Publish' }));
     await waitFor(() => expect(publishSpy).toHaveBeenCalledWith('tok', 'art-1'));
+  });
+
+  it('requires confirming before Archive actually calls the API', async () => {
+    const user = userEvent.setup();
+    const published = {
+      ...EXISTING_ARTICLE,
+      state: 'published' as const,
+      published_by: 'agent-1',
+      published_at: '2026-08-02T00:00:00Z',
+    };
+    vi.spyOn(agentApi, 'fetchArticle').mockResolvedValue(published);
+    vi.spyOn(agentApi, 'fetchIntents').mockResolvedValue({ intents: [] });
+    const archiveSpy = vi.spyOn(agentApi, 'archiveArticle').mockResolvedValue(published);
+
+    renderWithClient(
+      <ArticleEditorSheet
+        token="tok"
+        session={SESSION}
+        articleId="art-1"
+        open
+        onOpenChange={() => {}}
+        onCreated={() => {}}
+      />,
+    );
+    await screen.findByDisplayValue('Refunds');
 
     await user.click(screen.getByRole('button', { name: 'Archive' }));
     expect(archiveSpy).not.toHaveBeenCalled();
-    dialog = screen.getByRole('dialog');
+    const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByText('Archive this article?')).toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: 'Archive' }));
     await waitFor(() => expect(archiveSpy).toHaveBeenCalledWith('tok', 'art-1'));

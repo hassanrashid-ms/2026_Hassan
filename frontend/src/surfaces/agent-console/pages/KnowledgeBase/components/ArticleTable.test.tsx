@@ -223,4 +223,58 @@ describe('ArticleTable bulk selection', () => {
 
     expect(await screen.findByRole('button', { name: 'Archive' })).toBeDisabled();
   });
+
+  it('disables bulk Archive for a draft — the draft -> archived edge must not exist', async () => {
+    vi.spyOn(agentApi, 'fetchArticles').mockResolvedValue({ articles: TWO_ARTICLES });
+
+    renderWithClient(
+      <ArticleTable token="tok" selectedId={null} onSelect={() => {}} onNew={() => {}} />,
+    );
+
+    (await screen.findByLabelText('Select Refund Policy')).click();
+
+    expect(await screen.findByRole('button', { name: 'Archive' })).toBeDisabled();
+  });
+
+  it('enables bulk Unarchive only when every selected article is archived, then unarchives them', async () => {
+    vi.spyOn(agentApi, 'fetchArticles').mockResolvedValue({
+      articles: [
+        { ...TWO_ARTICLES[0]!, state: 'archived' as const },
+        { ...TWO_ARTICLES[1]!, state: 'archived' as const },
+      ],
+    });
+    const unarchiveSpy = vi.spyOn(agentApi, 'unarchiveArticle').mockResolvedValue({} as never);
+
+    renderWithClient(
+      <ArticleTable token="tok" selectedId={null} onSelect={() => {}} onNew={() => {}} />,
+    );
+
+    (await screen.findByLabelText('Select Refund Policy')).click();
+    (await screen.findByLabelText('Select Getting Started')).click();
+
+    const unarchiveButton = await screen.findByRole('button', { name: 'Unarchive' });
+    expect(unarchiveButton).not.toBeDisabled();
+    unarchiveButton.click();
+
+    const dialogTitle = await screen.findByText('Unarchive 2 articles?');
+    const dialog = (dialogTitle.closest('[role="dialog"]') ?? document.body) as HTMLElement;
+    within(dialog).getByRole('button', { name: 'Unarchive' }).click();
+
+    await waitFor(() => expect(unarchiveSpy).toHaveBeenCalledTimes(2));
+  });
+
+  it('disables bulk Unarchive if any selected article is not archived', async () => {
+    vi.spyOn(agentApi, 'fetchArticles').mockResolvedValue({
+      articles: [{ ...TWO_ARTICLES[0]!, state: 'archived' as const }, TWO_ARTICLES[1]!],
+    });
+
+    renderWithClient(
+      <ArticleTable token="tok" selectedId={null} onSelect={() => {}} onNew={() => {}} />,
+    );
+
+    (await screen.findByLabelText('Select Refund Policy')).click();
+    (await screen.findByLabelText('Select Getting Started')).click();
+
+    expect(await screen.findByRole('button', { name: 'Unarchive' })).toBeDisabled();
+  });
 });
