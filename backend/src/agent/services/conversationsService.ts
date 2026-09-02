@@ -12,13 +12,14 @@ import {
   sql,
 } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
-import type { AgentConversationSummary, AgentMessageView } from '@support/types';
+import type { AgentConversationSummary, AgentMessageView, NotificationView } from '@support/types';
 import {
   applySubintentDefaultPriority,
   postMessage,
   toAgentView,
   type PostedMessageRow,
 } from '../../domain/conversations/index.ts';
+import { notifyAgent } from '../../domain/notifications/notifyAgent.ts';
 import { appendEvent } from '../../shared/events/appendEvent.ts';
 import { appendChangeLog } from '../../shared/changeLog/appendChangeLog.ts';
 import {
@@ -616,6 +617,7 @@ export type ClaimResult = {
   claimed: boolean;
   status: string | null;
   posted: PostedMessageRow | null;
+  notification: NotificationView | null;
 };
 export type TakeOverResult = ClaimResult;
 
@@ -656,7 +658,7 @@ export async function claimConversation(
       )
       .returning({ id: conversation.id, status: conversation.status });
     const [row] = claimed;
-    if (!row) return { claimed: false, status: null, posted: null };
+    if (!row) return { claimed: false, status: null, posted: null, notification: null };
 
     await appendEvent(tx, {
       workspaceId: ctx.workspaceId,
@@ -666,8 +668,14 @@ export async function claimConversation(
       actorType: 'agent',
       payload: { agent_id: ctx.agentId, via: 'claim' },
     });
+    const notification = await notifyAgent(tx, {
+      workspaceId: ctx.workspaceId,
+      agentId: ctx.agentId,
+      conversationId,
+      via: 'claim',
+    });
     const posted = await postTakenOverNotice(tx, ctx, conversationId);
-    return { claimed: true, status: row.status, posted };
+    return { claimed: true, status: row.status, posted, notification };
   });
 }
 
@@ -687,7 +695,7 @@ export async function takeOverConversation(
         ),
       )
       .returning({ id: conversation.id, status: conversation.status });
-    if (!row) return { claimed: false, status: null, posted: null };
+    if (!row) return { claimed: false, status: null, posted: null, notification: null };
 
     await appendEvent(tx, {
       workspaceId: ctx.workspaceId,
@@ -697,14 +705,20 @@ export async function takeOverConversation(
       actorType: 'agent',
       payload: { agent_id: ctx.agentId, from_status: 'bot_active', to_status: 'open' },
     });
+    const notification = await notifyAgent(tx, {
+      workspaceId: ctx.workspaceId,
+      agentId: ctx.agentId,
+      conversationId,
+      via: 'take_over',
+    });
 
     const posted = await postTakenOverNotice(tx, ctx, conversationId);
-    return { claimed: true, status: row.status, posted };
+    return { claimed: true, status: row.status, posted, notification };
   });
 }
 
 export type ReassignResult =
-  | { ok: true; status: string; posted: PostedMessageRow }
+  | { ok: true; status: string; posted: PostedMessageRow; notification: NotificationView }
   | { ok: false; reason: 'not_found' | 'invalid_status' | 'agent_not_found' | 'agent_not_active' };
 
 async function postReassignedNotice(
@@ -791,8 +805,14 @@ export async function reassignConversation(
       actorType: 'agent',
       payload: { agent_id: targetAgentId, reassigned_by: ctx.agentId, via: 'reassign' },
     });
+    const notification = await notifyAgent(tx, {
+      workspaceId: ctx.workspaceId,
+      agentId: targetAgentId,
+      conversationId,
+      via: 'reassign',
+    });
     const posted = await postReassignedNotice(tx, ctx, conversationId, targetAgentId);
-    return { ok: true, status: row!.status, posted };
+    return { ok: true, status: row!.status, posted, notification };
   });
 }
 

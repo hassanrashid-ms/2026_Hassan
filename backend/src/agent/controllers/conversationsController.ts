@@ -5,6 +5,7 @@ import { getIo } from '../../shared/realtime/socketServer.ts';
 import {
   emitInboxChanged,
   emitMessageToRooms,
+  emitNotificationNew,
   emitPhaseChanged,
 } from '../../shared/realtime/emit.ts';
 import { toAgentView, toPlayerView } from '../../domain/conversations/index.ts';
@@ -115,6 +116,7 @@ export const takeOverConversationHandler: RequestHandler = async (req, res) => {
       conversation_id: params.data.id,
       confirm_phase: 'none',
     });
+    if (result.notification) emitNotificationNew(getIo(), ctx.agentId, result.notification);
   }
   res.status(200).json({ taken_over: result.claimed });
 };
@@ -137,6 +139,7 @@ export const claimConversationHandler: RequestHandler = async (req, res) => {
         toPlayerView(result.posted),
         toAgentView(result.posted),
       );
+    if (result.notification) emitNotificationNew(getIo(), ctx.agentId, result.notification);
   }
   res.status(200).json({ claimed: result.claimed });
 };
@@ -171,6 +174,7 @@ export const reassignConversationHandler: RequestHandler = async (req, res) => {
     toPlayerView(result.posted),
     toAgentView(result.posted),
   );
+  emitNotificationNew(getIo(), body.data.agentId, result.notification);
   res.status(200).json({ reassigned: true });
 };
 
@@ -425,13 +429,17 @@ export const getWorkspaceWorkloadHandler: RequestHandler = async (req, res) => {
 
 export const sweepAssignHandler: RequestHandler = async (req, res) => {
   const ctx = req.agent!;
-  const { assignedCount, assignments } = await sweepUnassignedQueue(ctx.workspaceId);
+  const { assignedCount, assignments, remainingCount, stopReason } = await sweepUnassignedQueue(
+    ctx.workspaceId,
+  );
   for (const a of assignments) {
     emitInboxChanged(getIo(), ctx.workspaceId, a.conversationId, a.status);
   }
   res.status(200).json({
     assignedCount,
     conversationIds: assignments.map((a) => a.conversationId),
+    remainingCount,
+    stopReason,
   });
 };
 
