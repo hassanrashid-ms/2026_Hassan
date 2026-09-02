@@ -208,6 +208,31 @@ describe('FormEditorSheet — publish visibility', () => {
   });
 });
 
+describe('FormEditorSheet — live preview', () => {
+  it('shows a live mobile preview of the current draft that updates as fields change', async () => {
+    vi.spyOn(agentApi, 'fetchIntents').mockResolvedValue(INTENTS);
+    vi.spyOn(agentApi, 'fetchForm').mockResolvedValue(FORM_WITH_DRAFT);
+
+    renderWithClient(
+      <FormEditorSheet
+        token="t"
+        session={ADMIN_SESSION}
+        formId="form-1"
+        open
+        onOpenChange={() => {}}
+        onCreated={() => {}}
+      />,
+    );
+
+    await screen.findByDisplayValue('Refund request');
+    const panel = within(screen.getByTestId('form-live-preview-panel'));
+    expect(panel.getByText('Order ID')).toBeInTheDocument();
+
+    await userEvent.type(screen.getByDisplayValue('Order ID'), ' updated');
+    expect(panel.getByText('Order ID updated')).toBeInTheDocument();
+  });
+});
+
 describe('FormEditorSheet — field type picker', () => {
   it('offers the six builder types, including attachment, never time', async () => {
     vi.spyOn(agentApi, 'fetchIntents').mockResolvedValue(INTENTS);

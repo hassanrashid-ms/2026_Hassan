@@ -40,6 +40,7 @@ import {
   SheetTitle,
 } from '../../../components/ui/sheet.tsx';
 import { Skeleton } from '../../../components/ui/skeleton.tsx';
+import { FormLivePreview } from './FormLivePreview.tsx';
 import { ShownForPicker } from './ShownForPicker.tsx';
 
 export function FormEditorSheet({
@@ -224,7 +225,8 @@ function FormEditorForm({
 
   return (
     <>
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
+      <div className="flex min-h-0 flex-1">
+        <div className="flex min-w-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
         {archived && (
           <p className="rounded-md bg-amber-100 px-3 py-2 text-xs text-amber-900">
             This form is archived and can no longer be edited.
@@ -437,6 +439,14 @@ function FormEditorForm({
           currentFormId={formId}
           disabled={archived}
         />
+        </div>
+
+        <div
+          data-testid="form-live-preview-panel"
+          className="w-[375px] shrink-0 overflow-y-auto border-l border-slate-200 p-4"
+        >
+          <FormLivePreview formName={name} fields={fields} />
+        </div>
       </div>
 
       <SheetFooter className="flex-row justify-end gap-2 border-t border-slate-200">
