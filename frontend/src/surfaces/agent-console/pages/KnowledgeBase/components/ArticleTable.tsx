@@ -1,7 +1,13 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Loader2 } from 'lucide-react';
 import type { ArticleStateValue } from '@support/types';
-import { fetchArticles } from '../../../api/agentApi.ts';
+import {
+  archiveArticle,
+  bulkExportArticles,
+  fetchArticles,
+  publishArticle,
+} from '../../../api/agentApi.ts';
 import { canBuildForms, loadAgentSession } from '../../../lib/agentSession.ts';
 import { Badge } from '../../../components/ui/badge.tsx';
 import { Button } from '../../../components/ui/button.tsx';
@@ -16,6 +22,17 @@ import {
 } from '../../../components/ui/table.tsx';
 import { cn } from '../../../lib/cn.ts';
 import { BulkImportDialog } from './BulkImportDialog.tsx';
+
+type BulkAction = 'publish' | 'archive' | 'export';
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
 
 const STATE_BADGE_VARIANT: Record<ArticleStateValue, 'secondary' | 'success' | 'outline'> = {
   draft: 'secondary',
@@ -42,8 +59,44 @@ export function ArticleTable({
 }) {
   const queryClient = useQueryClient();
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [busyAction, setBusyAction] = useState<BulkAction | null>(null);
   const session = loadAgentSession();
+  const canBulkAct = canBuildForms(session);
   const articles = useQuery({ queryKey: ['admin-articles'], queryFn: () => fetchArticles(token) });
+  const rows = articles.data?.articles ?? [];
+  const allSelected = rows.length > 0 && rows.every((a) => selectedIds.has(a.id));
+
+  function toggleRow(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    setSelectedIds(allSelected ? new Set() : new Set(rows.map((a) => a.id)));
+  }
+
+  async function runBulkAction(action: BulkAction) {
+    const ids = [...selectedIds];
+    setBusyAction(action);
+    try {
+      if (action === 'export') {
+        const blob = await bulkExportArticles(token, ids);
+        downloadBlob(blob, 'articles-export.zip');
+        return;
+      }
+      const call = action === 'publish' ? publishArticle : archiveArticle;
+      await Promise.allSettled(ids.map((id) => call(token, id)));
+      setSelectedIds(new Set());
+      void queryClient.invalidateQueries({ queryKey: ['admin-articles'] });
+    } finally {
+      setBusyAction(null);
+    }
+  }
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -65,25 +118,92 @@ export function ArticleTable({
           </Button>
         </div>
       </div>
+      {canBulkAct && selectedIds.size > 0 && (
+        <div className="flex items-center justify-between gap-2 border-b border-slate-200 bg-accent-soft px-3 py-2">
+          <span className="text-sm font-medium">{selectedIds.size} selected</span>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={busyAction !== null}
+              onClick={() => void runBulkAction('export')}
+            >
+              {busyAction === 'export' && <Loader2 className="size-3.5 animate-spin" />}
+              Export
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={busyAction !== null}
+              onClick={() => void runBulkAction('publish')}
+            >
+              {busyAction === 'publish' && <Loader2 className="size-3.5 animate-spin" />}
+              Publish
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={busyAction !== null}
+              onClick={() => void runBulkAction('archive')}
+            >
+              {busyAction === 'archive' && <Loader2 className="size-3.5 animate-spin" />}
+              Archive
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              disabled={busyAction !== null}
+              onClick={() => setSelectedIds(new Set())}
+            >
+              Clear
+            </Button>
+          </div>
+        </div>
+      )}
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {articles.data?.articles.length === 0 ? (
+        {rows.length === 0 ? (
           <EmptyState message="Nothing to show" />
         ) : (
           <Table>
             <TableHeader>
               <TableRow>
+                {canBulkAct && (
+                  <TableHead className="w-8">
+                    <input
+                      type="checkbox"
+                      aria-label="Select all articles"
+                      checked={allSelected}
+                      onChange={toggleAll}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  </TableHead>
+                )}
                 <TableHead>Title</TableHead>
                 <TableHead>State</TableHead>
                 <TableHead>Updated</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {articles.data?.articles.map((a) => (
+              {rows.map((a) => (
                 <TableRow
                   key={a.id}
                   onClick={() => onSelect(a.id)}
                   className={cn('cursor-pointer', selectedId === a.id && 'bg-accent-soft')}
                 >
+                  {canBulkAct && (
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${displayTitle(a.title, a.body)}`}
+                        checked={selectedIds.has(a.id)}
+                        onChange={() => toggleRow(a.id)}
+                      />
+                    </TableCell>
+                  )}
                   {/* max-w-0 + w-full lets the cell shrink below its content's natural
                     width in an auto-layout table — without it, `truncate` alone has no
                     bound to clip against, and a long title wraps character-by-character

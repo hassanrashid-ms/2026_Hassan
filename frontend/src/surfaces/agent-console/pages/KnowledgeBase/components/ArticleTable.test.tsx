@@ -1,8 +1,33 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ArticleTable } from './ArticleTable.tsx';
 import * as agentApi from '../../../api/agentApi.ts';
+
+const TWO_ARTICLES = [
+  {
+    id: 'art-1',
+    title: 'Refund Policy',
+    body: 'Body one.',
+    state: 'draft' as const,
+    version: 0,
+    has_draft: false,
+    intent_id: null,
+    published_at: null,
+    created_at: '2026-08-01T00:00:00Z',
+  },
+  {
+    id: 'art-2',
+    title: 'Getting Started',
+    body: 'Body two.',
+    state: 'draft' as const,
+    version: 0,
+    has_draft: false,
+    intent_id: null,
+    published_at: null,
+    created_at: '2026-08-01T00:00:00Z',
+  },
+];
 
 function renderWithClient(ui: React.ReactElement) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -90,5 +115,60 @@ describe('ArticleTable title fallback', () => {
     );
 
     expect(await screen.findByText('Untitled')).toBeInTheDocument();
+  });
+});
+
+describe('ArticleTable bulk selection', () => {
+  it('selects rows via checkbox and shows a bulk action bar with the count', async () => {
+    vi.spyOn(agentApi, 'fetchArticles').mockResolvedValue({ articles: TWO_ARTICLES });
+
+    renderWithClient(
+      <ArticleTable token="tok" selectedId={null} onSelect={() => {}} onNew={() => {}} />,
+    );
+
+    const checkbox = await screen.findByLabelText('Select Refund Policy');
+    checkbox.click();
+
+    expect(await screen.findByText('1 selected')).toBeInTheDocument();
+  });
+
+  it('exports the selected ids as a zip download', async () => {
+    vi.spyOn(agentApi, 'fetchArticles').mockResolvedValue({ articles: TWO_ARTICLES });
+    const blob = new Blob(['zip bytes']);
+    vi.spyOn(agentApi, 'bulkExportArticles').mockResolvedValue(blob);
+    vi.stubGlobal('URL', {
+      ...URL,
+      createObjectURL: vi.fn().mockReturnValue('blob:mock'),
+      revokeObjectURL: vi.fn(),
+    });
+
+    renderWithClient(
+      <ArticleTable token="tok" selectedId={null} onSelect={() => {}} onNew={() => {}} />,
+    );
+
+    (await screen.findByLabelText('Select Refund Policy')).click();
+    (await screen.findByRole('button', { name: 'Export' })).click();
+
+    await waitFor(() => expect(agentApi.bulkExportArticles).toHaveBeenCalledWith('tok', ['art-1']));
+
+    vi.unstubAllGlobals();
+  });
+
+  it('publishes each selected article and clears the selection', async () => {
+    vi.spyOn(agentApi, 'fetchArticles').mockResolvedValue({ articles: TWO_ARTICLES });
+    const publishSpy = vi.spyOn(agentApi, 'publishArticle').mockResolvedValue({} as never);
+
+    renderWithClient(
+      <ArticleTable token="tok" selectedId={null} onSelect={() => {}} onNew={() => {}} />,
+    );
+
+    (await screen.findByLabelText('Select Refund Policy')).click();
+    (await screen.findByLabelText('Select Getting Started')).click();
+    (await screen.findByRole('button', { name: 'Publish' })).click();
+
+    await waitFor(() => expect(publishSpy).toHaveBeenCalledTimes(2));
+    expect(publishSpy).toHaveBeenCalledWith('tok', 'art-1');
+    expect(publishSpy).toHaveBeenCalledWith('tok', 'art-2');
+    await waitFor(() => expect(screen.queryByText(/selected/)).not.toBeInTheDocument());
   });
 });

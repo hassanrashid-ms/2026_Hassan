@@ -60,3 +60,36 @@ export async function apiCall<T>(
   }
   return (await res.json()) as T;
 }
+
+/**
+ * Same request/error contract as apiCall, but for endpoints whose 200
+ * response is a binary body (e.g. a zip download) rather than JSON — calling
+ * res.json() on those would throw on the caller's behalf for no reason.
+ */
+export async function apiCallBlob(
+  path: string,
+  token: string,
+  init: RequestInit = {},
+  workspaceId?: string,
+): Promise<Blob> {
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}${path}`, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        ...(workspaceId ? { 'X-Workspace-Id': workspaceId } : {}),
+        ...NGROK_SKIP_WARNING_HEADER,
+        ...(init.headers ?? {}),
+      },
+    });
+  } catch {
+    throw new ApiError('Network error — check your connection and try again.', 0);
+  }
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
+    throw new ApiError(body?.error?.message ?? `Request failed with ${res.status}`, res.status);
+  }
+  return res.blob();
+}

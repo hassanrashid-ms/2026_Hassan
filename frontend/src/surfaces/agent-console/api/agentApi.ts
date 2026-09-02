@@ -44,7 +44,7 @@ import type {
   UnarchiveSubintentResponse,
   UnescalateResponse,
 } from '@support/types';
-import { apiCall } from '../../../lib/httpClient.ts';
+import { apiCall, apiCallBlob } from '../../../lib/httpClient.ts';
 import { loadAgentSession } from '../lib/agentSession.ts';
 
 export type MembershipView = {
@@ -493,6 +493,15 @@ export function bulkImportArticles(
     method: 'POST',
     body: JSON.stringify(input),
   });
+}
+
+export function bulkExportArticles(token: string, ids: string[]): Promise<Blob> {
+  return apiCallBlob(
+    '/agent/articles/bulk-export',
+    token,
+    { method: 'POST', body: JSON.stringify({ ids }) },
+    loadAgentSession()?.workspaceId,
+  );
 }
 
 export function generateKeywords(
