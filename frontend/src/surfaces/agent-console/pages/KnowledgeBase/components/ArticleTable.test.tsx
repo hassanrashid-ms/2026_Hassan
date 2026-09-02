@@ -171,7 +171,7 @@ describe('ArticleTable bulk selection', () => {
     const dialogTitle = await screen.findByText('Publish 2 articles?');
     expect(publishSpy).not.toHaveBeenCalled();
 
-    const dialog = dialogTitle.closest('[role="dialog"]') ?? document.body;
+    const dialog = (dialogTitle.closest('[role="dialog"]') ?? document.body) as HTMLElement;
     within(dialog).getByRole('button', { name: 'Publish' }).click();
 
     await waitFor(() => expect(publishSpy).toHaveBeenCalledTimes(2));
@@ -190,6 +190,36 @@ describe('ArticleTable bulk selection', () => {
     );
 
     (await screen.findByLabelText('Select Refund Policy')).click();
+
+    expect(await screen.findByRole('button', { name: 'Archive' })).toBeDisabled();
+  });
+
+  it('disables bulk Publish if any selected article is already published', async () => {
+    vi.spyOn(agentApi, 'fetchArticles').mockResolvedValue({
+      articles: [TWO_ARTICLES[0]!, { ...TWO_ARTICLES[1]!, state: 'published' as const }],
+    });
+
+    renderWithClient(
+      <ArticleTable token="tok" selectedId={null} onSelect={() => {}} onNew={() => {}} />,
+    );
+
+    (await screen.findByLabelText('Select Refund Policy')).click();
+    (await screen.findByLabelText('Select Getting Started')).click();
+
+    expect(await screen.findByRole('button', { name: 'Publish' })).toBeDisabled();
+  });
+
+  it('disables bulk Archive if any selected article is already archived, even mixed with drafts', async () => {
+    vi.spyOn(agentApi, 'fetchArticles').mockResolvedValue({
+      articles: [TWO_ARTICLES[0]!, { ...TWO_ARTICLES[1]!, state: 'archived' as const }],
+    });
+
+    renderWithClient(
+      <ArticleTable token="tok" selectedId={null} onSelect={() => {}} onNew={() => {}} />,
+    );
+
+    (await screen.findByLabelText('Select Refund Policy')).click();
+    (await screen.findByLabelText('Select Getting Started')).click();
 
     expect(await screen.findByRole('button', { name: 'Archive' })).toBeDisabled();
   });

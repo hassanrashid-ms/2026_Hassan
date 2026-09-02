@@ -22,7 +22,6 @@ import {
   TableRow,
 } from '../../../components/ui/table.tsx';
 import { cn } from '../../../lib/cn.ts';
-import { canPublish } from '../articleForm.ts';
 import { BulkImportDialog } from './BulkImportDialog.tsx';
 
 type ArticleRow = AgentArticlesResponse['articles'][number];
@@ -38,14 +37,18 @@ function downloadBlob(blob: Blob, filename: string) {
 }
 
 /**
- * Same eligibility rules the single-article editor sheet enforces
- * (canPublish, and Archive hidden once already archived) — a bulk action
- * silently skips ids that wouldn't be offered one at a time, rather than
- * firing a doomed or no-op request at the server for them.
+ * All-or-nothing on purpose: if even one selected article is already
+ * published, the bulk Publish button is disabled entirely rather than
+ * quietly re-publishing the rest and skipping that one — same for Archive
+ * against an already-archived article. A mixed selection means the agent
+ * picked the wrong rows, not that the action should partially apply.
  */
-function eligibleForAction(action: 'publish' | 'archive', rows: ArticleRow[]): ArticleRow[] {
-  if (action === 'archive') return rows.filter((a) => a.state !== 'archived');
-  return rows.filter((a) => canPublish(a.state, a.title, a.body));
+function canBulkPublish(rows: ArticleRow[]): boolean {
+  return rows.length > 0 && rows.every((a) => a.state === 'draft');
+}
+
+function canBulkArchive(rows: ArticleRow[]): boolean {
+  return rows.length > 0 && rows.every((a) => a.state !== 'archived');
 }
 
 const STATE_BADGE_VARIANT: Record<ArticleStateValue, 'secondary' | 'success' | 'outline'> = {
@@ -82,8 +85,8 @@ export function ArticleTable({
   const rows = articles.data?.articles ?? [];
   const allSelected = rows.length > 0 && rows.every((a) => selectedIds.has(a.id));
   const selectedRows = rows.filter((a) => selectedIds.has(a.id));
-  const eligiblePublish = eligibleForAction('publish', selectedRows);
-  const eligibleArchive = eligibleForAction('archive', selectedRows);
+  const publishAllowed = canBulkPublish(selectedRows);
+  const archiveAllowed = canBulkArchive(selectedRows);
 
   function toggleRow(id: string) {
     setSelectedIds((prev) => {
@@ -111,11 +114,11 @@ export function ArticleTable({
   async function runConfirmedAction() {
     const action = confirmAction;
     if (action === null) return;
-    const eligible = action === 'publish' ? eligiblePublish : eligibleArchive;
+    const ids = [...selectedIds];
     setBusyAction(action);
     try {
       const call = action === 'publish' ? publishArticle : archiveArticle;
-      await Promise.allSettled(eligible.map((a) => call(token, a.id)));
+      await Promise.allSettled(ids.map((id) => call(token, id)));
       setSelectedIds(new Set());
       void queryClient.invalidateQueries({ queryKey: ['admin-articles'] });
     } finally {
@@ -162,7 +165,7 @@ export function ArticleTable({
               type="button"
               size="sm"
               variant="outline"
-              disabled={busyAction !== null || eligiblePublish.length === 0}
+              disabled={busyAction !== null || !publishAllowed}
               onClick={() => setConfirmAction('publish')}
             >
               {busyAction === 'publish' && <Loader2 className="size-3.5 animate-spin" />}
@@ -172,7 +175,7 @@ export function ArticleTable({
               type="button"
               size="sm"
               variant="outline"
-              disabled={busyAction !== null || eligibleArchive.length === 0}
+              disabled={busyAction !== null || !archiveAllowed}
               onClick={() => setConfirmAction('archive')}
             >
               {busyAction === 'archive' && <Loader2 className="size-3.5 animate-spin" />}
@@ -273,12 +276,8 @@ export function ArticleTable({
       <ConfirmDialog
         open={confirmAction === 'publish'}
         onOpenChange={(open) => !open && setConfirmAction(null)}
-        title={`Publish ${eligiblePublish.length} article${eligiblePublish.length === 1 ? '' : 's'}?`}
-        description={
-          eligiblePublish.length < selectedRows.length
-            ? `${selectedRows.length - eligiblePublish.length} of the selected articles are archived and can't be published — those will be skipped.`
-            : 'These become visible to players and the bot immediately.'
-        }
+        title={`Publish ${selectedRows.length} article${selectedRows.length === 1 ? '' : 's'}?`}
+        description="These become visible to players and the bot immediately."
         confirmLabel="Publish"
         confirming={busyAction === 'publish'}
         onConfirm={() => void runConfirmedAction()}
@@ -286,12 +285,8 @@ export function ArticleTable({
       <ConfirmDialog
         open={confirmAction === 'archive'}
         onOpenChange={(open) => !open && setConfirmAction(null)}
-        title={`Archive ${eligibleArchive.length} article${eligibleArchive.length === 1 ? '' : 's'}?`}
-        description={
-          eligibleArchive.length < selectedRows.length
-            ? `${selectedRows.length - eligibleArchive.length} of the selected articles are already archived and will be skipped. The rest are removed from player-facing search and the bot's knowledge base immediately. You can unarchive them later without losing content or version history.`
-            : "This removes them from player-facing search and the bot's knowledge base immediately. You can unarchive them later without losing content or version history."
-        }
+        title={`Archive ${selectedRows.length} article${selectedRows.length === 1 ? '' : 's'}?`}
+        description="This removes them from player-facing search and the bot's knowledge base immediately. You can unarchive them later without losing content or version history."
         confirmLabel="Archive"
         variant="destructive"
         confirming={busyAction === 'archive'}
