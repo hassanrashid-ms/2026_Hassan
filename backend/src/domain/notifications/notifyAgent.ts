@@ -27,8 +27,8 @@ export function toNotificationView(row: typeof notification.$inferSelect): Notif
  * The single write path for a ticket-assignment notification, called inside
  * the same transaction as the assignment write itself (right after
  * appendEvent), from every current assignment site — claim, take-over,
- * reassign, sweep, bot handoff. A future assignment path wires in with one
- * call here, nothing else in the notification system needs to change.
+ * reassign, sweep, bot handoff, reopen. A future assignment path wires in with
+ * one call here, nothing else in the notification system needs to change.
  *
  * Looks up the conversation's number/priority and the workspace's
  * name/slug itself so call sites stay one-liners; snapshotted into payload

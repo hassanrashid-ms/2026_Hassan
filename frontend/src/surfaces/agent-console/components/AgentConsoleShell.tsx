@@ -45,6 +45,9 @@ import {
 } from '../api/agentApi.ts';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher.tsx';
 import { NotificationBell } from './NotificationBell.tsx';
+import { TicketAssignedToast } from './TicketAssignedToast.tsx';
+import { playAssignmentChime, unlockAudioContext } from '../lib/notificationSound.ts';
+import { openTicketFromNotification } from '../lib/notificationNavigation.ts';
 import { createSocket } from '../../../features/chat/api/socket.ts';
 import { handleSessionExpired } from '../lib/authErrorHandling.ts';
 import { Avatar, AvatarFallback } from './ui/avatar.tsx';
@@ -173,6 +176,24 @@ export function AgentConsoleShell() {
     };
   }, [session]);
 
+  // Unlocks the Web Audio context inside a real user gesture so the
+  // notification chime (fired later from a socket event, which the browser
+  // does not count as a gesture) is actually allowed to play. One-time,
+  // capture-phase so it fires on the very first click/keydown anywhere.
+  useEffect(() => {
+    const unlock = () => {
+      unlockAudioContext();
+      window.removeEventListener('pointerdown', unlock, true);
+      window.removeEventListener('keydown', unlock, true);
+    };
+    window.addEventListener('pointerdown', unlock, true);
+    window.addEventListener('keydown', unlock, true);
+    return () => {
+      window.removeEventListener('pointerdown', unlock, true);
+      window.removeEventListener('keydown', unlock, true);
+    };
+  }, []);
+
   const membershipsForFallback = useQuery({
     queryKey: ['memberships'],
     queryFn: () => fetchMemberships(session!.token),
@@ -241,9 +262,27 @@ export function AgentConsoleShell() {
           : { unread_count: 1, notifications: [payload] },
       );
       const p = payload.payload as TicketAssignedPayload;
-      toast(`Ticket #${p.ticket_number} assigned to you`, {
-        description: p.workspace_name ? `in ${p.workspace_name}` : undefined,
-      });
+      playAssignmentChime();
+      // `toast.custom` rather than plain `toast()`: assignment is the one
+      // event an agent must not miss, so it gets its own high-contrast body
+      // (plain `toast()` renders in sonner's washed-out neutral style even
+      // with `richColors` on the <Toaster>, easy to miss against the white
+      // console background) and a click-to-open affordance, which sonner's
+      // built-in toast has no hook for.
+      toast.custom(
+        (t) => (
+          <TicketAssignedToast
+            ticketNumber={p.ticket_number}
+            workspaceName={p.workspace_name}
+            onOpen={() => {
+              toast.dismiss(t);
+              void openTicketFromNotification(session.token, payload, queryClient, navigate);
+            }}
+            onDismiss={() => toast.dismiss(t)}
+          />
+        ),
+        { duration: 10_000 },
+      );
     });
     return () => {
       cancelled = true;
@@ -337,7 +376,6 @@ export function AgentConsoleShell() {
         <header className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4">
           <WorkspaceSwitcher session={session} />
           <div className="flex items-center gap-2">
-            <NotificationBell session={session} />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
@@ -410,6 +448,7 @@ export function AgentConsoleShell() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            <NotificationBell session={session} />
           </div>
         </header>
 

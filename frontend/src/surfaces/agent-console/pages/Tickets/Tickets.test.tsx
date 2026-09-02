@@ -299,9 +299,12 @@ describe('Bulk assign (sweep)', () => {
         nextCursor: null,
       }),
     );
-    const sweepSpy = vi
-      .mocked(agentApi.sweepAssign)
-      .mockResolvedValue({ assignedCount: 3, conversationIds: ['c1', 'c2', 'c3'] });
+    const sweepSpy = vi.mocked(agentApi.sweepAssign).mockResolvedValue({
+      assignedCount: 3,
+      conversationIds: ['c1', 'c2', 'c3'],
+      remainingCount: 0,
+      stopReason: 'queue_empty',
+    });
     vi.mocked(loadAgentSession).mockReturnValue({
       token: 'tok',
       agentId: 'agent-1',
@@ -318,6 +321,66 @@ describe('Bulk assign (sweep)', () => {
 
     await waitFor(() => expect(sweepSpy).toHaveBeenCalledWith('tok'));
     await screen.findByText('Assigned 3 tickets.');
+  });
+
+  it('shows "No unassigned tickets." when the queue was already empty', async () => {
+    vi.mocked(agentApi.fetchInbox).mockImplementation((_token, status) =>
+      Promise.resolve({
+        conversations: status === 'unassigned' ? [unassignedRow] : [],
+        nextCursor: null,
+      }),
+    );
+    vi.mocked(agentApi.sweepAssign).mockResolvedValue({
+      assignedCount: 0,
+      conversationIds: [],
+      remainingCount: 0,
+      stopReason: 'queue_empty',
+    });
+    vi.mocked(loadAgentSession).mockReturnValue({
+      token: 'tok',
+      agentId: 'agent-1',
+      workspaceId: 'ws-1',
+      role: 'team_lead',
+    } as never);
+    const user = userEvent.setup();
+
+    renderTickets('/tickets');
+
+    await screen.findByText('Unassigned');
+    const button = await screen.findByRole('button', { name: 'Bulk assign' });
+    await user.click(button);
+
+    await screen.findByText('No unassigned tickets.');
+  });
+
+  it('reports the reason when tickets remain unassigned because no agents are online', async () => {
+    vi.mocked(agentApi.fetchInbox).mockImplementation((_token, status) =>
+      Promise.resolve({
+        conversations: status === 'unassigned' ? [unassignedRow] : [],
+        nextCursor: null,
+      }),
+    );
+    vi.mocked(agentApi.sweepAssign).mockResolvedValue({
+      assignedCount: 0,
+      conversationIds: [],
+      remainingCount: 2,
+      stopReason: 'none_online',
+    });
+    vi.mocked(loadAgentSession).mockReturnValue({
+      token: 'tok',
+      agentId: 'agent-1',
+      workspaceId: 'ws-1',
+      role: 'team_lead',
+    } as never);
+    const user = userEvent.setup();
+
+    renderTickets('/tickets');
+
+    await screen.findByText('Unassigned');
+    const button = await screen.findByRole('button', { name: 'Bulk assign' });
+    await user.click(button);
+
+    await screen.findByText('Assigned 0 tickets. 2 remain unassigned — no agents are online.');
   });
 
   it('shows Bulk assign above the list in list view, for a team lead', async () => {

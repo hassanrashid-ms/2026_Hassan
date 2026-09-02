@@ -1,13 +1,19 @@
 import { and, inArray, isNull, sql } from 'drizzle-orm';
 import { conversation } from '../../shared/db/schema/index.ts';
 import { withWorkspace } from '../../shared/db/withWorkspace.ts';
-import { assignNextTicket, type AssignNextTicketResult } from './assignNextTicket.ts';
+import {
+  assignNextTicket,
+  type AssignNextTicketResult,
+  type AssignNextTicketStopReason,
+} from './assignNextTicket.ts';
 
 const UNASSIGNED_STATUSES = ['open', 'escalated'] as const;
 
 export type SweepResult = {
   assignedCount: number;
   assignments: AssignNextTicketResult[];
+  remainingCount: number;
+  stopReason: AssignNextTicketStopReason;
 };
 
 async function countUnassigned(workspaceId: string): Promise<number> {
@@ -37,12 +43,18 @@ async function countUnassigned(workspaceId: string): Promise<number> {
 export async function sweepUnassignedQueue(workspaceId: string): Promise<SweepResult> {
   const maxIterations = (await countUnassigned(workspaceId)) + 1;
   const assignments: AssignNextTicketResult[] = [];
+  let stopReason: AssignNextTicketStopReason = 'queue_empty';
 
   for (let i = 0; i < maxIterations; i++) {
-    const result = await assignNextTicket(workspaceId);
-    if (!result) break;
-    assignments.push(result);
+    const outcome = await assignNextTicket(workspaceId);
+    if (!outcome.assigned) {
+      stopReason = outcome.reason;
+      break;
+    }
+    assignments.push(outcome.result);
   }
 
-  return { assignedCount: assignments.length, assignments };
+  const remainingCount = await countUnassigned(workspaceId);
+
+  return { assignedCount: assignments.length, assignments, remainingCount, stopReason };
 }

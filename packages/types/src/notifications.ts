@@ -1,4 +1,4 @@
-export type AssignmentVia = 'claim' | 'take_over' | 'reassign' | 'sweep' | 'bot_handoff';
+export type AssignmentVia = 'claim' | 'take_over' | 'reassign' | 'sweep' | 'bot_handoff' | 'reopen';
 
 export type TicketAssignedPayload = {
   ticket_number: number;

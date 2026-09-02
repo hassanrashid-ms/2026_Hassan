@@ -5,6 +5,7 @@ import {
   MarkPlayerReadBody,
   SendMessageBody,
   type AgentMessageView,
+  type NotificationView,
   type PlayerFormView,
   type PlayerMessageView,
   type PlayerMessagesResponse,
@@ -22,6 +23,7 @@ import {
 } from '../../domain/conversations/index.ts';
 import { applyBotTurn, assignOnHandoff, resolveBotConfig } from '../../domain/bot/index.ts';
 import { getHandoffMessage } from '../../domain/templates/templateService.ts';
+import { notifyAgent } from '../../domain/notifications/notifyAgent.ts';
 import { appendEvent } from '../../shared/events/appendEvent.ts';
 import {
   agent,
@@ -47,6 +49,7 @@ import { withWorkspace, type Tx } from '../../shared/db/withWorkspace.ts';
 import {
   emitInboxChanged,
   emitMessageToRooms,
+  emitNotificationNew,
   emitReadReceipt,
 } from '../../shared/realtime/emit.ts';
 import { getIo } from '../../shared/realtime/socketServer.ts';
@@ -152,6 +155,10 @@ export async function sendPlayerMessage(
     // Only the reopen branch sets this: the reopen's system message needs its
     // own socket emit, separate from the player's own message emitted below.
     let reopenPosted: PostedMessageRow | undefined;
+    // Only the reopen branch sets this: the newly (re-)assigned agent needs a
+    // notification, same as every other assignment site — claim, take-over,
+    // reassign, sweep, bot handoff. Reopen was the one site that skipped it.
+    let reopenNotification: NotificationView | null = null;
     // The reopen branch defers its handoff message until after the player's own
     // is posted — see below.
     let reopening = false;
@@ -260,6 +267,15 @@ export async function sendPlayerMessage(
           .where(eq(conversation.id, conversationId));
 
         reopening = true;
+
+        if (nextAssignedAgentId) {
+          reopenNotification = await notifyAgent(tx, {
+            workspaceId: ctx.workspaceId,
+            agentId: nextAssignedAgentId,
+            conversationId,
+            via: 'reopen',
+          });
+        }
 
         await appendEvent(tx, {
           workspaceId: ctx.workspaceId,
@@ -441,7 +457,15 @@ export async function sendPlayerMessage(
       }
     }
 
-    return { conversationId, posted, attachmentRow, reopenPosted, inboxStatus, shouldEnqueue };
+    return {
+      conversationId,
+      posted,
+      attachmentRow,
+      reopenPosted,
+      reopenNotification,
+      inboxStatus,
+      shouldEnqueue,
+    };
   });
 
   // Best-effort cleanup of the pending original — only after the transaction
@@ -490,6 +514,9 @@ export async function sendPlayerMessage(
   }
   if (result.inboxStatus) {
     emitInboxChanged(getIo(), ctx.workspaceId, result.conversationId, result.inboxStatus);
+  }
+  if (result.reopenNotification) {
+    emitNotificationNew(getIo(), result.reopenNotification.agent_id, result.reopenNotification);
   }
   if (result.shouldEnqueue) {
     await enqueueBotTurn({

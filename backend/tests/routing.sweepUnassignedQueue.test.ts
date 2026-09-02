@@ -56,6 +56,8 @@ describe('sweepUnassignedQueue', () => {
 
     const result = await sweepUnassignedQueue(workspaceId);
     expect(result.assignedCount).toBe(4);
+    expect(result.remainingCount).toBe(0);
+    expect(result.stopReason).toBe('queue_empty');
 
     const owners = await assignedAgentIds(ids);
     expect(owners.every((id) => id !== null)).toBe(true);
@@ -83,6 +85,8 @@ describe('sweepUnassignedQueue', () => {
     const result = await sweepUnassignedQueue(workspaceId);
     expect(result.assignedCount).toBe(1);
     expect(result.assignments[0]!.conversationId).toBe(first);
+    expect(result.remainingCount).toBe(1);
+    expect(result.stopReason).toBe('all_at_capacity');
 
     const owners = await assignedAgentIds([second]);
     expect(owners[0]).toBeNull();
@@ -95,7 +99,25 @@ describe('sweepUnassignedQueue', () => {
     await incrementPresence(agentId);
 
     const result = await sweepUnassignedQueue(workspaceId);
-    expect(result).toEqual({ assignedCount: 0, assignments: [] });
+    expect(result).toEqual({
+      assignedCount: 0,
+      assignments: [],
+      remainingCount: 0,
+      stopReason: 'queue_empty',
+    });
+  });
+
+  it('reports none_online when the workspace has an eligible agent under cap but nobody online', async () => {
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const agentId = await seedAgent();
+    await seedWorkspaceMember({ workspaceId, agentId });
+    await seedConversation({ workspaceId, playerId, status: 'open' });
+
+    const result = await sweepUnassignedQueue(workspaceId);
+    expect(result.assignedCount).toBe(0);
+    expect(result.remainingCount).toBe(1);
+    expect(result.stopReason).toBe('none_online');
   });
 
   it('never sweeps another workspace', async () => {
@@ -112,7 +134,12 @@ describe('sweepUnassignedQueue', () => {
     });
 
     const result = await sweepUnassignedQueue(workspaceA);
-    expect(result).toEqual({ assignedCount: 0, assignments: [] });
+    expect(result).toEqual({
+      assignedCount: 0,
+      assignments: [],
+      remainingCount: 0,
+      stopReason: 'queue_empty',
+    });
     const owners = await assignedAgentIds([conversationId]);
     expect(owners[0]).toBeNull();
   });

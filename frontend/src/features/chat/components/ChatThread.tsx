@@ -162,7 +162,13 @@ export function ChatThread({
                           ? 'bg-muted text-accent-fg ring-black/10'
                           : chatMessage.authorType === 'agent'
                             ? 'bg-accent-deep text-accent-fg ring-black/10'
-                            : 'bg-accent-soft text-muted ring-border',
+                            : // Was `bg-accent-soft text-muted ring-border` — a pale fill
+                              // with a grey icon, washed out next to the bot's and agent's
+                              // solid-filled circles. Matches their weight now: solid
+                              // accent fill, white icon. `ring-border` also only exists in
+                              // agent-console's theme — this surface-shared component
+                              // renders in webview too, where that token is undefined.
+                              'bg-accent text-accent-fg ring-black/10',
                       ].join(' ')}
                       aria-hidden="true"
                     >

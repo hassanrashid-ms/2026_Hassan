@@ -11,17 +11,9 @@ import {
   DropdownMenuTrigger,
 } from './ui/dropdown-menu.tsx';
 import { Badge } from './ui/badge.tsx';
-import {
-  fetchNotifications,
-  markAllNotificationsRead,
-  markNotificationRead,
-} from '../api/agentApi.ts';
-import {
-  loadAgentSession,
-  saveAgentSession,
-  saveLastActiveWorkspaceId,
-  type StoredAgentSession,
-} from '../lib/agentSession.ts';
+import { fetchNotifications, markAllNotificationsRead } from '../api/agentApi.ts';
+import { type StoredAgentSession } from '../lib/agentSession.ts';
+import { openTicketFromNotification } from '../lib/notificationNavigation.ts';
 
 export function NotificationBell({ session }: { session: StoredAgentSession }) {
   const navigate = useNavigate();
@@ -36,31 +28,7 @@ export function NotificationBell({ session }: { session: StoredAgentSession }) {
   const unreadCount = data?.unread_count ?? 0;
 
   async function handleSelect(n: NotificationView) {
-    await markNotificationRead(session.token, n.id);
-    queryClient.setQueryData<NotificationsResponse>(['notifications'], (old) =>
-      old
-        ? {
-            unread_count: Math.max(0, old.unread_count - (n.read_at ? 0 : 1)),
-            notifications: old.notifications.map((existing) =>
-              existing.id === n.id ? { ...existing, read_at: new Date().toISOString() } : existing,
-            ),
-          }
-        : old,
-    );
-
-    const payload = n.payload as TicketAssignedPayload;
-    const current = loadAgentSession();
-    if (current && payload.workspace_slug && current.workspaceSlug !== payload.workspace_slug) {
-      saveAgentSession({ ...current, workspaceSlug: payload.workspace_slug, workspaceId: undefined });
-      saveLastActiveWorkspaceId(''); // cleared; AgentConsoleShell's membership-fallback effect re-resolves workspaceId from the slug on next load
-      if (n.conversation_id) {
-        window.location.assign(`/tickets/${n.conversation_id}`);
-      } else {
-        window.location.reload();
-      }
-      return;
-    }
-    if (n.conversation_id) navigate(`/tickets/${n.conversation_id}`);
+    await openTicketFromNotification(session.token, n, queryClient, navigate);
   }
 
   async function handleMarkAllRead() {
@@ -96,7 +64,7 @@ export function NotificationBell({ session }: { session: StoredAgentSession }) {
           )}
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-80">
+      <DropdownMenuContent align="end" collisionPadding={12} className="w-80">
         <div className="flex items-center justify-between px-2 py-1.5">
           <DropdownMenuLabel className="p-0">Notifications</DropdownMenuLabel>
           {unreadCount > 0 && (
@@ -113,25 +81,30 @@ export function NotificationBell({ session }: { session: StoredAgentSession }) {
         {notifications.length === 0 && (
           <div className="px-2 py-6 text-center text-sm text-muted">No notifications yet.</div>
         )}
-        {notifications.map((n) => {
-          const payload = n.payload as TicketAssignedPayload;
-          return (
-            <DropdownMenuItem
-              key={n.id}
-              onSelect={() => void handleSelect(n)}
-              className={n.read_at ? undefined : 'bg-accent-soft/60'}
-            >
-              <div className="flex flex-col gap-0.5">
-                <span className="text-sm font-medium text-text">
-                  Ticket #{payload.ticket_number} assigned to you
-                </span>
-                <span className="text-xs text-muted">
-                  {payload.workspace_name} · {payload.priority?.toUpperCase()}
-                </span>
-              </div>
-            </DropdownMenuItem>
-          );
-        })}
+        {/* Capped and scrollable — the query already keeps at most 20, which
+            is more than fits in a dropdown without one. Header/label above
+            stays pinned; only this list scrolls. */}
+        <div className="max-h-96 overflow-y-auto">
+          {notifications.map((n) => {
+            const payload = n.payload as TicketAssignedPayload;
+            return (
+              <DropdownMenuItem
+                key={n.id}
+                onSelect={() => void handleSelect(n)}
+                className={n.read_at ? undefined : 'bg-accent-soft/60'}
+              >
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-sm font-medium text-text">
+                    Ticket #{payload.ticket_number} assigned to you
+                  </span>
+                  <span className="text-xs text-muted">
+                    {payload.workspace_name} · {payload.priority?.toUpperCase()}
+                  </span>
+                </div>
+              </DropdownMenuItem>
+            );
+          })}
+        </div>
       </DropdownMenuContent>
     </DropdownMenu>
   );

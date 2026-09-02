@@ -74,7 +74,12 @@ describe('POST /agent/conversations/sweep-assign', () => {
       .set('X-Workspace-Id', workspaceId);
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ assignedCount: 1, conversationIds: [conversationId] });
+    expect(res.body).toEqual({
+      assignedCount: 1,
+      conversationIds: [conversationId],
+      remainingCount: 0,
+      stopReason: 'queue_empty',
+    });
   });
 
   it('200s with zero assigned when nobody is eligible', async () => {
@@ -89,6 +94,11 @@ describe('POST /agent/conversations/sweep-assign', () => {
       .set('X-Workspace-Id', workspaceId);
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ assignedCount: 0, conversationIds: [] });
+    expect(res.body).toEqual({
+      assignedCount: 0,
+      conversationIds: [],
+      remainingCount: 0,
+      stopReason: 'queue_empty',
+    });
   });
 });

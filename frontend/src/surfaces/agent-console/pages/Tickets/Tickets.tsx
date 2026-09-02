@@ -8,6 +8,7 @@ import {
   fetchInbox,
   sweepAssign,
   type ConversationListFilter,
+  type SweepAssignStopReason,
   type TicketsQueryFilters,
 } from '../../api/agentApi.ts';
 import { loadAgentSession, canBuildForms } from '../../lib/agentSession.ts';
@@ -433,6 +434,18 @@ function TicketsListView({
   );
 }
 
+function sweepStopReasonText(reason: SweepAssignStopReason): string {
+  switch (reason) {
+    case 'no_active_agents':
+      return 'no agents are assigned to this workspace';
+    case 'all_at_capacity':
+      return 'all agents are at capacity';
+    case 'none_online':
+    case 'queue_empty':
+      return 'no agents are online';
+  }
+}
+
 export function Tickets() {
   const { conversationId } = useParams<{ conversationId?: string }>();
   const navigate = useNavigate();
@@ -443,7 +456,15 @@ export function Tickets() {
     onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: ['tickets'] });
       void queryClient.invalidateQueries({ queryKey: ['tickets-summary'] });
-      toast.success(`Assigned ${result.assignedCount} tickets.`);
+      if (result.stopReason === 'queue_empty' && result.assignedCount === 0) {
+        toast.success('No unassigned tickets.');
+      } else if (result.remainingCount === 0) {
+        toast.success(`Assigned ${result.assignedCount} tickets.`);
+      } else {
+        toast.warning(
+          `Assigned ${result.assignedCount} tickets. ${result.remainingCount} remain unassigned — ${sweepStopReasonText(result.stopReason)}.`,
+        );
+      }
     },
     onError: () => toast.error("Couldn't run the assignment sweep."),
   });

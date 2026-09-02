@@ -121,6 +121,27 @@ describe('reopen', () => {
     expect(row!.assignedAgentId).not.toBeNull();
   });
 
+  it('reopen notifies the newly assigned agent, same as every other assignment site', async () => {
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const activeAgent = await seedAgent();
+    await seedWorkspaceMember({ workspaceId, agentId: activeAgent });
+    await incrementPresence(activeAgent);
+    const conversationId = await seedConversation({ workspaceId, playerId });
+    await setResolved(conversationId, { resolutionSource: 'bot', assignedAgentId: null });
+
+    await sendPlayerMessage(ctxFor(workspaceId, playerId), { body: 'hi again' });
+
+    const { rows } = await ownerPool.query<{ agent_id: string; type: string; payload: unknown }>(
+      `select agent_id, type, payload from notification where conversation_id = $1`,
+      [conversationId],
+    );
+    expect(rows.length).toBe(1);
+    expect(rows[0]!.agent_id).toBe(activeAgent);
+    expect(rows[0]!.type).toBe('ticket_assigned');
+    expect((rows[0]!.payload as { via: string }).via).toBe('reopen');
+  });
+
   it('an agent-resolved conversation with an active previous owner keeps them', async () => {
     const workspaceId = await seedWorkspace();
     const playerId = await seedPlayer(workspaceId);

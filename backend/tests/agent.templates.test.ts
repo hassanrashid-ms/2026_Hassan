@@ -72,15 +72,17 @@ describe('GET /templates', () => {
     expect(res.body.system.handoff.every((v: { id: string | null }) => v.id === null)).toBe(true);
   });
 
-  it('forbids a plain agent', async () => {
+  it('allows a plain agent to read, for the chat composer canned-reply picker', async () => {
     const workspaceId = await seedWorkspace();
     const { token } = await seedAgentWithRole(workspaceId, 'agent');
 
-    await request(app)
+    const res = await request(app)
       .get('/templates')
       .set('Authorization', `Bearer ${token}`)
       .set('X-Workspace-Id', workspaceId)
-      .expect(403);
+      .expect(200);
+
+    expect(res.body.canned).toEqual([]);
   });
 });
 

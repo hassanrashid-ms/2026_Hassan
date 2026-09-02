@@ -8,5 +8,6 @@ import { pickEligibleAgent } from '../routing/pickEligibleAgent.ts';
  * See pickEligibleAgent.ts for the actual selection logic and its rationale.
  */
 export async function assignOnHandoff(tx: Tx, workspaceId: string): Promise<string | null> {
-  return pickEligibleAgent(tx, workspaceId);
+  const result = await pickEligibleAgent(tx, workspaceId);
+  return result.agentId;
 }

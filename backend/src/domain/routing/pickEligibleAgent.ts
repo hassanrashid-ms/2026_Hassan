@@ -28,7 +28,16 @@ const LIVE_STATUSES = ['open', 'awaiting_player', 'escalated'] as const;
  * silently ignoring presence and assigning anyway — same fallback direction
  * `conversationsService.ts`'s workload roster uses for a Redis-down read.
  */
-export async function pickEligibleAgent(tx: Tx, workspaceId: string): Promise<string | null> {
+export type PickEligibleAgentStopReason = 'no_active_agents' | 'all_at_capacity' | 'none_online';
+
+export type PickEligibleAgentResult =
+  | { agentId: string }
+  | { agentId: null; reason: PickEligibleAgentStopReason };
+
+export async function pickEligibleAgent(
+  tx: Tx,
+  workspaceId: string,
+): Promise<PickEligibleAgentResult> {
   const liveCount = sql<number>`count(${conversation.id}) filter (where ${inArray(conversation.status, [...LIVE_STATUSES])})`;
 
   const rows = await tx
@@ -55,7 +64,12 @@ export async function pickEligibleAgent(tx: Tx, workspaceId: string): Promise<st
     .having(lt(liveCount, workspace.maxAssignedTickets))
     .orderBy(liveCount, asc(agent.id));
 
-  if (rows.length === 0) return null;
+  if (rows.length === 0) {
+    const reason = await hasAnyActiveMember(tx, workspaceId)
+      ? 'all_at_capacity'
+      : 'no_active_agents';
+    return { agentId: null, reason };
+  }
 
   let presenceByAgent: Map<string, 'online' | 'away' | 'offline'>;
   try {
@@ -71,5 +85,28 @@ export async function pickEligibleAgent(tx: Tx, workspaceId: string): Promise<st
   }
 
   const online = rows.find((r) => presenceByAgent.get(r.agentId) === 'online');
-  return online?.agentId ?? null;
+  if (!online) return { agentId: null, reason: 'none_online' };
+  return { agentId: online.agentId };
+}
+
+/**
+ * Only consulted when the capacity-filtered query above returns zero rows —
+ * distinguishes "no active agent exists at all" from "every active agent is
+ * at capacity" (both collapse to zero rows there since capacity is a HAVING
+ * filter, not part of the WHERE clause).
+ */
+async function hasAnyActiveMember(tx: Tx, workspaceId: string): Promise<boolean> {
+  const [row] = await tx
+    .select({ agentId: agent.id })
+    .from(workspaceMember)
+    .innerJoin(agent, eq(agent.id, workspaceMember.agentId))
+    .where(
+      and(
+        eq(workspaceMember.workspaceId, workspaceId),
+        isNull(workspaceMember.deactivatedAt),
+        eq(agent.status, 'active'),
+      ),
+    )
+    .limit(1);
+  return Boolean(row);
 }
