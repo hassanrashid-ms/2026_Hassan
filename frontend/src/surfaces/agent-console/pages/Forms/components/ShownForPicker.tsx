@@ -101,9 +101,13 @@ export function ShownForPicker({
     () => intents.flatMap((i) => i.subintents.filter((s) => s.archivedAt === null)),
     [intents],
   );
+  // A selected id can be an archived/merged subintent still mapped to this
+  // form (archiving/merging never clears `formId`), so look names up across
+  // every subintent, not just the active ones in `allSubintents` — otherwise
+  // its chip falls back to rendering the raw id.
   const nameById = useMemo(
-    () => new Map(allSubintents.map((s) => [s.id, s.name])),
-    [allSubintents],
+    () => new Map(intents.flatMap((i) => i.subintents).map((s) => [s.id, s.name])),
+    [intents],
   );
   const groups = useMemo(
     () => buildGroupedSubintents(intents, query, currentFormId),

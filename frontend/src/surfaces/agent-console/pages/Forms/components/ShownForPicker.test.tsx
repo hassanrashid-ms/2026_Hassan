@@ -191,6 +191,20 @@ describe('ShownForPicker', () => {
     expect(onChange).toHaveBeenCalledWith(['sub-pw', 'sub-2fa']);
   });
 
+  it('renders the name, not the raw id, for a selected id that is now archived', () => {
+    render(
+      <ShownForPicker
+        intents={INTENTS}
+        selected={['sub-old']}
+        onChange={vi.fn()}
+        currentFormId={null}
+        disabled={false}
+      />,
+    );
+    expect(screen.getByText('Old billing thing')).toBeInTheDocument();
+    expect(screen.queryByText('sub-old')).not.toBeInTheDocument();
+  });
+
   it('an intent with one locked child disables its bulk checkbox while unlocked children stay checkable', async () => {
     const onChange = vi.fn();
     render(
