@@ -34,6 +34,7 @@ import type {
   IntentsResponse,
   MergeSubintentResponse,
   MoveSubintentResponse,
+  NotificationsResponse,
   RenameIntentResponse,
   RenameSubintentResponse,
   SaveBotConfigBodyValue,
@@ -69,6 +70,18 @@ export type GlobalInboxResponse = {
 
 export function fetchGlobalInbox(token: string): Promise<GlobalInboxResponse> {
   return call('/agent/global-inbox', token);
+}
+
+export function fetchNotifications(token: string): Promise<NotificationsResponse> {
+  return call('/agent/notifications', token);
+}
+
+export function markNotificationRead(token: string, id: string): Promise<{ read: boolean }> {
+  return call(`/agent/notifications/${id}/read`, token, { method: 'PATCH' });
+}
+
+export function markAllNotificationsRead(token: string): Promise<{ updated: number }> {
+  return call('/agent/notifications/read-all', token, { method: 'PATCH' });
 }
 
 /**
@@ -170,9 +183,18 @@ export function unassignConversation(
   return call(`/agent/conversations/${conversationId}/unassign`, token, { method: 'POST' });
 }
 
-export function sweepAssign(
-  token: string,
-): Promise<{ assignedCount: number; conversationIds: string[] }> {
+export type SweepAssignStopReason =
+  | 'queue_empty'
+  | 'no_active_agents'
+  | 'all_at_capacity'
+  | 'none_online';
+
+export function sweepAssign(token: string): Promise<{
+  assignedCount: number;
+  conversationIds: string[];
+  remainingCount: number;
+  stopReason: SweepAssignStopReason;
+}> {
   return call('/agent/conversations/sweep-assign', token, { method: 'POST' });
 }
 
