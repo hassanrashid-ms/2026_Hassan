@@ -1,6 +1,12 @@
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import type {
+  NotificationsResponse,
+  NotificationView,
+  TicketAssignedPayload,
+} from '@support/types';
 import mindstormLogo from '@/assets/mindstorm_logo.png';
 import {
   Inbox as InboxIcon,
@@ -38,6 +44,7 @@ import {
   type DisplayStatus,
 } from '../api/agentApi.ts';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher.tsx';
+import { NotificationBell } from './NotificationBell.tsx';
 import { createSocket } from '../../../features/chat/api/socket.ts';
 import { handleSessionExpired } from '../lib/authErrorHandling.ts';
 import { Avatar, AvatarFallback } from './ui/avatar.tsx';
@@ -121,6 +128,7 @@ const ROLE_LABEL: Record<string, string> = {
 
 export function AgentConsoleShell() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [session, setSession] = useState(loadAgentSession);
   // StrictMode double-invokes mount effects in development — mirrors
   // WebviewShell.tsx's startedRef guard for the same reason: scrubToken
@@ -223,6 +231,20 @@ export function AgentConsoleShell() {
     socket.on('presence_changed', (payload: { agentId: string; status: DisplayStatus }) => {
       if (payload.agentId === session.agentId) setPresence(payload.status);
     });
+    socket.on('notification:new', (payload: NotificationView) => {
+      queryClient.setQueryData<NotificationsResponse>(['notifications'], (old) =>
+        old
+          ? {
+              unread_count: old.unread_count + 1,
+              notifications: [payload, ...old.notifications].slice(0, 20),
+            }
+          : { unread_count: 1, notifications: [payload] },
+      );
+      const p = payload.payload as TicketAssignedPayload;
+      toast(`Ticket #${p.ticket_number} assigned to you`, {
+        description: p.workspace_name ? `in ${p.workspace_name}` : undefined,
+      });
+    });
     return () => {
       cancelled = true;
       socket.close();
@@ -314,78 +336,81 @@ export function AgentConsoleShell() {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4">
           <WorkspaceSwitcher session={session} />
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className="flex items-center gap-2 text-sm font-medium text-text"
-              >
-                <div className="relative">
-                  <Avatar className="size-7">
-                    <AvatarFallback>{initials}</AvatarFallback>
-                  </Avatar>
-                  <PresenceDot status={presence} className="absolute -right-0.5 -bottom-0.5" />
-                </div>
-                {session.displayName}
-                {roleLabel && (
-                  <Badge variant="secondary" className="text-accent-deep">
-                    {roleLabel}
-                  </Badge>
-                )}
-                <ChevronDown className="size-3.5 text-muted" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Status</DropdownMenuLabel>
-              {PRESENCE_OPTIONS.map((option) => (
-                <DropdownMenuCheckboxItem
-                  key={option.value}
-                  checked={presence === option.value}
-                  onSelect={() => handlePresenceSelect(option.value)}
+          <div className="flex items-center gap-2">
+            <NotificationBell session={session} />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="flex items-center gap-2 text-sm font-medium text-text"
                 >
-                  <span className={cn('size-2 rounded-full', option.dotClassName)} />
-                  {option.label}
-                </DropdownMenuCheckboxItem>
-              ))}
-              {isAdmin(session) && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onSelect={() => {
-                      // New tab, agent-console session untouched — mirrors
-                      // admin-console Overview.tsx's "Open console" action in
-                      // the opposite direction. The token already carries
-                      // is_admin: true, so no new token needs to be minted;
-                      // AdminConsoleShell's boot effect confirms it's really
-                      // an admin token via GET /admin/agents before trusting it.
-                      const params = new URLSearchParams({
-                        agentId: session.agentId,
-                        name: session.displayName,
-                      });
-                      window.open(
-                        `/dashboard/overview?${params.toString()}#t=${session.token}`,
-                        '_blank',
-                        'noopener',
-                      );
-                    }}
+                  <div className="relative">
+                    <Avatar className="size-7">
+                      <AvatarFallback>{initials}</AvatarFallback>
+                    </Avatar>
+                    <PresenceDot status={presence} className="absolute -right-0.5 -bottom-0.5" />
+                  </div>
+                  {session.displayName}
+                  {roleLabel && (
+                    <Badge variant="secondary" className="text-accent-deep">
+                      {roleLabel}
+                    </Badge>
+                  )}
+                  <ChevronDown className="size-3.5 text-muted" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Status</DropdownMenuLabel>
+                {PRESENCE_OPTIONS.map((option) => (
+                  <DropdownMenuCheckboxItem
+                    key={option.value}
+                    checked={presence === option.value}
+                    onSelect={() => handlePresenceSelect(option.value)}
                   >
-                    <ShieldCheck className="size-4" />
-                    Switch to Admin Dashboard
-                  </DropdownMenuItem>
-                </>
-              )}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onSelect={() => {
-                  clearAgentSession();
-                  navigate('/login');
-                }}
-              >
-                <LogOut className="size-4" />
-                Log out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+                    <span className={cn('size-2 rounded-full', option.dotClassName)} />
+                    {option.label}
+                  </DropdownMenuCheckboxItem>
+                ))}
+                {isAdmin(session) && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onSelect={() => {
+                        // New tab, agent-console session untouched — mirrors
+                        // admin-console Overview.tsx's "Open console" action in
+                        // the opposite direction. The token already carries
+                        // is_admin: true, so no new token needs to be minted;
+                        // AdminConsoleShell's boot effect confirms it's really
+                        // an admin token via GET /admin/agents before trusting it.
+                        const params = new URLSearchParams({
+                          agentId: session.agentId,
+                          name: session.displayName,
+                        });
+                        window.open(
+                          `/dashboard/overview?${params.toString()}#t=${session.token}`,
+                          '_blank',
+                          'noopener',
+                        );
+                      }}
+                    >
+                      <ShieldCheck className="size-4" />
+                      Switch to Admin Dashboard
+                    </DropdownMenuItem>
+                  </>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onSelect={() => {
+                    clearAgentSession();
+                    navigate('/login');
+                  }}
+                >
+                  <LogOut className="size-4" />
+                  Log out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </header>
 
         <main className="min-h-0 flex-1 overflow-hidden">
