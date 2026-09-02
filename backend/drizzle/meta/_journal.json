@@ -225,6 +225,13 @@
       "when": 1788257142625,
       "tag": "0031_nasty_nocturne",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1788333958391,
+      "tag": "0032_hard_stone_men",
+      "breakpoints": true
     }
   ]
 }

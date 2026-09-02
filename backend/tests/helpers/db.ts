@@ -27,6 +27,7 @@ const SCOPED_TABLES = [
   'message_template',
   'change_log',
   'bot_config',
+  'notification',
   'event',
   'message',
   'conversation',
