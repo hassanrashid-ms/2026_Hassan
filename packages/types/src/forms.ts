@@ -161,6 +161,20 @@ export type FormMappedSubintent = { id: string; name: string; intentId: string }
 
 export type FormVersionView = { version: number; fields: FormField[]; publishedAt: string | null };
 
+export type FormVersionActorView = { id: string; display_name: string; email: string };
+
+/** Only PUBLISHED versions are ever listed here — the current draft is the
+ * mutable working copy, not history, and has no publishedBy actor to show. */
+export type FormVersionSummaryView = {
+  version: number;
+  published_at: string;
+  actor: FormVersionActorView;
+};
+
+export type FormVersionsListResponse = { versions: FormVersionSummaryView[] };
+
+export type FormVersionSnapshotView = FormVersionSummaryView & { fields: FormField[] };
+
 export type FormDetail = {
   id: string;
   name: string;

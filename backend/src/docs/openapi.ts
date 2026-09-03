@@ -2016,6 +2016,16 @@ const FormFieldSchema = z.object({
   helperText: z.string().min(1).max(300).optional(),
 });
 
+const FormVersionSummarySchema = z.object({
+  version: z.number().int(),
+  published_at: z.string(),
+  actor: z.object({ id: z.uuid(), display_name: z.string(), email: z.string() }),
+});
+
+const FormVersionSnapshotSchema = FormVersionSummarySchema.extend({
+  fields: z.array(FormFieldSchema),
+});
+
 registry.registerPath({
   method: 'get',
   path: '/agent/forms',
@@ -2132,6 +2142,43 @@ registry.registerPath({
     403: { description: 'Forbidden' },
     404: { description: 'Not found' },
     422: { description: 'One or more subintent ids are unknown, archived, or cross-workspace' },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/agent/forms/{id}/versions',
+  summary: 'Agent List Form Versions',
+  description:
+    'Published version history for a form, newest first. The current unpublished draft is never listed — it has no publishing actor and is not history yet. Team Lead or Admin.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: { params: z.object({ id: z.uuid() }) },
+  responses: {
+    200: {
+      description: 'Version list',
+      content: {
+        'application/json': { schema: z.object({ versions: z.array(FormVersionSummarySchema) }) },
+      },
+    },
+    403: { description: 'Forbidden' },
+    404: { description: 'Not found' },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/agent/forms/{id}/versions/{version}',
+  summary: 'Agent Get Form Version',
+  description: 'The full field snapshot for one published version of a form. Team Lead or Admin.',
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: { params: z.object({ id: z.uuid(), version: z.coerce.number().int().positive() }) },
+  responses: {
+    200: {
+      description: 'Version snapshot',
+      content: { 'application/json': { schema: FormVersionSnapshotSchema } },
+    },
+    403: { description: 'Forbidden' },
+    404: { description: 'Not found, or the version was never published' },
   },
 });
 

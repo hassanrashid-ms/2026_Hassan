@@ -15,6 +15,8 @@ import {
   archiveForm,
   createForm,
   getForm,
+  getFormVersion,
+  listFormVersions,
   publishForm,
   setFormSubintents,
   updateForm,
@@ -342,5 +344,91 @@ describe('forms permissions', () => {
       .set('Authorization', `Bearer ${token}`)
       .set('X-Workspace-Id', workspaceId)
       .expect(403);
+  });
+});
+
+describe('form version history', () => {
+  it('lists only published versions, newest first, and omits the draft', async () => {
+    const workspaceId = await seedWorkspace();
+    const { ctx } = await seedAgentWithRole(workspaceId, 'admin');
+    const created = await createForm(ctx, 'Refund');
+    await updateForm(ctx, created.id, { fields: FIELDS });
+    await publishForm(ctx, created.id);
+    await updateForm(ctx, created.id, { fields: [] });
+
+    const result = await listFormVersions(ctx, created.id);
+    expect(result).not.toBeNull();
+    expect(result!.versions.map((v) => v.version)).toEqual([1]);
+    expect(result!.versions[0]!.actor.email).toBeTruthy();
+  });
+
+  it('returns null for an unknown form id', async () => {
+    const workspaceId = await seedWorkspace();
+    const { ctx } = await seedAgentWithRole(workspaceId, 'admin');
+    const result = await listFormVersions(ctx, '00000000-0000-0000-0000-000000000000');
+    expect(result).toBeNull();
+  });
+
+  it('gets a single published version snapshot with its fields', async () => {
+    const workspaceId = await seedWorkspace();
+    const { ctx } = await seedAgentWithRole(workspaceId, 'admin');
+    const created = await createForm(ctx, 'Refund');
+    await updateForm(ctx, created.id, { fields: FIELDS });
+    await publishForm(ctx, created.id);
+
+    const result = await getFormVersion(ctx, created.id, 1);
+    expect(result).not.toBeNull();
+    expect(result!.fields).toEqual(FIELDS);
+  });
+
+  it('returns null for a draft version number (never published)', async () => {
+    const workspaceId = await seedWorkspace();
+    const { ctx } = await seedAgentWithRole(workspaceId, 'admin');
+    const created = await createForm(ctx, 'Refund');
+    await updateForm(ctx, created.id, { fields: FIELDS });
+
+    const result = await getFormVersion(ctx, created.id, 1);
+    expect(result).toBeNull();
+  });
+});
+
+describe('form version history HTTP', () => {
+  it('a Team Lead can list and get versions, an Agent gets 403', async () => {
+    const workspaceId = await seedWorkspace();
+    const { ctx, token: adminToken } = await seedAgentWithRole(workspaceId, 'admin');
+    const created = await createForm(ctx, 'Refund');
+    await updateForm(ctx, created.id, { fields: FIELDS });
+    await publishForm(ctx, created.id);
+    const { token: agentToken } = await seedAgentWithRole(workspaceId, 'agent');
+
+    await request(app)
+      .get(`/forms/${created.id}/versions`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+    await request(app)
+      .get(`/forms/${created.id}/versions/1`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(200);
+    await request(app)
+      .get(`/forms/${created.id}/versions`)
+      .set('Authorization', `Bearer ${agentToken}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(403);
+  });
+
+  it('404s on an unknown version number', async () => {
+    const workspaceId = await seedWorkspace();
+    const { ctx, token } = await seedAgentWithRole(workspaceId, 'admin');
+    const created = await createForm(ctx, 'Refund');
+    await updateForm(ctx, created.id, { fields: FIELDS });
+    await publishForm(ctx, created.id);
+
+    await request(app)
+      .get(`/forms/${created.id}/versions/99`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .expect(404);
   });
 });

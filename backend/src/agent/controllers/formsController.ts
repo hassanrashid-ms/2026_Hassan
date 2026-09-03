@@ -6,13 +6,16 @@ import {
   archiveForm,
   createForm,
   getForm,
+  getFormVersion,
   listForms,
+  listFormVersions,
   publishForm,
   setFormSubintents,
   updateForm,
 } from '../services/formsService.ts';
 
 const FormIdParams = z.object({ id: z.uuid() });
+const FormVersionParams = z.object({ id: z.uuid(), version: z.coerce.number().int().positive() });
 
 export const listFormsHandler: RequestHandler = async (req, res) => {
   res.status(200).json(await listForms(req.agent!));
@@ -30,6 +33,34 @@ export const getFormHandler: RequestHandler = async (req, res) => {
     return;
   }
   res.status(200).json(found);
+};
+
+export const listFormVersionsHandler: RequestHandler = async (req, res) => {
+  const params = FormIdParams.safeParse(req.params);
+  if (!params.success) {
+    sendError(res, 422, 'invalid_request', 'id must be a uuid.');
+    return;
+  }
+  const result = await listFormVersions(req.agent!, params.data.id);
+  if (!result) {
+    sendError(res, 404, 'not_found', 'Form not found.');
+    return;
+  }
+  res.status(200).json(result);
+};
+
+export const getFormVersionHandler: RequestHandler = async (req, res) => {
+  const params = FormVersionParams.safeParse(req.params);
+  if (!params.success) {
+    sendError(res, 422, 'invalid_request', 'id must be a uuid and version a positive integer.');
+    return;
+  }
+  const result = await getFormVersion(req.agent!, params.data.id, params.data.version);
+  if (!result) {
+    sendError(res, 404, 'not_found', 'Form version not found.');
+    return;
+  }
+  res.status(200).json(result);
 };
 
 export const createFormHandler: RequestHandler = async (req, res) => {

@@ -1,13 +1,15 @@
-import { and, desc, eq, inArray, isNull, notInArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, isNull, notInArray } from 'drizzle-orm';
 import type {
   FormDetail,
   FormField,
   FormMappedSubintent,
   FormSummary,
+  FormVersionsListResponse,
+  FormVersionSnapshotView,
   FormVersionView,
   FormsListResponse,
 } from '@support/types';
-import { form, formVersion, subintent } from '../../shared/db/schema/index.ts';
+import { agent, form, formVersion, subintent } from '../../shared/db/schema/index.ts';
 import { withWorkspace } from '../../shared/db/withWorkspace.ts';
 import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts';
 import type { Tx } from '../../shared/db/withWorkspace.ts';
@@ -140,6 +142,77 @@ async function loadFormDetail(tx: Tx, formId: string): Promise<FormDetail | null
 
 export async function getForm(ctx: AgentContext, formId: string): Promise<FormDetail | null> {
   return withWorkspace(ctx.workspaceId, (tx) => loadFormDetail(tx, formId));
+}
+
+/**
+ * Only PUBLISHED versions — the current draft has no publishedBy actor and is
+ * the mutable working copy, not a historical fact yet.
+ */
+export async function listFormVersions(
+  ctx: AgentContext,
+  formId: string,
+): Promise<FormVersionsListResponse | null> {
+  return withWorkspace(ctx.workspaceId, async (tx) => {
+    const [formRow] = await tx.select({ id: form.id }).from(form).where(eq(form.id, formId)).limit(1);
+    if (!formRow) return null;
+
+    const rows = await tx
+      .select({
+        version: formVersion.version,
+        publishedAt: formVersion.publishedAt,
+        actorId: agent.id,
+        actorDisplayName: agent.displayName,
+        actorEmail: agent.email,
+      })
+      .from(formVersion)
+      .innerJoin(agent, eq(agent.id, formVersion.publishedBy))
+      .where(and(eq(formVersion.formId, formId), isNotNull(formVersion.publishedAt)))
+      .orderBy(desc(formVersion.version));
+
+    return {
+      versions: rows.map((r) => ({
+        version: r.version,
+        published_at: r.publishedAt!.toISOString(),
+        actor: { id: r.actorId, display_name: r.actorDisplayName, email: r.actorEmail },
+      })),
+    };
+  });
+}
+
+export async function getFormVersion(
+  ctx: AgentContext,
+  formId: string,
+  version: number,
+): Promise<FormVersionSnapshotView | null> {
+  return withWorkspace(ctx.workspaceId, async (tx) => {
+    const [row] = await tx
+      .select({
+        version: formVersion.version,
+        fields: formVersion.fields,
+        publishedAt: formVersion.publishedAt,
+        actorId: agent.id,
+        actorDisplayName: agent.displayName,
+        actorEmail: agent.email,
+      })
+      .from(formVersion)
+      .innerJoin(agent, eq(agent.id, formVersion.publishedBy))
+      .where(
+        and(
+          eq(formVersion.formId, formId),
+          eq(formVersion.version, version),
+          isNotNull(formVersion.publishedAt),
+        ),
+      )
+      .limit(1);
+    if (!row) return null;
+
+    return {
+      version: row.version,
+      published_at: row.publishedAt!.toISOString(),
+      actor: { id: row.actorId, display_name: row.actorDisplayName, email: row.actorEmail },
+      fields: row.fields,
+    };
+  });
 }
 
 export type UpdateFormInput = { name?: string; fields?: FormField[] };

@@ -5,7 +5,9 @@ import {
   archiveFormHandler,
   createFormHandler,
   getFormHandler,
+  getFormVersionHandler,
   listFormsHandler,
+  listFormVersionsHandler,
   publishFormHandler,
   setFormSubintentsHandler,
   updateFormHandler,
@@ -21,3 +23,5 @@ formsRouter.patch('/forms/:id', canBuildForms, updateFormHandler);
 formsRouter.post('/forms/:id/publish', requireAdminRole, publishFormHandler);
 formsRouter.post('/forms/:id/archive', requireAdminRole, archiveFormHandler);
 formsRouter.patch('/forms/:id/subintents', canBuildForms, setFormSubintentsHandler);
+formsRouter.get('/forms/:id/versions', canBuildForms, listFormVersionsHandler);
+formsRouter.get('/forms/:id/versions/:version', canBuildForms, getFormVersionHandler);
