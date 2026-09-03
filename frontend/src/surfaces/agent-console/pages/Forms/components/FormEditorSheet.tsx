@@ -41,6 +41,8 @@ import {
 } from '../../../components/ui/sheet.tsx';
 import { Skeleton } from '../../../components/ui/skeleton.tsx';
 import { FormLivePreview } from '../../../components/FormLivePreview.tsx';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../components/ui/tabs.tsx';
+import { FormVersionHistoryTab } from './FormVersionHistoryTab.tsx';
 import { ShownForPicker } from './ShownForPicker.tsx';
 
 export function FormEditorSheet({
@@ -141,6 +143,7 @@ function FormEditorForm({
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [addingField, setAddingField] = useState(false);
   const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'fields' | 'history'>('fields');
 
   const errors = validateFields(fields);
   const admin = isAdmin(session);
@@ -228,7 +231,19 @@ function FormEditorForm({
 
   return (
     <>
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => setActiveTab(v as 'fields' | 'history')}
+        className="flex min-h-0 flex-1 flex-col gap-0"
+      >
+        <TabsList className="mx-4 mt-2 w-fit">
+          <TabsTrigger value="fields">Fields</TabsTrigger>
+          {formId && <TabsTrigger value="history">History</TabsTrigger>}
+        </TabsList>
+        <TabsContent
+          value="fields"
+          className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden"
+        >
         <div className="flex min-w-0 flex-1 flex-col gap-4 p-4 lg:overflow-y-auto">
         {archived && (
           <p className="rounded-md bg-amber-100 px-3 py-2 text-xs text-amber-900">
@@ -450,7 +465,17 @@ function FormEditorForm({
         >
           <FormLivePreview formName={name} fields={fields} />
         </div>
-      </div>
+        </TabsContent>
+        {formId && (
+          <TabsContent value="history" className="min-h-0 flex-1 overflow-auto p-4">
+            <FormVersionHistoryTab
+              token={token}
+              formId={formId}
+              onRestored={() => setActiveTab('fields')}
+            />
+          </TabsContent>
+        )}
+      </Tabs>
 
       <SheetFooter className="flex-row justify-end gap-2 border-t border-slate-200">
         {formId === null ? (

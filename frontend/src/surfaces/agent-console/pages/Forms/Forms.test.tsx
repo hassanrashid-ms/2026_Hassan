@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { Forms } from './Forms.tsx';
@@ -70,5 +70,19 @@ describe('Forms route-driven selection', () => {
     renderAt('/forms');
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
+  it('shows a History tab for an existing form that switches away from Fields', async () => {
+    vi.spyOn(agentApi, 'fetchFormVersions').mockResolvedValue({ versions: [] });
+
+    renderAt('/forms/form-1');
+
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'History' })).toBeInTheDocument());
+
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'History' }));
+    await waitFor(() =>
+      expect(screen.getByText('No published versions yet.')).toBeInTheDocument(),
+    );
   });
 });
