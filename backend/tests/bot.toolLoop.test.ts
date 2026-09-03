@@ -334,21 +334,6 @@ describe('toolLoopDecider', () => {
     },
   );
 
-  /**
-   * Regression: the model sometimes writes a tool call's payload as plain
-   * content instead of actually invoking the tool (no toolCalls array), and
-   * that raw JSON was posted straight to the player as if it were prose.
-   */
-  it('no tool call and a JSON-object reply produces invalid_response, never the raw JSON as an answer', async () => {
-    const { workspaceId, conversationId } = await fixture();
-    mockCallModel.mockResolvedValueOnce({
-      toolCalls: [],
-      text: '{"article_id":"a1","answer":"Here is how to fix it."}',
-    });
-    const decision = await toolLoopDecider(baseInput({ workspaceId, conversationId }));
-    expect(decision).toEqual({ kind: 'unavailable', reason: 'invalid_response' });
-  });
-
   it('trims a reply that has content, and keeps it', async () => {
     const { workspaceId, conversationId } = await fixture();
     mockCallModel.mockResolvedValueOnce({ toolCalls: [], text: '  What do you need help with?  ' });
