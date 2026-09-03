@@ -54,6 +54,17 @@ function parseToolCall(raw: { id: string; name: string; arguments: string }): Pa
   return { id: raw.id, name: raw.name, args: args as Record<string, unknown> };
 }
 
+/** Whole-message JSON object, not merely text that contains some braces. */
+function looksLikeLeakedToolPayload(text: string): boolean {
+  if (!text.startsWith('{') || !text.endsWith('}')) return false;
+  try {
+    const parsed: unknown = JSON.parse(text);
+    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed);
+  } catch {
+    return false;
+  }
+}
+
 /**
  * The real BotDecider (spec 4). Never writes — returns a BotTurnDecision for
  * applyBotTurn to write in one transaction. A throw here (network error,
@@ -135,6 +146,15 @@ export const toolLoopDecider: BotDecider = async (input, overrides) => {
             const reply = response.text?.trim();
             if (!reply)
               throw new InvalidResponseError('model returned neither a tool call nor any text');
+            // A whole-message JSON object is never a legitimate reply to a player —
+            // it is the model writing a tool call's payload as content instead of
+            // actually invoking the tool (observed with answer_from_article's
+            // {"article_id":...,"answer":...} shape leaking straight into the
+            // transcript). Same malformed-response treatment as everywhere else in
+            // this file, not a retry loop: a model that produces this once is not
+            // reliably steerable back onto a real tool call within the same turn.
+            if (looksLikeLeakedToolPayload(reply))
+              throw new InvalidResponseError('model wrote a tool call payload as plain text');
             return { kind: 'answer', reply, subintentId: classifiedSubintentId };
           }
 
