@@ -31,6 +31,8 @@ import type {
   FormDetail,
   FormField,
   FormsListResponse,
+  FormVersionsListResponse,
+  FormVersionSnapshotView,
   IntentsResponse,
   MergeSubintentResponse,
   MoveSubintentResponse,
@@ -663,6 +665,26 @@ export function setFormSubintents(
     method: 'PATCH',
     body: JSON.stringify({ subintentIds }),
   });
+}
+
+export function fetchFormVersions(token: string, formId: string): Promise<FormVersionsListResponse> {
+  return call(`/agent/forms/${formId}/versions`, token);
+}
+
+export function fetchFormVersion(
+  token: string,
+  formId: string,
+  version: number,
+): Promise<FormVersionSnapshotView> {
+  return call(`/agent/forms/${formId}/versions/${version}`, token);
+}
+
+export function restoreFormVersion(
+  token: string,
+  formId: string,
+  version: number,
+): Promise<FormDetail> {
+  return call(`/agent/forms/${formId}/versions/${version}/restore`, token, { method: 'POST' });
 }
 
 export function askResolved(token: string, conversationId: string): Promise<AskResolvedResponse> {
