@@ -3,7 +3,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowDown, ArrowUp } from 'lucide-react';
 import {
   fetchWorkload,
-  setAgentLeave,
   type AgentWorkloadEntry,
   type AgentWorkloadResponse,
   type DisplayStatus,
@@ -19,10 +18,9 @@ import {
   TableRow,
 } from '../../components/ui/table.tsx';
 import { Avatar, AvatarFallback } from '../../components/ui/avatar.tsx';
-import { Button } from '../../components/ui/button.tsx';
+import { Badge } from '../../components/ui/badge.tsx';
 import { PresenceDot } from '../../components/PresenceDot.tsx';
 import { EmptyState } from '../../components/ui/empty-state.tsx';
-import { LeaveDialog } from '../../components/LeaveDialog.tsx';
 import { cn } from '../../lib/cn.ts';
 
 function daysSince(iso: string): number {
@@ -30,14 +28,21 @@ function daysSince(iso: string): number {
   return Math.max(0, Math.floor(ms / (24 * 60 * 60 * 1000)));
 }
 
-type SortColumn = 'agent' | 'open' | 'resolved7d';
+type SortColumn = 'agent' | 'open' | 'escalated' | 'overdue' | 'resolved7d';
 type SortDirection = 'asc' | 'desc';
 
 const COLUMNS: { key: SortColumn; label: string }[] = [
   { key: 'agent', label: 'Agent' },
   { key: 'open', label: 'Open' },
+  { key: 'escalated', label: 'Escalated' },
+  { key: 'overdue', label: 'Overdue' },
   { key: 'resolved7d', label: 'Resolved (7d)' },
 ];
+
+const ROLE_LABEL: Record<AgentWorkloadEntry['role'], string> = {
+  agent: 'Agent',
+  team_lead: 'Team lead',
+};
 
 function initialsFor(name: string): string {
   return name
@@ -57,6 +62,8 @@ function sortAgents(
     let cmp: number;
     if (column === 'agent') cmp = a.agentName.localeCompare(b.agentName);
     else if (column === 'open') cmp = a.openCount - b.openCount;
+    else if (column === 'escalated') cmp = a.escalatedCount - b.escalatedCount;
+    else if (column === 'overdue') cmp = a.overdueCount - b.overdueCount;
     else cmp = a.resolved7d - b.resolved7d;
     return direction === 'asc' ? cmp : -cmp;
   });
@@ -75,11 +82,6 @@ export function Workload() {
     queryFn: () => fetchWorkload(session!.token),
     enabled: session !== null,
   });
-
-  const [leaveDialog, setLeaveDialog] = useState<{
-    agent: AgentWorkloadEntry;
-    mode: 'set' | 'clear';
-  } | null>(null);
 
   const sessionToken = session?.token;
   const sessionWorkspaceId = session?.workspaceId;
@@ -122,24 +124,6 @@ export function Workload() {
       socket.close();
     };
   }, [sessionToken, sessionWorkspaceId, queryClient]);
-
-  async function handleConfirmLeave(agentId: string, nextOnLeave: boolean, days?: number) {
-    if (!session) return;
-    const { status, onLeaveSince, onLeaveUntil } = await setAgentLeave(
-      session.token,
-      agentId,
-      nextOnLeave,
-      days,
-    );
-    queryClient.setQueryData<AgentWorkloadResponse>(['workload'], (current) => {
-      if (!current) return current;
-      return {
-        agents: current.agents.map((a) =>
-          a.agentId === agentId ? { ...a, status, onLeaveSince, onLeaveUntil } : a,
-        ),
-      };
-    });
-  }
 
   if (!session) return null;
 
@@ -186,54 +170,53 @@ export function Workload() {
                     </button>
                   </TableHead>
                 ))}
-                <TableHead className="text-xs font-medium text-muted">Leave</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sortedAgents.map((agent) => (
-                <TableRow key={agent.agentId}>
-                  <TableCell className="font-medium">
-                    <div className="flex items-center gap-2">
-                      <div className="relative">
-                        <Avatar className="size-6">
-                          <AvatarFallback className="text-xs">
-                            {initialsFor(agent.agentName)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <PresenceDot
-                          status={agent.status}
-                          className="absolute -right-0.5 -bottom-0.5 size-2"
-                        />
+              {sortedAgents.map((agent) => {
+                const atCapacity = agent.openCount >= agent.capacityMax;
+                return (
+                  <TableRow key={agent.agentId}>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        <div className="relative">
+                          <Avatar className="size-6">
+                            <AvatarFallback className="text-xs">
+                              {initialsFor(agent.agentName)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <PresenceDot
+                            status={agent.status}
+                            className="absolute -right-0.5 -bottom-0.5 size-2"
+                          />
+                        </div>
+                        <span data-testid="agent-name">{agent.agentName}</span>
+                        <Badge variant="secondary">{ROLE_LABEL[agent.role]}</Badge>
+                        {agent.status === 'on_leave' && agent.onLeaveSince && (
+                          <span data-testid="leave-duration" className="text-xs text-muted">
+                            on leave {daysSince(agent.onLeaveSince)}d
+                          </span>
+                        )}
                       </div>
-                      <span data-testid="agent-name">{agent.agentName}</span>
-                      {agent.status === 'on_leave' && agent.onLeaveSince && (
-                        <span data-testid="leave-duration" className="text-xs text-muted">
-                          on leave {daysSince(agent.onLeaveSince)}d
-                        </span>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>{agent.openCount}</TableCell>
-                  <TableCell>{agent.resolved7d}</TableCell>
-                  <TableCell>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        setLeaveDialog({
-                          agent,
-                          mode: agent.status === 'on_leave' ? 'clear' : 'set',
-                        })
-                      }
-                    >
-                      {agent.status === 'on_leave' ? 'Clear leave' : 'Set on leave'}
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
+                    </TableCell>
+                    <TableCell>
+                      <span
+                        data-testid="capacity-cell"
+                        data-at-capacity={atCapacity}
+                        className={cn(atCapacity && 'font-medium text-amber-700')}
+                      >
+                        {agent.openCount}/{agent.capacityMax}
+                      </span>
+                    </TableCell>
+                    <TableCell data-testid="escalated-count">{agent.escalatedCount}</TableCell>
+                    <TableCell data-testid="overdue-count">{agent.overdueCount}</TableCell>
+                    <TableCell>{agent.resolved7d}</TableCell>
+                  </TableRow>
+                );
+              })}
               {workload.isError && (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-xs text-muted">
+                  <TableCell colSpan={5} className="text-xs text-muted">
                     Could not load workload.
                   </TableCell>
                 </TableRow>
@@ -242,19 +225,6 @@ export function Workload() {
           </Table>
         )}
       </div>
-      {leaveDialog && (
-        <LeaveDialog
-          open
-          onOpenChange={(open) => {
-            if (!open) setLeaveDialog(null);
-          }}
-          agentName={leaveDialog.agent.agentName}
-          mode={leaveDialog.mode}
-          onConfirm={(days) =>
-            handleConfirmLeave(leaveDialog.agent.agentId, leaveDialog.mode === 'set', days)
-          }
-        />
-      )}
     </div>
   );
 }

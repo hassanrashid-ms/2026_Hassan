@@ -59,7 +59,11 @@ beforeEach(() => {
       {
         agentId: '1',
         agentName: 'Alice',
+        role: 'agent',
         openCount: 3,
+        capacityMax: 5,
+        escalatedCount: 0,
+        overdueCount: 0,
         resolved7d: 10,
         status: 'online',
         onLeaveSince: null,
@@ -68,7 +72,11 @@ beforeEach(() => {
       {
         agentId: '2',
         agentName: 'Bob',
+        role: 'team_lead',
         openCount: 8,
+        capacityMax: 5,
+        escalatedCount: 2,
+        overdueCount: 1,
         resolved7d: 2,
         status: 'away',
         onLeaveSince: null,
@@ -77,7 +85,11 @@ beforeEach(() => {
       {
         agentId: '3',
         agentName: 'Carol',
+        role: 'agent',
         openCount: 5,
+        capacityMax: 5,
+        escalatedCount: 1,
+        overdueCount: 0,
         resolved7d: 20,
         status: 'offline',
         onLeaveSince: null,
@@ -133,6 +145,26 @@ describe('Workload sorting', () => {
     await user.click(screen.getByRole('button', { name: /^open$/i }));
     expect(rowNames()).toEqual(['Alice', 'Carol', 'Bob']);
   });
+
+  it('sorts by Escalated descending on first click', async () => {
+    const user = userEvent.setup();
+    renderWithClient();
+
+    await screen.findByText('Alice');
+
+    await user.click(screen.getByRole('button', { name: /^escalated$/i }));
+    expect(rowNames()).toEqual(['Bob', 'Carol', 'Alice']);
+  });
+
+  it('sorts by Overdue descending on first click', async () => {
+    const user = userEvent.setup();
+    renderWithClient();
+
+    await screen.findByText('Alice');
+
+    await user.click(screen.getByRole('button', { name: /^overdue$/i }));
+    expect(rowNames()).toEqual(['Bob', 'Alice', 'Carol']);
+  });
 });
 
 function rowStatuses() {
@@ -166,85 +198,48 @@ describe('Workload presence', () => {
   });
 });
 
-describe('Workload leave toggle', () => {
-  it('requires confirming in a dialog before calling setAgentLeave', async () => {
-    const user = userEvent.setup();
-    vi.spyOn(agentApi, 'setAgentLeave').mockResolvedValue({
-      status: 'on_leave',
-      onLeaveSince: '2026-08-20T00:00:00.000Z',
-      onLeaveUntil: null,
-    });
+describe('Workload roster metrics', () => {
+  it('shows a role badge for each agent', async () => {
     renderWithClient();
 
-    await screen.findByText('Alice');
-    const fetchCountAfterLoad = vi.mocked(agentApi.fetchWorkload).mock.calls.length;
-
-    const aliceRow = screen.getByText('Alice').closest('tr')!;
-    await user.click(within(aliceRow).getByRole('button', { name: /set on leave/i }));
-
-    // The click alone must not call the API — a dialog confirmation is required.
-    const dialog = await screen.findByRole('dialog');
-    expect(agentApi.setAgentLeave).not.toHaveBeenCalled();
-
-    await user.click(within(dialog).getByRole('button', { name: /^set on leave$/i }));
-
-    expect(agentApi.setAgentLeave).toHaveBeenCalledWith('t', '1', true, undefined);
-    expect(
-      await within(aliceRow).findByRole('button', { name: /clear leave/i }),
-    ).toBeInTheDocument();
-    expect(await within(aliceRow).findByText(/on leave/i)).toBeInTheDocument();
-    expect(agentApi.fetchWorkload).toHaveBeenCalledTimes(fetchCountAfterLoad);
+    const aliceRow = await screen.findByText('Alice').then((el) => el.closest('tr')!);
+    const bobRow = screen.getByText('Bob').closest('tr')!;
+    expect(within(aliceRow).getByText('Agent')).toBeInTheDocument();
+    expect(within(bobRow).getByText('Team lead')).toBeInTheDocument();
   });
 
-  it('passes the entered day count through to setAgentLeave', async () => {
-    const user = userEvent.setup();
-    vi.spyOn(agentApi, 'setAgentLeave').mockResolvedValue({
-      status: 'on_leave',
-      onLeaveSince: '2026-08-24T00:00:00.000Z',
-      onLeaveUntil: '2026-08-29T00:00:00.000Z',
-    });
+  it('shows open count against capacity', async () => {
     renderWithClient();
 
-    await screen.findByText('Alice');
-    const aliceRow = screen.getByText('Alice').closest('tr')!;
-    await user.click(within(aliceRow).getByRole('button', { name: /set on leave/i }));
-
-    const dialog = await screen.findByRole('dialog');
-    await user.type(within(dialog).getByRole('spinbutton'), '5');
-    await user.click(within(dialog).getByRole('button', { name: /^set on leave$/i }));
-
-    expect(agentApi.setAgentLeave).toHaveBeenCalledWith('t', '1', true, 5);
+    const bobRow = await screen.findByText('Bob').then((el) => el.closest('tr')!);
+    expect(within(bobRow).getByText('8/5')).toBeInTheDocument();
   });
 
-  it('clearing leave sends onLeave: false after confirmation', async () => {
-    const user = userEvent.setup();
-    vi.mocked(agentApi.fetchWorkload).mockResolvedValue({
-      agents: [
-        {
-          agentId: '1',
-          agentName: 'Alice',
-          openCount: 3,
-          resolved7d: 10,
-          status: 'on_leave',
-          onLeaveSince: '2026-08-20T00:00:00.000Z',
-          onLeaveUntil: null,
-        },
-      ],
-    });
-    vi.spyOn(agentApi, 'setAgentLeave').mockResolvedValue({
-      status: 'online',
-      onLeaveSince: null,
-      onLeaveUntil: null,
-    });
+  it('flags a row as at-capacity when open count meets or exceeds capacityMax', async () => {
+    renderWithClient();
+
+    const bobRow = await screen.findByText('Bob').then((el) => el.closest('tr')!);
+    const carolRow = screen.getByText('Carol').closest('tr')!;
+    const aliceRow = screen.getByText('Alice').closest('tr')!;
+    expect(within(bobRow).getByTestId('capacity-cell')).toHaveAttribute('data-at-capacity', 'true');
+    expect(within(carolRow).getByTestId('capacity-cell')).toHaveAttribute('data-at-capacity', 'true');
+    expect(within(aliceRow).getByTestId('capacity-cell')).toHaveAttribute('data-at-capacity', 'false');
+  });
+
+  it('shows escalated and overdue counts', async () => {
+    renderWithClient();
+
+    const bobRow = await screen.findByText('Bob').then((el) => el.closest('tr')!);
+    expect(within(bobRow).getByTestId('escalated-count').textContent).toBe('2');
+    expect(within(bobRow).getByTestId('overdue-count').textContent).toBe('1');
+  });
+
+  it('no longer shows a leave toggle or leave column', async () => {
     renderWithClient();
 
     await screen.findByText('Alice');
-    const aliceRow = screen.getByText('Alice').closest('tr')!;
-    await user.click(within(aliceRow).getByRole('button', { name: /clear leave/i }));
-
-    const dialog = await screen.findByRole('dialog');
-    await user.click(within(dialog).getByRole('button', { name: /^clear leave$/i }));
-
-    expect(agentApi.setAgentLeave).toHaveBeenCalledWith('t', '1', false, undefined);
+    expect(screen.queryByRole('button', { name: /set on leave/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /clear leave/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: /^leave$/i })).not.toBeInTheDocument();
   });
 });

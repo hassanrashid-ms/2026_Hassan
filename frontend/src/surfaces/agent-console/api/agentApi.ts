@@ -348,7 +348,11 @@ export type DisplayStatus = PresenceStatus | 'on_leave';
 export type AgentWorkloadEntry = {
   agentId: string;
   agentName: string;
+  role: 'agent' | 'team_lead';
   openCount: number;
+  capacityMax: number;
+  escalatedCount: number;
+  overdueCount: number;
   resolved7d: number;
   status: DisplayStatus;
   onLeaveSince: string | null;
