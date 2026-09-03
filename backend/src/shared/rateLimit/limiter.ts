@@ -1,6 +1,6 @@
 import type { Request, RequestHandler } from 'express';
 import rateLimit from 'express-rate-limit';
-import { RedisStore } from 'rate-limit-redis';
+import { RedisStore, type SendCommandFn } from 'rate-limit-redis';
 import { sendError } from '../../errors.ts';
 import { logger } from '../logging/logger.ts';
 import { rateLimitRedisClient } from './rateLimitRedis.ts';
@@ -24,9 +24,12 @@ export function createRateLimiter(options: {
     keyGenerator: keyFn,
     store: new RedisStore({
       prefix: `rl:${tier}:${keyType}:`,
-      sendCommand: async (...args: string[]) => {
+      sendCommand: (async (...args: string[]) => {
+        const [command, ...rest] = args as [string, ...string[]];
         try {
-          return await rateLimitRedisClient().call(...args);
+          return (await rateLimitRedisClient().call(command, ...rest)) as Awaited<
+            ReturnType<SendCommandFn>
+          >;
         } catch (error) {
           logger.warn('rate_limit', 'redis store error, failing open', {
             tier,
@@ -34,7 +37,7 @@ export function createRateLimiter(options: {
           });
           throw error;
         }
-      },
+      }) satisfies SendCommandFn,
     }),
     handler: (req, res) => {
       const key = keyFn(req);
