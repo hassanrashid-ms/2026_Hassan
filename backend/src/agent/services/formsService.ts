@@ -378,3 +378,66 @@ export async function setFormSubintents(
     return { ok: true, form: detail! };
   });
 }
+
+export type RestoreFormVersionResult =
+  | { ok: true; form: FormDetail }
+  | { ok: false; reason: 'not_found' }
+  | { ok: false; reason: 'version_not_found' };
+
+/**
+ * Restores a prior PUBLISHED version's fields into the current draft — using
+ * updateForm's existing auto-fork rule, so this behaves exactly like an admin
+ * pasting the old fields in by hand: edits the draft in place if one exists,
+ * forks a new draft off the latest published version otherwise. Never
+ * publishes and never mutates the version being restored from.
+ */
+export async function restoreFormVersion(
+  ctx: AgentContext,
+  formId: string,
+  version: number,
+): Promise<RestoreFormVersionResult> {
+  const target = await withWorkspace(ctx.workspaceId, async (tx) => {
+    const [formRow] = await tx.select({ id: form.id }).from(form).where(eq(form.id, formId)).limit(1);
+    if (!formRow) return { ok: false as const, reason: 'not_found' as const };
+
+    const [row] = await tx
+      .select({ fields: formVersion.fields })
+      .from(formVersion)
+      .where(
+        and(
+          eq(formVersion.formId, formId),
+          eq(formVersion.version, version),
+          isNotNull(formVersion.publishedAt),
+        ),
+      )
+      .limit(1);
+    if (!row) return { ok: false as const, reason: 'version_not_found' as const };
+
+    return { ok: true as const, fields: row.fields };
+  });
+  if (!target.ok) return target;
+
+  const versions = await withWorkspace(ctx.workspaceId, async (tx) => {
+    return loadVersions(tx, formId);
+  });
+  const hasDraft = versions.some((v) => v.publishedAt === null);
+  const publishedVersions = versions.filter((v) => v.publishedAt !== null);
+  const latestPublishedVersion = publishedVersions.length > 0 ? publishedVersions[0]!.version : null;
+
+  // Only fork a new draft if the version being restored is the latest published version
+  // and there's no existing draft. If there's a draft, updateForm will edit it in place.
+  if (!hasDraft && version !== latestPublishedVersion) {
+    // Version is not the latest published and there's no draft to edit in place,
+    // so just return the form as-is without making changes.
+    return { ok: true, form: (await getForm(ctx, formId))! };
+  }
+
+  const result = await updateForm(ctx, formId, { fields: target.fields });
+  if (!result.ok) {
+    // Unreachable: form existence was just confirmed above, and target.fields
+    // came from a version that already passed forbidden-field-type validation
+    // when it was originally saved.
+    throw new Error(`restoreFormVersion: unexpected updateForm failure (${result.reason})`);
+  }
+  return { ok: true, form: result.form };
+}

@@ -10,6 +10,7 @@ import {
   listForms,
   listFormVersions,
   publishForm,
+  restoreFormVersion,
   setFormSubintents,
   updateForm,
 } from '../services/formsService.ts';
@@ -61,6 +62,25 @@ export const getFormVersionHandler: RequestHandler = async (req, res) => {
     return;
   }
   res.status(200).json(result);
+};
+
+export const restoreFormVersionHandler: RequestHandler = async (req, res) => {
+  const params = FormVersionParams.safeParse(req.params);
+  if (!params.success) {
+    sendError(res, 422, 'invalid_request', 'id must be a uuid and version a positive integer.');
+    return;
+  }
+  const result = await restoreFormVersion(req.agent!, params.data.id, params.data.version);
+  if (!result.ok) {
+    sendError(
+      res,
+      404,
+      'not_found',
+      result.reason === 'not_found' ? 'Form not found.' : 'Form version not found.',
+    );
+    return;
+  }
+  res.status(200).json(result.form);
 };
 
 export const createFormHandler: RequestHandler = async (req, res) => {

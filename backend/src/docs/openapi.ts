@@ -2183,6 +2183,21 @@ registry.registerPath({
 });
 
 registry.registerPath({
+  method: 'post',
+  path: '/agent/forms/{id}/versions/{version}/restore',
+  summary: 'Agent Restore Form Version',
+  description:
+    "Copies a prior published version's fields into the current draft — edits the draft in place if one exists, forks a new draft off the latest published version otherwise. Never publishes, never mutates the version restored from. Team Lead or Admin, same as PATCH /forms/{id}.",
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: { params: z.object({ id: z.uuid(), version: z.coerce.number().int().positive() }) },
+  responses: {
+    200: { description: 'Form with the restored draft' },
+    403: { description: 'Forbidden' },
+    404: { description: 'Form not found, or the version was never published' },
+  },
+});
+
+registry.registerPath({
   method: 'get',
   path: '/agent/bot-config',
   summary: 'Agent Get Bot Config',

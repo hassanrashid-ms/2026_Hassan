@@ -9,6 +9,7 @@ import {
   listFormsHandler,
   listFormVersionsHandler,
   publishFormHandler,
+  restoreFormVersionHandler,
   setFormSubintentsHandler,
   updateFormHandler,
 } from '../controllers/formsController.ts';
@@ -25,3 +26,8 @@ formsRouter.post('/forms/:id/archive', requireAdminRole, archiveFormHandler);
 formsRouter.patch('/forms/:id/subintents', canBuildForms, setFormSubintentsHandler);
 formsRouter.get('/forms/:id/versions', canBuildForms, listFormVersionsHandler);
 formsRouter.get('/forms/:id/versions/:version', canBuildForms, getFormVersionHandler);
+formsRouter.post(
+  '/forms/:id/versions/:version/restore',
+  canBuildForms,
+  restoreFormVersionHandler,
+);

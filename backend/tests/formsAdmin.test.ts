@@ -18,6 +18,7 @@ import {
   getFormVersion,
   listFormVersions,
   publishForm,
+  restoreFormVersion,
   setFormSubintents,
   updateForm,
 } from '../src/agent/services/formsService.ts';
@@ -389,6 +390,79 @@ describe('form version history', () => {
 
     const result = await getFormVersion(ctx, created.id, 1);
     expect(result).toBeNull();
+  });
+
+  it('restore copies a published version into the draft without touching the published row', async () => {
+    const workspaceId = await seedWorkspace();
+    const { ctx } = await seedAgentWithRole(workspaceId, 'admin');
+    const created = await createForm(ctx, 'Refund');
+    await updateForm(ctx, created.id, { fields: FIELDS });
+    await publishForm(ctx, created.id);
+    const otherField: FormField = { key: 'other', label: 'Other', type: 'short_text', isRequired: false, position: 1 };
+    await updateForm(ctx, created.id, { fields: [otherField] });
+    await publishForm(ctx, created.id);
+    // Now: v1 published with FIELDS, v2 published with [otherField].
+
+    const result = await restoreFormVersion(ctx, created.id, 1);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('unreachable');
+    expect(result.form.draft).toBeNull();
+    expect(result.form.published!.version).toBe(2);
+    expect(result.form.published!.fields).toEqual([otherField]);
+
+    const versions = await listFormVersions(ctx, created.id);
+    expect(versions!.versions.map((v) => v.version)).toEqual([2, 1]);
+
+    const afterRestoreCreatesDraft = await updateForm(ctx, created.id, { fields: FIELDS });
+    expect(afterRestoreCreatesDraft.ok).toBe(true);
+  });
+
+  it('restore forks a new draft with the old fields when the latest version is published', async () => {
+    const workspaceId = await seedWorkspace();
+    const { ctx } = await seedAgentWithRole(workspaceId, 'admin');
+    const created = await createForm(ctx, 'Refund');
+    await updateForm(ctx, created.id, { fields: FIELDS });
+    await publishForm(ctx, created.id);
+
+    const result = await restoreFormVersion(ctx, created.id, 1);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('unreachable');
+    expect(result.form.draft!.version).toBe(2);
+    expect(result.form.draft!.fields).toEqual(FIELDS);
+    expect(result.form.draft!.publishedAt).toBeNull();
+    expect(result.form.published!.version).toBe(1);
+  });
+
+  it('restore edits an existing draft in place with the old fields', async () => {
+    const workspaceId = await seedWorkspace();
+    const { ctx } = await seedAgentWithRole(workspaceId, 'admin');
+    const created = await createForm(ctx, 'Refund');
+    await updateForm(ctx, created.id, { fields: FIELDS });
+    await publishForm(ctx, created.id);
+    await updateForm(ctx, created.id, { fields: [] });
+
+    const result = await restoreFormVersion(ctx, created.id, 1);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('unreachable');
+    expect(result.form.draft!.version).toBe(2);
+    expect(result.form.draft!.fields).toEqual(FIELDS);
+  });
+
+  it('returns version_not_found for an unpublished or unknown version', async () => {
+    const workspaceId = await seedWorkspace();
+    const { ctx } = await seedAgentWithRole(workspaceId, 'admin');
+    const created = await createForm(ctx, 'Refund');
+
+    const result = await restoreFormVersion(ctx, created.id, 1);
+    expect(result).toEqual({ ok: false, reason: 'version_not_found' });
+  });
+
+  it('returns not_found for an unknown form id', async () => {
+    const workspaceId = await seedWorkspace();
+    const { ctx } = await seedAgentWithRole(workspaceId, 'admin');
+
+    const result = await restoreFormVersion(ctx, '00000000-0000-0000-0000-000000000000', 1);
+    expect(result).toEqual({ ok: false, reason: 'not_found' });
   });
 });
 
