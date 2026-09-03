@@ -56,7 +56,7 @@ other tenants or degrading the API for everyone.
 | Auth / token issuance | agent OAuth login, `/sdk/auth/player-token` | — (no identity yet) | 60/min |
 | Message / ticket / form writes | chat message posting, ticket/form submission | 30/min | 200/min |
 | Session start / uploads | `/sdk/sessions/start`, attachment uploads | 10/min | 100/min |
-| General reads | conversation/article browsing, admin panel, agent console | 60/min | 300/min |
+| General reads | conversation/article browsing, admin panel, agent console | 240/min | 300/min |
 
 Numbers are sized against real usage, not arbitrary round numbers: a human can't sustain much
 faster than ~1 message per 2 seconds even typing fast (30/min), session start and uploads are
@@ -64,6 +64,12 @@ rare per-session actions (10/min), and most live data flows over Socket.io rathe
 polling, so read traffic stays well under 60/min per person in normal use. IP ceilings are set
 higher than the identity ceiling they contain, to give NAT'd offices and shared networks
 headroom before a whole building gets throttled by one heavy user.
+
+The reads identity ceiling was raised from an initial 60/min to 240/min after rollout: the
+agent-console tickets board fires one summary request per status column (6) plus, in board view,
+one more per visible column's own paginated query — up to ~12 requests per filter/sort change,
+all under the same agent identity. 240/min keeps headroom for that fan-out (see the Tickets list
+fan-out fix landed alongside this) without approaching the 300/min IP ceiling it sits under.
 
 These are starting numbers — each is just an argument to `createRateLimiter`, so retuning a
 single tier later is a one-line change, not a redesign.

@@ -31,6 +31,6 @@ describe('reads-tier baseline rate limiting', () => {
     const res = await request(app)
       .get('/surface/messages')
       .set('Authorization', `Bearer ${token}`);
-    expect(res.headers['ratelimit']).toMatch(/^limit=60,/);
+    expect(res.headers['ratelimit']).toMatch(/^limit=240,/);
   });
 });

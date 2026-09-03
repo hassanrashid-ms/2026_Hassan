@@ -269,6 +269,7 @@ function TicketsListView({
   bulkAssignAvailable,
   bulkAssignPending,
   onBulkAssign,
+  unassignedCount,
 }: {
   token: string;
   queryFilters: TicketsQueryFilters;
@@ -278,6 +279,7 @@ function TicketsListView({
   bulkAssignAvailable: boolean;
   bulkAssignPending: boolean;
   onBulkAssign: () => void;
+  unassignedCount: number;
 }) {
   const queryClient = useQueryClient();
   const queue = useInfiniteQuery({
@@ -304,9 +306,11 @@ function TicketsListView({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {bulkAssignAvailable && (
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-semibold">Unassigned queue</h2>
+      {bulkAssignAvailable && unassignedCount > 0 && (
+        <div className="mb-2 flex items-center justify-between rounded-card border border-border bg-accent-soft/40 px-3 py-2">
+          <p className="text-sm text-text">
+            {unassignedCount} ticket{unassignedCount === 1 ? '' : 's'} waiting to be assigned
+          </p>
           <Button
             type="button"
             variant="outline"
@@ -507,11 +511,17 @@ export function Tickets() {
     };
   }, [sessionToken, sessionWorkspaceId, queryClient]);
 
+  // List view only renders the 'unassigned' banner count and (when a conversation is
+  // selected) needs to find that conversation's summary — it never displays the other
+  // five columns. Fetching all six on every filter/sort change was firing 6 parallel
+  // GET requests per keystroke-driven filter update, burning through the reads-tier
+  // rate limit; board view still needs all six to render its columns.
+  const needsAllSummaries = filters.view === 'board' || Boolean(conversationId);
   const summaryQueries = useQueries({
     queries: COLUMNS.map(({ filter }) => ({
       queryKey: ['tickets-summary', filter, queryFilters],
       queryFn: () => fetchInbox(session!.token, filter, queryFilters),
-      enabled: session !== null,
+      enabled: session !== null && (needsAllSummaries || filter === 'unassigned'),
     })),
   });
 
@@ -525,6 +535,9 @@ export function Tickets() {
     }
     return undefined;
   })();
+
+  const unassignedColumnIndex = COLUMNS.findIndex((c) => c.filter === 'unassigned');
+  const unassignedCount = summaryQueries[unassignedColumnIndex]?.data?.conversations.length ?? 0;
 
   const [columnOrder, setColumnOrder] = useState<ConversationListFilter[]>(() => {
     const saved = localStorage.getItem('ticketsColumnOrder');
@@ -629,6 +642,7 @@ export function Tickets() {
           bulkAssignAvailable={canBulkAssign}
           bulkAssignPending={sweep.isPending}
           onBulkAssign={() => sweep.mutate()}
+          unassignedCount={unassignedCount}
         />
       ) : (
         <>
