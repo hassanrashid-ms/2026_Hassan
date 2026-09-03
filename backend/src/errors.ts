@@ -34,7 +34,8 @@ export type ErrorCode =
   | 'attachment_mismatch'
   | 'invalid_zip'
   | 'no_markdown_files'
-  | 'too_many_files';
+  | 'too_many_files'
+  | 'rate_limited';
 
 export function sendError(res: Response, status: number, code: ErrorCode, message: string): void {
   res.status(status).json({ error: { code, message } });
