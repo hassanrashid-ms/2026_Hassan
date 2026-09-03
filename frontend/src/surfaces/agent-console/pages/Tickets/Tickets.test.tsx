@@ -397,7 +397,7 @@ describe('Bulk assign (sweep)', () => {
 
     renderTickets('/tickets?view=list');
 
-    await screen.findByText('Unassigned queue');
+    await screen.findByText('1 ticket waiting to be assigned');
     expect(screen.getByRole('button', { name: 'Bulk assign' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Board' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'List' })).toBeInTheDocument();

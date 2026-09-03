@@ -57,19 +57,28 @@ export function GlobalInboxTab() {
         </div>
       )}
       <ScrollArea className="min-h-0 flex-1">
-        {groups.map((group) => (
-          <div key={group.workspace.id}>
-            <div className="px-3 py-2 text-sm font-bold text-text">{group.workspace.name}</div>
-            {group.tickets.map((ticket) => (
-              <ConversationRow
-                key={ticket.id}
-                conversation={ticket}
-                selected={false}
-                onSelect={() => openTicket(ticket)}
-              />
-            ))}
-          </div>
-        ))}
+        {groups.map((group) => {
+          const rows = group.tickets.map((ticket) => (
+            <ConversationRow
+              key={ticket.id}
+              conversation={ticket}
+              selected={false}
+              onSelect={() => openTicket(ticket)}
+            />
+          ));
+          return (
+            <div key={group.workspace.id}>
+              <div className="bg-accent-soft px-3 py-2 text-sm font-bold text-text">
+                {group.workspace.name}
+              </div>
+              {groups.length > 1 ? (
+                <div className="max-h-[30rem] overflow-y-auto">{rows}</div>
+              ) : (
+                rows
+              )}
+            </div>
+          );
+        })}
         {inboxQuery.data?.conversations.length === 0 && <EmptyState message="Nothing to show" />}
       </ScrollArea>
     </div>
