@@ -31,6 +31,7 @@ import {
   player,
   resolutionCycle,
   subintent,
+  workspace,
   workspaceMember,
 } from '../../shared/db/schema/index.ts';
 import { presignGetObject } from '../../shared/storage/presign.ts';
@@ -977,7 +978,11 @@ export async function setConversationPriority(
 export type WorkspaceWorkloadAgent = {
   agentId: string;
   agentName: string;
+  role: 'agent' | 'team_lead';
   openCount: number;
+  capacityMax: number;
+  escalatedCount: number;
+  overdueCount: number;
   resolved7d: number;
   status: 'online' | 'away' | 'offline' | 'on_leave';
   onLeaveSince: Date | null;
@@ -988,6 +993,12 @@ export type WorkspaceWorkload = { agents: WorkspaceWorkloadAgent[] };
 
 export async function getWorkspaceWorkload(ctx: AgentContext): Promise<WorkspaceWorkload> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
+    const [workspaceRow] = await tx
+      .select({ maxAssignedTickets: workspace.maxAssignedTickets })
+      .from(workspace)
+      .where(eq(workspace.id, ctx.workspaceId));
+    const capacityMax = workspaceRow?.maxAssignedTickets ?? 0;
+
     const openRows = await tx
       .select({
         agentId: conversation.assignedAgentId,
@@ -998,6 +1009,51 @@ export async function getWorkspaceWorkload(ctx: AgentContext): Promise<Workspace
         and(
           isNotNull(conversation.assignedAgentId),
           inArray(conversation.status, ACTIVE_AGENT_STATUSES),
+        ),
+      )
+      .groupBy(conversation.assignedAgentId);
+
+    const escalatedRows = await tx
+      .select({
+        agentId: conversation.assignedAgentId,
+        count: sql<number>`count(*)`,
+      })
+      .from(conversation)
+      .where(and(isNotNull(conversation.assignedAgentId), eq(conversation.status, 'escalated')))
+      .groupBy(conversation.assignedAgentId);
+
+    // One row per conversation: the message whose seq is the max seq for that
+    // conversation. A correlated subquery on the same table, not a self-join,
+    // because it must return exactly one row per conversation.
+    const latestMessage = tx
+      .select({
+        conversationId: message.conversationId,
+        authorType: message.authorType,
+        createdAt: message.createdAt,
+      })
+      .from(message)
+      .where(
+        sql`${message.seq} = (select max(m2.seq) from message m2 where m2.conversation_id = ${message.conversationId})`,
+      )
+      .as('latest_message');
+
+    // "Overdue" is deliberately not resolutionCycle.inactivityDueAt — that
+    // clock resets on a message from either side, so it can't attribute
+    // silence to the agent. This counts only conversations where the PLAYER's
+    // latest message is the one still waiting on a reply, past 4 hours.
+    const overdueRows = await tx
+      .select({
+        agentId: conversation.assignedAgentId,
+        count: sql<number>`count(*)`,
+      })
+      .from(conversation)
+      .innerJoin(latestMessage, eq(latestMessage.conversationId, conversation.id))
+      .where(
+        and(
+          isNotNull(conversation.assignedAgentId),
+          inArray(conversation.status, ACTIVE_AGENT_STATUSES),
+          eq(latestMessage.authorType, 'player'),
+          sql`${latestMessage.createdAt} < now() - interval '4 hours'`,
         ),
       )
       .groupBy(conversation.assignedAgentId);
@@ -1020,6 +1076,7 @@ export async function getWorkspaceWorkload(ctx: AgentContext): Promise<Workspace
     const roster = await tx
       .select({
         agentId: workspaceMember.agentId,
+        role: workspaceMember.role,
         agentName: agent.displayName,
         agentStatus: agent.status,
         onLeaveSince: agent.onLeaveSince,
@@ -1036,6 +1093,10 @@ export async function getWorkspaceWorkload(ctx: AgentContext): Promise<Workspace
       );
 
     const openByAgent = new Map(openRows.map((r) => [r.agentId as string, Number(r.count)]));
+    const escalatedByAgent = new Map(
+      escalatedRows.map((r) => [r.agentId as string, Number(r.count)]),
+    );
+    const overdueByAgent = new Map(overdueRows.map((r) => [r.agentId as string, Number(r.count)]));
     const resolvedByAgent = new Map(
       resolvedRows.map((r) => [r.agentId as string, Number(r.count)]),
     );
@@ -1059,7 +1120,11 @@ export async function getWorkspaceWorkload(ctx: AgentContext): Promise<Workspace
     const agents: WorkspaceWorkloadAgent[] = roster.map((member) => ({
       agentId: member.agentId,
       agentName: member.agentName,
+      role: member.role,
       openCount: openByAgent.get(member.agentId) ?? 0,
+      capacityMax,
+      escalatedCount: escalatedByAgent.get(member.agentId) ?? 0,
+      overdueCount: overdueByAgent.get(member.agentId) ?? 0,
       resolved7d: resolvedByAgent.get(member.agentId) ?? 0,
       // on_leave (account-level, admin-managed) overrides live presence
       // unconditionally; otherwise fall through to Redis presence, defaulting

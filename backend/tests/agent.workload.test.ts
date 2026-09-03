@@ -18,6 +18,7 @@ import {
   ownerPool,
   seedAgent,
   seedConversation,
+  seedMessage,
   seedPlayer,
   seedResolutionCycle,
   seedWorkspace,
@@ -312,5 +313,159 @@ describe('GET /agent/workload', () => {
     const row = res.body.agents.find((a: { agentId: string }) => a.agentId === workerAgentId);
     expect(row.status).toBe('offline');
     expect(row.openCount).toBe(0);
+  });
+});
+
+describe('GET /agent/workload — new metrics', () => {
+  it('returns each roster member’s workspace role', async () => {
+    const workspaceId = await seedWorkspace();
+    const { token: teamLeadToken } = await seedAgentWithRole(workspaceId, 'team_lead');
+    const workerAgentId = await seedAgent('worker@example.test');
+    await seedWorkspaceMember({ workspaceId, agentId: workerAgentId, role: 'agent' });
+
+    const res = await request(app)
+      .get('/workload')
+      .set('Authorization', `Bearer ${teamLeadToken}`)
+      .set('X-Workspace-Id', workspaceId);
+
+    expect(res.status).toBe(200);
+    const roles = new Set(res.body.agents.map((a: { role: string }) => a.role));
+    expect(roles).toEqual(new Set(['agent', 'team_lead']));
+  });
+
+  it('returns the workspace’s maxAssignedTickets as capacityMax for every agent', async () => {
+    const workspaceId = await seedWorkspace({ maxAssignedTickets: 3 });
+    const { token: teamLeadToken } = await seedAgentWithRole(workspaceId, 'team_lead');
+    const workerAgentId = await seedAgent('worker@example.test');
+    await seedWorkspaceMember({ workspaceId, agentId: workerAgentId, role: 'agent' });
+
+    const res = await request(app)
+      .get('/workload')
+      .set('Authorization', `Bearer ${teamLeadToken}`)
+      .set('X-Workspace-Id', workspaceId);
+
+    expect(res.status).toBe(200);
+    for (const a of res.body.agents) {
+      expect(a.capacityMax).toBe(3);
+    }
+  });
+
+  it('counts escalated conversations separately from other open statuses', async () => {
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const { token: teamLeadToken } = await seedAgentWithRole(workspaceId, 'team_lead');
+    const workerAgentId = await seedAgent('worker@example.test');
+    await seedWorkspaceMember({ workspaceId, agentId: workerAgentId, role: 'agent' });
+
+    await seedConversation({ workspaceId, playerId, status: 'open', assignedAgentId: workerAgentId });
+    await seedConversation({
+      workspaceId,
+      playerId,
+      status: 'escalated',
+      assignedAgentId: workerAgentId,
+    });
+
+    const res = await request(app)
+      .get('/workload')
+      .set('Authorization', `Bearer ${teamLeadToken}`)
+      .set('X-Workspace-Id', workspaceId);
+
+    const worker = res.body.agents.find((a: { agentId: string }) => a.agentId === workerAgentId);
+    expect(worker.openCount).toBe(2);
+    expect(worker.escalatedCount).toBe(1);
+  });
+
+  it('counts a conversation as overdue when the player’s latest message is more than 4 hours old', async () => {
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const { token: teamLeadToken } = await seedAgentWithRole(workspaceId, 'team_lead');
+    const workerAgentId = await seedAgent('worker@example.test');
+    await seedWorkspaceMember({ workspaceId, agentId: workerAgentId, role: 'agent' });
+
+    const staleConversationId = await seedConversation({
+      workspaceId,
+      playerId,
+      status: 'open',
+      assignedAgentId: workerAgentId,
+    });
+    await seedMessage({
+      workspaceId,
+      conversationId: staleConversationId,
+      seq: 1,
+      authorType: 'player',
+      createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000),
+    });
+
+    const res = await request(app)
+      .get('/workload')
+      .set('Authorization', `Bearer ${teamLeadToken}`)
+      .set('X-Workspace-Id', workspaceId);
+    const worker = res.body.agents.find((a: { agentId: string }) => a.agentId === workerAgentId);
+    expect(worker.overdueCount).toBe(1);
+  });
+
+  it('does not count a conversation as overdue when the player’s message is recent', async () => {
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const { token: teamLeadToken } = await seedAgentWithRole(workspaceId, 'team_lead');
+    const workerAgentId = await seedAgent('worker@example.test');
+    await seedWorkspaceMember({ workspaceId, agentId: workerAgentId, role: 'agent' });
+
+    const freshConversationId = await seedConversation({
+      workspaceId,
+      playerId,
+      status: 'open',
+      assignedAgentId: workerAgentId,
+    });
+    await seedMessage({
+      workspaceId,
+      conversationId: freshConversationId,
+      seq: 1,
+      authorType: 'player',
+      createdAt: new Date(Date.now() - 1 * 60 * 60 * 1000),
+    });
+
+    const res = await request(app)
+      .get('/workload')
+      .set('Authorization', `Bearer ${teamLeadToken}`)
+      .set('X-Workspace-Id', workspaceId);
+    const worker = res.body.agents.find((a: { agentId: string }) => a.agentId === workerAgentId);
+    expect(worker.overdueCount).toBe(0);
+  });
+
+  it('does not count a conversation as overdue when the agent replied last, even if that reply is old', async () => {
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const { token: teamLeadToken } = await seedAgentWithRole(workspaceId, 'team_lead');
+    const workerAgentId = await seedAgent('worker@example.test');
+    await seedWorkspaceMember({ workspaceId, agentId: workerAgentId, role: 'agent' });
+
+    const conversationId = await seedConversation({
+      workspaceId,
+      playerId,
+      status: 'open',
+      assignedAgentId: workerAgentId,
+    });
+    await seedMessage({
+      workspaceId,
+      conversationId,
+      seq: 1,
+      authorType: 'player',
+      createdAt: new Date(Date.now() - 10 * 60 * 60 * 1000),
+    });
+    await seedMessage({
+      workspaceId,
+      conversationId,
+      seq: 2,
+      authorType: 'agent',
+      createdAt: new Date(Date.now() - 9 * 60 * 60 * 1000),
+    });
+
+    const res = await request(app)
+      .get('/workload')
+      .set('Authorization', `Bearer ${teamLeadToken}`)
+      .set('X-Workspace-Id', workspaceId);
+    const worker = res.body.agents.find((a: { agentId: string }) => a.agentId === workerAgentId);
+    expect(worker.overdueCount).toBe(0);
   });
 });

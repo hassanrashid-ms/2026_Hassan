@@ -61,13 +61,14 @@ export async function seedWorkspace(
     autoCloseDays?: number;
     formTimeoutMinutes?: number;
     inactivityWindowHours?: number;
+    maxAssignedTickets?: number;
   } = {},
 ): Promise<string> {
   const id = overrides.id ?? randomUUID();
   const slug = overrides.slug ?? `ws-${id.slice(0, 8)}`;
   await ownerPool.query(
-    `insert into workspace (id, name, slug, disabled_at, auto_close_days, form_timeout_minutes, inactivity_window_hours)
-     values ($1, $2, $3, $4, $5, $6, $7)`,
+    `insert into workspace (id, name, slug, disabled_at, auto_close_days, form_timeout_minutes, inactivity_window_hours, max_assigned_tickets)
+     values ($1, $2, $3, $4, $5, $6, $7, $8)`,
     [
       id,
       overrides.name ?? slug,
@@ -76,6 +77,7 @@ export async function seedWorkspace(
       overrides.autoCloseDays ?? 7,
       overrides.formTimeoutMinutes ?? 30,
       overrides.inactivityWindowHours ?? 24,
+      overrides.maxAssignedTickets ?? 5,
     ],
   );
   return id;

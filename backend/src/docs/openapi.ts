@@ -724,7 +724,18 @@ const AgentWorkspaceWorkloadSchema = z.object({
     z.object({
       agentId: z.uuid(),
       agentName: z.string(),
+      role: z.enum(['agent', 'team_lead']),
       openCount: z.number().int(),
+      capacityMax: z.number().int().openapi({
+        description: 'The workspace’s max-assigned-tickets cap. Same value for every agent.',
+      }),
+      escalatedCount: z.number().int().openapi({
+        description: 'Of this agent’s open tickets, how many are currently escalated.',
+      }),
+      overdueCount: z.number().int().openapi({
+        description:
+          'Open tickets assigned to this agent where the player’s latest message has gone unanswered for more than 4 hours.',
+      }),
       resolved7d: z.number().int(),
       status: z.enum(['online', 'away', 'offline', 'on_leave']).openapi({
         description:
