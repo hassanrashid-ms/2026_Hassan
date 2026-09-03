@@ -1,5 +1,12 @@
 import { and, desc, eq, inArray, isNull, lte, ne } from 'drizzle-orm';
-import { conversation, message, resolutionCycle, workspace } from '../db/schema/index.ts';
+import type { NotificationView } from '@support/types';
+import {
+  conversation,
+  message,
+  resolutionCycle,
+  workspace,
+  workspaceMember,
+} from '../db/schema/index.ts';
 import { withWorkspace, withoutWorkspace, type Tx } from '../db/withWorkspace.ts';
 import { appendEvent } from '../events/appendEvent.ts';
 import {
@@ -8,8 +15,15 @@ import {
   RESOLUTION_CHECK_MESSAGE,
   toAgentView,
   toPlayerView,
+  touchInactivityClock,
 } from '../../domain/conversations/index.ts';
-import { emitInboxChanged, emitMessageToRooms, emitPhaseChanged } from '../realtime/emit.ts';
+import { notifyAgentReplyOwed } from '../../domain/notifications/notifyAgentReplyOwed.ts';
+import {
+  emitInboxChanged,
+  emitMessageToRooms,
+  emitNotificationNew,
+  emitPhaseChanged,
+} from '../realtime/emit.ts';
 import { tryIo } from '../realtime/tryIo.ts';
 import { logger } from '../logging/logger.ts';
 
@@ -60,10 +74,14 @@ async function candidates(
   workspaceId: string,
   now: Date,
   phase: 'none' | 'inactivity_ask',
-): Promise<{ cycleId: string; conversationId: string }[]> {
+): Promise<{ cycleId: string; conversationId: string; assignedAgentId: string | null }[]> {
   return withWorkspace(workspaceId, async (tx) =>
     tx
-      .select({ cycleId: resolutionCycle.id, conversationId: resolutionCycle.conversationId })
+      .select({
+        cycleId: resolutionCycle.id,
+        conversationId: resolutionCycle.conversationId,
+        assignedAgentId: conversation.assignedAgentId,
+      })
       .from(resolutionCycle)
       .innerJoin(conversation, eq(conversation.id, resolutionCycle.conversationId))
       .where(
@@ -87,18 +105,27 @@ async function lockAndCheck(
   tx: Tx,
   conversationId: string,
   phase: 'none' | 'inactivity_ask',
-): Promise<boolean> {
+): Promise<{ status: string; confirmPhase: string; assignedAgentId: string | null } | null> {
   const [locked] = await tx
-    .select({ status: conversation.status, confirmPhase: conversation.confirmPhase })
+    .select({
+      status: conversation.status,
+      confirmPhase: conversation.confirmPhase,
+      assignedAgentId: conversation.assignedAgentId,
+    })
     .from(conversation)
     .where(eq(conversation.id, conversationId))
     .limit(1)
     .for('update');
 
-  if (!locked) return false;
-  if (locked.confirmPhase !== phase) return false;
-  return (CLOCK_STATUSES as readonly string[]).includes(locked.status);
+  if (!locked) return null;
+  if (locked.confirmPhase !== phase) return null;
+  if (!(CLOCK_STATUSES as readonly string[]).includes(locked.status)) return null;
+  return locked;
 }
+
+type AskOutcome =
+  | { kind: 'asked'; message: Awaited<ReturnType<typeof postMessage>> }
+  | { kind: 'reply_owed'; notifications: NotificationView[] };
 
 async function runAskStage(workspaceId: string, now: Date): Promise<number> {
   const rows = await candidates(workspaceId, now, 'none');
@@ -106,8 +133,68 @@ async function runAskStage(workspaceId: string, now: Date): Promise<number> {
   let asked = 0;
   for (const row of rows) {
     try {
-      const posted = await withWorkspace(workspaceId, async (tx) => {
-        if (!(await lockAndCheck(tx, row.conversationId, 'none'))) return null;
+      const outcome = await withWorkspace(workspaceId, async (tx): Promise<AskOutcome | null> => {
+        const locked = await lockAndCheck(tx, row.conversationId, 'none');
+        if (!locked) return null;
+
+        // Same "last public, non-system message" check stage 2 uses to compute
+        // supportOwedFlag — if the agent hasn't replied since the player's last
+        // word, asking "did this solve it?" is nonsensical.
+        const [last] = await tx
+          .select({ authorType: message.authorType })
+          .from(message)
+          .where(
+            and(
+              eq(message.conversationId, row.conversationId),
+              eq(message.visibility, 'public'),
+              ne(message.authorType, 'system'),
+            ),
+          )
+          .orderBy(desc(message.seq))
+          .limit(1);
+
+        if (last?.authorType === 'player') {
+          const notifiedAgentIds: string[] = [];
+          if (locked.assignedAgentId) {
+            notifiedAgentIds.push(locked.assignedAgentId);
+          } else {
+            const leads = await tx
+              .select({ agentId: workspaceMember.agentId })
+              .from(workspaceMember)
+              .where(
+                and(
+                  eq(workspaceMember.workspaceId, workspaceId),
+                  eq(workspaceMember.role, 'team_lead'),
+                  isNull(workspaceMember.deactivatedAt),
+                ),
+              );
+            notifiedAgentIds.push(...leads.map((l) => l.agentId));
+          }
+
+          const notifications: NotificationView[] = [];
+          for (const agentId of notifiedAgentIds) {
+            notifications.push(
+              await notifyAgentReplyOwed(tx, {
+                workspaceId,
+                agentId,
+                conversationId: row.conversationId,
+              }),
+            );
+          }
+
+          await touchInactivityClock(tx, { conversationId: row.conversationId, now });
+
+          await appendEvent(tx, {
+            workspaceId,
+            type: 'reply_owed_reminder_sent',
+            conversationId: row.conversationId,
+            actorId: null,
+            actorType: 'system',
+            payload: { source: 'inactivity', notified: locked.assignedAgentId ? 'agent' : 'team_leads' },
+          });
+
+          return { kind: 'reply_owed', notifications };
+        }
 
         // `now` is threaded into postMessage so the stage 2 deadline this touch
         // writes is derived from the tick's clock, not from wall time.
@@ -139,19 +226,31 @@ async function runAskStage(workspaceId: string, now: Date): Promise<number> {
           payload: { source: 'inactivity' },
         });
 
-        return sent;
+        return { kind: 'asked', message: sent };
       });
 
-      if (!posted) continue;
-      asked += 1;
+      if (!outcome) continue;
 
       const io = tryIo('jobs', { workspaceId, conversationId: row.conversationId });
-      if (io) {
-        emitMessageToRooms(io, row.conversationId, toPlayerView(posted), toAgentView(posted));
-        emitPhaseChanged(io, row.conversationId, {
-          conversation_id: row.conversationId,
-          confirm_phase: 'inactivity_ask',
-        });
+
+      if (outcome.kind === 'asked') {
+        asked += 1;
+        if (io) {
+          emitMessageToRooms(
+            io,
+            row.conversationId,
+            toPlayerView(outcome.message),
+            toAgentView(outcome.message),
+          );
+          emitPhaseChanged(io, row.conversationId, {
+            conversation_id: row.conversationId,
+            confirm_phase: 'inactivity_ask',
+          });
+        }
+      } else if (io) {
+        for (const notificationView of outcome.notifications) {
+          emitNotificationNew(io, notificationView.agent_id, notificationView);
+        }
       }
     } catch (error) {
       logger.error('jobs', `inactivity-clock ask failed for conversation ${row.conversationId}`, {

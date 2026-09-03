@@ -2,7 +2,13 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { asc, eq } from 'drizzle-orm';
 import { closeDb } from '../src/shared/db/client.ts';
 import { withWorkspace } from '../src/shared/db/withWorkspace.ts';
-import { conversation, event, message, resolutionCycle } from '../src/shared/db/schema/index.ts';
+import {
+  conversation,
+  event,
+  message,
+  notification,
+  resolutionCycle,
+} from '../src/shared/db/schema/index.ts';
 import { runInactivityClock } from '../src/shared/jobs/inactivityClock.ts';
 import {
   RESOLUTION_CHECK_MESSAGE,
@@ -10,11 +16,14 @@ import {
 } from '../src/domain/conversations/index.ts';
 import {
   closeOwnerPool,
+  ownerPool,
+  seedAgent,
   seedConversation,
   seedMessage,
   seedPlayer,
   seedResolutionCycle,
   seedWorkspace,
+  seedWorkspaceMember,
   truncateAll,
 } from './helpers/db.ts';
 
@@ -34,6 +43,7 @@ type FixtureArgs = {
   dueAt?: Date | null;
   resolvedAt?: Date | null;
   slug?: string;
+  assignedAgentId?: string | null;
 };
 
 async function fixture(args: FixtureArgs = {}) {
@@ -44,6 +54,7 @@ async function fixture(args: FixtureArgs = {}) {
     playerId,
     status: args.status ?? 'open',
     confirmPhase: args.confirmPhase ?? 'none',
+    assignedAgentId: args.assignedAgentId ?? null,
   });
   const cycleId = await seedResolutionCycle({
     workspaceId,
@@ -137,6 +148,97 @@ describe('runInactivityClock — stage 1 (ask)', () => {
       tx.select().from(message).where(eq(message.conversationId, conversationId)),
     );
     expect(messages.filter((m) => m.body === RESOLUTION_CHECK_MESSAGE)).toHaveLength(1);
+  });
+
+  it('agent has not replied: does not post the check, re-arms the clock, notifies the assigned agent', async () => {
+    const { workspaceId, conversationId } = await fixture({
+      assignedAgentId: await seedAgent(),
+    });
+    const conv = await readConversation(workspaceId, conversationId);
+    const agentId = conv.assignedAgentId!;
+    await seedMessage({ workspaceId, conversationId, seq: 1, authorType: 'player' });
+
+    expect(await runInactivityClock({ now: NOW })).toEqual({ asked: 0, timedOut: 0 });
+
+    const messages = await withWorkspace(workspaceId, (tx) =>
+      tx.select().from(message).where(eq(message.conversationId, conversationId)),
+    );
+    expect(messages.some((m) => m.body === RESOLUTION_CHECK_MESSAGE)).toBe(false);
+    expect((await readConversation(workspaceId, conversationId)).confirmPhase).toBe('none');
+    expect((await readCycle(workspaceId, conversationId)).inactivityDueAt!.toISOString()).toBe(
+      nextInactivityDueAt(NOW, 24).toISOString(),
+    );
+
+    const notifications = await withWorkspace(workspaceId, (tx) =>
+      tx.select().from(notification).where(eq(notification.conversationId, conversationId)),
+    );
+    expect(notifications).toHaveLength(1);
+    expect(notifications[0]!.agentId).toBe(agentId);
+    expect(notifications[0]!.type).toBe('reply_owed');
+
+    const events = await withWorkspace(workspaceId, (tx) =>
+      tx.select().from(event).where(eq(event.type, 'reply_owed_reminder_sent')),
+    );
+    expect(events).toHaveLength(1);
+    expect(events[0]!.payload).toMatchObject({ source: 'inactivity', notified: 'agent' });
+  });
+
+  it('unassigned conversation: notifies every team lead, not plain agents or deactivated leads', async () => {
+    const { workspaceId, conversationId } = await fixture({ assignedAgentId: null });
+    await seedMessage({ workspaceId, conversationId, seq: 1, authorType: 'player' });
+
+    const leadId = await seedAgent();
+    await seedWorkspaceMember({ workspaceId, agentId: leadId, role: 'team_lead' });
+    const plainAgentId = await seedAgent();
+    await seedWorkspaceMember({ workspaceId, agentId: plainAgentId, role: 'agent' });
+    const deactivatedLeadId = await seedAgent();
+    await seedWorkspaceMember({
+      workspaceId,
+      agentId: deactivatedLeadId,
+      role: 'team_lead',
+      deactivatedAt: new Date('2026-01-01T00:00:00Z'),
+    });
+
+    expect(await runInactivityClock({ now: NOW })).toEqual({ asked: 0, timedOut: 0 });
+
+    const notifications = await withWorkspace(workspaceId, (tx) =>
+      tx.select().from(notification).where(eq(notification.conversationId, conversationId)),
+    );
+    expect(notifications).toHaveLength(1);
+    expect(notifications[0]!.agentId).toBe(leadId);
+  });
+
+  it('an internal note from the agent does not count as a reply', async () => {
+    const { workspaceId, conversationId } = await fixture({ assignedAgentId: await seedAgent() });
+    await seedMessage({ workspaceId, conversationId, seq: 1, authorType: 'player' });
+    await seedMessage({
+      workspaceId,
+      conversationId,
+      seq: 2,
+      authorType: 'agent',
+      visibility: 'internal',
+    });
+
+    expect(await runInactivityClock({ now: NOW })).toEqual({ asked: 0, timedOut: 0 });
+
+    const notifications = await withWorkspace(workspaceId, (tx) =>
+      tx.select().from(notification).where(eq(notification.conversationId, conversationId)),
+    );
+    expect(notifications).toHaveLength(1);
+  });
+
+  it('agent had replied: unchanged existing behavior', async () => {
+    const { workspaceId, conversationId } = await fixture({ assignedAgentId: await seedAgent() });
+    await seedMessage({ workspaceId, conversationId, seq: 1, authorType: 'player' });
+    await seedMessage({ workspaceId, conversationId, seq: 2, authorType: 'agent' });
+    await ownerPool.query('update conversation set message_seq = 2 where id = $1', [
+      conversationId,
+    ]);
+
+    expect(await runInactivityClock({ now: NOW })).toEqual({ asked: 1, timedOut: 0 });
+    expect((await readConversation(workspaceId, conversationId)).confirmPhase).toBe(
+      'inactivity_ask',
+    );
   });
 });
 

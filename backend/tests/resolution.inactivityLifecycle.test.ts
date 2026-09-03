@@ -5,7 +5,7 @@ import { closeDb } from '../src/shared/db/client.ts';
 import { closeSocketServer, createSocketServer } from '../src/shared/realtime/socketServer.ts';
 import { withWorkspace } from '../src/shared/db/withWorkspace.ts';
 import { conversation, resolutionCycle } from '../src/shared/db/schema/index.ts';
-import { applyResolutionAnswer } from '../src/domain/conversations/index.ts';
+import { applyResolutionAnswer, postMessage } from '../src/domain/conversations/index.ts';
 import { sendPlayerMessage } from '../src/surface/services/messagesService.ts';
 import type { PlayerContext } from '../src/shared/middleware/requirePlayerToken.ts';
 
@@ -20,7 +20,13 @@ async function sendPlayerMessageOk(ctx: PlayerContext, body: { body: string }) {
 }
 import { runInactivityClock } from '../src/shared/jobs/inactivityClock.ts';
 import { runAutoClose } from '../src/shared/jobs/autoClose.ts';
-import { closeOwnerPool, seedPlayer, seedWorkspace, truncateAll } from './helpers/db.ts';
+import {
+  closeOwnerPool,
+  seedAgent,
+  seedPlayer,
+  seedWorkspace,
+  truncateAll,
+} from './helpers/db.ts';
 
 const T0 = new Date('2026-08-18T12:00:00Z');
 const plusHours = (n: number) => new Date(T0.getTime() + n * 3_600_000);
@@ -56,9 +62,22 @@ describe('inactivity clock end to end', () => {
     const ctx = { workspaceId, playerId } as never;
 
     const { conversation_id } = await sendPlayerMessageOk(ctx, { body: 'my gems vanished' });
-    await withWorkspace(workspaceId, (tx) =>
-      tx.update(conversation).set({ status: 'open' }).where(eq(conversation.id, conversation_id)),
-    );
+    const agentId = await seedAgent();
+    await withWorkspace(workspaceId, async (tx) => {
+      await tx
+        .update(conversation)
+        .set({ status: 'open' })
+        .where(eq(conversation.id, conversation_id));
+      await postMessage(tx, {
+        workspaceId,
+        conversationId: conversation_id,
+        authorType: 'agent',
+        actorId: agentId,
+        authorAgentId: agentId,
+        body: 'looking into it',
+        visibility: 'public',
+      });
+    });
     // A public reply is what starts the clock — the same hook every path uses.
     await withWorkspace(workspaceId, (tx) =>
       tx
@@ -77,7 +96,9 @@ describe('inactivity clock end to end', () => {
     expect(timedOut.conv.status).toBe('resolved');
     expect(timedOut.conv.resolutionSource).toBe('timed_out');
     expect(timedOut.cycles[0]!.resolutionKind).toBe('timed_out');
-    expect(timedOut.cycles[0]!.supportOwedFlag).toBe(true);
+    // The agent's reply is the last public, non-system word before the ask —
+    // nothing was owed to the player when the second window also expired.
+    expect(timedOut.cycles[0]!.supportOwedFlag).toBe(false);
 
     // Auto-close seven days after the resolve.
     expect(await runAutoClose({ now: plusDays(10) })).toBe(1);
@@ -100,11 +121,21 @@ describe('inactivity clock end to end', () => {
     const ctx = { workspaceId, playerId } as never;
 
     const { conversation_id } = await sendPlayerMessageOk(ctx, { body: 'help' });
+    const agentId = await seedAgent();
     await withWorkspace(workspaceId, async (tx) => {
       await tx
         .update(conversation)
         .set({ status: 'open' })
         .where(eq(conversation.id, conversation_id));
+      await postMessage(tx, {
+        workspaceId,
+        conversationId: conversation_id,
+        authorType: 'agent',
+        actorId: agentId,
+        authorAgentId: agentId,
+        body: 'looking into it',
+        visibility: 'public',
+      });
       await tx
         .update(resolutionCycle)
         .set({ inactivityDueAt: plusHours(24) })
@@ -135,11 +166,21 @@ describe('inactivity clock end to end', () => {
     const ctx = { workspaceId, playerId } as never;
 
     const { conversation_id } = await sendPlayerMessageOk(ctx, { body: 'help' });
+    const agentId = await seedAgent();
     await withWorkspace(workspaceId, async (tx) => {
       await tx
         .update(conversation)
         .set({ status: 'open' })
         .where(eq(conversation.id, conversation_id));
+      await postMessage(tx, {
+        workspaceId,
+        conversationId: conversation_id,
+        authorType: 'agent',
+        actorId: agentId,
+        authorAgentId: agentId,
+        body: 'looking into it',
+        visibility: 'public',
+      });
       await tx
         .update(resolutionCycle)
         .set({ inactivityDueAt: plusHours(24) })
