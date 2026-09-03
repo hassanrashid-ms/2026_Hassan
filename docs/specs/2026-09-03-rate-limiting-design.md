@@ -19,8 +19,10 @@ other tenants or degrading the API for everyone.
 - Per-workspace override mechanism for trusted high-volume tenants — not needed yet, add later
   if a real tenant needs it.
 - Alerting/monitoring dashboard on 429 rate — out of scope for this change. (Every trigger is
-  still logged, per Logging below — a dashboard would consume those logs, but building one is
-  not part of this work.)
+  still logged and persisted, per Logging below — a dashboard would consume that data, but
+  building one is not part of this work.)
+- Pruning/retention job for `rate_limit_hit` rows — not needed yet, add later if volume becomes
+  a real problem.
 - Anything beyond HTTP routes (Socket.io realtime traffic is not rate limited by this design).
 
 ## Architecture
@@ -102,8 +104,41 @@ The custom `express-rate-limit` handler (the same one that builds the `sendError
   metadata, consistent with `requestLoggerMiddleware`)
 - `path` and `method` of the request that got blocked
 
-This is a log, not an event — it's for watching abuse happen in real time, not for answering
-historical questions about a workspace or tenant, so it does not go through `db/event`.
+This is a log, not a `db/event` row — it's for watching abuse happen in real time and it does
+not fit the conversation-scoped, RLS-workspace-scoped shape of `event` (IP-keyed triggers on
+pre-auth routes have no workspace or conversation to attach to at all). Durable persistence for
+later querying is handled separately, by the `rate_limit_hit` table below.
+
+## Persistence: `rate_limit_hit` table
+
+Triggers are also written to a dedicated, **unscoped** table (like `workspace`/`agent`, not RLS
+row-scoped — a rejected pre-auth login attempt has no workspace to scope to, and an identity-keyed
+hit shouldn't require joining through RLS just to be queried for abuse analysis later):
+
+```sql
+create table rate_limit_hit (
+  id           uuid primary key default gen_random_uuid(),
+  tier         text not null,        -- 'auth' | 'writes' | 'sessionsUploads' | 'reads'
+  key_type     text not null,        -- 'ip' | 'identity'
+  key_value    text not null,        -- the IP or identity value that hit the ceiling
+  path         text not null,
+  method       text not null,
+  created_at   timestamptz not null default now()
+);
+create index rate_limit_hit_tier_created_at_idx on rate_limit_hit (tier, created_at);
+create index rate_limit_hit_key_value_created_at_idx on rate_limit_hit (key_value, created_at);
+```
+
+**Write path is fire-and-forget**: the 429 handler logs first (per Logging above), then issues
+the insert without awaiting it, catching and `logger.warn`-ing any insert failure. A rate-limit
+bookkeeping write must never add latency to an already-throttled response, and must never become
+a new failure mode — if Postgres is unhappy, the request was already rejected correctly by Redis;
+losing one audit row is an acceptable trade-off, silently swallowing another user's response is
+not.
+
+No retention/pruning job is added now (see Non-goals) — the table is expected to stay small
+relative to `event`/`message` volume, since it only grows on actual triggers, not on every
+request.
 
 ## Testing
 
@@ -111,8 +146,9 @@ historical questions about a workspace or tenant, so it does not go through `db/
   429 with correct body/headers, Redis-down fail-open, and a `logger.warn` call with the
   `rateLimit` tag firing on trigger.
 - One integration test per tier hitting a real route with a stubbed low `max`, confirming the
-  429 fires with correct body/headers end-to-end. Fits the existing `pnpm test` setup, which
-  already requires Postgres and Redis.
+  429 fires with correct body/headers end-to-end, and that a matching `rate_limit_hit` row is
+  eventually written (poll/await the fire-and-forget insert rather than asserting on the
+  response). Fits the existing `pnpm test` setup, which already requires Postgres and Redis.
 
 ## Rollout
 
@@ -121,4 +157,6 @@ well above real usage, so there's no expected impact on legitimate traffic to st
 
 ## Dependencies
 
-Add `express-rate-limit` and `rate-limit-redis` to the root `package.json`.
+- Add `express-rate-limit` and `rate-limit-redis` to the root `package.json`.
+- Add the `rate_limit_hit` table to `backend/src/shared/db/schema/**` and generate the migration
+  with `pnpm db:generate`; run `pnpm db:setup` afterward.
