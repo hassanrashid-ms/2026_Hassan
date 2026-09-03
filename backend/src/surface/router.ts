@@ -9,12 +9,24 @@ import { messagesRouter } from './routers/messagesRouter.ts';
 import { newTicketRouter } from './routers/newTicketRouter.ts';
 import { resolutionRouter } from './routers/resolutionRouter.ts';
 import { uploadsRouter } from './routers/uploadsRouter.ts';
+import { createRateLimiter } from '../shared/rateLimit/limiter.ts';
+import { playerIdentityKey } from '../shared/rateLimit/keys.ts';
+import { RATE_LIMIT_TIERS } from '../shared/rateLimit/tiers.ts';
 
 export const surfaceRouter = Router();
 
 // requirePlayerToken only. A browser page has no reason to know the workspace slug,
 // so requireSdkHeaders is deliberately absent here.
 surfaceRouter.use(requirePlayerToken);
+surfaceRouter.use(
+  createRateLimiter({
+    tier: 'reads',
+    keyType: 'identity',
+    windowMs: RATE_LIMIT_TIERS.reads.windowMs,
+    max: RATE_LIMIT_TIERS.reads.identityMax,
+    keyFn: playerIdentityKey,
+  }),
+);
 
 surfaceRouter.use(bootstrapRouter);
 surfaceRouter.use(articleReadRouter);

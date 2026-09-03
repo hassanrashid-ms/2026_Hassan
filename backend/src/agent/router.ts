@@ -18,6 +18,9 @@ import { globalInboxRouter } from './routers/globalInboxRouter.ts';
 import { notificationsRouter } from './routers/notificationsRouter.ts';
 import { uploadsRouter } from './routers/uploadsRouter.ts';
 import { analyticsRouter } from './routers/analyticsRouter.ts';
+import { createRateLimiter } from '../shared/rateLimit/limiter.ts';
+import { agentIdentityKey } from '../shared/rateLimit/keys.ts';
+import { RATE_LIMIT_TIERS } from '../shared/rateLimit/tiers.ts';
 
 export const agentRouter = Router();
 
@@ -25,6 +28,15 @@ export const agentRouter = Router();
 agentRouter.use(authRouter);
 
 agentRouter.use(requireAgentSession);
+agentRouter.use(
+  createRateLimiter({
+    tier: 'reads',
+    keyType: 'identity',
+    windowMs: RATE_LIMIT_TIERS.reads.windowMs,
+    max: RATE_LIMIT_TIERS.reads.identityMax,
+    keyFn: agentIdentityKey,
+  }),
+);
 agentRouter.use(membershipsRouter);
 agentRouter.use(globalInboxRouter);
 agentRouter.use(notificationsRouter);

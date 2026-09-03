@@ -54,12 +54,40 @@ export function createApp(): express.Express {
     max: RATE_LIMIT_TIERS.auth.ipMax,
     keyFn: ipKey,
   });
+  const sdkIpLimiter = createRateLimiter({
+    tier: 'reads',
+    keyType: 'ip',
+    windowMs: RATE_LIMIT_TIERS.reads.windowMs,
+    max: RATE_LIMIT_TIERS.reads.ipMax,
+    keyFn: ipKey,
+  });
+  const surfaceIpLimiter = createRateLimiter({
+    tier: 'reads',
+    keyType: 'ip',
+    windowMs: RATE_LIMIT_TIERS.reads.windowMs,
+    max: RATE_LIMIT_TIERS.reads.ipMax,
+    keyFn: ipKey,
+  });
+  const agentIpLimiter = createRateLimiter({
+    tier: 'reads',
+    keyType: 'ip',
+    windowMs: RATE_LIMIT_TIERS.reads.windowMs,
+    max: RATE_LIMIT_TIERS.reads.ipMax,
+    keyFn: ipKey,
+  });
+  const adminIpLimiter = createRateLimiter({
+    tier: 'reads',
+    keyType: 'ip',
+    windowMs: RATE_LIMIT_TIERS.reads.windowMs,
+    max: RATE_LIMIT_TIERS.reads.ipMax,
+    keyFn: ipKey,
+  });
 
   app.use('/auth', authRateLimiter, playerTokenRouter);
-  app.use('/sdk', sdkRouter);
-  app.use('/surface', surfaceRouter);
-  app.use('/agent', agentRouter);
-  app.use('/admin', adminRouter);
+  app.use('/sdk', sdkIpLimiter, sdkRouter);
+  app.use('/surface', surfaceIpLimiter, surfaceRouter);
+  app.use('/agent', agentIpLimiter, agentRouter);
+  app.use('/admin', adminIpLimiter, adminRouter);
 
   app.use(errorMiddleware);
   return app;

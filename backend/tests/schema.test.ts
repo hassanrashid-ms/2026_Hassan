@@ -26,6 +26,7 @@ const EXPECTED_TABLES = [
   'notification',
   'player',
   'player_state_snapshot',
+  'rate_limit_hit',
   'resolution_cycle',
   'session',
   'subintent',
@@ -128,10 +129,15 @@ describe('schema', () => {
   it('carries workspace_id on every table except workspace, agent, and article_version', async () => {
     // article_version scopes through article_id -> article.workspace_id instead
     // (see the hand-written RLS policy in 002_rls.sql) — a version/draft row has
-    // no workspace of its own outside the article it belongs to.
+    // no workspace of its own outside the article it belongs to. rate_limit_hit is
+    // unscoped like workspace/agent — a pre-auth, IP-keyed hit has no workspace.
     for (const table of EXPECTED_TABLES) {
       const cols = await columns(table);
-      const expected = table === 'workspace' || table === 'agent' || table === 'article_version';
+      const expected =
+        table === 'workspace' ||
+        table === 'agent' ||
+        table === 'article_version' ||
+        table === 'rate_limit_hit';
       expect(cols.has('workspace_id'), `${table}.workspace_id`).toBe(!expected);
     }
   });
