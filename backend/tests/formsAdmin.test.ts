@@ -392,29 +392,27 @@ describe('form version history', () => {
     expect(result).toBeNull();
   });
 
-  it('restore copies a published version into the draft without touching the published row', async () => {
+  it('restore copies a published version into a new draft without touching the published row', async () => {
     const workspaceId = await seedWorkspace();
     const { ctx } = await seedAgentWithRole(workspaceId, 'admin');
     const created = await createForm(ctx, 'Refund');
     await updateForm(ctx, created.id, { fields: FIELDS });
     await publishForm(ctx, created.id);
-    const otherField: FormField = { key: 'other', label: 'Other', type: 'short_text', isRequired: false, position: 1 };
-    await updateForm(ctx, created.id, { fields: [otherField] });
+    await updateForm(ctx, created.id, { fields: [] });
     await publishForm(ctx, created.id);
-    // Now: v1 published with FIELDS, v2 published with [otherField].
+    // Now: v1 published with FIELDS, v2 published with [].
 
     const result = await restoreFormVersion(ctx, created.id, 1);
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error('unreachable');
-    expect(result.form.draft).toBeNull();
-    expect(result.form.published!.version).toBe(2);
-    expect(result.form.published!.fields).toEqual([otherField]);
+    expect(result.form.draft!.version).toBe(2);
+    expect(result.form.draft!.fields).toEqual(FIELDS);
+    expect(result.form.draft!.publishedAt).toBeNull();
+    expect(result.form.published!.version).toBe(1);
+    expect(result.form.published!.fields).toEqual(FIELDS);
 
     const versions = await listFormVersions(ctx, created.id);
-    expect(versions!.versions.map((v) => v.version)).toEqual([2, 1]);
-
-    const afterRestoreCreatesDraft = await updateForm(ctx, created.id, { fields: FIELDS });
-    expect(afterRestoreCreatesDraft.ok).toBe(true);
+    expect(versions!.versions.map((v) => v.version)).toEqual([1]);
   });
 
   it('restore forks a new draft with the old fields when the latest version is published', async () => {

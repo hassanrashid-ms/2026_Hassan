@@ -417,21 +417,6 @@ export async function restoreFormVersion(
   });
   if (!target.ok) return target;
 
-  const versions = await withWorkspace(ctx.workspaceId, async (tx) => {
-    return loadVersions(tx, formId);
-  });
-  const hasDraft = versions.some((v) => v.publishedAt === null);
-  const publishedVersions = versions.filter((v) => v.publishedAt !== null);
-  const latestPublishedVersion = publishedVersions.length > 0 ? publishedVersions[0]!.version : null;
-
-  // Only fork a new draft if the version being restored is the latest published version
-  // and there's no existing draft. If there's a draft, updateForm will edit it in place.
-  if (!hasDraft && version !== latestPublishedVersion) {
-    // Version is not the latest published and there's no draft to edit in place,
-    // so just return the form as-is without making changes.
-    return { ok: true, form: (await getForm(ctx, formId))! };
-  }
-
   const result = await updateForm(ctx, formId, { fields: target.fields });
   if (!result.ok) {
     // Unreachable: form existence was just confirmed above, and target.fields
