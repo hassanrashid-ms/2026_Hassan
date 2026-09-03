@@ -202,7 +202,7 @@ export function BotTestPanel({ token }: { token: string }) {
           </div>
         )}
       </div>
-      <div className="min-h-0 flex-1">
+      <div className="min-h-0 flex-1 overflow-hidden">
         <ChatThread messages={messages} currentAuthorType="agent" isTyping={sending} />
         {messages.map(
           (m) =>
@@ -214,7 +214,7 @@ export function BotTestPanel({ token }: { token: string }) {
         )}
       </div>
       {activeTestForm && (
-        <div className="border-t border-slate-200 p-4">
+        <div className="relative shrink-0 border-t border-slate-200 bg-bg p-4">
           <FormLivePreview formName={activeTestForm.formName} fields={activeTestForm.fields} />
         </div>
       )}
