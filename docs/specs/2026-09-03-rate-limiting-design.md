@@ -18,7 +18,9 @@ other tenants or degrading the API for everyone.
 
 - Per-workspace override mechanism for trusted high-volume tenants — not needed yet, add later
   if a real tenant needs it.
-- Alerting/monitoring dashboard on 429 rate — out of scope for this change.
+- Alerting/monitoring dashboard on 429 rate — out of scope for this change. (Every trigger is
+  still logged, per Logging below — a dashboard would consume those logs, but building one is
+  not part of this work.)
 - Anything beyond HTTP routes (Socket.io realtime traffic is not rate limited by this design).
 
 ## Architecture
@@ -86,10 +88,28 @@ draft-7 headers), so well-behaved clients can back off automatically.
 No OpenAPI changes are needed — `openapi.ts` does not currently document per-route error
 responses beyond the happy path, and this doesn't add or change any endpoint.
 
+## Logging
+
+Every rate limit trigger is logged via `logger.warn` under a dedicated `rateLimit` tag, the same
+pattern as `bot.grounding`/`bot.search` — one line per 429, not sampled, since a rising trigger
+rate on one tier is exactly the signal that catches a real attack or a misbehaving client early.
+The custom `express-rate-limit` handler (the same one that builds the `sendError` response) logs:
+
+- `tier` — which limiter tier fired (`auth`, `writes`, `sessionsUploads`, `reads`)
+- `keyType` — `ip` or `identity`
+- `key` — the IP or identity value that hit the ceiling (agent id / player session id are not
+  PII in the way `state.raw` is, so these are safe to log as-is; IPs are logged as normal request
+  metadata, consistent with `requestLoggerMiddleware`)
+- `path` and `method` of the request that got blocked
+
+This is a log, not an event — it's for watching abuse happen in real time, not for answering
+historical questions about a workspace or tenant, so it does not go through `db/event`.
+
 ## Testing
 
 - Unit tests for the limiter factory (mocked Redis store): under-limit passthrough, over-limit
-  429 with correct body/headers, Redis-down fail-open.
+  429 with correct body/headers, Redis-down fail-open, and a `logger.warn` call with the
+  `rateLimit` tag firing on trigger.
 - One integration test per tier hitting a real route with a stubbed low `max`, confirming the
   429 fires with correct body/headers end-to-end. Fits the existing `pnpm test` setup, which
   already requires Postgres and Redis.
