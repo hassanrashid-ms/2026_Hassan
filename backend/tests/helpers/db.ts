@@ -41,6 +41,7 @@ const SCOPED_TABLES = [
   'workspace_member',
   'agent',
   'workspace',
+  'rate_limit_hit',
 ];
 
 export async function truncateAll(): Promise<void> {
