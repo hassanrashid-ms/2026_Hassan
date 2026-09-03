@@ -10,6 +10,9 @@ import { openApiDocument } from './docs/openapi.ts';
 import { sdkRouter } from './sdk/router.ts';
 import { surfaceRouter } from './surface/router.ts';
 import { adminRouter } from './admin/router.ts';
+import { createRateLimiter } from './shared/rateLimit/limiter.ts';
+import { ipKey } from './shared/rateLimit/keys.ts';
+import { RATE_LIMIT_TIERS } from './shared/rateLimit/tiers.ts';
 
 export function createApp(): express.Express {
   const app = express();
@@ -44,7 +47,15 @@ export function createApp(): express.Express {
   });
   app.use('/docs', swaggerUi.serve, swaggerUi.setup(openApiDocument));
 
-  app.use('/auth', playerTokenRouter);
+  const authRateLimiter = createRateLimiter({
+    tier: 'auth',
+    keyType: 'ip',
+    windowMs: RATE_LIMIT_TIERS.auth.windowMs,
+    max: RATE_LIMIT_TIERS.auth.ipMax,
+    keyFn: ipKey,
+  });
+
+  app.use('/auth', authRateLimiter, playerTokenRouter);
   app.use('/sdk', sdkRouter);
   app.use('/surface', surfaceRouter);
   app.use('/agent', agentRouter);
