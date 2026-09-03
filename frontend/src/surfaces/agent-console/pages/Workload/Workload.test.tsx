@@ -242,4 +242,43 @@ describe('Workload roster metrics', () => {
     expect(screen.queryByRole('button', { name: /clear leave/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('columnheader', { name: /^leave$/i })).not.toBeInTheDocument();
   });
+
+  it('marks the signed-in agent’s own row as "You"', async () => {
+    vi.spyOn(agentApi, 'fetchWorkload').mockResolvedValue({
+      agents: [
+        {
+          agentId: 'a1',
+          agentName: 'Alice',
+          role: 'agent',
+          openCount: 3,
+          capacityMax: 5,
+          escalatedCount: 0,
+          overdueCount: 0,
+          resolved7d: 10,
+          status: 'online',
+          onLeaveSince: null,
+          onLeaveUntil: null,
+        },
+        {
+          agentId: '2',
+          agentName: 'Bob',
+          role: 'team_lead',
+          openCount: 8,
+          capacityMax: 5,
+          escalatedCount: 2,
+          overdueCount: 1,
+          resolved7d: 2,
+          status: 'away',
+          onLeaveSince: null,
+          onLeaveUntil: null,
+        },
+      ],
+    });
+    renderWithClient();
+
+    const aliceRow = await screen.findByText('Alice').then((el) => el.closest('tr')!);
+    const bobRow = screen.getByText('Bob').closest('tr')!;
+    expect(within(aliceRow).getByText('You')).toBeInTheDocument();
+    expect(within(bobRow).queryByText('You')).not.toBeInTheDocument();
+  });
 });
