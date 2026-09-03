@@ -9,6 +9,7 @@ import {
   saveBotConfigHandler,
 } from '../controllers/botConfigController.ts';
 import { testBotTurnHandler } from '../controllers/botTestTurnController.ts';
+import { testResolutionAnswerHandler } from '../controllers/botTestResolutionController.ts';
 
 /**
  * Roles follow the permission matrix in docs/project-overview.md, which splits
@@ -41,3 +42,10 @@ botConfigRouter.post('/bot-config/rollback', requireAdminRole, rollbackBotConfig
 // text supplied in the request body, not merely a persisted, already-vetted
 // config.
 botConfigRouter.post('/bot-config/test-turn', requireAdminRole, testBotTurnHandler);
+// Same gate as test-turn: also executes against the test panel's synthetic
+// conversation state, admin-only for the same reason.
+botConfigRouter.post(
+  '/bot-config/test-resolution',
+  requireAdminRole,
+  testResolutionAnswerHandler,
+);

@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ChevronRight } from 'lucide-react';
 import { fetchFormVersion, fetchFormVersions, restoreFormVersion } from '../../../api/agentApi.ts';
 import { Button } from '../../../components/ui/button.tsx';
 import { ScrollArea } from '../../../components/ui/scroll-area.tsx';
 import { ConfirmDialog } from '../../../components/ConfirmDialog.tsx';
+import { cn } from '../../../lib/cn.ts';
 import { diffFormFields } from '../lib/diffFormFields.ts';
 
 function relativeTime(iso: string): string {
@@ -92,41 +94,52 @@ export function FormVersionHistoryTab({
     <div className="flex h-full min-h-0 flex-col gap-2">
       <ScrollArea className="min-h-0 flex-1">
         <ul className="flex flex-col gap-2">
-          {versions.map((entry, index) => (
-            <li key={entry.version} className="rounded-md border border-slate-200 p-2 text-xs">
-              <button
-                type="button"
-                className="flex w-full items-center justify-between gap-2 text-left"
-                onClick={() => setExpanded((v) => (v === entry.version ? null : entry.version))}
-              >
-                <span className="flex items-center gap-2">
-                  <span className="font-semibold">v{entry.version}</span>
-                  <span className="text-muted">{entry.actor.display_name}</span>
-                  <span className="text-muted">{relativeTime(entry.published_at)}</span>
-                </span>
-              </button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="mt-2"
-                onClick={() => setRestoreTarget(entry.version)}
-                disabled={restore.isPending}
-              >
-                Restore
-              </Button>
-              {expanded === entry.version && (
-                <div className="mt-2 border-t border-slate-100 pt-2">
-                  <VersionDiff
-                    token={token}
-                    formId={formId}
-                    version={entry.version}
-                    priorVersion={versions[index + 1]?.version ?? null}
+          {versions.map((entry, index) => {
+            const isExpanded = expanded === entry.version;
+            return (
+              <li key={entry.version} className="rounded-md border border-slate-200 text-xs">
+                <button
+                  type="button"
+                  aria-expanded={isExpanded}
+                  className="flex w-full cursor-pointer items-center gap-2 rounded-md p-2 text-left hover:bg-slate-50"
+                  onClick={() => setExpanded((v) => (v === entry.version ? null : entry.version))}
+                >
+                  <ChevronRight
+                    className={cn(
+                      'size-3.5 shrink-0 text-muted transition-transform',
+                      isExpanded && 'rotate-90',
+                    )}
                   />
+                  <span className="flex items-center gap-2">
+                    <span className="font-semibold">v{entry.version}</span>
+                    <span className="text-muted">{entry.actor.display_name}</span>
+                    <span className="text-muted">{relativeTime(entry.published_at)}</span>
+                  </span>
+                </button>
+                <div className="px-2 pb-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setRestoreTarget(entry.version)}
+                    disabled={restore.isPending}
+                  >
+                    Restore
+                  </Button>
+                  {isExpanded && (
+                    <div className="mt-2 border-t border-slate-100 pt-2">
+                      <VersionDiff
+                        token={token}
+                        formId={formId}
+                        version={entry.version}
+                        priorVersion={versions[index + 1]?.version ?? null}
+                      />
+                    </div>
+                  )}
                 </div>
-              )}
-            </li>
-          ))}
+              </li>
+            );
+          })}
           {versions.length === 0 && (
             <li className="text-xs text-muted">No published versions yet.</li>
           )}

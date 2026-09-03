@@ -1,8 +1,13 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { RotateCcw } from 'lucide-react';
-import type { BotTestTurnDecision, ConfirmPhaseValue, FormField } from '@support/types';
-import { testBotTurn, fetchIntents } from '../../../api/agentApi.ts';
+import type {
+  BotTestResolutionDecision,
+  BotTestTurnDecision,
+  ConfirmPhaseValue,
+  FormField,
+} from '@support/types';
+import { testBotTurn, testResolutionAnswer, fetchIntents } from '../../../api/agentApi.ts';
 import { useBotConfigDraft } from '../BotConfigDraftContext.tsx';
 import { ChatThread } from '@/features/chat/components/ChatThread.tsx';
 import { Composer } from '@/features/chat/components/Composer.tsx';
@@ -28,7 +33,24 @@ const CONFIRM_PHASES: ConfirmPhaseValue[] = [
   'player_stated',
 ];
 
+// Mirrors SupportChat.tsx's confirmPending, plus 'player_stated' — the phase
+// the confirm_player_resolution tool drives here — so testing that tool shows
+// the same yes/no prompt a real player would see.
+const CONFIRM_PENDING_PHASES: ConfirmPhaseValue[] = [
+  'bot_article',
+  'agent_ask',
+  'inactivity_ask',
+  'player_stated',
+];
+
 const NO_SUBINTENT = '__none__';
+
+// Mirrors backend/src/domain/conversations/resolutionMessages.ts. Duplicated
+// rather than imported — the frontend doesn't import backend code — because
+// the point here is the same as there: the player's Yes/No is an answer to a
+// fixed question, posted as fixed text, never phrased by the model.
+const RESOLUTION_CONFIRM_TEXT = 'Yes, my issue is resolved.';
+const RESOLUTION_DECLINE_TEXT = "No, I'm still having issues.";
 
 type TestMessage = ChatMessage & { toolActivity?: React.ReactNode };
 
@@ -57,6 +79,19 @@ function nextConfirmPhase(
   }
 }
 
+function outcomeLabel(decision: BotTestResolutionDecision): string {
+  switch (decision.kind) {
+    case 'resolved':
+      return '[resolved]';
+    case 'reopened':
+      return '[reopened]';
+    case 'handed_off':
+      return decision.form
+        ? `[handoff: article_rejected → form: ${decision.form.form_name}]`
+        : '[handoff: article_rejected]';
+  }
+}
+
 /** Mirrors classifyIfUnset — write-once, same as the real conversation's subintent_id column. */
 function nextSubintentId(decision: BotTestTurnDecision, current: string | null): string | null {
   if (current !== null) return current;
@@ -73,18 +108,72 @@ export function BotTestPanel({ token }: { token: string }) {
     formName: string;
     fields: FormField[];
   } | null>(null);
+  const [testResolved, setTestResolved] = useState(false);
 
   const intentsQuery = useQuery({ queryKey: ['intents'], queryFn: () => fetchIntents(token) });
   const subintentOptions = (intentsQuery.data?.intents ?? []).flatMap((intent) =>
     intent.subintents.map((sub) => ({ value: sub.id, label: `${intent.name} / ${sub.name}` })),
   );
   const selectedSubintentLabel = subintentOptions.find((o) => o.value === subintentId)?.label;
+  const confirmPending = CONFIRM_PENDING_PHASES.includes(confirmPhase);
 
   const reset = () => {
     setMessages([]);
     setSubintentId(null);
     setConfirmPhase('none');
     setActiveTestForm(null);
+    setTestResolved(false);
+  };
+
+  /**
+   * Mirrors resolutionAnswer.ts: a resolution tap is answered deterministically,
+   * never by handing the reply back to the model — the backend endpoint runs
+   * the same pre-decided `resolve` / `handoff('article_rejected')` outcomes
+   * applyBotTurn does, including the resolveSubintentForm lookup, so a
+   * subintent with a published form opens here exactly as it would for a real
+   * player declining a bot_article answer.
+   */
+  const answerResolution = async (helped: boolean) => {
+    if (!confirmPending || sending) return;
+    const phase = confirmPhase as 'bot_article' | 'agent_ask' | 'inactivity_ask' | 'player_stated';
+    setSending(true);
+    try {
+      const { decision } = await testResolutionAnswer(token, {
+        subintent_id: subintentId,
+        confirm_phase: phase,
+        helped,
+      });
+      const reply: TestMessage = {
+        id: `test-player-${messages.length}`,
+        authorType: 'player',
+        body: helped ? RESOLUTION_CONFIRM_TEXT : RESOLUTION_DECLINE_TEXT,
+        createdAt: new Date().toISOString(),
+      };
+      const outcome: TestMessage = {
+        id: `test-outcome-${messages.length}`,
+        authorType: 'system',
+        body: outcomeLabel(decision),
+        createdAt: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, reply, outcome]);
+      setConfirmPhase('none');
+      setActiveTestForm(
+        decision.kind === 'handed_off' && decision.form
+          ? { formName: decision.form.form_name, fields: decision.form.fields }
+          : null,
+      );
+      setTestResolved(decision.kind !== 'reopened');
+    } catch {
+      const errorMessage: TestMessage = {
+        id: `test-error-${messages.length}`,
+        authorType: 'system',
+        body: 'Resolution answer failed — check server logs.',
+        createdAt: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
+      setSending(false);
+    }
   };
 
   const send = async (body: string) => {
@@ -218,7 +307,38 @@ export function BotTestPanel({ token }: { token: string }) {
           <FormLivePreview formName={activeTestForm.formName} fields={activeTestForm.fields} />
         </div>
       )}
-      <Composer onSend={(body) => void send(body)} disabled={sending || !draft} />
+      {confirmPending && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Is your issue resolved?"
+          className="shrink-0 border-t border-slate-200 bg-accent-soft/40 p-4"
+        >
+          <p className="text-sm font-semibold text-text">Is your issue resolved?</p>
+          <p className="mt-1 text-xs text-muted">
+            Answered deterministically, same as a real tap — not sent to the model.
+          </p>
+          <div className="mt-3 flex items-center gap-2">
+            <Button type="button" size="sm" disabled={sending} onClick={() => void answerResolution(true)}>
+              Yes
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={sending}
+              onClick={() => void answerResolution(false)}
+            >
+              No
+            </Button>
+          </div>
+        </div>
+      )}
+      <Composer
+        onSend={(body) => void send(body)}
+        disabled={sending || !draft || confirmPending || testResolved}
+        placeholder={testResolved ? 'Conversation ended — Reset to test again' : undefined}
+      />
     </div>
   );
 }

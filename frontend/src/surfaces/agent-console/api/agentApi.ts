@@ -43,6 +43,8 @@ import type {
   TagView,
   TestBotTurnBodyValue,
   BotTestTurnDecision,
+  TestResolutionAnswerBodyValue,
+  BotTestResolutionDecision,
   UnarchiveIntentResponse,
   UnarchiveSubintentResponse,
   UnescalateResponse,
@@ -728,6 +730,16 @@ export function testBotTurn(
   body: TestBotTurnBodyValue,
 ): Promise<{ decision: BotTestTurnDecision }> {
   return call('/agent/bot-config/test-turn', token, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export function testResolutionAnswer(
+  token: string,
+  body: TestResolutionAnswerBodyValue,
+): Promise<{ decision: BotTestResolutionDecision }> {
+  return call('/agent/bot-config/test-resolution', token, {
     method: 'POST',
     body: JSON.stringify(body),
   });

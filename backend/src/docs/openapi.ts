@@ -2553,6 +2553,33 @@ registry.registerPath({
   },
 });
 
+registry.registerPath({
+  method: 'post',
+  path: '/agent/bot-config/test-resolution',
+  summary: 'Agent Test Bot Resolution Answer',
+  description:
+    "Answers a resolution prompt (Yes/No) for the Bot Config test panel's synthetic conversation, deterministically — never via the model — mirroring resolutionAnswer.ts. Writes nothing. Admin-only.",
+  security: [{ [bearerAgentJwt.name]: [] }],
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: z.object({
+            subintent_id: z.string().nullable(),
+            confirm_phase: z.enum(['bot_article', 'agent_ask', 'inactivity_ask', 'player_stated']),
+            helped: z.boolean(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: { description: 'The deterministic resolution outcome — resolved, handed off, or reopened' },
+    403: { description: 'Forbidden — admin role required' },
+    422: { description: 'Invalid test-resolution payload' },
+  },
+});
+
 // --- 6. SURFACE ARTICLE ENDPOINTS ---
 registry.registerPath({
   method: 'get',

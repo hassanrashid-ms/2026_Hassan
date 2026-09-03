@@ -158,6 +158,38 @@ export type BotTestTurnDecision = (
   | { kind: 'confirm_player_resolution'; subintent_id: string | null; quoted_text: string }
 ) & { searches?: BotTestTurnSearch[] };
 
+/**
+ * Mirrors resolutionAnswer.ts's inputs: which confirm-pending phase is being
+ * answered, the subintent in play (needed only to resolve a form on a
+ * bot_article decline), and the player's tap. Never a model call — see
+ * BotTestResolutionDecision.
+ */
+export const TestResolutionAnswerBody = z
+  .object({
+    subintent_id: z.string().nullable(),
+    confirm_phase: z.enum(['bot_article', 'agent_ask', 'inactivity_ask', 'player_stated']),
+    helped: z.boolean(),
+  })
+  .strict();
+
+export type TestResolutionAnswerBodyValue = z.infer<typeof TestResolutionAnswerBody>;
+
+/**
+ * Mirrors resolutionAnswer.ts's outcomes exactly — deterministic, not a fresh
+ * model decision. `bot_article` delegates to applyBotTurn's own pre-decided
+ * `resolve` / `handoff('article_rejected')`, so this endpoint runs the same
+ * resolveSubintentForm lookup rather than reimplementing or guessing it
+ * client-side.
+ */
+export type BotTestResolutionDecision =
+  | { kind: 'resolved' }
+  | {
+      kind: 'handed_off';
+      reason: 'article_rejected';
+      form: { form_id: string; form_name: string; version: number; fields: FormField[] } | null;
+    }
+  | { kind: 'reopened' };
+
 export type RuleEntryView = RuleEntryValue & { enforcement: 'code' | 'prompt' };
 
 /**
