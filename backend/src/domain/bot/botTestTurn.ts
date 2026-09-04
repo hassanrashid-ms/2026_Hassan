@@ -1,5 +1,5 @@
 import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts';
-import { resolved } from './botConfig.ts';
+import { resolveBotConfig, resolved } from './botConfig.ts';
 import { toolLoopDecider } from './toolLoop.ts';
 import type { ChatRole } from './contextAssembly.ts';
 import type { BotTurnDecision, BotTurnInput } from './botTurn.ts';
@@ -37,13 +37,21 @@ export async function runTestBotTurn(
   ctx: AgentContext,
   body: TestBotTurnBodyValue,
 ): Promise<BotTestTurnDecision> {
-  const config = resolved(
-    true,
-    body.config.prompt,
-    body.config.rules,
-    body.config.tools_config,
-    body.config.limits_config,
-  );
+  // Admins may test unsaved draft prompt/rules text; a team lead (not
+  // permitted to edit bot config at all) always runs against the persisted,
+  // already-vetted config, regardless of what the request body claims —
+  // otherwise this endpoint would let a non-editor execute arbitrary prompt
+  // text through a real model call, the exact capability edit/save is
+  // restricted to admins to prevent.
+  const config = ctx.isAdmin
+    ? resolved(
+        true,
+        body.config.prompt,
+        body.config.rules,
+        body.config.tools_config,
+        body.config.limits_config,
+      )
+    : await withWorkspace(ctx.workspaceId, (tx) => resolveBotConfig(tx, ctx.workspaceId));
 
   const transcript: { role: ChatRole; body: string }[] = [
     ...body.history.map((m) => ({

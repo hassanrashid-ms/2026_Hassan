@@ -38,14 +38,17 @@ botConfigRouter.post('/bot-config', requireAdminRole, saveBotConfigHandler);
 botConfigRouter.get('/bot-config/versions', canSeeBotConfig, getBotConfigVersionsHandler);
 botConfigRouter.get('/bot-config/versions/:version', canSeeBotConfig, getBotConfigVersionHandler);
 botConfigRouter.post('/bot-config/rollback', requireAdminRole, rollbackBotConfigHandler);
-// Admin-only, same reasoning as save: this executes arbitrary draft prompt
-// text supplied in the request body, not merely a persisted, already-vetted
-// config.
-botConfigRouter.post('/bot-config/test-turn', requireAdminRole, testBotTurnHandler);
-// Same gate as test-turn: also executes against the test panel's synthetic
-// conversation state, admin-only for the same reason.
+// canSeeBotConfig, not requireAdminRole: Team Lead can exercise the test
+// panel like Admin, but runTestBotTurn (domain/bot/botTestTurn.ts) refuses to
+// run a non-admin's caller-supplied draft prompt/rules — it substitutes the
+// persisted, already-vetted config instead. That keeps "execute arbitrary
+// unsaved prompt text" admin-only in effect while letting Team Lead send test
+// messages against what's actually live.
+botConfigRouter.post('/bot-config/test-turn', canSeeBotConfig, testBotTurnHandler);
+// test-resolution takes no prompt/rules input (just subintent_id, confirm_phase,
+// helped), so there's no arbitrary-execution risk — same gate as test-turn.
 botConfigRouter.post(
   '/bot-config/test-resolution',
-  requireAdminRole,
+  canSeeBotConfig,
   testResolutionAnswerHandler,
 );

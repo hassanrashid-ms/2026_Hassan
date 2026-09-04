@@ -317,6 +317,7 @@ export function ThreadPanel({
     // button and disabled Composer stick around until a manual reload.
     void queryClient.invalidateQueries({ queryKey: ['tickets-summary'] });
     void queryClient.invalidateQueries({ queryKey: ['inbox', 'mine'] });
+    void queryClient.invalidateQueries({ queryKey: ['inbox', 'unassigned'] });
   };
 
   const takeOver = useMutation({

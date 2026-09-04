@@ -182,6 +182,8 @@ export function ConversationList({
           return;
         }
 
+        void queryClient.invalidateQueries({ queryKey: ['conversation', id, 'detail'] });
+
         let patched = false;
         for (const key of [
           ['inbox', 'mine'],

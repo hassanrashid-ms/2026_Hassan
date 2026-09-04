@@ -46,7 +46,8 @@ export function AssignPicker({
   const invalidateContext = () => {
     void queryClient.invalidateQueries({ queryKey: ['conversation', conversationId, 'detail'] });
     void queryClient.invalidateQueries({ queryKey: ['tickets'] });
-    void queryClient.invalidateQueries({ queryKey: ['inbox', 'mine'] });
+    void queryClient.invalidateQueries({ queryKey: ['tickets-summary'] });
+    void queryClient.invalidateQueries({ queryKey: ['inbox'] });
   };
 
   const reassign = useMutation({
@@ -69,18 +70,23 @@ export function AssignPicker({
               <CommandEmpty>No agents found.</CommandEmpty>
             )}
             <CommandGroup>
-              {results.map((agent) => (
-                <CommandItem
-                  key={agent.id}
-                  value={agent.id}
-                  onSelect={() => {
-                    reassign.mutate(agent.id);
-                    setOpen(false);
-                  }}
-                >
-                  {agent.display_name}
-                </CommandItem>
-              ))}
+              {results.map((agent) => {
+                const isCurrentAssignee = agent.id === currentAssigneeId;
+                return (
+                  <CommandItem
+                    key={agent.id}
+                    value={agent.id}
+                    disabled={isCurrentAssignee}
+                    onSelect={() => {
+                      if (isCurrentAssignee) return;
+                      reassign.mutate(agent.id);
+                      setOpen(false);
+                    }}
+                  >
+                    {agent.display_name}
+                  </CommandItem>
+                );
+              })}
             </CommandGroup>
           </CommandList>
         </Command>

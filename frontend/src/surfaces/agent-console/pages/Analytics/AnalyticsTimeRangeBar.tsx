@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { subDays, startOfDay } from 'date-fns'
-import { DayPicker } from 'react-day-picker'
+import type { DateRange } from 'react-day-picker'
 import { Button } from '../../components/ui/button.tsx'
+import { Calendar } from '../../components/ui/calendar.tsx'
+import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/popover.tsx'
 
 type Range = { from: Date; to: Date }
 
@@ -18,10 +20,10 @@ const PRESETS: Array<{ label: string; days: number }> = [
 ]
 
 export function AnalyticsTimeRangeBar({ value, onChange }: AnalyticsTimeRangeBarProps) {
-  const [showCustom, setShowCustom] = useState(false)
+  const [open, setOpen] = useState(false)
 
   return (
-    <div className="relative flex items-center gap-2">
+    <div className="flex items-center gap-2">
       {PRESETS.map((preset) => (
         <Button
           key={preset.label}
@@ -33,23 +35,25 @@ export function AnalyticsTimeRangeBar({ value, onChange }: AnalyticsTimeRangeBar
           {preset.label}
         </Button>
       ))}
-      <Button type="button" variant="ghost" className="h-8 px-3 text-sm" onClick={() => setShowCustom((s) => !s)}>
-        Custom
-      </Button>
-      {showCustom && (
-        <div className="absolute top-full right-0 z-10 mt-2 rounded-card border border-accent-soft bg-surface p-2 shadow-md">
-          <DayPicker
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button type="button" variant="ghost" className="h-8 px-3 text-sm">
+            Custom
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="end">
+          <Calendar
             mode="range"
-            selected={{ from: value.from, to: value.to }}
+            selected={{ from: value.from, to: value.to } satisfies DateRange}
             onSelect={(range) => {
               if (range?.from && range?.to) {
                 onChange({ from: range.from, to: range.to })
-                setShowCustom(false)
+                setOpen(false)
               }
             }}
           />
-        </div>
-      )}
+        </PopoverContent>
+      </Popover>
     </div>
   )
 }
