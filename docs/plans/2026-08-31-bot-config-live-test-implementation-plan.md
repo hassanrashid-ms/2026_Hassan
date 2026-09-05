@@ -22,6 +22,7 @@
 ## Task 1: Backend seam — `BotTurnOverrides` on the decider
 
 **Files:**
+
 - Modify: `backend/src/domain/bot/botTurn.ts`
 - Modify: `backend/src/domain/bot/contextAssembly.ts`
 - Modify: `backend/src/domain/bot/toolLoop.ts`
@@ -29,6 +30,7 @@
 - Test: `backend/tests/bot.toolLoop.overrides.test.ts`
 
 **Interfaces:**
+
 - Produces: `BotTurnOverrides` type (`{ config?: ResolvedBotConfig; transcript?: { role: ChatRole; body: string }[] }`), exported from `botTurn.ts`. `BotDecider` becomes `(input: BotTurnInput, overrides?: BotTurnOverrides) => Promise<BotTurnDecision>`. `buildMessages(tx, input, overrides?)` and `toolLoopDecider(input, overrides?)` both accept it, both default to today's DB-read behavior when omitted. `resolved(...)` (in `botConfig.ts`) becomes exported, unchanged signature — `(isProvisioned: boolean, prompt: string, rules: RuleEntry[], toolsConfig: ToolToggle[], limitsConfig: LimitToggle[]) => ResolvedBotConfig`.
 - Consumes: nothing new from earlier tasks (this is the first task).
 
@@ -166,33 +168,33 @@ export async function buildMessages(
 Find:
 
 ```ts
-  const rows = await tx
-    .select()
-    .from(message)
-    .where(eq(message.conversationId, input.conversationId))
-    .orderBy(asc(message.seq));
+const rows = await tx
+  .select()
+  .from(message)
+  .where(eq(message.conversationId, input.conversationId))
+  .orderBy(asc(message.seq));
 
-  const transcript = rows
-    .filter((r) => r.visibility === 'public')
-    .map((r) => ({ role: toChatRole(r.authorType), body: r.body }))
-    .filter((m): m is { role: ChatRole; body: string } => m.role !== null);
+const transcript = rows
+  .filter((r) => r.visibility === 'public')
+  .map((r) => ({ role: toChatRole(r.authorType), body: r.body }))
+  .filter((m): m is { role: ChatRole; body: string } => m.role !== null);
 ```
 
 Replace with:
 
 ```ts
-  const transcript =
-    overrides?.transcript ??
-    (
-      await tx
-        .select()
-        .from(message)
-        .where(eq(message.conversationId, input.conversationId))
-        .orderBy(asc(message.seq))
-    )
-      .filter((r) => r.visibility === 'public')
-      .map((r) => ({ role: toChatRole(r.authorType), body: r.body }))
-      .filter((m): m is { role: ChatRole; body: string } => m.role !== null);
+const transcript =
+  overrides?.transcript ??
+  (
+    await tx
+      .select()
+      .from(message)
+      .where(eq(message.conversationId, input.conversationId))
+      .orderBy(asc(message.seq))
+  )
+    .filter((r) => r.visibility === 'public')
+    .map((r) => ({ role: toChatRole(r.authorType), body: r.body }))
+    .filter((m): m is { role: ChatRole; body: string } => m.role !== null);
 ```
 
 - [ ] **Step 4: Thread `overrides` through `toolLoopDecider` in `toolLoop.ts`**
@@ -241,36 +243,36 @@ export const toolLoopDecider: BotDecider = async (input, overrides) => {
 Find the grounded-answer return (further down the same function):
 
 ```ts
-              logger.info('bot.grounding', 'answered from article', {
-                workspaceId: input.workspaceId,
-                conversationId: input.conversationId,
-                articleId,
-                articleTitle: cited.title,
-                score: Number(grounding.score.toFixed(2)),
-              });
-              return { kind: 'answer', reply, subintentId: classifiedSubintentId, articleId };
+logger.info('bot.grounding', 'answered from article', {
+  workspaceId: input.workspaceId,
+  conversationId: input.conversationId,
+  articleId,
+  articleTitle: cited.title,
+  score: Number(grounding.score.toFixed(2)),
+});
+return { kind: 'answer', reply, subintentId: classifiedSubintentId, articleId };
 ```
 
 Replace with:
 
 ```ts
-              logger.info('bot.grounding', 'answered from article', {
-                workspaceId: input.workspaceId,
-                conversationId: input.conversationId,
-                articleId,
-                articleTitle: cited.title,
-                score: Number(grounding.score.toFixed(2)),
-              });
-              return {
-                kind: 'answer',
-                reply,
-                subintentId: classifiedSubintentId,
-                articleId,
-                grounding: {
-                  score: Number(grounding.score.toFixed(2)),
-                  ungrounded: grounding.ungrounded,
-                },
-              };
+logger.info('bot.grounding', 'answered from article', {
+  workspaceId: input.workspaceId,
+  conversationId: input.conversationId,
+  articleId,
+  articleTitle: cited.title,
+  score: Number(grounding.score.toFixed(2)),
+});
+return {
+  kind: 'answer',
+  reply,
+  subintentId: classifiedSubintentId,
+  articleId,
+  grounding: {
+    score: Number(grounding.score.toFixed(2)),
+    ungrounded: grounding.ungrounded,
+  },
+};
 ```
 
 - [ ] **Step 5: Write the failing test for the override seam**
@@ -398,9 +400,11 @@ git commit -m "Add BotTurnOverrides seam so the decider can run against an in-me
 ## Task 2: Shared types — `TestBotTurnBody` and the wire decision shape
 
 **Files:**
+
 - Modify: `packages/types/src/bot.ts`
 
 **Interfaces:**
+
 - Consumes: `RuleEntrySchema`, `ToolToggleSchema`, `LimitToggleSchema` (already exported from this file, used unchanged).
 - Produces: `TestBotTurnBody` (Zod schema), `TestBotTurnBodyValue` (`z.infer`), `BotTestTurnDecision` (TS type — the wire/snake_case mirror of the backend's internal `BotTurnDecision`), consumed by Task 4 (backend service) and Task 8 (frontend API client).
 
@@ -447,7 +451,8 @@ export type BotTestTurnHandoffReason =
   | 'turn_cap'
   | 'unhelped_cap';
 
-export type BotTestTurnUnavailableReason = 'not_provisioned' | 'error' | 'timeout' | 'invalid_response';
+export type BotTestTurnUnavailableReason =
+  'not_provisioned' | 'error' | 'timeout' | 'invalid_response';
 
 export type BotTestTurnSearch = { query: string; results: { id: string; title: string }[] };
 
@@ -485,10 +490,12 @@ git commit -m "Add TestBotTurnBody schema and BotTestTurnDecision wire type"
 ## Task 3: Backend service — `runTestBotTurn`
 
 **Files:**
+
 - Create: `backend/src/domain/bot/botTestTurn.ts`
 - Test: `backend/tests/botTestTurn.test.ts`
 
 **Interfaces:**
+
 - Consumes: `resolved` (Task 1, `botConfig.ts`), `toolLoopDecider`/`BotTurnOverrides`/`BotTurnInput`/`BotTurnDecision` (Task 1, `botTurn.ts`/`toolLoop.ts`), `ChatRole` (`contextAssembly.ts`), `AgentContext` (`shared/middleware/requireAgentSession.ts`), `TestBotTurnBodyValue`/`BotTestTurnDecision` (Task 2, `@support/types`), `PlayerMessageView` (`@support/types`, pre-existing).
 - Produces: `runTestBotTurn(ctx: AgentContext, body: TestBotTurnBodyValue): Promise<BotTestTurnDecision>`, consumed by Task 5 (controller).
 
@@ -565,10 +572,7 @@ describe('runTestBotTurn', () => {
 
     mockCallModel.mockResolvedValueOnce({ toolCalls: [], text: 'draft answer' });
 
-    const decision = await runTestBotTurn(
-      { agentId, workspaceId, isAdmin: true },
-      baseBody(),
-    );
+    const decision = await runTestBotTurn({ agentId, workspaceId, isAdmin: true }, baseBody());
 
     expect(decision).toMatchObject({ kind: 'answer', reply: 'draft answer' });
   });
@@ -757,12 +761,14 @@ git commit -m "Add runTestBotTurn service — draft-config bot turn with no DB w
 ## Task 4: Backend endpoint — route, controller, openapi
 
 **Files:**
+
 - Create: `backend/src/agent/controllers/botTestTurnController.ts`
 - Modify: `backend/src/agent/routers/botConfigRouter.ts`
 - Modify: `backend/src/docs/openapi.ts`
 - Test: `backend/tests/agent.botTestTurn.test.ts`
 
 **Interfaces:**
+
 - Consumes: `runTestBotTurn` (Task 3), `TestBotTurnBody` (Task 2), `requireAdminRole` (existing middleware), `sendError` (existing `errors.ts`).
 - Produces: `POST /agent/bot-config/test-turn` — `200 { decision: BotTestTurnDecision }`, `403` (not admin), `422` (invalid payload).
 
@@ -1022,7 +1028,9 @@ registry.registerPath({
                 }),
               ),
               tools_config: z.array(z.object({ tool: z.string(), enabled: z.boolean() })),
-              limits_config: z.array(z.object({ key: z.string(), value: z.number().int().positive() })),
+              limits_config: z.array(
+                z.object({ key: z.string(), value: z.number().int().positive() }),
+              ),
             }),
             subintent_id: z.string().nullable(),
             confirm_phase: z.enum([
@@ -1071,6 +1079,7 @@ git commit -m "Add POST /agent/bot-config/test-turn endpoint"
 ## Task 5: Frontend — `BotConfigDraftContext`
 
 **Files:**
+
 - Create: `frontend/src/surfaces/agent-console/pages/BotConfig/BotConfigDraftContext.tsx`
 - Modify: `frontend/src/surfaces/agent-console/pages/BotConfig/BotConfig.tsx`
 - Modify: `frontend/src/surfaces/agent-console/pages/BotConfig/components/PromptTab.tsx`
@@ -1079,6 +1088,7 @@ git commit -m "Add POST /agent/bot-config/test-turn endpoint"
 - Test: `frontend/src/surfaces/agent-console/pages/BotConfig/BotConfigDraftContext.test.tsx`
 
 **Interfaces:**
+
 - Produces: `BotConfigDraftProvider` (wraps children, takes `config: BotConfigView | undefined`), `useBotConfigDraft()` returning `{ draft: BotConfigDraft | null; setDraftField: <K extends keyof BotConfigDraft>(field: K, value: BotConfigDraft[K]) => void }`, and `BotConfigDraft = { prompt: string; rules: RuleEntryValue[]; toolsConfig: ToolToggleValue[]; limitsConfig: LimitToggleValue[] }`. Consumed by Task 7 (`BotTestPanel`).
 - Consumes: `BotConfigView` (`@support/types`, pre-existing).
 
@@ -1153,7 +1163,12 @@ Expected: FAIL — module doesn't exist.
 
 ```tsx
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
-import type { BotConfigView, LimitToggleValue, RuleEntryValue, ToolToggleValue } from '@support/types';
+import type {
+  BotConfigView,
+  LimitToggleValue,
+  RuleEntryValue,
+  ToolToggleValue,
+} from '@support/types';
 
 export type BotConfigDraft = {
   prompt: string;
@@ -1541,9 +1556,11 @@ git commit -m "Share live config draft across Bot Config tabs via BotConfigDraft
 ## Task 6: Frontend — API client function
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/agent-console/api/agentApi.ts`
 
 **Interfaces:**
+
 - Consumes: `call<T>(path, token, init?)` (existing wrapper in this file), `TestBotTurnBodyValue`/`BotTestTurnDecision` (Task 2, `@support/types`).
 - Produces: `testBotTurn(token: string, body: TestBotTurnBodyValue): Promise<{ decision: BotTestTurnDecision }>`, consumed by Task 7.
 
@@ -1583,10 +1600,12 @@ git commit -m "Add testBotTurn API client function"
 ## Task 7: Frontend — `ToolActivityStrip`
 
 **Files:**
+
 - Create: `frontend/src/surfaces/agent-console/pages/BotConfig/components/ToolActivityStrip.tsx`
 - Test: `frontend/src/surfaces/agent-console/pages/BotConfig/components/ToolActivityStrip.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `BotTestTurnDecision` (Task 2, `@support/types`).
 - Produces: `ToolActivityStrip({ decision }: { decision: BotTestTurnDecision })`, consumed by Task 8 (`BotTestPanel`).
 
@@ -1742,10 +1761,12 @@ git commit -m "Add ToolActivityStrip for the bot test panel"
 ## Task 8: Frontend — `BotTestPanel`
 
 **Files:**
+
 - Create: `frontend/src/surfaces/agent-console/pages/BotConfig/components/BotTestPanel.tsx`
 - Test: `frontend/src/surfaces/agent-console/pages/BotConfig/components/BotTestPanel.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `useBotConfigDraft` (Task 5), `testBotTurn` (Task 6), `ToolActivityStrip` (Task 7), `ChatThread`/`Composer`/`MessageBody`-family types (`ChatMessage`, `ChatAuthorType`) from `features/chat/components/types.ts` and `ChatThread`/`Composer` components (pre-existing, unmodified), `fetchIntents` (pre-existing, `agentApi.ts`).
 - Produces: `BotTestPanel({ token }: { token: string })`, consumed by `BotConfig.tsx` (wired in Task 5, Step 5 — this task supplies the file that reference needs).
 
@@ -2008,7 +2029,9 @@ export function BotTestPanel({ token }: { token: string }) {
       </div>
       <div className="min-h-0 flex-1">
         <ChatThread messages={messages} currentAuthorType="agent" />
-        {messages.map((m) => m.toolActivity && <div key={`activity-${m.id}`}>{m.toolActivity}</div>)}
+        {messages.map(
+          (m) => m.toolActivity && <div key={`activity-${m.id}`}>{m.toolActivity}</div>,
+        )}
       </div>
       <Composer onSend={(body) => void send(body)} disabled={sending || !draft} />
     </div>
@@ -2020,7 +2043,7 @@ export function BotTestPanel({ token }: { token: string }) {
 
 Run: `pnpm --filter frontend exec vitest run src/surfaces/agent-console/pages/BotConfig/components/BotTestPanel.test.tsx`
 
-Expected: PASS. If `ChatThread`'s Virtuoso rendering makes the tool-activity strip's placement fail to assert cleanly (Virtuoso only mounts measured items in jsdom, per the note in `ChatThread.test.tsx`), move the `toolActivity` rendering to read from the *last* message only rather than mapping every message, and adjust the test to assert against the last strip. Prefer the simplest passing version; do not iterate more than twice on this layout detail.
+Expected: PASS. If `ChatThread`'s Virtuoso rendering makes the tool-activity strip's placement fail to assert cleanly (Virtuoso only mounts measured items in jsdom, per the note in `ChatThread.test.tsx`), move the `toolActivity` rendering to read from the _last_ message only rather than mapping every message, and adjust the test to assert against the last strip. Prefer the simplest passing version; do not iterate more than twice on this layout detail.
 
 - [ ] **Step 5: Typecheck the whole frontend workspace**
 

@@ -244,227 +244,235 @@ function FormEditorForm({
           value="fields"
           className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden"
         >
-        <div className="flex min-w-0 flex-1 flex-col gap-4 p-4 lg:overflow-y-auto">
-        {archived && (
-          <p className="rounded-md bg-amber-100 px-3 py-2 text-xs text-amber-900">
-            This form is archived and can no longer be edited.
-          </p>
-        )}
+          <div className="flex min-w-0 flex-1 flex-col gap-4 p-4 lg:overflow-y-auto">
+            {archived && (
+              <p className="rounded-md bg-amber-100 px-3 py-2 text-xs text-amber-900">
+                This form is archived and can no longer be edited.
+              </p>
+            )}
 
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-muted">Name</label>
-          <Input
-            placeholder="Form name"
-            value={name}
-            disabled={archived}
-            onChange={(e) => setName(e.target.value)}
-          />
-        </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-muted">Name</label>
+              <Input
+                placeholder="Form name"
+                value={name}
+                disabled={archived}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </div>
 
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-medium text-muted">Fields</label>
-          </div>
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-medium text-muted">Fields</label>
+              </div>
 
-          <div className="flex flex-col gap-2">
-            {fields.map((field, index) => (
-              <div key={field.key} className="rounded-card border border-slate-200 bg-surface p-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Input
-                    className="h-8 min-w-32 flex-1"
-                    value={field.label}
-                    disabled={archived}
-                    onChange={(e) => updateFieldAt(field.key, { label: e.target.value })}
-                  />
-                  <Badge variant="outline">
-                    {FIELD_TYPE_LABELS[field.type as keyof typeof FIELD_TYPE_LABELS] ?? field.type}
-                  </Badge>
-                  <Button
-                    type="button"
-                    variant={field.isRequired ? 'secondary' : 'ghost'}
-                    size="sm"
-                    disabled={archived}
-                    onClick={() => updateFieldAt(field.key, { isRequired: !field.isRequired })}
+              <div className="flex flex-col gap-2">
+                {fields.map((field, index) => (
+                  <div
+                    key={field.key}
+                    className="rounded-card border border-slate-200 bg-surface p-2"
                   >
-                    Required
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Move ${field.label} up`}
-                    disabled={archived || index === 0}
-                    onClick={() => moveField(index, -1)}
-                  >
-                    <ArrowUp className="size-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Move ${field.label} down`}
-                    disabled={archived || index === fields.length - 1}
-                    onClick={() => moveField(index, 1)}
-                  >
-                    <ArrowDown className="size-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Remove ${field.label}`}
-                    disabled={archived}
-                    onClick={() => removeField(field.key)}
-                  >
-                    <X className="size-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="link"
-                    size="sm"
-                    onClick={() => setExpandedKey(expandedKey === field.key ? null : field.key)}
-                  >
-                    {expandedKey === field.key ? 'Hide details' : 'Details'}
-                  </Button>
-                </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Input
+                        className="h-8 min-w-32 flex-1"
+                        value={field.label}
+                        disabled={archived}
+                        onChange={(e) => updateFieldAt(field.key, { label: e.target.value })}
+                      />
+                      <Badge variant="outline">
+                        {FIELD_TYPE_LABELS[field.type as keyof typeof FIELD_TYPE_LABELS] ??
+                          field.type}
+                      </Badge>
+                      <Button
+                        type="button"
+                        variant={field.isRequired ? 'secondary' : 'ghost'}
+                        size="sm"
+                        disabled={archived}
+                        onClick={() => updateFieldAt(field.key, { isRequired: !field.isRequired })}
+                      >
+                        Required
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Move ${field.label} up`}
+                        disabled={archived || index === 0}
+                        onClick={() => moveField(index, -1)}
+                      >
+                        <ArrowUp className="size-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Move ${field.label} down`}
+                        disabled={archived || index === fields.length - 1}
+                        onClick={() => moveField(index, 1)}
+                      >
+                        <ArrowDown className="size-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Remove ${field.label}`}
+                        disabled={archived}
+                        onClick={() => removeField(field.key)}
+                      >
+                        <X className="size-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="link"
+                        size="sm"
+                        onClick={() => setExpandedKey(expandedKey === field.key ? null : field.key)}
+                      >
+                        {expandedKey === field.key ? 'Hide details' : 'Details'}
+                      </Button>
+                    </div>
 
-                {expandedKey === field.key && (
-                  <div className="mt-2 flex flex-col gap-2 border-t border-slate-100 pt-2">
-                    <Input
-                      placeholder="Placeholder text"
-                      value={field.placeholder ?? ''}
-                      disabled={archived}
-                      onChange={(e) =>
-                        updateFieldAt(field.key, { placeholder: e.target.value || undefined })
-                      }
-                    />
-                    <Input
-                      placeholder="Helper text"
-                      value={field.helperText ?? ''}
-                      disabled={archived}
-                      onChange={(e) =>
-                        updateFieldAt(field.key, { helperText: e.target.value || undefined })
-                      }
-                    />
-                    {field.type === 'choice' && (
-                      <div className="flex flex-col gap-1.5">
-                        <label className="text-xs font-medium text-muted">Options (min 2)</label>
-                        {(field.options ?? []).map((option, optIndex) => (
-                          <div key={optIndex} className="flex items-center gap-2">
-                            <Input
-                              className="h-8 min-w-0 flex-1"
-                              value={option}
-                              disabled={archived}
-                              onChange={(e) => {
-                                const nextOptions = [...(field.options ?? [])];
-                                nextOptions[optIndex] = e.target.value;
-                                updateFieldAt(field.key, { options: nextOptions });
-                              }}
-                            />
+                    {expandedKey === field.key && (
+                      <div className="mt-2 flex flex-col gap-2 border-t border-slate-100 pt-2">
+                        <Input
+                          placeholder="Placeholder text"
+                          value={field.placeholder ?? ''}
+                          disabled={archived}
+                          onChange={(e) =>
+                            updateFieldAt(field.key, { placeholder: e.target.value || undefined })
+                          }
+                        />
+                        <Input
+                          placeholder="Helper text"
+                          value={field.helperText ?? ''}
+                          disabled={archived}
+                          onChange={(e) =>
+                            updateFieldAt(field.key, { helperText: e.target.value || undefined })
+                          }
+                        />
+                        {field.type === 'choice' && (
+                          <div className="flex flex-col gap-1.5">
+                            <label className="text-xs font-medium text-muted">
+                              Options (min 2)
+                            </label>
+                            {(field.options ?? []).map((option, optIndex) => (
+                              <div key={optIndex} className="flex items-center gap-2">
+                                <Input
+                                  className="h-8 min-w-0 flex-1"
+                                  value={option}
+                                  disabled={archived}
+                                  onChange={(e) => {
+                                    const nextOptions = [...(field.options ?? [])];
+                                    nextOptions[optIndex] = e.target.value;
+                                    updateFieldAt(field.key, { options: nextOptions });
+                                  }}
+                                />
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  aria-label={`Remove option ${optIndex + 1}`}
+                                  disabled={archived || (field.options?.length ?? 0) <= 2}
+                                  onClick={() => {
+                                    const nextOptions = (field.options ?? []).filter(
+                                      (_, i) => i !== optIndex,
+                                    );
+                                    updateFieldAt(field.key, { options: nextOptions });
+                                  }}
+                                >
+                                  <X className="size-4" />
+                                </Button>
+                              </div>
+                            ))}
                             <Button
                               type="button"
-                              variant="ghost"
-                              size="icon"
-                              aria-label={`Remove option ${optIndex + 1}`}
-                              disabled={archived || (field.options?.length ?? 0) <= 2}
-                              onClick={() => {
-                                const nextOptions = (field.options ?? []).filter(
-                                  (_, i) => i !== optIndex,
-                                );
-                                updateFieldAt(field.key, { options: nextOptions });
-                              }}
+                              variant="outline"
+                              size="sm"
+                              disabled={archived}
+                              onClick={() =>
+                                updateFieldAt(field.key, {
+                                  options: [
+                                    ...(field.options ?? []),
+                                    `Option ${(field.options?.length ?? 0) + 1}`,
+                                  ],
+                                })
+                              }
                             >
-                              <X className="size-4" />
+                              + Add option
                             </Button>
                           </div>
-                        ))}
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          disabled={archived}
-                          onClick={() =>
-                            updateFieldAt(field.key, {
-                              options: [
-                                ...(field.options ?? []),
-                                `Option ${(field.options?.length ?? 0) + 1}`,
-                              ],
-                            })
-                          }
-                        >
-                          + Add option
-                        </Button>
+                        )}
                       </div>
                     )}
                   </div>
-                )}
-              </div>
-            ))}
+                ))}
 
-            <div className="rounded-card border border-dashed border-slate-200 p-2 opacity-60">
-              <span className="text-sm">Skip and talk to an agent</span>
-              <span className="ml-2 text-xs text-muted">(always present, cannot be removed)</span>
-            </div>
+                <div className="rounded-card border border-dashed border-slate-200 p-2 opacity-60">
+                  <span className="text-sm">Skip and talk to an agent</span>
+                  <span className="ml-2 text-xs text-muted">
+                    (always present, cannot be removed)
+                  </span>
+                </div>
 
-            {addingField ? (
-              <div className="flex flex-wrap gap-2">
-                {BUILDER_FIELD_TYPES.map((type) => (
+                {addingField ? (
+                  <div className="flex flex-wrap gap-2">
+                    {BUILDER_FIELD_TYPES.map((type) => (
+                      <Button
+                        key={type}
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => addField(type)}
+                      >
+                        {FIELD_TYPE_LABELS[type]}
+                      </Button>
+                    ))}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setAddingField(false)}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                ) : (
                   <Button
-                    key={type}
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => addField(type)}
+                    disabled={archived}
+                    onClick={() => setAddingField(true)}
                   >
-                    {FIELD_TYPE_LABELS[type]}
+                    + Add a field
                   </Button>
-                ))}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setAddingField(false)}
-                >
-                  Cancel
-                </Button>
+                )}
               </div>
-            ) : (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={archived}
-                onClick={() => setAddingField(true)}
-              >
-                + Add a field
-              </Button>
-            )}
+
+              {errors.length > 0 && (
+                <ul className="list-disc pl-4 text-xs text-red-700">
+                  {errors.map((error, i) => (
+                    <li key={i}>{error}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <ShownForPicker
+              intents={intents}
+              selected={shownFor}
+              onChange={setShownFor}
+              currentFormId={formId}
+              disabled={archived}
+            />
           </div>
 
-          {errors.length > 0 && (
-            <ul className="list-disc pl-4 text-xs text-red-700">
-              {errors.map((error, i) => (
-                <li key={i}>{error}</li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        <ShownForPicker
-          intents={intents}
-          selected={shownFor}
-          onChange={setShownFor}
-          currentFormId={formId}
-          disabled={archived}
-        />
-        </div>
-
-        <div
-          data-testid="form-live-preview-panel"
-          className="w-full shrink-0 overflow-y-auto border-t border-slate-200 p-4 lg:w-[375px] lg:border-t-0 lg:border-l"
-        >
-          <FormLivePreview formName={name} fields={fields} />
-        </div>
+          <div
+            data-testid="form-live-preview-panel"
+            className="w-full shrink-0 overflow-y-auto border-t border-slate-200 p-4 lg:w-[375px] lg:border-t-0 lg:border-l"
+          >
+            <FormLivePreview formName={name} fields={fields} />
+          </div>
         </TabsContent>
         {formId && (
           <TabsContent value="history" className="min-h-0 flex-1 overflow-auto p-4">

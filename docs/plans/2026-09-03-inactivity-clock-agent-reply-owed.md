@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - No schema/migration changes — `notification.type` and `event.type` are both free `text` columns, no enum to extend.
-- `supportOwedFlag` / stage 2's timeout logic is unchanged — it still exists for the case where an ask *was* sent and the player then went silent.
+- `supportOwedFlag` / stage 2's timeout logic is unchanged — it still exists for the case where an ask _was_ sent and the player then went silent.
 - `touchInactivityClock`'s trigger (any public message resets the clock) is unchanged — this fix only changes what stage 1 does when the window expires.
 - Reply-owed path must never call `postMessage` or flip `confirmPhase` — it must leave `confirmPhase` at `'none'` so stage 2 can never act on this path (stage 2's candidate query requires `confirmPhase = 'inactivity_ask'`).
 - Internal notes (`visibility = 'internal'`) must not count as a reply, mirroring stage 2's existing query filter.
@@ -32,10 +32,12 @@ No frontend changes: `NotificationView.payload` is already typed as `TicketAssig
 ### Task 1: `notifyAgentReplyOwed`
 
 **Files:**
+
 - Create: `backend/src/domain/notifications/notifyAgentReplyOwed.ts`
 - Test: `backend/tests/notifications.notifyAgentReplyOwed.test.ts`
 
 **Interfaces:**
+
 - Consumes: `Tx` (`backend/src/shared/db/withWorkspace.ts`), `notification`/`conversation`/`workspace` tables (`backend/src/shared/db/schema/index.ts`), `toNotificationView` (exported from `backend/src/domain/notifications/notifyAgent.ts`), `NotificationView` (`@support/types`).
 - Produces: `notifyAgentReplyOwed(tx: Tx, params: NotifyAgentReplyOwedParams): Promise<NotificationView>` and `export type NotifyAgentReplyOwedParams = { workspaceId: string; agentId: string; conversationId: string }`. Task 2 calls this once per notified agent/team-lead.
 
@@ -173,9 +175,11 @@ git commit -m "feat: add notifyAgentReplyOwed for inactivity clock reply-owed nu
 ### Task 2: Export `notifyAgentReplyOwed` and `emitNotificationNew` where `runAskStage` can reach them
 
 **Files:**
+
 - Modify: `backend/src/shared/jobs/inactivityClock.ts:1-14` (imports)
 
 **Interfaces:**
+
 - Consumes: `notifyAgentReplyOwed` (Task 1), `emitNotificationNew(io: Server, agentId: string, notificationView: NotificationView): void` (`backend/src/shared/realtime/emit.ts:71-77`), `touchInactivityClock(tx: Tx, args: { conversationId: string; now: Date }): Promise<void>` (`backend/src/domain/conversations/resolutionCycle.ts:62-87`, re-exported from `backend/src/domain/conversations/index.ts`), `workspaceMember` table (`backend/src/shared/db/schema/index.ts`).
 - Produces: nothing new — this task only wires imports that Task 3 uses.
 
@@ -251,9 +255,11 @@ git commit -m "chore: import reply-owed dependencies into inactivityClock job"
 ### Task 3: Add `assignedAgentId` to stage candidates and the lock re-check
 
 **Files:**
+
 - Modify: `backend/src/shared/jobs/inactivityClock.ts:59-101`
 
 **Interfaces:**
+
 - Consumes: `conversation.assignedAgentId` column (`backend/src/shared/db/schema/index.ts`).
 - Produces: `candidates()` now returns `{ cycleId: string; conversationId: string; assignedAgentId: string | null }[]`; `lockAndCheck()` now returns `{ status: string; confirmPhase: string; assignedAgentId: string | null } | null` instead of `boolean` (callers in Task 4/5 destructure this). Task 4's `runAskStage` relies on both of these exact shapes.
 
@@ -262,44 +268,53 @@ git commit -m "chore: import reply-owed dependencies into inactivityClock job"
 Add to `backend/tests/jobs.inactivityClock.test.ts`, inside `describe('runInactivityClock — stage 1 (ask)', ...)`:
 
 ```typescript
-  it('agent has not replied: does not post the check, re-arms the clock, notifies the assigned agent', async () => {
-    const { workspaceId, conversationId, playerId } = await fixture();
-    const agentId = await seedAgent();
-    await withWorkspace(workspaceId, (tx) =>
-      tx.update(conversation).set({ assignedAgentId: agentId }).where(eq(conversation.id, conversationId)),
-    );
-    await seedMessage({ workspaceId, conversationId, seq: 1, authorType: 'player' });
+it('agent has not replied: does not post the check, re-arms the clock, notifies the assigned agent', async () => {
+  const { workspaceId, conversationId, playerId } = await fixture();
+  const agentId = await seedAgent();
+  await withWorkspace(workspaceId, (tx) =>
+    tx
+      .update(conversation)
+      .set({ assignedAgentId: agentId })
+      .where(eq(conversation.id, conversationId)),
+  );
+  await seedMessage({ workspaceId, conversationId, seq: 1, authorType: 'player' });
 
-    expect(await runInactivityClock({ now: NOW })).toEqual({ asked: 0, timedOut: 0 });
+  expect(await runInactivityClock({ now: NOW })).toEqual({ asked: 0, timedOut: 0 });
 
-    const messages = await withWorkspace(workspaceId, (tx) =>
-      tx.select().from(message).where(eq(message.conversationId, conversationId)),
-    );
-    expect(messages.some((m) => m.body === RESOLUTION_CHECK_MESSAGE)).toBe(false);
+  const messages = await withWorkspace(workspaceId, (tx) =>
+    tx.select().from(message).where(eq(message.conversationId, conversationId)),
+  );
+  expect(messages.some((m) => m.body === RESOLUTION_CHECK_MESSAGE)).toBe(false);
 
-    expect((await readConversation(workspaceId, conversationId)).confirmPhase).toBe('none');
-    expect((await readCycle(workspaceId, conversationId)).inactivityDueAt!.toISOString()).toBe(
-      nextInactivityDueAt(NOW, 24).toISOString(),
-    );
+  expect((await readConversation(workspaceId, conversationId)).confirmPhase).toBe('none');
+  expect((await readCycle(workspaceId, conversationId)).inactivityDueAt!.toISOString()).toBe(
+    nextInactivityDueAt(NOW, 24).toISOString(),
+  );
 
-    const notifications = await withWorkspace(workspaceId, (tx) =>
-      tx.select().from(notification).where(eq(notification.conversationId, conversationId)),
-    );
-    expect(notifications).toHaveLength(1);
-    expect(notifications[0]!.agentId).toBe(agentId);
-    expect(notifications[0]!.type).toBe('reply_owed');
+  const notifications = await withWorkspace(workspaceId, (tx) =>
+    tx.select().from(notification).where(eq(notification.conversationId, conversationId)),
+  );
+  expect(notifications).toHaveLength(1);
+  expect(notifications[0]!.agentId).toBe(agentId);
+  expect(notifications[0]!.type).toBe('reply_owed');
 
-    const events = await withWorkspace(workspaceId, (tx) =>
-      tx.select().from(event).where(eq(event.conversationId, conversationId)),
-    );
-    expect(events.some((e) => e.type === 'reply_owed_reminder_sent')).toBe(true);
-  });
+  const events = await withWorkspace(workspaceId, (tx) =>
+    tx.select().from(event).where(eq(event.conversationId, conversationId)),
+  );
+  expect(events.some((e) => e.type === 'reply_owed_reminder_sent')).toBe(true);
+});
 ```
 
 Add `seedAgent` and `notification` to the test file's existing imports (`backend/tests/jobs.inactivityClock.test.ts`):
 
 ```typescript
-import { conversation, event, message, notification, resolutionCycle } from '../src/shared/db/schema/index.ts';
+import {
+  conversation,
+  event,
+  message,
+  notification,
+  resolutionCycle,
+} from '../src/shared/db/schema/index.ts';
 ```
 
 ```typescript
@@ -398,9 +413,11 @@ git commit -m "feat: surface assignedAgentId in inactivity clock candidate/lock 
 ### Task 4: Branch `runAskStage` on the last public message's author
 
 **Files:**
+
 - Modify: `backend/src/shared/jobs/inactivityClock.ts:103-164` (`runAskStage`)
 
 **Interfaces:**
+
 - Consumes: `candidates()`/`lockAndCheck()` from Task 3, `notifyAgentReplyOwed` (Task 1), `emitNotificationNew` (`backend/src/shared/realtime/emit.ts:71-77`), `touchInactivityClock` (`backend/src/domain/conversations/resolutionCycle.ts:62-87`), `workspaceMember` table, `appendEvent` (`backend/src/shared/events/appendEvent.ts:30`).
 - Produces: `runAskStage` behavior split into two paths as described in the spec. No new exports — this is the terminal task that makes Task 3's test pass.
 
@@ -459,7 +476,11 @@ async function runAskStage(workspaceId: string, now: Date): Promise<number> {
           const notifications = [];
           for (const agentId of notifiedAgentIds) {
             notifications.push(
-              await notifyAgentReplyOwed(tx, { workspaceId, agentId, conversationId: row.conversationId }),
+              await notifyAgentReplyOwed(tx, {
+                workspaceId,
+                agentId,
+                conversationId: row.conversationId,
+              }),
             );
           }
 
@@ -471,7 +492,10 @@ async function runAskStage(workspaceId: string, now: Date): Promise<number> {
             conversationId: row.conversationId,
             actorId: null,
             actorType: 'system',
-            payload: { source: 'inactivity', notified: locked.assignedAgentId ? 'agent' : 'team_leads' },
+            payload: {
+              source: 'inactivity',
+              notified: locked.assignedAgentId ? 'agent' : 'team_leads',
+            },
           });
 
           return { kind: 'reply_owed' as const, notifications };
@@ -550,8 +574,8 @@ Note: `asked` now counts both "asked" and "reply-owed nudged" outcomes as one bu
 Replace `if (!outcome) continue; asked += 1;` with:
 
 ```typescript
-      if (!outcome) continue;
-      if (outcome.kind === 'asked') asked += 1;
+if (!outcome) continue;
+if (outcome.kind === 'asked') asked += 1;
 ```
 
 - [ ] **Step 2: Run the Task 3 test to verify it passes**
@@ -571,9 +595,11 @@ git commit -m "feat: gate inactivity clock ask stage on agent-reply-owed check"
 ### Task 5: Remaining spec test cases — unassigned conversation and internal-note exclusion
 
 **Files:**
+
 - Modify: `backend/tests/jobs.inactivityClock.test.ts`
 
 **Interfaces:**
+
 - Consumes: `seedWorkspaceMember(args: { workspaceId: string; agentId: string; role?: 'agent' | 'team_lead'; deactivatedAt?: Date | null }): Promise<string>` (`backend/tests/helpers/db.ts:247-259`), everything from Task 3/4.
 - Produces: nothing new — final verification pass.
 
@@ -582,53 +608,56 @@ git commit -m "feat: gate inactivity clock ask stage on agent-reply-owed check"
 Add to `backend/tests/jobs.inactivityClock.test.ts`, inside the same `describe('runInactivityClock — stage 1 (ask)', ...)` block:
 
 ```typescript
-  it('unassigned conversation, agent has not replied: notifies every team lead, not plain agents', async () => {
-    const { workspaceId, conversationId } = await fixture();
-    const leadId = await seedAgent();
-    const plainAgentId = await seedAgent();
-    const deactivatedLeadId = await seedAgent();
-    await seedWorkspaceMember({ workspaceId, agentId: leadId, role: 'team_lead' });
-    await seedWorkspaceMember({ workspaceId, agentId: plainAgentId, role: 'agent' });
-    await seedWorkspaceMember({
-      workspaceId,
-      agentId: deactivatedLeadId,
-      role: 'team_lead',
-      deactivatedAt: new Date(),
-    });
-    await seedMessage({ workspaceId, conversationId, seq: 1, authorType: 'player' });
+it('unassigned conversation, agent has not replied: notifies every team lead, not plain agents', async () => {
+  const { workspaceId, conversationId } = await fixture();
+  const leadId = await seedAgent();
+  const plainAgentId = await seedAgent();
+  const deactivatedLeadId = await seedAgent();
+  await seedWorkspaceMember({ workspaceId, agentId: leadId, role: 'team_lead' });
+  await seedWorkspaceMember({ workspaceId, agentId: plainAgentId, role: 'agent' });
+  await seedWorkspaceMember({
+    workspaceId,
+    agentId: deactivatedLeadId,
+    role: 'team_lead',
+    deactivatedAt: new Date(),
+  });
+  await seedMessage({ workspaceId, conversationId, seq: 1, authorType: 'player' });
 
-    expect(await runInactivityClock({ now: NOW })).toEqual({ asked: 0, timedOut: 0 });
+  expect(await runInactivityClock({ now: NOW })).toEqual({ asked: 0, timedOut: 0 });
 
-    const notifications = await withWorkspace(workspaceId, (tx) =>
-      tx.select().from(notification).where(eq(notification.conversationId, conversationId)),
-    );
-    expect(notifications).toHaveLength(1);
-    expect(notifications[0]!.agentId).toBe(leadId);
+  const notifications = await withWorkspace(workspaceId, (tx) =>
+    tx.select().from(notification).where(eq(notification.conversationId, conversationId)),
+  );
+  expect(notifications).toHaveLength(1);
+  expect(notifications[0]!.agentId).toBe(leadId);
+});
+
+it('internal note from the agent does not count as a reply', async () => {
+  const { workspaceId, conversationId } = await fixture();
+  const agentId = await seedAgent();
+  await withWorkspace(workspaceId, (tx) =>
+    tx
+      .update(conversation)
+      .set({ assignedAgentId: agentId })
+      .where(eq(conversation.id, conversationId)),
+  );
+  await seedMessage({ workspaceId, conversationId, seq: 1, authorType: 'player' });
+  await seedMessage({
+    workspaceId,
+    conversationId,
+    seq: 2,
+    authorType: 'agent',
+    visibility: 'internal',
   });
 
-  it('internal note from the agent does not count as a reply', async () => {
-    const { workspaceId, conversationId } = await fixture();
-    const agentId = await seedAgent();
-    await withWorkspace(workspaceId, (tx) =>
-      tx.update(conversation).set({ assignedAgentId: agentId }).where(eq(conversation.id, conversationId)),
-    );
-    await seedMessage({ workspaceId, conversationId, seq: 1, authorType: 'player' });
-    await seedMessage({
-      workspaceId,
-      conversationId,
-      seq: 2,
-      authorType: 'agent',
-      visibility: 'internal',
-    });
+  expect(await runInactivityClock({ now: NOW })).toEqual({ asked: 0, timedOut: 0 });
 
-    expect(await runInactivityClock({ now: NOW })).toEqual({ asked: 0, timedOut: 0 });
-
-    const messages = await withWorkspace(workspaceId, (tx) =>
-      tx.select().from(message).where(eq(message.conversationId, conversationId)),
-    );
-    expect(messages.some((m) => m.body === RESOLUTION_CHECK_MESSAGE)).toBe(false);
-    expect((await readConversation(workspaceId, conversationId)).confirmPhase).toBe('none');
-  });
+  const messages = await withWorkspace(workspaceId, (tx) =>
+    tx.select().from(message).where(eq(message.conversationId, conversationId)),
+  );
+  expect(messages.some((m) => m.body === RESOLUTION_CHECK_MESSAGE)).toBe(false);
+  expect((await readConversation(workspaceId, conversationId)).confirmPhase).toBe('none');
+});
 ```
 
 Add `seedWorkspaceMember` to the existing helper import list in `backend/tests/jobs.inactivityClock.test.ts`.

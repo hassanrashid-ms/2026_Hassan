@@ -22,7 +22,10 @@ async function countUnassigned(workspaceId: string): Promise<number> {
       .select({ count: sql<number>`count(*)` })
       .from(conversation)
       .where(
-        and(isNull(conversation.assignedAgentId), inArray(conversation.status, UNASSIGNED_STATUSES)),
+        and(
+          isNull(conversation.assignedAgentId),
+          inArray(conversation.status, UNASSIGNED_STATUSES),
+        ),
       );
     return Number(row?.count ?? 0);
   });

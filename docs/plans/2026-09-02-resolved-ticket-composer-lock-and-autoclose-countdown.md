@@ -24,12 +24,14 @@ Full design: `docs/specs/2026-09-02-resolved-ticket-composer-lock-and-autoclose-
 ### Task 1: Server-side guard — reject agent sends on resolved/closed conversations
 
 **Files:**
+
 - Modify: `backend/src/agent/services/messagesService.ts`
 - Modify: `backend/src/agent/controllers/messagesController.ts`
 - Modify: `backend/src/docs/openapi.ts:1298-1332` (the `POST .../messages` `registerPath` block — its `summary: 'Agent Send Reply or Internal Note'`)
 - Test: `backend/tests/agent.messages.test.ts`
 
 **Interfaces:**
+
 - Consumes: nothing new — `conversation.status` is already selected in `sendAgentMessage`'s existing `found` query (`messagesService.ts:82-90`).
 - Produces: `SendAgentMessageResult` gains a `{ outcome: 'wrong_status' }` variant; `postAgentMessageHandler` maps it to HTTP `409`.
 
@@ -38,28 +40,25 @@ Full design: `docs/specs/2026-09-02-resolved-ticket-composer-lock-and-autoclose-
 Add to `backend/tests/agent.messages.test.ts`, inside the existing `describe('POST /agent/messages', ...)` block (it already imports `seedConversation`, `seedWorkspace`, `seedPlayer`, `ownerPool`, `signAgentSession`, and has a `setupAssignedAgent` helper — reuse both):
 
 ```ts
-  it.each(['resolved', 'closed'] as const)(
-    '409s when the conversation is %s',
-    async (status) => {
-      const workspaceId = await seedWorkspace();
-      const playerId = await seedPlayer(workspaceId);
-      const conversationId = await seedConversation({ workspaceId, playerId, status });
-      const { token } = await setupAssignedAgent(workspaceId, conversationId);
+it.each(['resolved', 'closed'] as const)('409s when the conversation is %s', async (status) => {
+  const workspaceId = await seedWorkspace();
+  const playerId = await seedPlayer(workspaceId);
+  const conversationId = await seedConversation({ workspaceId, playerId, status });
+  const { token } = await setupAssignedAgent(workspaceId, conversationId);
 
-      await request(app)
-        .post('/messages')
-        .set('Authorization', `Bearer ${token}`)
-        .set('X-Workspace-Id', workspaceId)
-        .send({ conversation_id: conversationId, body: 'still here?' })
-        .expect(409);
+  await request(app)
+    .post('/messages')
+    .set('Authorization', `Bearer ${token}`)
+    .set('X-Workspace-Id', workspaceId)
+    .send({ conversation_id: conversationId, body: 'still here?' })
+    .expect(409);
 
-      const { rows } = await ownerPool.query(
-        `select count(*)::int as count from message where conversation_id = $1`,
-        [conversationId],
-      );
-      expect(rows[0].count).toBe(0);
-    },
+  const { rows } = await ownerPool.query(
+    `select count(*)::int as count from message where conversation_id = $1`,
+    [conversationId],
   );
+  expect(rows[0].count).toBe(0);
+});
 ```
 
 - [ ] **Step 2: Run it to verify it fails**
@@ -102,10 +101,15 @@ In the transaction body (`messagesService.ts:81-93`), add the check right after 
 In `backend/src/agent/controllers/messagesController.ts`, add this branch to `postAgentMessageHandler`, right after the existing `if (result.outcome === 'forbidden')` block and before `res.status(200).json(...)`:
 
 ```ts
-  if (result.outcome === 'wrong_status') {
-    sendError(res, 409, 'wrong_status', 'Cannot send a message to a resolved or closed conversation.');
-    return;
-  }
+if (result.outcome === 'wrong_status') {
+  sendError(
+    res,
+    409,
+    'wrong_status',
+    'Cannot send a message to a resolved or closed conversation.',
+  );
+  return;
+}
 ```
 
 - [ ] **Step 5: Run the test to verify it passes**
@@ -146,6 +150,7 @@ git commit -m "Reject agent message sends on resolved/closed conversations (409)
 ### Task 2: Expose `resolved_at` and `auto_close_days` on conversation detail
 
 **Files:**
+
 - Modify: `packages/types/src/agent-context.ts`
 - Modify: `backend/src/agent/services/conversationContextService.ts`
 - Modify: `backend/src/docs/openapi.ts:870-890` (`AgentConversationDetailSchema`)
@@ -153,6 +158,7 @@ git commit -m "Reject agent message sends on resolved/closed conversations (409)
 - Test: a new backend test file, `backend/tests/agent.conversationDetail.test.ts`
 
 **Interfaces:**
+
 - Consumes: `resolution_cycle` table (`backend/src/shared/db/schema/conversations.ts:192-235`, columns `conversationId`, `resolvedAt`, `closedAt`), `workspace.autoCloseDays` (`backend/src/shared/db/schema/identity.ts:38`).
 - Produces: `AgentConversationDetail` gains `resolved_at: string | null` and `auto_close_days: number`. `seedResolutionCycle(args: { workspaceId: string; conversationId: string; resolvedAt?: Date | null; closedAt?: Date | null; cycleNo?: number }): Promise<string>` — a new test helper, exported for reuse by any later test that needs a resolution-cycle row.
 
@@ -290,14 +296,14 @@ Expected: FAIL — `resolved_at`/`auto_close_days` are `undefined` on the respon
 In `packages/types/src/agent-context.ts`, add to `AgentConversationDetail` (after `resolved_by_agent_name`, before `created_at`):
 
 ```ts
-  /**
-   * From the most recent resolution_cycle row's resolved_at. Null whenever
-   * there is no closed cycle yet (i.e. status isn't resolved/closed).
-   */
-  resolved_at: string | null;
-  /** The workspace's auto-close window in days — always present, not gated. */
-  auto_close_days: number;
-  created_at: string;
+/**
+ * From the most recent resolution_cycle row's resolved_at. Null whenever
+ * there is no closed cycle yet (i.e. status isn't resolved/closed).
+ */
+resolved_at: string | null;
+/** The workspace's auto-close window in days — always present, not gated. */
+auto_close_days: number;
+created_at: string;
 ```
 
 (Remove the old trailing `created_at: string;` line so it isn't duplicated — the block above replaces it.)
@@ -329,41 +335,41 @@ import {
 Update the query (`conversationContextService.ts:44-67`) to select and join both:
 
 ```ts
-    const [row] = await tx
-      .select({
-        id: conversation.id,
-        number: conversation.number,
-        status: conversation.status,
-        priority: conversation.priority,
-        resolutionSource: conversation.resolutionSource,
-        createdAt: conversation.createdAt,
-        playerId: player.id,
-        externalPlayerId: player.externalId,
-        intentName: intent.name,
-        subintentName: subintent.name,
-        subintentId: subintent.id,
-        assignedAgentId: agent.id,
-        assignedAgentName: agent.displayName,
-        resolvedAt: resolutionCycle.resolvedAt,
-        autoCloseDays: workspace.autoCloseDays,
-      })
-      .from(conversation)
-      .innerJoin(player, eq(player.id, conversation.playerId))
-      .leftJoin(subintent, eq(subintent.id, conversation.subintentId))
-      .leftJoin(intent, eq(intent.id, subintent.intentId))
-      .leftJoin(agent, eq(agent.id, conversation.assignedAgentId))
-      .innerJoin(workspace, eq(workspace.id, conversation.workspaceId))
-      // At most one open cycle exists (resolution_cycle_open_uk), and once
-      // resolved it stays resolved — ordering by resolvedAt desc + limit 1
-      // on the outer query picks the most recent closed cycle regardless of
-      // how many past cycles a reopened conversation has.
-      .leftJoin(
-        resolutionCycle,
-        and(eq(resolutionCycle.conversationId, conversation.id), isNotNull(resolutionCycle.resolvedAt)),
-      )
-      .where(eq(conversation.id, conversationId))
-      .orderBy(desc(resolutionCycle.resolvedAt))
-      .limit(1);
+const [row] = await tx
+  .select({
+    id: conversation.id,
+    number: conversation.number,
+    status: conversation.status,
+    priority: conversation.priority,
+    resolutionSource: conversation.resolutionSource,
+    createdAt: conversation.createdAt,
+    playerId: player.id,
+    externalPlayerId: player.externalId,
+    intentName: intent.name,
+    subintentName: subintent.name,
+    subintentId: subintent.id,
+    assignedAgentId: agent.id,
+    assignedAgentName: agent.displayName,
+    resolvedAt: resolutionCycle.resolvedAt,
+    autoCloseDays: workspace.autoCloseDays,
+  })
+  .from(conversation)
+  .innerJoin(player, eq(player.id, conversation.playerId))
+  .leftJoin(subintent, eq(subintent.id, conversation.subintentId))
+  .leftJoin(intent, eq(intent.id, subintent.intentId))
+  .leftJoin(agent, eq(agent.id, conversation.assignedAgentId))
+  .innerJoin(workspace, eq(workspace.id, conversation.workspaceId))
+  // At most one open cycle exists (resolution_cycle_open_uk), and once
+  // resolved it stays resolved — ordering by resolvedAt desc + limit 1
+  // on the outer query picks the most recent closed cycle regardless of
+  // how many past cycles a reopened conversation has.
+  .leftJoin(
+    resolutionCycle,
+    and(eq(resolutionCycle.conversationId, conversation.id), isNotNull(resolutionCycle.resolvedAt)),
+  )
+  .where(eq(conversation.id, conversationId))
+  .orderBy(desc(resolutionCycle.resolvedAt))
+  .limit(1);
 ```
 
 Add `and`, `desc`, `isNotNull` to the existing `drizzle-orm` import at the top of the file (line 1 currently reads `import { and, asc, count, desc, eq, sql } from 'drizzle-orm';` — `and`/`desc` are already imported; add `isNotNull`):
@@ -438,10 +444,12 @@ git commit -m "Expose resolved_at and auto_close_days on agent conversation deta
 ### Task 3: Fix stale `readOnly` on live resolution — query invalidation + 409 toast
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/agent-console/pages/Inbox/components/ThreadPanel.tsx`
 - Test: `frontend/src/surfaces/agent-console/pages/Inbox/components/ThreadPanel.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `ApiError` (`frontend/src/lib/httpClient.ts`, already has a `status: number` field); nothing else new.
 - Produces: no new exports — behavioral fix only.
 
@@ -494,13 +502,13 @@ Expected: FAIL — only the two `inbox` invalidations happen today.
 In `ThreadPanel.tsx`, update the `conversation:phase_changed` handler (currently lines 385-388):
 
 ```ts
-    socket.on('conversation:phase_changed', () => {
-      void queryClient.invalidateQueries({ queryKey: ['conversation', conversationId, 'detail'] });
-      void queryClient.invalidateQueries({ queryKey: ['tickets'] });
-      void queryClient.invalidateQueries({ queryKey: ['tickets-summary'] });
-      void queryClient.invalidateQueries({ queryKey: ['inbox', 'mine'] });
-      void queryClient.invalidateQueries({ queryKey: ['inbox', 'unassigned'] });
-    });
+socket.on('conversation:phase_changed', () => {
+  void queryClient.invalidateQueries({ queryKey: ['conversation', conversationId, 'detail'] });
+  void queryClient.invalidateQueries({ queryKey: ['tickets'] });
+  void queryClient.invalidateQueries({ queryKey: ['tickets-summary'] });
+  void queryClient.invalidateQueries({ queryKey: ['inbox', 'mine'] });
+  void queryClient.invalidateQueries({ queryKey: ['inbox', 'unassigned'] });
+});
 ```
 
 - [ ] **Step 4: Run the test to verify it passes**
@@ -534,23 +542,23 @@ function renderPanel(overrides: PanelProps = {}) {
 Add this test to the `describe('ThreadPanel optimistic sends', ...)` block, alongside the existing "offers a retry when the send fails" test:
 
 ```ts
-  it('toasts and refetches detail when a send loses the race to a resolve (409)', async () => {
-    fakeSocket();
-    vi.mocked(fetchConversationMessages).mockResolvedValue({ messages: [] } as never);
-    vi.mocked(sendAgentMessage).mockRejectedValue(
-      new ApiError('Cannot send a message to a resolved or closed conversation.', 409),
-    );
+it('toasts and refetches detail when a send loses the race to a resolve (409)', async () => {
+  fakeSocket();
+  vi.mocked(fetchConversationMessages).mockResolvedValue({ messages: [] } as never);
+  vi.mocked(sendAgentMessage).mockRejectedValue(
+    new ApiError('Cannot send a message to a resolved or closed conversation.', 409),
+  );
 
-    renderPanel();
-    await screen.findByLabelText('Message');
+  renderPanel();
+  await screen.findByLabelText('Message');
 
-    await userEvent.type(screen.getByLabelText('Message'), 'sneaking in');
-    await userEvent.click(screen.getByRole('button', { name: 'Send' }));
+  await userEvent.type(screen.getByLabelText('Message'), 'sneaking in');
+  await userEvent.click(screen.getByRole('button', { name: 'Send' }));
 
-    expect(
-      await screen.findByText('This ticket was just resolved — your message was not sent.'),
-    ).toBeInTheDocument();
-  });
+  expect(
+    await screen.findByText('This ticket was just resolved — your message was not sent.'),
+  ).toBeInTheDocument();
+});
 ```
 
 - [ ] **Step 6: Run it to verify it fails**
@@ -603,10 +611,12 @@ git commit -m "Fix stale composer lock: invalidate conversation detail on phase_
 ### Task 4: `formatCountdown` and `useAutoCloseCountdown`
 
 **Files:**
+
 - Create: `frontend/src/surfaces/agent-console/pages/Inbox/components/autoCloseCountdown.ts`
 - Test: `frontend/src/surfaces/agent-console/pages/Inbox/components/autoCloseCountdown.test.ts`
 
 **Interfaces:**
+
 - Produces: `formatCountdown(ms: number): string`; `useAutoCloseCountdown(resolvedAt: string | null | undefined, autoCloseDays: number | undefined): string | null` — Task 5 imports both (the hook directly, `formatCountdown` only for tests import it too if needed, but Task 5 only needs the hook).
 
 - [ ] **Step 1: Write the failing tests for `formatCountdown`**
@@ -642,7 +652,9 @@ describe('formatCountdown', () => {
 describe('useAutoCloseCountdown', () => {
   it('returns null when resolvedAt or autoCloseDays is missing', () => {
     expect(renderHook(() => useAutoCloseCountdown(null, 7)).result.current).toBeNull();
-    expect(renderHook(() => useAutoCloseCountdown('2026-08-30T00:00:00.000Z', undefined)).result.current).toBeNull();
+    expect(
+      renderHook(() => useAutoCloseCountdown('2026-08-30T00:00:00.000Z', undefined)).result.current,
+    ).toBeNull();
   });
 
   it('computes the deadline from resolvedAt + autoCloseDays and ticks on a 60s interval', () => {
@@ -697,7 +709,9 @@ export function useAutoCloseCountdown(
   autoCloseDays: number | undefined,
 ): string | null {
   const deadline =
-    resolvedAt && autoCloseDays ? new Date(resolvedAt).getTime() + autoCloseDays * 86_400_000 : null;
+    resolvedAt && autoCloseDays
+      ? new Date(resolvedAt).getTime() + autoCloseDays * 86_400_000
+      : null;
 
   const [label, setLabel] = useState<string | null>(() =>
     deadline === null ? null : formatCountdown(deadline - Date.now()),
@@ -741,11 +755,13 @@ git commit -m "Add formatCountdown and useAutoCloseCountdown for the resolved-ti
 ### Task 5: Resolved/closed-specific banner text and wired-in countdown
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/agent-console/pages/Inbox/components/ThreadPanel.tsx`
 - Modify: `frontend/src/surfaces/agent-console/components/ConversationDetailPane.tsx`
 - Test: `frontend/src/surfaces/agent-console/pages/Inbox/components/ThreadPanel.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `useAutoCloseCountdown` (Task 4); `resolved_at`/`auto_close_days` (Task 2, via `AgentConversationDetail`).
 - Produces: `ThreadPanel` gains two new optional props: `resolvedAt?: string | null` and `autoCloseDays?: number`.
 
@@ -754,33 +770,33 @@ git commit -m "Add formatCountdown and useAutoCloseCountdown for the resolved-ti
 The current banner test in `ThreadPanel.test.tsx` (`describe('ThreadPanel read-only tickets', ...)`, `'banners which ticket is on screen...'`) asserts the old generic copy. Replace it:
 
 ```ts
-  it('banners "Viewing resolved ticket" with who resolved it and when it auto-closes', async () => {
-    fakeSocket();
-    vi.mocked(fetchConversationMessages).mockResolvedValue({ messages: [agentMessage()] } as never);
+it('banners "Viewing resolved ticket" with who resolved it and when it auto-closes', async () => {
+  fakeSocket();
+  vi.mocked(fetchConversationMessages).mockResolvedValue({ messages: [agentMessage()] } as never);
 
-    renderPanel({
-      ...RESOLVED,
-      resolvedAt: '2026-08-30T00:00:00.000Z',
-      autoCloseDays: 7,
-    });
-
-    const banner = await screen.findByRole('status');
-    expect(banner).toHaveTextContent('Viewing resolved ticket');
-    expect(banner).toHaveTextContent('#1039');
-    expect(banner).toHaveTextContent('Resolved by Sam');
-    expect(banner).toHaveTextContent('closes in');
+  renderPanel({
+    ...RESOLVED,
+    resolvedAt: '2026-08-30T00:00:00.000Z',
+    autoCloseDays: 7,
   });
 
-  it('banners "Viewing closed ticket" with no countdown for a closed conversation', async () => {
-    fakeSocket();
-    vi.mocked(fetchConversationMessages).mockResolvedValue({ messages: [agentMessage()] } as never);
+  const banner = await screen.findByRole('status');
+  expect(banner).toHaveTextContent('Viewing resolved ticket');
+  expect(banner).toHaveTextContent('#1039');
+  expect(banner).toHaveTextContent('Resolved by Sam');
+  expect(banner).toHaveTextContent('closes in');
+});
 
-    renderPanel({ ...RESOLVED, status: 'closed' });
+it('banners "Viewing closed ticket" with no countdown for a closed conversation', async () => {
+  fakeSocket();
+  vi.mocked(fetchConversationMessages).mockResolvedValue({ messages: [agentMessage()] } as never);
 
-    const banner = await screen.findByRole('status');
-    expect(banner).toHaveTextContent('Viewing closed ticket');
-    expect(banner).not.toHaveTextContent('closes in');
-  });
+  renderPanel({ ...RESOLVED, status: 'closed' });
+
+  const banner = await screen.findByRole('status');
+  expect(banner).toHaveTextContent('Viewing closed ticket');
+  expect(banner).not.toHaveTextContent('closes in');
+});
 ```
 
 - [ ] **Step 2: Run it to verify it fails**
@@ -847,24 +863,26 @@ export function ThreadPanel({
 Inside the component body, call the hook (any spot alongside the other `useQuery`/`useState` calls, e.g. right after the `queryClient`/`pending`/`expandedImage` declarations):
 
 ```ts
-  const countdownLabel = useAutoCloseCountdown(resolvedAt, autoCloseDays);
+const countdownLabel = useAutoCloseCountdown(resolvedAt, autoCloseDays);
 ```
 
 Replace the banner block (currently lines 566-579):
 
 ```tsx
-        {readOnly && (
-          <div
-            role="status"
-            className="flex shrink-0 items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-900"
-          >
-            <Archive className="size-3.5 shrink-0" />
-            {status === 'resolved' ? 'Viewing resolved ticket' : 'Viewing closed ticket'}
-            {ticketNumber != null && ` · #${ticketNumber}`}
-            {` · ${resolverLabel(resolutionSource, resolvedByAgentName)}`}
-            {status === 'resolved' && countdownLabel && ` · ${countdownLabel}`}
-          </div>
-        )}
+{
+  readOnly && (
+    <div
+      role="status"
+      className="flex shrink-0 items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-900"
+    >
+      <Archive className="size-3.5 shrink-0" />
+      {status === 'resolved' ? 'Viewing resolved ticket' : 'Viewing closed ticket'}
+      {ticketNumber != null && ` · #${ticketNumber}`}
+      {` · ${resolverLabel(resolutionSource, resolvedByAgentName)}`}
+      {status === 'resolved' && countdownLabel && ` · ${countdownLabel}`}
+    </div>
+  );
+}
 ```
 
 (This drops the old `openedAt`/`formatTicketDate` fragment in favor of `resolverLabel`, which is strictly more informative and was already computed for the composer placeholder just below — no behavior is lost, since `resolverLabel` already covers the "Closed" fallback case the old bare-status word covered. `formatTicketDate` and the `openedAt` prop stay — nothing else in this file uses `formatTicketDate` today, but it's a small pure function with no cost to leave in place, and removing an exported-looking helper is out of scope for this task; leave it as dead code review may flag separately, or delete it if `pnpm lint`'s unused-export check fails the build — check `pnpm lint` output in Step 6 below and delete `formatTicketDate` only if it does.)

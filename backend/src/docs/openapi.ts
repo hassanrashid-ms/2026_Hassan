@@ -484,7 +484,7 @@ registry.registerPath({
   path: '/surface/messages',
   summary: 'Send Player Message',
   description:
-    'Sends a player chat message. `session_id` is optional and best-effort: it is verified against the caller and used to attribute the resulting events, and is ignored when it cannot be verified. `form_field_key` is present only when this send answers a live form submission\'s pending `attachment` field.',
+    "Sends a player chat message. `session_id` is optional and best-effort: it is verified against the caller and used to attribute the resulting events, and is ignored when it cannot be verified. `form_field_key` is present only when this send answers a live form submission's pending `attachment` field.",
   security: [{ [bearerPlayerJwt.name]: [] }],
   request: {
     body: {
@@ -620,22 +620,55 @@ registry.registerPath({
       olderThanHours: z.coerce.number().optional(),
       q: z.string().optional(),
       cursor: z.string().optional(),
-      createdFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-      createdTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      createdFrom: z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}$/)
+        .optional(),
+      createdTo: z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}$/)
+        .optional(),
       statuses: z
         .union([
           z.enum(['unassigned', 'agentAssigned', 'botHandling', 'escalated', 'resolved', 'closed']),
           z.array(
-            z.enum(['unassigned', 'agentAssigned', 'botHandling', 'escalated', 'resolved', 'closed']),
+            z.enum([
+              'unassigned',
+              'agentAssigned',
+              'botHandling',
+              'escalated',
+              'resolved',
+              'closed',
+            ]),
           ),
         ])
         .optional(),
       sortBy: z
-        .enum(['player', 'status', 'priority', 'assignee', 'lastMessage', 'tags', 'created', 'subintent', 'number'])
+        .enum([
+          'player',
+          'status',
+          'priority',
+          'assignee',
+          'lastMessage',
+          'tags',
+          'created',
+          'subintent',
+          'number',
+        ])
         .optional(),
       sortDir: z.enum(['asc', 'desc']).optional(),
       sortBy2: z
-        .enum(['player', 'status', 'priority', 'assignee', 'lastMessage', 'tags', 'created', 'subintent', 'number'])
+        .enum([
+          'player',
+          'status',
+          'priority',
+          'assignee',
+          'lastMessage',
+          'tags',
+          'created',
+          'subintent',
+          'number',
+        ])
         .optional(),
       sortDir2: z.enum(['asc', 'desc']).optional(),
     }),
@@ -784,7 +817,12 @@ registry.registerPath({
             assignedCount: z.number().int(),
             conversationIds: z.array(z.uuid()),
             remainingCount: z.number().int(),
-            stopReason: z.enum(['queue_empty', 'no_active_agents', 'all_at_capacity', 'none_online']),
+            stopReason: z.enum([
+              'queue_empty',
+              'no_active_agents',
+              'all_at_capacity',
+              'none_online',
+            ]),
           }),
         },
       },
@@ -1146,7 +1184,10 @@ registry.registerPath({
   security: [{ [bearerAgentJwt.name]: [] }],
   request: { params: z.object({ id: z.uuid() }) },
   responses: {
-    200: { description: 'Marked read', content: { 'application/json': { schema: z.object({ read: z.boolean() }) } } },
+    200: {
+      description: 'Marked read',
+      content: { 'application/json': { schema: z.object({ read: z.boolean() }) } },
+    },
     404: { description: 'Notification not found' },
   },
 });
@@ -1155,7 +1196,8 @@ registry.registerPath({
   method: 'patch',
   path: '/agent/notifications/read-all',
   summary: 'Mark All Notifications Read',
-  description: 'Marks every unread notification for the calling agent read, across all their workspaces.',
+  description:
+    'Marks every unread notification for the calling agent read, across all their workspaces.',
   security: [{ [bearerAgentJwt.name]: [] }],
   responses: {
     200: {
@@ -1985,7 +2027,10 @@ registry.registerPath({
     'On a published article with a draft in progress, stages the removal (applied at publish). Otherwise removes immediately.',
   security: [{ [bearerAgentJwt.name]: [] }],
   request: { params: z.object({ id: z.uuid(), attachmentId: z.uuid() }) },
-  responses: { 200: { description: 'Removed or staged for removal' }, 404: { description: 'Not found' } },
+  responses: {
+    200: { description: 'Removed or staged for removal' },
+    404: { description: 'Not found' },
+  },
 });
 
 registry.registerPath({
@@ -2002,8 +2047,7 @@ registry.registerPath({
   method: 'post',
   path: '/agent/articles/{id}/unarchive',
   summary: 'Agent Unarchive Article',
-  description:
-    'archived -> published, unchanged content. Re-indexes the article in Weaviate.',
+  description: 'archived -> published, unchanged content. Re-indexes the article in Weaviate.',
   security: [{ [bearerAgentJwt.name]: [] }],
   request: { params: z.object({ id: z.uuid() }) },
   responses: {
@@ -2368,14 +2412,21 @@ registry.registerPath({
               ]),
               body: z.string().min(1),
             }),
-            z.object({ kind: z.literal('canned'), label: z.string().min(1), body: z.string().min(1) }),
+            z.object({
+              kind: z.literal('canned'),
+              label: z.string().min(1),
+              body: z.string().min(1),
+            }),
           ]),
         },
       },
     },
   },
   responses: {
-    201: { description: 'The created template row', content: { 'application/json': { schema: TemplateRowSchema } } },
+    201: {
+      description: 'The created template row',
+      content: { 'application/json': { schema: TemplateRowSchema } },
+    },
     403: { description: 'Forbidden — admin role required' },
     422: { description: 'Missing or invalid kind/key/label/body' },
   },
@@ -2402,7 +2453,10 @@ registry.registerPath({
     },
   },
   responses: {
-    200: { description: 'The updated template row', content: { 'application/json': { schema: TemplateRowSchema } } },
+    200: {
+      description: 'The updated template row',
+      content: { 'application/json': { schema: TemplateRowSchema } },
+    },
     403: { description: 'Forbidden — admin role required' },
     422: { description: 'No recognised field to update' },
   },
@@ -2506,7 +2560,10 @@ registry.registerPath({
     200: { description: 'Resolved bot config after the rollback' },
     403: { description: 'Forbidden — admin role required' },
     404: { description: 'No matching bot config version for this workspace' },
-    422: { description: 'version is missing, not a positive integer, or the restored value fails validation' },
+    422: {
+      description:
+        'version is missing, not a positive integer, or the restored value fails validation',
+    },
   },
 });
 
@@ -2534,7 +2591,9 @@ registry.registerPath({
                 }),
               ),
               tools_config: z.array(z.object({ tool: z.string(), enabled: z.boolean() })),
-              limits_config: z.array(z.object({ key: z.string(), value: z.number().int().positive() })),
+              limits_config: z.array(
+                z.object({ key: z.string(), value: z.number().int().positive() }),
+              ),
             }),
             subintent_id: z.string().nullable(),
             confirm_phase: z.enum([
@@ -2585,7 +2644,9 @@ registry.registerPath({
     },
   },
   responses: {
-    200: { description: 'The deterministic resolution outcome — resolved, handed off, or reopened' },
+    200: {
+      description: 'The deterministic resolution outcome — resolved, handed off, or reopened',
+    },
     403: { description: 'Forbidden — admin role required' },
     422: { description: 'Invalid test-resolution payload' },
   },
@@ -3039,7 +3100,7 @@ const AnalyticsRangeSchema = z.object({
   from: z.string().openapi({ example: '2026-08-01' }),
   to: z.string().openapi({ example: '2026-08-31' }),
   granularity: z.enum(['day', 'week']),
-})
+});
 
 const AnalyticsResponseSchema = z.object({
   range: AnalyticsRangeSchema,
@@ -3062,23 +3123,30 @@ const AnalyticsResponseSchema = z.object({
       p90Seconds: z.number().nullable(),
       series: z.array(z.object({ bucket: z.string(), seconds: z.number().nullable() })),
     }),
-    timeToClaim: z.object({ series: z.array(z.object({ bucket: z.string(), seconds: z.number().nullable() })) }),
+    timeToClaim: z.object({
+      series: z.array(z.object({ bucket: z.string(), seconds: z.number().nullable() })),
+    }),
   }),
   bot: z.object({
     containmentRate: z.number().nullable(),
     selfServeRate: z.number().nullable(),
-    handoff: z.object({ rate: z.number().nullable(), byReason: z.array(z.object({ reason: z.string(), count: z.number() })) }),
+    handoff: z.object({
+      rate: z.number().nullable(),
+      byReason: z.array(z.object({ reason: z.string(), count: z.number() })),
+    }),
     articleHitRate: z.number().nullable(),
   }),
   team: z.object({
     avgOpenPerActiveAgent: z.number().nullable(),
-    unassignedQueueDepth: z.object({ series: z.array(z.object({ bucket: z.string(), depth: z.number() })) }),
+    unassignedQueueDepth: z.object({
+      series: z.array(z.object({ bucket: z.string(), depth: z.number() })),
+    }),
   }),
   articles: z.object({
     topCited: z.array(z.object({ articleId: z.string(), title: z.string(), count: z.number() })),
     topRead: z.array(z.object({ articleId: z.string(), title: z.string(), count: z.number() })),
   }),
-})
+});
 
 const DashboardLayoutSchema = z.object({
   items: z.array(
@@ -3093,7 +3161,7 @@ const DashboardLayoutSchema = z.object({
     }),
   ),
   visibleTileIds: z.array(z.string()),
-})
+});
 
 registry.registerPath({
   method: 'get',
@@ -3103,13 +3171,20 @@ registry.registerPath({
     'One aggregate response covering volume/status, speed, bot performance and team metric groups for a date range.',
   security: [{ [bearerAgentJwt.name]: [] }],
   request: {
-    query: z.object({ from: z.string(), to: z.string(), granularity: z.enum(['day', 'week']).optional() }),
+    query: z.object({
+      from: z.string(),
+      to: z.string(),
+      granularity: z.enum(['day', 'week']).optional(),
+    }),
   },
   responses: {
-    200: { description: 'Analytics data', content: { 'application/json': { schema: AnalyticsResponseSchema } } },
+    200: {
+      description: 'Analytics data',
+      content: { 'application/json': { schema: AnalyticsResponseSchema } },
+    },
     422: { description: 'Invalid range or granularity' },
   },
-})
+});
 
 registry.registerPath({
   method: 'get',
@@ -3122,7 +3197,7 @@ registry.registerPath({
       content: { 'application/json': { schema: z.object({ layout: DashboardLayoutSchema }) } },
     },
   },
-})
+});
 
 registry.registerPath({
   method: 'put',
@@ -3130,13 +3205,15 @@ registry.registerPath({
   summary: "Save the caller's dashboard tile layout",
   security: [{ [bearerAgentJwt.name]: [] }],
   request: {
-    body: { content: { 'application/json': { schema: z.object({ layout: DashboardLayoutSchema }) } } },
+    body: {
+      content: { 'application/json': { schema: z.object({ layout: DashboardLayoutSchema }) } },
+    },
   },
   responses: {
     200: { description: 'Saved' },
     422: { description: 'Invalid layout shape' },
   },
-})
+});
 
 // Build Document
 const generator = new OpenApiGeneratorV3(registry.definitions);

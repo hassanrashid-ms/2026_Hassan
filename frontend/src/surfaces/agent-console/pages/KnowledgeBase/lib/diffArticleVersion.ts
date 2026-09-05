@@ -8,7 +8,8 @@ export function diffKeywords(before: string[], after: string[]): FieldDiffEntry[
   const added = after.filter((k) => !beforeSet.has(k));
   const removed = before.filter((k) => !afterSet.has(k));
   const entries: FieldDiffEntry[] = [];
-  if (added.length) entries.push({ key: 'keywords-added', description: `Added: ${added.join(', ')}` });
+  if (added.length)
+    entries.push({ key: 'keywords-added', description: `Added: ${added.join(', ')}` });
   if (removed.length)
     entries.push({ key: 'keywords-removed', description: `Removed: ${removed.join(', ')}` });
   return entries;
@@ -22,7 +23,8 @@ export function diffAttachments(
   const afterIds = new Set(after.map((a) => a.id));
   const entries: FieldDiffEntry[] = [];
   for (const a of after) {
-    if (!beforeIds.has(a.id)) entries.push({ key: `att-add-${a.id}`, description: `Added "${a.filename}"` });
+    if (!beforeIds.has(a.id))
+      entries.push({ key: `att-add-${a.id}`, description: `Added "${a.filename}"` });
   }
   for (const a of before) {
     if (!afterIds.has(a.id))

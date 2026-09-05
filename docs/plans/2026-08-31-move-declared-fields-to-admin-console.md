@@ -22,12 +22,14 @@
 ## Task 1: Backend — new admin declared-fields service, controller, and routes
 
 **Files:**
+
 - Create: `backend/src/admin/services/declaredFieldsService.ts`
 - Create: `backend/src/admin/controllers/declaredFieldsController.ts`
 - Modify: `backend/src/admin/routers/workspacesRouter.ts`
 - Test: `backend/tests/admin.declaredFields.test.ts`
 
 **Interfaces:**
+
 - Consumes: `adminDb` (`shared/db/adminClient.ts`), `declaredField`/`agent` tables (`shared/db/schema/index.ts`), `appendChangeLog` (`shared/changeLog/appendChangeLog.ts`), `AgentContext` type (`shared/middleware/requireAgentSession.ts`, for `req.agent!.agentId`).
 - Produces: `listDeclaredFields(workspaceId)`, `createDeclaredField(workspaceId, actorId, input)`, `updateDeclaredField(workspaceId, id, patch)`, `deactivateDeclaredField(workspaceId, id, actorId)`, `reactivateDeclaredField(workspaceId, id, actorId)`, `archiveDeclaredField(workspaceId, id, actorId)` — all exported from `declaredFieldsService.ts`, consumed by `declaredFieldsController.ts`, and by nothing else (no other task calls these directly). Routes: `GET/POST /workspaces/:id/declared-fields`, `PATCH/POST /workspaces/:id/declared-fields/:fieldId[/deactivate|/reactivate|/archive]`, mounted under `/admin` (full path e.g. `/admin/workspaces/:id/declared-fields`).
 
@@ -256,7 +258,11 @@ describe('PATCH /admin/workspaces/:id/declared-fields/:fieldId', () => {
       .send({ label: 'Player Level (v2)' })
       .expect(200);
 
-    expect(res.body).toMatchObject({ key: 'player_level', label: 'Player Level (v2)', type: 'number' });
+    expect(res.body).toMatchObject({
+      key: 'player_level',
+      label: 'Player Level (v2)',
+      type: 'number',
+    });
   });
 
   it('writes a change_log row per changed field, attributed to the admin', async () => {
@@ -283,7 +289,9 @@ describe('PATCH /admin/workspaces/:id/declared-fields/:fieldId', () => {
     const { token } = await adminToken();
 
     await request(app)
-      .patch(`/admin/workspaces/${workspaceId}/declared-fields/00000000-0000-0000-0000-000000000000`)
+      .patch(
+        `/admin/workspaces/${workspaceId}/declared-fields/00000000-0000-0000-0000-000000000000`,
+      )
       .set('Authorization', `Bearer ${token}`)
       .send({ label: 'VIP tier' })
       .expect(404);
@@ -465,8 +473,7 @@ export async function listDeclaredFields(workspaceId: string): Promise<DeclaredF
 }
 
 export type CreateDeclaredFieldResult =
-  | { ok: true; field: CreateDeclaredFieldResponse }
-  | { ok: false; reason: 'key_taken' };
+  { ok: true; field: CreateDeclaredFieldResponse } | { ok: false; reason: 'key_taken' };
 
 /**
  * Re-promoting a key that is currently `inactive` or `archived` revives the
@@ -578,8 +585,7 @@ export async function updateDeclaredField(
 }
 
 export type DeactivateDeclaredFieldResult =
-  | { ok: true; field: DeactivateDeclaredFieldResponse }
-  | { ok: false; reason: 'not_found' };
+  { ok: true; field: DeactivateDeclaredFieldResponse } | { ok: false; reason: 'not_found' };
 
 export async function deactivateDeclaredField(
   workspaceId: string,
@@ -614,8 +620,7 @@ export async function deactivateDeclaredField(
 }
 
 export type ReactivateDeclaredFieldResult =
-  | { ok: true; field: ReactivateDeclaredFieldResponse }
-  | { ok: false; reason: 'not_found' };
+  { ok: true; field: ReactivateDeclaredFieldResponse } | { ok: false; reason: 'not_found' };
 
 export async function reactivateDeclaredField(
   workspaceId: string,
@@ -650,8 +655,7 @@ export async function reactivateDeclaredField(
 }
 
 export type ArchiveDeclaredFieldResult =
-  | { ok: true; field: ArchiveDeclaredFieldResponse }
-  | { ok: false; reason: 'not_found' };
+  { ok: true; field: ArchiveDeclaredFieldResponse } | { ok: false; reason: 'not_found' };
 
 export async function archiveDeclaredField(
   workspaceId: string,
@@ -716,11 +720,7 @@ export const createDeclaredFieldHandler: RequestHandler = async (req, res) => {
     sendError(res, 422, 'invalid_request', 'key, label and a valid type are required.');
     return;
   }
-  const result = await createDeclaredField(
-    req.params.id as string,
-    req.agent!.agentId,
-    body.data,
-  );
+  const result = await createDeclaredField(req.params.id as string, req.agent!.agentId, body.data);
   if (!result.ok) {
     sendError(res, 409, 'key_taken', 'A declared field with this key already exists.');
     return;
@@ -859,10 +859,7 @@ workspacesRouter.post('/workspaces/:id/secret/rotate', rotateSecretHandler);
 
 workspacesRouter.get('/workspaces/:id/declared-fields', listDeclaredFieldsHandler);
 workspacesRouter.post('/workspaces/:id/declared-fields', createDeclaredFieldHandler);
-workspacesRouter.patch(
-  '/workspaces/:id/declared-fields/:fieldId',
-  updateDeclaredFieldHandler,
-);
+workspacesRouter.patch('/workspaces/:id/declared-fields/:fieldId', updateDeclaredFieldHandler);
 workspacesRouter.post(
   '/workspaces/:id/declared-fields/:fieldId/deactivate',
   deactivateDeclaredFieldHandler,
@@ -904,6 +901,7 @@ git commit -m "Add admin-console declared-fields service, controller, and routes
 ## Task 2: Backend — remove the old agent-console declared-fields code
 
 **Files:**
+
 - Delete: `backend/src/agent/routers/declaredFieldRouter.ts`
 - Delete: `backend/src/agent/controllers/declaredFieldController.ts`
 - Delete: `backend/src/agent/services/declaredFieldService.ts`
@@ -911,6 +909,7 @@ git commit -m "Add admin-console declared-fields service, controller, and routes
 - Modify: `backend/src/agent/router.ts`
 
 **Interfaces:**
+
 - Consumes: nothing new.
 - Produces: nothing — this is pure removal. No other backend file imports from the three deleted files (confirmed: only `agent/router.ts` mounts `declaredFieldRouter`, and only the deleted test imports the router directly).
 
@@ -996,9 +995,11 @@ git commit -m "Remove agent-console declared-fields backend code"
 ## Task 3: Backend — update OpenAPI docs
 
 **Files:**
+
 - Modify: `backend/src/docs/openapi.ts`
 
 **Interfaces:**
+
 - Consumes: `bearerAgentSession` (already imported/used elsewhere in this file for other `/admin/*` entries — same import used by the members/secret blocks).
 - Produces: nothing consumed by other tasks — this is documentation only.
 
@@ -1138,11 +1139,13 @@ git commit -m "Move declared-fields OpenAPI entries from agent to admin routes"
 ## Task 4: Frontend — admin-console API functions and `DeclaredFieldRow`
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/admin-console/api/adminApi.ts`
 - Create: `frontend/src/surfaces/admin-console/pages/WorkspaceDetail/components/DeclaredFieldRow.tsx`
 - Test: `frontend/src/surfaces/admin-console/pages/WorkspaceDetail/components/DeclaredFieldRow.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `DeclaredFieldView`, `DeclaredFieldType` (`@support/types`), `TableRow`/`TableCell` (`../../../components/ui/table.tsx`), `Badge`/`Button`/`Input`/`Select*` (`../../../components/ui/*`), `ConfirmDialog` (`../../../components/ConfirmDialog.tsx`), `ApiError` (`../../../../../lib/httpClient.ts`).
 - Produces: `updateDeclaredField(token, workspaceId, id, patch)`, `deactivateDeclaredField(token, workspaceId, id)`, `reactivateDeclaredField(token, workspaceId, id)`, `archiveDeclaredField(token, workspaceId, id)` from `adminApi.ts` — consumed by both this task's `DeclaredFieldRow` and Task 5's `DeclaredFieldsPanel` (which also needs `fetchDeclaredFields`/`createDeclaredField`, added here too). `DeclaredFieldRow` component: `<DeclaredFieldRow token={string} workspaceId={string} field={DeclaredFieldView} />`, consumed by Task 5.
 
@@ -1650,11 +1653,13 @@ git commit -m "Add admin-console DeclaredFieldRow and its API functions"
 ## Task 5: Frontend — `DeclaredFieldsPanel` and wiring into `WorkspaceDetail`
 
 **Files:**
+
 - Create: `frontend/src/surfaces/admin-console/pages/WorkspaceDetail/components/DeclaredFieldsPanel.tsx`
 - Test: `frontend/src/surfaces/admin-console/pages/WorkspaceDetail/components/DeclaredFieldsPanel.test.tsx`
 - Modify: `frontend/src/surfaces/admin-console/pages/WorkspaceDetail/WorkspaceDetail.tsx`
 
 **Interfaces:**
+
 - Consumes: `fetchDeclaredFields`, `createDeclaredField` (Task 4's `adminApi.ts` additions), `DeclaredFieldRow` (Task 4), `Table`/`TableHeader`/`TableBody`/`TableRow`/`TableHead` (`../../../components/ui/table.tsx`), `toast` (`sonner`, already a dependency per `MembersTable.tsx`).
 - Produces: `<DeclaredFieldsPanel token={string} workspaceId={string} />`, consumed by `WorkspaceDetail.tsx`.
 
@@ -2018,6 +2023,7 @@ git commit -m "Add DeclaredFieldsPanel and wire it into WorkspaceDetail's third 
 ## Task 6: Frontend — remove the old agent-console declared-fields code
 
 **Files:**
+
 - Delete: `frontend/src/surfaces/agent-console/pages/DeclaredFields/DeclaredFields.tsx`
 - Delete: `frontend/src/surfaces/agent-console/pages/DeclaredFields/DeclaredFields.test.tsx`
 - Delete: `frontend/src/surfaces/agent-console/pages/DeclaredFields/components/DeclaredFieldRow.tsx`
@@ -2028,6 +2034,7 @@ git commit -m "Add DeclaredFieldsPanel and wire it into WorkspaceDetail's third 
 - Modify: `frontend/src/routes/AppRoutes.tsx`
 
 **Interfaces:**
+
 - Consumes: nothing new.
 - Produces: nothing — pure removal. `isAdmin` (from `agent-console/lib/agentSession.ts`) becomes unused in `AppRoutes.tsx` after this task and its import is removed there; it remains used elsewhere in `agentSession.ts` itself and in `AgentConsoleShell.tsx` (still gating other nav items), so the exported function itself is not touched.
 
@@ -2044,6 +2051,7 @@ Modify `frontend/src/surfaces/agent-console/api/agentApi.ts` — delete the six 
 - [ ] **Step 3: Remove the nav entry from `AgentConsoleShell.tsx`**
 
 Modify `frontend/src/surfaces/agent-console/components/AgentConsoleShell.tsx`:
+
 - Delete the `DECLARED_FIELDS_NAV_ITEM` constant (including its preceding comment).
 - Delete the `Layers` import from the `lucide-react` import list at the top of the file, if `Layers` is not used anywhere else in the file (check with `grep -n "Layers" frontend/src/surfaces/agent-console/components/AgentConsoleShell.tsx` after removing the constant — if the only remaining match is the import line itself, delete that line too).
 - Remove `...(isAdmin(session) ? [DECLARED_FIELDS_NAV_ITEM] : [])` from the nav items array it's spread into (the line reads `...(isAdmin(session) ? [DECLARED_FIELDS_NAV_ITEM] : []),` inside the array — delete the whole line). Leave `isAdmin` imported/used if `AgentConsoleShell.tsx` still calls it elsewhere (check with `grep -n "isAdmin" frontend/src/surfaces/agent-console/components/AgentConsoleShell.tsx` after the removal).
@@ -2089,6 +2097,7 @@ export const agentRoutePreload: Record<string, () => Promise<unknown>> = {
 - [ ] **Step 5: Remove the route from `AppRoutes.tsx`**
 
 Modify `frontend/src/routes/AppRoutes.tsx`:
+
 - Remove `importDeclaredFields` from the `routePreload.ts` import list.
 - Remove `isAdmin` from the `import { canBuildForms, isAdmin } from '../surfaces/agent-console/lib/agentSession.ts';` line, leaving `import { canBuildForms } from '../surfaces/agent-console/lib/agentSession.ts';` (confirm first with `grep -n "isAdmin" frontend/src/routes/AppRoutes.tsx` that the only usage was the declared-fields route being removed in this step).
 - Remove the `const DeclaredFieldsPage = lazy(...)` block.

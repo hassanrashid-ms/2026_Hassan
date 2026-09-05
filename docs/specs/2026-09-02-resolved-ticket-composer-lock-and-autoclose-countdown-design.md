@@ -8,7 +8,7 @@
 An agent was able to send a message on a conversation whose status was `resolved`. Two independent gaps allow this:
 
 1. **No server-side guard.** `sendAgentMessage` (`backend/src/agent/services/messagesService.ts`) fetches `conversation.status` but never checks it before calling `postMessage`. Nothing at the API rejects a send on a `resolved`/`closed` conversation — permission checks must run at the API per this repo's rules, and today this one doesn't.
-2. **Stale client cache.** The console already computes `readOnly = status === 'resolved' || status === 'closed'` (`ConversationDetailPane.tsx`) and disables the composer when `readOnly` is true (`ThreadPanel.tsx`). But when a conversation resolves *while an agent is viewing it* — via player confirmation, the 24h inactivity-clock auto-resolve job, or another agent's force-resolve — the socket event that announces it (`conversation:phase_changed`, emitted to the `conv:{id}:agents` room all three triggers already reach) only triggers `ThreadPanel`'s handler to invalidate `['inbox','mine']`/`['inbox','unassigned']`. It never invalidates `['conversation', conversationId, 'detail']`, the query `status` is read from. So `status` stays stale, `readOnly` stays `false`, and the composer stays live and accepts a send that gap #1 then lets through.
+2. **Stale client cache.** The console already computes `readOnly = status === 'resolved' || status === 'closed'` (`ConversationDetailPane.tsx`) and disables the composer when `readOnly` is true (`ThreadPanel.tsx`). But when a conversation resolves _while an agent is viewing it_ — via player confirmation, the 24h inactivity-clock auto-resolve job, or another agent's force-resolve — the socket event that announces it (`conversation:phase_changed`, emitted to the `conv:{id}:agents` room all three triggers already reach) only triggers `ThreadPanel`'s handler to invalidate `['inbox','mine']`/`['inbox','unassigned']`. It never invalidates `['conversation', conversationId, 'detail']`, the query `status` is read from. So `status` stays stale, `readOnly` stays `false`, and the composer stays live and accepts a send that gap #1 then lets through.
 
 Separately, there's no visibility into when a resolved ticket will auto-close (`resolution_cycle.resolvedAt` + the workspace's `autoCloseDays`, default 7 — see `backend/src/shared/jobs/autoClose.ts`). An agent viewing a resolved ticket has no way to tell if it closes in an hour or a week.
 
@@ -99,9 +99,17 @@ Update the response schema in `backend/src/docs/openapi.ts` for `GET /agent/conv
 New hook, colocated with `ThreadPanel.tsx` or in `features/chat/hooks/` if it fits that shared layer better:
 
 ```ts
-function useAutoCloseCountdown(resolvedAt: string | null | undefined, autoCloseDays: number | undefined): string | null {
-  const deadline = resolvedAt && autoCloseDays ? new Date(resolvedAt).getTime() + autoCloseDays * 86_400_000 : null;
-  const [label, setLabel] = useState(() => (deadline ? formatCountdown(deadline - Date.now()) : null));
+function useAutoCloseCountdown(
+  resolvedAt: string | null | undefined,
+  autoCloseDays: number | undefined,
+): string | null {
+  const deadline =
+    resolvedAt && autoCloseDays
+      ? new Date(resolvedAt).getTime() + autoCloseDays * 86_400_000
+      : null;
+  const [label, setLabel] = useState(() =>
+    deadline ? formatCountdown(deadline - Date.now()) : null,
+  );
   useEffect(() => {
     if (!deadline) return;
     const tick = () => setLabel(formatCountdown(deadline - Date.now()));
@@ -127,15 +135,20 @@ function formatCountdown(ms: number): string {
 The existing amber banner block in `ThreadPanel.tsx` splits on status instead of a single generic string:
 
 ```tsx
-{readOnly && (
-  <div role="status" className="flex shrink-0 items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-900">
-    <Archive className="size-3.5 shrink-0" />
-    {status === 'resolved' ? 'Viewing resolved ticket' : 'Viewing closed ticket'}
-    {ticketNumber != null && ` · #${ticketNumber}`}
-    {openedAt && ` · ${resolverLabel(resolutionSource, resolvedByAgentName)}`}
-    {status === 'resolved' && countdownLabel && ` · ${countdownLabel}`}
-  </div>
-)}
+{
+  readOnly && (
+    <div
+      role="status"
+      className="flex shrink-0 items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-900"
+    >
+      <Archive className="size-3.5 shrink-0" />
+      {status === 'resolved' ? 'Viewing resolved ticket' : 'Viewing closed ticket'}
+      {ticketNumber != null && ` · #${ticketNumber}`}
+      {openedAt && ` · ${resolverLabel(resolutionSource, resolvedByAgentName)}`}
+      {status === 'resolved' && countdownLabel && ` · ${countdownLabel}`}
+    </div>
+  );
+}
 ```
 
 (Replacing the old `${status ?? 'resolved'} · opened ${formatTicketDate(openedAt)}` fragment with `resolverLabel(...)`, which is already computed today for the composer placeholder and is more informative than the bare status word — "Resolved by Sam" rather than "resolved". `closed` tickets keep showing the resolver label with no countdown appended.)

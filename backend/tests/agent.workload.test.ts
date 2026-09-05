@@ -357,7 +357,12 @@ describe('GET /agent/workload — new metrics', () => {
     const workerAgentId = await seedAgent('worker@example.test');
     await seedWorkspaceMember({ workspaceId, agentId: workerAgentId, role: 'agent' });
 
-    await seedConversation({ workspaceId, playerId, status: 'open', assignedAgentId: workerAgentId });
+    await seedConversation({
+      workspaceId,
+      playerId,
+      status: 'open',
+      assignedAgentId: workerAgentId,
+    });
     await seedConversation({
       workspaceId,
       playerId,

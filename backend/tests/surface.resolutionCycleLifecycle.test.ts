@@ -131,9 +131,12 @@ describe('resolution cycles on the surface ticket paths', () => {
   it('stamps closed_at on the old cycle and opens cycle 1 on the replacement ticket', async () => {
     const workspaceId = await seedWorkspace({ slug: 'demo-game' });
     const playerId = await seedPlayer(workspaceId);
-    const { conversation_id: oldId } = await sendPlayerMessageOk({ workspaceId, playerId } as never, {
-      body: 'first',
-    });
+    const { conversation_id: oldId } = await sendPlayerMessageOk(
+      { workspaceId, playerId } as never,
+      {
+        body: 'first',
+      },
+    );
     await withWorkspace(workspaceId, (tx) =>
       tx.update(conversation).set({ status: 'resolved' }).where(eq(conversation.id, oldId)),
     );

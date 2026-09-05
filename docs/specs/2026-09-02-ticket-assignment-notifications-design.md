@@ -35,7 +35,7 @@ a workspace the agent is not currently viewing.
 
 ## Non-goals
 
-- Notifying the *previous* agent when a ticket is reassigned away from them.
+- Notifying the _previous_ agent when a ticket is reassigned away from them.
 - Notifying about anything other than ticket assignment (no message notifications,
   no mention notifications, etc.) — the `type` column is generic for future reuse,
   but only `ticket_assigned` is implemented here.
@@ -55,14 +55,20 @@ New table, `backend/src/shared/db/schema/notifications.ts`:
 ```ts
 notification = pgTable('notification', {
   id: uuid('id').primaryKey().defaultRandom(),
-  workspaceId: uuid('workspace_id').notNull().references(() => workspace.id), // RLS tenant column
-  agentId: uuid('agent_id').notNull().references(() => agent.id),             // recipient
-  type: text('type').notNull(),                                              // 'ticket_assigned'
+  workspaceId: uuid('workspace_id')
+    .notNull()
+    .references(() => workspace.id), // RLS tenant column
+  agentId: uuid('agent_id')
+    .notNull()
+    .references(() => agent.id), // recipient
+  type: text('type').notNull(), // 'ticket_assigned'
   conversationId: uuid('conversation_id').references(() => conversation.id),
-  payload: jsonb('payload').notNull().default(sql`'{}'::jsonb`),
-  readAt: timestamp('read_at', { withTimezone: true, mode: 'date' }),        // null = unread
+  payload: jsonb('payload')
+    .notNull()
+    .default(sql`'{}'::jsonb`),
+  readAt: timestamp('read_at', { withTimezone: true, mode: 'date' }), // null = unread
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
-})
+});
 ```
 
 Standard `tenant` RLS policy on `workspace_id`, identical in shape to every other
@@ -83,7 +89,7 @@ For `type: 'ticket_assigned'`, `payload` holds:
 `workspaceName`/`workspaceSlug` are snapshotted at creation time, not looked up via
 join at read time — same rule the `event` table already follows ("payload values in
 events are snapshotted, never live pointers"), and necessary here because a
-dropdown read may happen from a request scoped to a *different* workspace than the
+dropdown read may happen from a request scoped to a _different_ workspace than the
 one the notification belongs to.
 
 Index: `(agent_id, workspace_id, read_at)` to support the unread-count and
@@ -103,10 +109,10 @@ export async function notifyAgent(
     conversationId?: string;
     payload: Record<string, unknown>;
   },
-): Promise<NotificationRow>
+): Promise<NotificationRow>;
 ```
 
-Called inside the *same transaction* as the assignment write, immediately after the
+Called inside the _same transaction_ as the assignment write, immediately after the
 existing `appendEvent(...)` call, at every current assignment site:
 
 - `claimConversation` (`conversationsService.ts`)
@@ -145,7 +151,7 @@ After the assignment transaction commits, the handler layer (not the service, sa
 pattern `emitInboxChanged` already follows) emits:
 
 ```ts
-emitNotificationNew(io, agentId, notificationView) // io.to(agentNotificationRoom(agentId)).emit('notification:new', notificationView)
+emitNotificationNew(io, agentId, notificationView); // io.to(agentNotificationRoom(agentId)).emit('notification:new', notificationView)
 ```
 
 For sweep, the handler emits one `notification:new` per assignment returned by
@@ -156,11 +162,11 @@ assignment.
 
 Registered in `backend/src/docs/openapi.ts` per repo convention.
 
-| Method | Path | Notes |
-|---|---|---|
-| `GET` | `/notifications` | Returns `{ notifications: NotificationView[], unreadCount: number }` — latest 20 across **all** of the caller's workspaces |
-| `PATCH` | `/notifications/:id/read` | Marks one notification read |
-| `PATCH` | `/notifications/read-all` | Marks all of the caller's unread notifications read, across all their workspaces |
+| Method  | Path                      | Notes                                                                                                                      |
+| ------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `GET`   | `/notifications`          | Returns `{ notifications: NotificationView[], unreadCount: number }` — latest 20 across **all** of the caller's workspaces |
+| `PATCH` | `/notifications/:id/read` | Marks one notification read                                                                                                |
+| `PATCH` | `/notifications/read-all` | Marks all of the caller's unread notifications read, across all their workspaces                                           |
 
 ### Cross-workspace reads and writes
 
@@ -176,12 +182,12 @@ belongs to in one dropdown/one "mark all read" action. This reuses the existing
    with `Promise.all` (reuse the existing `pLimit` concurrency cap), each returning
    that workspace's notifications for this agent.
 3. Gather: merge, sort by `createdAt DESC`, take the top 20 for `GET
-   /notifications`; sum unread counts across workspaces for `unreadCount`.
+/notifications`; sum unread counts across workspaces for `unreadCount`.
 4. `PATCH /notifications/:id/read`: look up which workspace the id belongs to (from
    the gathered set, or a light per-workspace existence check) and issue the update
    inside that workspace's `withWorkspace`.
 5. `PATCH /notifications/read-all`: same scatter as step 2, then one `UPDATE
-   notification SET read_at = now() WHERE agent_id = $1 AND read_at IS NULL` inside
+notification SET read_at = now() WHERE agent_id = $1 AND read_at IS NULL` inside
    each workspace's `withWorkspace`, in parallel.
 
 An agent in exactly one workspace is the same code path with a one-element scatter
@@ -205,7 +211,7 @@ utilities/theme tokens only, per repo styling rules.
   `payload.workspaceSlug` if different from the current one (same mechanism
   `WorkspaceSwitcher` already uses), then navigate to that conversation's thread.
 - "Mark all as read" button in the dropdown header: `PATCH
-  /notifications/read-all`, clears the bubble immediately (optimistic update).
+/notifications/read-all`, clears the bubble immediately (optimistic update).
 
 **Realtime toast** — existing socket connection subscribes to `notification:new`;
 on receipt: `toast(...)` via Sonner (already wired at the app root) with the
@@ -217,7 +223,7 @@ fetch.
 
 - `notifyAgent` failing must not roll back the assignment — but per repo
   convention ("one function writes both conversation and event in a single
-  transaction"), the notification insert runs in the *same* transaction as the
+  transaction"), the notification insert runs in the _same_ transaction as the
   assignment write, so either both commit or both roll back together. A failure
   here means the assignment itself failed, which is already the correct behavior
   for a transaction failure — there's no case where "assignment succeeds but

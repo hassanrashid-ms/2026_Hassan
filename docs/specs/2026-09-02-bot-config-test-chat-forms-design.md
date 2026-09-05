@@ -56,7 +56,10 @@ Extend `BotTestTurnDecision`'s `handoff` case (`packages/types/src/bot.ts`):
 `BotTestPanel.tsx` gains local state:
 
 ```ts
-const [activeTestForm, setActiveTestForm] = useState<{ formName: string; fields: FormField[] } | null>(null);
+const [activeTestForm, setActiveTestForm] = useState<{
+  formName: string;
+  fields: FormField[];
+} | null>(null);
 ```
 
 In the turn handler (`send`, around lines 86-134), when the response decision is `kind: 'handoff'` and carries a non-null `form`, set `activeTestForm` from `{ formName: decision.form.form_name, fields: decision.form.fields }`; otherwise (any other decision kind, or a handoff with `form: null`) clear it to `null`. `nextConfirmPhase` reflects this too — a handoff whose lookup found a form now maps to `'form'` (matching what a real conversation's `confirm_phase` would become), not the previous hardcoded `'none'`; every other case is unchanged.
@@ -64,12 +67,14 @@ In the turn handler (`send`, around lines 86-134), when the response decision is
 Render the form between the message list and the composer:
 
 ```tsx
-{activeTestForm && (
-  <div className="border-t border-slate-200 p-4">
-    <FormLivePreview formName={activeTestForm.formName} fields={activeTestForm.fields} />
-  </div>
-)}
-<Composer onSend={(body) => void send(body)} disabled={sending || !draft} />
+{
+  activeTestForm && (
+    <div className="border-t border-slate-200 p-4">
+      <FormLivePreview formName={activeTestForm.formName} fields={activeTestForm.fields} />
+    </div>
+  );
+}
+<Composer onSend={(body) => void send(body)} disabled={sending || !draft} />;
 ```
 
 `FormLivePreview` already does everything needed here unmodified: builds a synthetic `PlayerFormView`, wires `FormCard` to fully local/mocked handlers (no network calls), remounts on field-set changes, and shows "Preview complete." + restart after submit/skip. Whatever conversation-reset control `BotTestPanel` already has for starting a fresh test conversation also clears `activeTestForm` back to `null`.

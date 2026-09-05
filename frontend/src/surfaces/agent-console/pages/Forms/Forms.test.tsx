@@ -81,8 +81,6 @@ describe('Forms route-driven selection', () => {
     await waitFor(() => expect(screen.getByRole('tab', { name: 'History' })).toBeInTheDocument());
 
     fireEvent.mouseDown(screen.getByRole('tab', { name: 'History' }));
-    await waitFor(() =>
-      expect(screen.getByText('No published versions yet.')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('No published versions yet.')).toBeInTheDocument());
   });
 });

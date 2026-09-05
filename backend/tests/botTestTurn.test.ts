@@ -136,7 +136,14 @@ describe('runTestBotTurn', () => {
       formId,
       version: 1,
       fields: [
-        { key: 'store', label: 'Store', type: 'choice', isRequired: true, position: 0, options: ['A', 'B'] },
+        {
+          key: 'store',
+          label: 'Store',
+          type: 'choice',
+          isRequired: true,
+          position: 0,
+          options: ['A', 'B'],
+        },
       ],
       publishedAt: new Date(),
     });
@@ -189,7 +196,14 @@ describe('runTestBotTurn', () => {
       formId,
       version: 1,
       fields: [
-        { key: 'store', label: 'Store', type: 'choice', isRequired: true, position: 0, options: ['A', 'B'] },
+        {
+          key: 'store',
+          label: 'Store',
+          type: 'choice',
+          isRequired: true,
+          position: 0,
+          options: ['A', 'B'],
+        },
       ],
       publishedAt: new Date(),
     });

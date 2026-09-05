@@ -268,7 +268,12 @@ describe('Tickets view toggle', () => {
       expect(agentApi.fetchInbox).toHaveBeenCalledWith(
         expect.anything(),
         'all',
-        expect.objectContaining({ sortBy: 'assignee', sortDir: 'asc', sortBy2: 'priority', sortDir2: 'asc' }),
+        expect.objectContaining({
+          sortBy: 'assignee',
+          sortDir: 'asc',
+          sortBy2: 'priority',
+          sortDir2: 'asc',
+        }),
         undefined,
       ),
     );

@@ -1,12 +1,12 @@
 ---
 title: Account Recovery
-tags: "account, security, recovery, security"
+tags: 'account, security, recovery, security'
 ---
 
 If you've lost access to your account, use the **recovery flow** linked from
 the login screen. Duplicate tags in frontmatter above should be deduped.
 
-Recovery requires *one* of the following:
+Recovery requires _one_ of the following:
 
 - A verified email address
 - A linked platform account (Google Play / Game Center)

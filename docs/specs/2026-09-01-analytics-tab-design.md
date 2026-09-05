@@ -24,20 +24,20 @@ RLS `app.workspace_id` mechanism — no new tenancy work.
 One aggregate endpoint powers all tiles (see API below); each tile is a pure rendering of a slice of
 that response. Four metric groups, matching what's already tracked in `event`/`conversation`:
 
-| Group | Tile | Shape | Source |
-| --- | --- | --- | --- |
-| Volume & status | New vs. resolved over time | line | `conversation_opened` / `conversation_resolved(_forced)` events, bucketed |
-| Volume & status | Status breakdown | donut | `conversation.status` grouped |
-| Volume & status | Total open count | number | `conversation.status` not in (resolved, closed) |
-| Volume & status | Volume by priority | bar | `conversation.priority` grouped |
-| Speed | First-response time (avg/p50/p90) | number + sparkline | `conversation_opened` → first `message_sent` (actor=agent) |
-| Speed | Resolution time (avg/p50/p90) | number + sparkline | `conversation_opened` → `conversation_resolved`/`conversation_resolved_forced` |
-| Speed | Time-to-claim trend | line | `conversation_opened`/`conversation_assigned_bot` → `conversation_assigned` |
-| Bot performance | Bot containment rate | number | `conversation_resolved` where `resolution_source = 'bot'` ÷ total resolved |
-| Bot performance | Handoff rate + top reasons | donut | `bot_handoff` events, grouped by reason in payload |
-| Bot performance | Article search hit rate | number | `bot_search` vs `bot_article_offered` events |
-| Team & workload (aggregate only) | Avg open tickets per active agent | number | `conversation.assignedAgentId` count ÷ active agent count |
-| Team & workload (aggregate only) | Unassigned queue depth over time | line | sampled from `conversation_opened`/`conversation_assigned` events per bucket |
+| Group                            | Tile                              | Shape              | Source                                                                         |
+| -------------------------------- | --------------------------------- | ------------------ | ------------------------------------------------------------------------------ |
+| Volume & status                  | New vs. resolved over time        | line               | `conversation_opened` / `conversation_resolved(_forced)` events, bucketed      |
+| Volume & status                  | Status breakdown                  | donut              | `conversation.status` grouped                                                  |
+| Volume & status                  | Total open count                  | number             | `conversation.status` not in (resolved, closed)                                |
+| Volume & status                  | Volume by priority                | bar                | `conversation.priority` grouped                                                |
+| Speed                            | First-response time (avg/p50/p90) | number + sparkline | `conversation_opened` → first `message_sent` (actor=agent)                     |
+| Speed                            | Resolution time (avg/p50/p90)     | number + sparkline | `conversation_opened` → `conversation_resolved`/`conversation_resolved_forced` |
+| Speed                            | Time-to-claim trend               | line               | `conversation_opened`/`conversation_assigned_bot` → `conversation_assigned`    |
+| Bot performance                  | Bot containment rate              | number             | `conversation_resolved` where `resolution_source = 'bot'` ÷ total resolved     |
+| Bot performance                  | Handoff rate + top reasons        | donut              | `bot_handoff` events, grouped by reason in payload                             |
+| Bot performance                  | Article search hit rate           | number             | `bot_search` vs `bot_article_offered` events                                   |
+| Team & workload (aggregate only) | Avg open tickets per active agent | number             | `conversation.assignedAgentId` count ÷ active agent count                      |
+| Team & workload (aggregate only) | Unassigned queue depth over time  | line               | sampled from `conversation_opened`/`conversation_assigned` events per bucket   |
 
 No per-agent breakdown here — that stays on Workload, to avoid duplicating it.
 

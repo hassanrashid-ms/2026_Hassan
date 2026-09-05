@@ -1,8 +1,8 @@
-import { ResponsiveGridLayout, useContainerWidth } from 'react-grid-layout'
-import type { AnalyticsResponse, DashboardLayout, DashboardLayoutItem } from '@support/types'
-import { TileSkeleton } from './tiles/TileSkeleton.tsx'
-import { renderTile } from './tileCatalog.tsx'
-import 'react-grid-layout/css/styles.css'
+import { ResponsiveGridLayout, useContainerWidth } from 'react-grid-layout';
+import type { AnalyticsResponse, DashboardLayout, DashboardLayoutItem } from '@support/types';
+import { TileSkeleton } from './tiles/TileSkeleton.tsx';
+import { renderTile } from './tileCatalog.tsx';
+import 'react-grid-layout/css/styles.css';
 
 // Tile ids that render as a single number, vs. everything else (chart) — used
 // only to pick the right skeleton shape while loading.
@@ -13,18 +13,18 @@ const NUMBER_TILE_IDS = new Set([
   'bot-containment',
   'article-hit-rate',
   'avg-open-per-agent',
-])
+]);
 
 type AnalyticsGridProps = {
-  layout: DashboardLayout
-  data: AnalyticsResponse | undefined
-  isLoading: boolean
-  onLayoutChange: (items: DashboardLayoutItem[]) => void
-}
+  layout: DashboardLayout;
+  data: AnalyticsResponse | undefined;
+  isLoading: boolean;
+  onLayoutChange: (items: DashboardLayoutItem[]) => void;
+};
 
 export function AnalyticsGrid({ layout, data, isLoading, onLayoutChange }: AnalyticsGridProps) {
-  const { width, containerRef, mounted } = useContainerWidth()
-  const visibleItems = layout.items.filter((item) => layout.visibleTileIds.includes(item.i))
+  const { width, containerRef, mounted } = useContainerWidth();
+  const visibleItems = layout.items.filter((item) => layout.visibleTileIds.includes(item.i));
 
   return (
     <div ref={containerRef}>
@@ -48,7 +48,7 @@ export function AnalyticsGrid({ layout, data, isLoading, onLayoutChange }: Analy
                 minW: item.minW,
                 minH: item.minH,
               })),
-            )
+            );
           }}
         >
           {visibleItems.map((item) => (
@@ -63,5 +63,5 @@ export function AnalyticsGrid({ layout, data, isLoading, onLayoutChange }: Analy
         </ResponsiveGridLayout>
       )}
     </div>
-  )
+  );
 }

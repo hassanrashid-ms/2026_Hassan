@@ -66,7 +66,9 @@ describe('createRateLimiter', () => {
     await request(app).get('/probe').expect(429);
 
     await vi.waitFor(async () => {
-      const { rows } = await ownerPool.query('select tier, key_type, path, method from rate_limit_hit');
+      const { rows } = await ownerPool.query(
+        'select tier, key_type, path, method from rate_limit_hit',
+      );
       expect(rows).toEqual([{ tier, key_type: 'ip', path: '/probe', method: 'GET' }]);
     });
   });

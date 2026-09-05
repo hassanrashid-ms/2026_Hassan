@@ -88,7 +88,9 @@ export async function runTestBotTurn(
     decision.kind === 'handoff' &&
     decision.subintentId !== null &&
     decision.reason !== 'asked_for_person'
-      ? await withWorkspace(ctx.workspaceId, (tx) => resolveSubintentForm(tx, decision.subintentId!))
+      ? await withWorkspace(ctx.workspaceId, (tx) =>
+          resolveSubintentForm(tx, decision.subintentId!),
+        )
       : null;
 
   return toWireDecision(decision, resolvedForm);

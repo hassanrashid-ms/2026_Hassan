@@ -35,10 +35,7 @@ export function toNotificationView(row: typeof notification.$inferSelect): Notif
  * because a later rename must not rewrite what this notification said at
  * the time.
  */
-export async function notifyAgent(
-  tx: Tx,
-  params: NotifyAgentParams,
-): Promise<NotificationView> {
+export async function notifyAgent(tx: Tx, params: NotifyAgentParams): Promise<NotificationView> {
   const [conv] = await tx
     .select({ number: conversation.number, priority: conversation.priority })
     .from(conversation)

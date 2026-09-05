@@ -81,8 +81,7 @@ export async function listDeclaredFields(workspaceId: string): Promise<DeclaredF
 }
 
 export type CreateDeclaredFieldResult =
-  | { ok: true; field: CreateDeclaredFieldResponse }
-  | { ok: false; reason: 'key_taken' };
+  { ok: true; field: CreateDeclaredFieldResponse } | { ok: false; reason: 'key_taken' };
 
 /**
  * Re-promoting a key that is currently `inactive` or `archived` revives the
@@ -194,8 +193,7 @@ export async function updateDeclaredField(
 }
 
 export type DeactivateDeclaredFieldResult =
-  | { ok: true; field: DeactivateDeclaredFieldResponse }
-  | { ok: false; reason: 'not_found' };
+  { ok: true; field: DeactivateDeclaredFieldResponse } | { ok: false; reason: 'not_found' };
 
 export async function deactivateDeclaredField(
   workspaceId: string,
@@ -230,8 +228,7 @@ export async function deactivateDeclaredField(
 }
 
 export type ReactivateDeclaredFieldResult =
-  | { ok: true; field: ReactivateDeclaredFieldResponse }
-  | { ok: false; reason: 'not_found' };
+  { ok: true; field: ReactivateDeclaredFieldResponse } | { ok: false; reason: 'not_found' };
 
 export async function reactivateDeclaredField(
   workspaceId: string,
@@ -266,8 +263,7 @@ export async function reactivateDeclaredField(
 }
 
 export type ArchiveDeclaredFieldResult =
-  | { ok: true; field: ArchiveDeclaredFieldResponse }
-  | { ok: false; reason: 'not_found' };
+  { ok: true; field: ArchiveDeclaredFieldResponse } | { ok: false; reason: 'not_found' };
 
 export async function archiveDeclaredField(
   workspaceId: string,

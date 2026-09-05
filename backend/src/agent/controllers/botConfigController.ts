@@ -63,7 +63,12 @@ export const saveBotConfigHandler: RequestHandler = async (req, res) => {
 export const getBotConfigVersionsHandler: RequestHandler = async (req, res) => {
   const query = BotConfigVersionsQuery.safeParse(req.query);
   if (!query.success) {
-    sendError(res, 422, 'invalid_request', 'limit must be 1-200, cursor must be a positive integer.');
+    sendError(
+      res,
+      422,
+      'invalid_request',
+      'limit must be 1-200, cursor must be a positive integer.',
+    );
     return;
   }
   res.status(200).json(

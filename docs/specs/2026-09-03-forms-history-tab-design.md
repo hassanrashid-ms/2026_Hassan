@@ -32,11 +32,11 @@ version, so restore produces the same shape as any other edit-to-a-published-for
 Three new routes on `formsRouter.ts`, same auth as existing form reads
 (Team Lead + Admin):
 
-| Method | Path                                     | Behavior                                                                 |
-| ------ | ----------------------------------------- | ------------------------------------------------------------------------ |
-| GET    | `/forms/:id/versions`                     | List versions (version, publishedAt, publishedBy→actor, created_at), newest first |
-| GET    | `/forms/:id/versions/:version`            | Single version's full field snapshot                                     |
-| POST   | `/forms/:id/versions/:version/restore`    | Copies that version's `fields[]` into a new unpublished draft version; does not touch `publishedAt` on any existing row |
+| Method | Path                                   | Behavior                                                                                                                |
+| ------ | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/forms/:id/versions`                  | List versions (version, publishedAt, publishedBy→actor, created_at), newest first                                       |
+| GET    | `/forms/:id/versions/:version`         | Single version's full field snapshot                                                                                    |
+| POST   | `/forms/:id/versions/:version/restore` | Copies that version's `fields[]` into a new unpublished draft version; does not touch `publishedAt` on any existing row |
 
 Restore is a dedicated route rather than reusing `PATCH /forms/:id`, so the
 action is explicit and self-documenting server-side rather than looking like an

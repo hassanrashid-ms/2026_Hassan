@@ -76,9 +76,7 @@ export const botConfigVersion = pgTable(
       .references(() => agent.id, { onDelete: 'restrict' }),
     /** Subset of 'prompt' | 'rules' | 'tools_config' | 'limits_config'. */
     changedFields: text('changed_fields').array().notNull(),
-    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
   },
   (t) => [
     unique('bot_config_version_workspace_version_unique').on(t.workspaceId, t.version),

@@ -78,7 +78,9 @@ export function ConversationRow({
       }}
       className={cn(
         'group flex cursor-pointer flex-col gap-1 border-b border-slate-100 border-l-2 px-4 py-3.5 text-left transition-colors',
-        selected ? 'border-l-accent bg-accent-soft' : 'border-l-transparent hover:bg-accent-soft/50',
+        selected
+          ? 'border-l-accent bg-accent-soft'
+          : 'border-l-transparent hover:bg-accent-soft/50',
       )}
     >
       <div className="flex items-start justify-between gap-2">

@@ -2,7 +2,13 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { req as request } from './helpers/http.ts';
 import { app, mintToken } from './helpers/app.ts';
 import { closeDb } from '../src/shared/db/client.ts';
-import { closeOwnerPool, seedPlayer, seedSession, seedWorkspace, truncateAll } from './helpers/db.ts';
+import {
+  closeOwnerPool,
+  seedPlayer,
+  seedSession,
+  seedWorkspace,
+  truncateAll,
+} from './helpers/db.ts';
 import { closeRateLimitRedis } from '../src/shared/rateLimit/rateLimitRedis.ts';
 
 afterAll(async () => {

@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest'
-import { render, screen } from '@testing-library/react'
-import { BarChartTile } from './BarChartTile.tsx'
+import { describe, expect, it } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import { BarChartTile } from './BarChartTile.tsx';
 
 describe('BarChartTile', () => {
   it('renders the title', () => {
@@ -12,7 +12,7 @@ describe('BarChartTile', () => {
           { label: 'p2', value: 5 },
         ]}
       />,
-    )
-    expect(screen.getByText('By priority')).toBeInTheDocument()
-  })
-})
+    );
+    expect(screen.getByText('By priority')).toBeInTheDocument();
+  });
+});

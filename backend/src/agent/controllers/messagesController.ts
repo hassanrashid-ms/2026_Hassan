@@ -38,7 +38,12 @@ export const postAgentMessageHandler: RequestHandler = async (req, res) => {
     return;
   }
   if (result.outcome === 'wrong_status') {
-    sendError(res, 409, 'wrong_status', 'Cannot send a message to a resolved or closed conversation.');
+    sendError(
+      res,
+      409,
+      'wrong_status',
+      'Cannot send a message to a resolved or closed conversation.',
+    );
     return;
   }
   res.status(200).json({ message: result.message });

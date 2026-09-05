@@ -89,8 +89,8 @@ export function PromptTab({ token, config }: { token: string; config: BotConfigV
         </ul>
         <p>
           Placeholders are filled at run time. The prompt never contains a hard-coded subintent or
-          article. Editing the list of subintents therefore changes the bot&apos;s behaviour
-          without touching the prompt.
+          article. Editing the list of subintents therefore changes the bot&apos;s behaviour without
+          touching the prompt.
         </p>
       </div>
 

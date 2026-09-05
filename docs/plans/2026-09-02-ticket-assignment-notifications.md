@@ -26,6 +26,7 @@ Full design: `docs/specs/2026-09-02-ticket-assignment-notifications-design.md`.
 ### Task 1: Schema, shared types, and test-helper wiring
 
 **Files:**
+
 - Create: `backend/src/shared/db/schema/notifications.ts`
 - Modify: `backend/src/shared/db/schema/index.ts`
 - Modify: `backend/tests/helpers/db.ts` (add `'notification'` to `SCOPED_TABLES`)
@@ -34,6 +35,7 @@ Full design: `docs/specs/2026-09-02-ticket-assignment-notifications-design.md`.
 - Test: `backend/tests/notifications.schema.test.ts`
 
 **Interfaces:**
+
 - Produces: `notification` Drizzle table (columns: `id`, `workspaceId`, `agentId`, `type`, `conversationId`, `payload`, `readAt`, `createdAt`); `NotificationView` type `{ id: string; workspace_id: string; agent_id: string; type: string; conversation_id: string | null; payload: Record<string, unknown>; read_at: string | null; created_at: string }`; `AssignmentVia = 'claim' | 'take_over' | 'reassign' | 'sweep' | 'bot_handoff'` (both exported from `@support/types`).
 
 - [ ] **Step 1: Write the schema file**
@@ -242,12 +244,14 @@ git commit -m "Add notification table, RLS via structural policy, and shared typ
 ### Task 2: Realtime infrastructure — per-agent room and emit function
 
 **Files:**
+
 - Modify: `backend/src/shared/realtime/rooms.ts`
 - Modify: `backend/src/shared/realtime/emit.ts`
 - Modify: `backend/src/shared/realtime/socketServer.ts`
 - Test: `backend/tests/realtime.notificationRoom.test.ts`
 
 **Interfaces:**
+
 - Consumes: `NotificationView` (Task 1).
 - Produces: `agentNotificationRoom(agentId: string): string`; `emitNotificationNew(io: Server, agentId: string, notification: NotificationView): void`.
 
@@ -267,7 +271,11 @@ export const agentNotificationRoom = (agentId: string): string => `agent:${agent
 In `backend/src/shared/realtime/emit.ts`, add the import and function:
 
 ```ts
-import type { ConversationPhaseChangedEvent, MessageReadEvent, NotificationView } from '@support/types';
+import type {
+  ConversationPhaseChangedEvent,
+  MessageReadEvent,
+  NotificationView,
+} from '@support/types';
 import { agentNotificationRoom, agentRoom, inboxRoom, playerRoom } from './rooms.ts';
 
 // ... existing functions unchanged ...
@@ -393,10 +401,12 @@ git commit -m "Add per-agent notification room and emitNotificationNew"
 ### Task 3: `notifyAgent` — the send function
 
 **Files:**
+
 - Create: `backend/src/domain/notifications/notifyAgent.ts`
 - Test: `backend/tests/notifications.notifyAgent.test.ts`
 
 **Interfaces:**
+
 - Consumes: `Tx` (`shared/db/withWorkspace.ts`), `appendEvent`-style transaction context, `notification`/`conversation`/`workspace` schema tables, `AssignmentVia`/`NotificationView` (`@support/types`).
 - Produces: `notifyAgent(tx: Tx, params: { workspaceId: string; agentId: string; conversationId: string; via: AssignmentVia }): Promise<NotificationView>` and `toNotificationView(row): NotificationView` — every later task (4, 5, 6) calls `notifyAgent` exactly this way and threads its return value out as `result.notification` for the handler layer to pass to `emitNotificationNew`.
 
@@ -499,10 +509,7 @@ export function toNotificationView(row: typeof notification.$inferSelect): Notif
  * because a later rename must not rewrite what this notification said at
  * the time.
  */
-export async function notifyAgent(
-  tx: Tx,
-  params: NotifyAgentParams,
-): Promise<NotificationView> {
+export async function notifyAgent(tx: Tx, params: NotifyAgentParams): Promise<NotificationView> {
   const [conv] = await tx
     .select({ number: conversation.number, priority: conversation.priority })
     .from(conversation)
@@ -558,11 +565,13 @@ git commit -m "Add notifyAgent: single write path for assignment notifications"
 ### Task 4: Wire into claim, take-over, reassign
 
 **Files:**
+
 - Modify: `backend/src/agent/services/conversationsService.ts:642-797` (`claimConversation`, `takeOverConversation`, `reassignConversation`)
 - Modify: `backend/src/agent/controllers/conversationsController.ts:92-175` (their handlers)
 - Test: `backend/tests/notifications.claimTakeOverReassign.test.ts`
 
 **Interfaces:**
+
 - Consumes: `notifyAgent`, `toNotificationView` (Task 3); `emitNotificationNew` (Task 2).
 - Produces: `ClaimResult`, `TakeOverResult`, `ReassignResult` each gain a `notification: NotificationView | null` field (`null` only on the already-existing not-claimed/not-found/invalid branches) — later tasks don't touch these three, but any other future reader of these result types must account for the new field.
 
@@ -797,28 +806,28 @@ export async function takeOverConversation(
 And `reassignConversation` (`via: 'reassign'`, target agent `targetAgentId`; add `notification: NotificationView | null` to `ReassignResult`; every `{ ok: false, ... }` early-return branch is unaffected since `ReassignResult`'s `ok: false` variant has no `notification` field — only the `ok: true` variant needs it):
 
 ```ts
-    const [row] = await tx
-      .update(conversation)
-      .set({ assignedAgentId: targetAgentId })
-      .where(eq(conversation.id, conversationId))
-      .returning({ id: conversation.id, status: conversation.status });
+const [row] = await tx
+  .update(conversation)
+  .set({ assignedAgentId: targetAgentId })
+  .where(eq(conversation.id, conversationId))
+  .returning({ id: conversation.id, status: conversation.status });
 
-    await appendEvent(tx, {
-      workspaceId: ctx.workspaceId,
-      type: 'conversation_reassigned',
-      conversationId,
-      actorId: ctx.agentId,
-      actorType: 'agent',
-      payload: { agent_id: targetAgentId, reassigned_by: ctx.agentId, via: 'reassign' },
-    });
-    const notification = await notifyAgent(tx, {
-      workspaceId: ctx.workspaceId,
-      agentId: targetAgentId,
-      conversationId,
-      via: 'reassign',
-    });
-    const posted = await postReassignedNotice(tx, ctx, conversationId, targetAgentId);
-    return { ok: true, status: row!.status, posted, notification };
+await appendEvent(tx, {
+  workspaceId: ctx.workspaceId,
+  type: 'conversation_reassigned',
+  conversationId,
+  actorId: ctx.agentId,
+  actorType: 'agent',
+  payload: { agent_id: targetAgentId, reassigned_by: ctx.agentId, via: 'reassign' },
+});
+const notification = await notifyAgent(tx, {
+  workspaceId: ctx.workspaceId,
+  agentId: targetAgentId,
+  conversationId,
+  via: 'reassign',
+});
+const posted = await postReassignedNotice(tx, ctx, conversationId, targetAgentId);
+return { ok: true, status: row!.status, posted, notification };
 ```
 
 If `ReassignResult`'s `ok: true` variant is declared inline (e.g. `{ ok: true; status: ...; posted: ...; }`), add `notification: NotificationView;` to it; if `ClaimResult`/`TakeOverResult` are single flat types (not a union), add `notification: NotificationView | null;` to each.
@@ -828,18 +837,28 @@ If `ReassignResult`'s `ok: true` variant is declared inline (e.g. `{ ok: true; s
 In `backend/src/agent/controllers/conversationsController.ts`, add the import:
 
 ```ts
-import { emitInboxChanged, emitMessageToRooms, emitNotificationNew, emitPhaseChanged } from '../../shared/realtime/emit.ts';
+import {
+  emitInboxChanged,
+  emitMessageToRooms,
+  emitNotificationNew,
+  emitPhaseChanged,
+} from '../../shared/realtime/emit.ts';
 ```
 
 In `claimConversationHandler`, inside the existing `if (result.claimed && result.status) { ... }` block, add:
 
 ```ts
-  if (result.claimed && result.status) {
-    emitInboxChanged(getIo(), ctx.workspaceId, params.data.id, result.status);
-    if (result.posted)
-      emitMessageToRooms(getIo(), params.data.id, toPlayerView(result.posted), toAgentView(result.posted));
-    if (result.notification) emitNotificationNew(getIo(), ctx.agentId, result.notification);
-  }
+if (result.claimed && result.status) {
+  emitInboxChanged(getIo(), ctx.workspaceId, params.data.id, result.status);
+  if (result.posted)
+    emitMessageToRooms(
+      getIo(),
+      params.data.id,
+      toPlayerView(result.posted),
+      toAgentView(result.posted),
+    );
+  if (result.notification) emitNotificationNew(getIo(), ctx.agentId, result.notification);
+}
 ```
 
 Same addition in `takeOverConversationHandler`'s equivalent block (target agent is `ctx.agentId` there too).
@@ -847,10 +866,15 @@ Same addition in `takeOverConversationHandler`'s equivalent block (target agent 
 In `reassignConversationHandler`, after the existing unconditional `emitMessageToRooms(...)` call:
 
 ```ts
-  emitInboxChanged(getIo(), ctx.workspaceId, params.data.id, result.status);
-  emitMessageToRooms(getIo(), params.data.id, toPlayerView(result.posted), toAgentView(result.posted));
-  emitNotificationNew(getIo(), body.data.agentId, result.notification);
-  res.status(200).json({ reassigned: true });
+emitInboxChanged(getIo(), ctx.workspaceId, params.data.id, result.status);
+emitMessageToRooms(
+  getIo(),
+  params.data.id,
+  toPlayerView(result.posted),
+  toAgentView(result.posted),
+);
+emitNotificationNew(getIo(), body.data.agentId, result.notification);
+res.status(200).json({ reassigned: true });
 ```
 
 - [ ] **Step 5: Run the test to verify it passes**
@@ -881,6 +905,7 @@ git commit -m "Notify agent on claim, take-over, and reassign"
 ### Task 5: Wire into the unassigned-queue sweep
 
 **Files:**
+
 - Modify: `backend/src/domain/routing/assignNextTicket.ts`
 - Modify: `backend/src/agent/controllers/conversationsController.ts:426-440` (`sweepAssignHandler`)
 - Test: `backend/tests/notifications.sweep.test.ts`
@@ -888,6 +913,7 @@ git commit -m "Notify agent on claim, take-over, and reassign"
 Note: `assignNextTicket`/`sweepUnassignedQueue` currently exist in this codebase per the (draft) sweep design spec — this task assumes they are already implemented as shown in the design research. If they are not yet merged, implement them first per `docs/specs/2026-09-01-ticket-assignment-sweep-design.md` before continuing.
 
 **Interfaces:**
+
 - Consumes: `notifyAgent` (Task 3), `emitNotificationNew` (Task 2).
 - Produces: `AssignNextTicketResult` gains `notification: NotificationView`; `sweepAssignHandler` emits one `notification:new` per assignment, same loop shape it already uses for `emitInboxChanged`.
 
@@ -972,30 +998,30 @@ export type AssignNextTicketResult = {
 
 // ... inside assignNextTicket, after appendEvent:
 
-    await appendEvent(tx, {
-      workspaceId,
-      type: 'conversation_assigned',
-      conversationId: next.id,
-      actorId: null,
-      actorType: 'system',
-      payload: { agent_id: agentId, via: 'sweep' },
-    });
-    const notificationView = await notifyAgent(tx, {
-      workspaceId,
-      agentId,
-      conversationId: next.id,
-      via: 'sweep',
-    });
+await appendEvent(tx, {
+  workspaceId,
+  type: 'conversation_assigned',
+  conversationId: next.id,
+  actorId: null,
+  actorType: 'system',
+  payload: { agent_id: agentId, via: 'sweep' },
+});
+const notificationView = await notifyAgent(tx, {
+  workspaceId,
+  agentId,
+  conversationId: next.id,
+  via: 'sweep',
+});
 
-    return {
-      assigned: true,
-      result: {
-        conversationId: next.id,
-        agentId,
-        status: next.status as AssignNextTicketResult['status'],
-        notification: notificationView,
-      },
-    };
+return {
+  assigned: true,
+  result: {
+    conversationId: next.id,
+    agentId,
+    status: next.status as AssignNextTicketResult['status'],
+    notification: notificationView,
+  },
+};
 ```
 
 - [ ] **Step 4: Emit from `sweepAssignHandler`**
@@ -1049,6 +1075,7 @@ git commit -m "Notify agent on sweep auto-assignment"
 ### Task 6: Wire into bot handoff (applyBotTurn + completeFormAndHandoff)
 
 **Files:**
+
 - Modify: `backend/src/domain/bot/applyBotTurn.ts:211-249,275-300` (`handoff` and `unavailable` branches)
 - Modify: `backend/src/domain/bot/orchestrator.ts:82-117` (`emitApplied`)
 - Modify: `backend/src/domain/forms/completeFormAndHandoff.ts:117-133,252-260`
@@ -1056,6 +1083,7 @@ git commit -m "Notify agent on sweep auto-assignment"
 - Test: `backend/tests/notifications.botHandoff.test.ts`
 
 **Interfaces:**
+
 - Consumes: `notifyAgent` (Task 3), `emitNotificationNew` (Task 2).
 - Produces: `ApplyBotTurnResult` gains `notification: NotificationView | null`; `CompleteFormResult` gains the same. Both default to `null` on every branch that doesn't assign an agent (including `assignedAgentId === null`, i.e. "no agents online" — nothing to notify).
 
@@ -1174,29 +1202,27 @@ Add `notification: NotificationView | null` to `ApplyBotTurnResult`. Every exist
 In the `handoff` branch, right after its `bot_handoff` `appendEvent` call:
 
 ```ts
-      await appendEvent(tx, {
-        workspaceId: ctx.workspaceId,
-        type: 'bot_handoff',
-        conversationId: ctx.conversationId,
-        actorId: null,
-        actorType: 'bot',
-        payload: { reason: decision.reason, assigned_agent_id: assignedAgentId },
-      });
-      const notification = assignedAgentId
-        ? await notifyAgent(tx, {
-            workspaceId: ctx.workspaceId,
-            agentId: assignedAgentId,
-            conversationId: ctx.conversationId,
-            via: 'bot_handoff',
-          })
-        : null;
-      const finalPosted = [posted];
-      if (assignedAgentId === null) {
-        finalPosted.push(
-          await postMessage(tx, { /* ... unchanged ... */ }),
-        );
-      }
-      return { posted: finalPosted, statusChanged: true, phaseChanged: null, notification };
+await appendEvent(tx, {
+  workspaceId: ctx.workspaceId,
+  type: 'bot_handoff',
+  conversationId: ctx.conversationId,
+  actorId: null,
+  actorType: 'bot',
+  payload: { reason: decision.reason, assigned_agent_id: assignedAgentId },
+});
+const notification = assignedAgentId
+  ? await notifyAgent(tx, {
+      workspaceId: ctx.workspaceId,
+      agentId: assignedAgentId,
+      conversationId: ctx.conversationId,
+      via: 'bot_handoff',
+    })
+  : null;
+const finalPosted = [posted];
+if (assignedAgentId === null) {
+  finalPosted.push(await postMessage(tx, {/* ... unchanged ... */}));
+}
+return { posted: finalPosted, statusChanged: true, phaseChanged: null, notification };
 ```
 
 Apply the same pattern in the `unavailable` branch, right after its `bot_unavailable` `appendEvent` call, returning `notification` in its final `return { posted, statusChanged: true, phaseChanged: null, notification };`.
@@ -1206,7 +1232,12 @@ Apply the same pattern in the `unavailable` branch, right after its `bot_unavail
 In `backend/src/domain/bot/orchestrator.ts`, add the import:
 
 ```ts
-import { emitInboxChanged, emitMessageToRooms, emitNotificationNew, emitPhaseChanged } from '../../shared/realtime/emit.ts';
+import {
+  emitInboxChanged,
+  emitMessageToRooms,
+  emitNotificationNew,
+  emitPhaseChanged,
+} from '../../shared/realtime/emit.ts';
 ```
 
 Update `emitApplied`'s parameter type and body:
@@ -1277,22 +1308,22 @@ export type CompleteFormResult = {
 Right after its `bot_handoff` `appendEvent` call:
 
 ```ts
-  await appendEvent(tx, {
-    workspaceId: ctx.workspaceId,
-    type: 'bot_handoff',
-    conversationId: ctx.conversationId,
-    actorId: null,
-    actorType: 'bot',
-    payload: { reason, assigned_agent_id: assignedAgentId },
-  });
-  const notification = assignedAgentId
-    ? await notifyAgent(tx, {
-        workspaceId: ctx.workspaceId,
-        agentId: assignedAgentId,
-        conversationId: ctx.conversationId,
-        via: 'bot_handoff',
-      })
-    : null;
+await appendEvent(tx, {
+  workspaceId: ctx.workspaceId,
+  type: 'bot_handoff',
+  conversationId: ctx.conversationId,
+  actorId: null,
+  actorType: 'bot',
+  payload: { reason, assigned_agent_id: assignedAgentId },
+});
+const notification = assignedAgentId
+  ? await notifyAgent(tx, {
+      workspaceId: ctx.workspaceId,
+      agentId: assignedAgentId,
+      conversationId: ctx.conversationId,
+      via: 'bot_handoff',
+    })
+  : null;
 ```
 
 And in the final `return { ... }`, add `notification,`.
@@ -1302,14 +1333,19 @@ And in the final `return { ... }`, add `notification,`.
 In `backend/src/domain/forms/emitFormTerminated.ts`, add the import and the emit call:
 
 ```ts
-import { emitInboxChanged, emitMessageToRooms, emitNotificationNew, emitPhaseChanged } from '../../shared/realtime/emit.ts';
+import {
+  emitInboxChanged,
+  emitMessageToRooms,
+  emitNotificationNew,
+  emitPhaseChanged,
+} from '../../shared/realtime/emit.ts';
 
 // ... at the end of emitFormTerminated, before the closing brace:
 
-  emitInboxChanged(io, workspaceId, result.conversationId, 'open');
-  if (result.notification) {
-    emitNotificationNew(io, result.notification.agent_id, result.notification);
-  }
+emitInboxChanged(io, workspaceId, result.conversationId, 'open');
+if (result.notification) {
+  emitNotificationNew(io, result.notification.agent_id, result.notification);
+}
 ```
 
 - [ ] **Step 7: Run the test to verify it passes**
@@ -1341,10 +1377,12 @@ git commit -m "Notify agent on bot handoff (direct and via form completion)"
 ### Task 7: Cross-workspace read/write service
 
 **Files:**
+
 - Create: `backend/src/domain/notifications/notificationsQueryService.ts`
 - Test: `backend/tests/notifications.queryService.test.ts`
 
 **Interfaces:**
+
 - Consumes: `listActiveMembershipsForAgent`, `AgentContext`, `toNotificationView` (Task 3), `pLimit` (already a dependency, used by `globalInboxService.ts`).
 - Produces: `listNotificationsForAgent(ctx: AgentContext): Promise<{ notifications: NotificationView[]; unread_count: number }>`; `markNotificationRead(ctx: AgentContext, notificationId: string): Promise<boolean>` (returns `false` if not found in any of the agent's workspaces); `markAllNotificationsRead(ctx: AgentContext): Promise<number>` (returns total rows updated).
 
@@ -1479,7 +1517,10 @@ import type { NotificationView } from '@support/types';
 import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts';
 import { notification } from '../../shared/db/schema/index.ts';
 import { withWorkspace } from '../../shared/db/withWorkspace.ts';
-import { listActiveMembershipsForAgent, listAllWorkspaces } from '../../shared/db/workspaceMembership.ts';
+import {
+  listActiveMembershipsForAgent,
+  listAllWorkspaces,
+} from '../../shared/db/workspaceMembership.ts';
 import { toNotificationView } from './notifyAgent.ts';
 
 const PER_WORKSPACE_CAP = 20;
@@ -1594,6 +1635,7 @@ git commit -m "Add cross-workspace notification read/mark-read service"
 ### Task 8: API routes, controller, and OpenAPI registration
 
 **Files:**
+
 - Create: `backend/src/agent/controllers/notificationsController.ts`
 - Create: `backend/src/agent/routers/notificationsRouter.ts`
 - Modify: `backend/src/agent/router.ts` (mount, alongside `membershipsRouter`/`globalInboxRouter`, before `resolveConsoleWorkspace`)
@@ -1601,6 +1643,7 @@ git commit -m "Add cross-workspace notification read/mark-read service"
 - Test: `backend/tests/notifications.routes.test.ts`
 
 **Interfaces:**
+
 - Consumes: `listNotificationsForAgent`, `markNotificationRead`, `markAllNotificationsRead` (Task 7).
 - Produces: `GET /agent/notifications`, `PATCH /agent/notifications/:id/read`, `PATCH /agent/notifications/read-all`.
 
@@ -1859,7 +1902,10 @@ registry.registerPath({
   security: [{ [bearerAgentJwt.name]: [] }],
   request: { params: z.object({ id: z.uuid() }) },
   responses: {
-    200: { description: 'Marked read', content: { 'application/json': { schema: z.object({ read: z.boolean() }) } } },
+    200: {
+      description: 'Marked read',
+      content: { 'application/json': { schema: z.object({ read: z.boolean() }) } },
+    },
     404: { description: 'Notification not found' },
   },
 });
@@ -1868,7 +1914,8 @@ registry.registerPath({
   method: 'patch',
   path: '/agent/notifications/read-all',
   summary: 'Mark All Notifications Read',
-  description: 'Marks every unread notification for the calling agent read, across all their workspaces.',
+  description:
+    'Marks every unread notification for the calling agent read, across all their workspaces.',
   security: [{ [bearerAgentJwt.name]: [] }],
   responses: {
     200: {
@@ -1906,9 +1953,11 @@ git commit -m "Add GET/PATCH notifications routes, mounted cross-workspace"
 ### Task 9: Frontend API client
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/agent-console/api/agentApi.ts`
 
 **Interfaces:**
+
 - Consumes: `NotificationView`, `NotificationsResponse` (`@support/types`, Task 1), the existing `call()` helper in this file.
 - Produces: `fetchNotifications(token): Promise<NotificationsResponse>`; `markNotificationRead(token, id): Promise<{ read: boolean }>`; `markAllNotificationsRead(token): Promise<{ updated: number }>` — consumed by Task 10's `NotificationBell.tsx`.
 
@@ -1955,9 +2004,11 @@ git commit -m "Add notifications API client functions"
 ### Task 10: `NotificationBell` component
 
 **Files:**
+
 - Create: `frontend/src/surfaces/agent-console/components/NotificationBell.tsx`
 
 **Interfaces:**
+
 - Consumes: `fetchNotifications`, `markNotificationRead`, `markAllNotificationsRead` (Task 9); `NotificationView`, `TicketAssignedPayload` (`@support/types`); `loadAgentSession`, `saveAgentSession`, `saveLastActiveWorkspaceId` (`../lib/agentSession.ts`); shadcn/ui `DropdownMenu*`, `Badge` (already used in `AgentConsoleShell.tsx`); `Bell` from `lucide-react`.
 - Produces: `<NotificationBell session={StoredAgentSession} />` — a self-contained bell + unread badge + dropdown that reads/writes the `['notifications']` TanStack Query cache. Consumed by Task 11.
 
@@ -2018,7 +2069,11 @@ export function NotificationBell({ session }: { session: StoredAgentSession }) {
     const payload = n.payload as TicketAssignedPayload;
     const current = loadAgentSession();
     if (current && payload.workspace_slug && current.workspaceSlug !== payload.workspace_slug) {
-      saveAgentSession({ ...current, workspaceSlug: payload.workspace_slug, workspaceId: undefined });
+      saveAgentSession({
+        ...current,
+        workspaceSlug: payload.workspace_slug,
+        workspaceId: undefined,
+      });
       saveLastActiveWorkspaceId(''); // cleared; AgentConsoleShell's membership-fallback effect re-resolves workspaceId from the slug on next load
       window.location.assign(`/tickets/${n.conversation_id}`);
       return;
@@ -2044,7 +2099,10 @@ export function NotificationBell({ session }: { session: StoredAgentSession }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button type="button" className="relative flex size-8 items-center justify-center rounded-md text-muted hover:bg-accent-soft/60 hover:text-text">
+        <button
+          type="button"
+          className="relative flex size-8 items-center justify-center rounded-md text-muted hover:bg-accent-soft/60 hover:text-text"
+        >
           <Bell className="size-4.5" />
           {unreadCount > 0 && (
             <Badge
@@ -2117,9 +2175,11 @@ git commit -m "Add NotificationBell component"
 ### Task 11: Wire the bell into the shell, listen for realtime notifications
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/agent-console/components/AgentConsoleShell.tsx`
 
 **Interfaces:**
+
 - Consumes: `NotificationBell` (Task 10); existing `socket` instance and `useEffect` (lines ~203-230); `NotificationView`, `NotificationsResponse`, `TicketAssignedPayload` (`@support/types`).
 
 - [ ] **Step 1: Import the bell and toast**
@@ -2129,7 +2189,11 @@ Add to the top of `AgentConsoleShell.tsx`:
 ```tsx
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
-import type { NotificationsResponse, NotificationView, TicketAssignedPayload } from '@support/types';
+import type {
+  NotificationsResponse,
+  NotificationView,
+  TicketAssignedPayload,
+} from '@support/types';
 import { NotificationBell } from './NotificationBell.tsx';
 ```
 
@@ -2148,17 +2212,20 @@ const queryClient = useQueryClient();
 In the existing `useEffect` (around line 203) that creates `socket`, add a listener alongside `presence_changed`:
 
 ```tsx
-    socket.on('notification:new', (payload: NotificationView) => {
-      queryClient.setQueryData<NotificationsResponse>(['notifications'], (old) =>
-        old
-          ? { unread_count: old.unread_count + 1, notifications: [payload, ...old.notifications].slice(0, 20) }
-          : { unread_count: 1, notifications: [payload] },
-      );
-      const p = payload.payload as TicketAssignedPayload;
-      toast(`Ticket #${p.ticket_number} assigned to you`, {
-        description: p.workspace_name ? `in ${p.workspace_name}` : undefined,
-      });
-    });
+socket.on('notification:new', (payload: NotificationView) => {
+  queryClient.setQueryData<NotificationsResponse>(['notifications'], (old) =>
+    old
+      ? {
+          unread_count: old.unread_count + 1,
+          notifications: [payload, ...old.notifications].slice(0, 20),
+        }
+      : { unread_count: 1, notifications: [payload] },
+  );
+  const p = payload.payload as TicketAssignedPayload;
+  toast(`Ticket #${p.ticket_number} assigned to you`, {
+    description: p.workspace_name ? `in ${p.workspace_name}` : undefined,
+  });
+});
 ```
 
 Add this inside the same `if (!session) return;` guarded effect, before the `return () => { ... }` cleanup — no new cleanup needed since `socket.close()` already tears down every listener on this socket.
@@ -2168,15 +2235,13 @@ Add this inside the same `if (!session) return;` guarded effect, before the `ret
 In the header JSX (around line 316), add it between `WorkspaceSwitcher` and the avatar `DropdownMenu`:
 
 ```tsx
-        <header className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4">
-          <WorkspaceSwitcher session={session} />
-          <div className="flex items-center gap-2">
-            <NotificationBell session={session} />
-            <DropdownMenu>
-              {/* ... existing avatar dropdown, unchanged ... */}
-            </DropdownMenu>
-          </div>
-        </header>
+<header className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4">
+  <WorkspaceSwitcher session={session} />
+  <div className="flex items-center gap-2">
+    <NotificationBell session={session} />
+    <DropdownMenu>{/* ... existing avatar dropdown, unchanged ... */}</DropdownMenu>
+  </div>
+</header>
 ```
 
 (Wrapping the avatar `DropdownMenu` and the new bell in a `flex items-center gap-2` div, since the header is `justify-between` with exactly two children today — `WorkspaceSwitcher` and the dropdown — and now needs three items grouped as two flex children.)
@@ -2186,13 +2251,14 @@ In the header JSX (around line 316), add it between `WorkspaceSwitcher` and the 
 Run: `pnpm dev`
 
 In the browser:
+
 1. Log in as an agent who is a member of two workspaces (or seed one via `pnpm db:seed` / manually).
 2. Confirm the bell renders in the header with no bubble when there are zero notifications.
 3. From another session/tab (or via `curl`/Swagger UI at `/docs`), claim or reassign a ticket to this agent.
 4. Confirm a toast appears and the bell's red bubble increments without a page reload.
 5. Open the dropdown, confirm the new notification is listed and visually distinct (unread background).
 6. Click it — confirm it marks read (bubble decrements, row style changes) and navigates to `/tickets/:id`.
-7. Trigger a second assignment in the agent's *other* workspace; confirm the toast/dropdown row names that workspace, and clicking it switches the active workspace and lands on the right ticket.
+7. Trigger a second assignment in the agent's _other_ workspace; confirm the toast/dropdown row names that workspace, and clicking it switches the active workspace and lands on the right ticket.
 8. Click "Mark all as read" with several unread notifications present; confirm the bubble clears immediately.
 
 Expected: all 8 checks pass. Note any that don't for a follow-up fix before considering this task done.
@@ -2213,6 +2279,6 @@ git commit -m "Mount NotificationBell in agent console header, wire realtime toa
 
 ## Post-plan follow-ups (not blocking, out of this plan's scope per the design doc's non-goals)
 
-- Notifying the *previous* agent on reassignment.
+- Notifying the _previous_ agent on reassignment.
 - Push/email notifications outside the browser tab.
 - Pruning old read notifications (explicitly rejected in the design doc — "no hard deletes anywhere").

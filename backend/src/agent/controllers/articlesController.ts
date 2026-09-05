@@ -34,7 +34,10 @@ import { GenerateKeywordsBody } from '@support/types';
 
 const ArticleIdParams = z.object({ id: z.uuid() });
 const ArticleAttachmentParams = z.object({ id: z.uuid(), attachmentId: z.uuid() });
-const ArticleVersionParams = z.object({ id: z.uuid(), version: z.coerce.number().int().positive() });
+const ArticleVersionParams = z.object({
+  id: z.uuid(),
+  version: z.coerce.number().int().positive(),
+});
 
 export const listArticlesHandler: RequestHandler = async (req, res) => {
   res.status(200).json(await listArticles(req.agent!));
@@ -191,7 +194,11 @@ export const removeArticleAttachmentHandler: RequestHandler = async (req, res) =
     sendError(res, 422, 'invalid_request', 'Invalid ids.');
     return;
   }
-  const result = await removeArticleAttachment(req.agent!, params.data.id, params.data.attachmentId);
+  const result = await removeArticleAttachment(
+    req.agent!,
+    params.data.id,
+    params.data.attachmentId,
+  );
   if (!result.ok) {
     sendError(res, 404, 'not_found', 'Article or attachment not found.');
     return;

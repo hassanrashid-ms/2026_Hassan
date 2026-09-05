@@ -23,11 +23,7 @@ export const createDeclaredFieldHandler: RequestHandler = async (req, res) => {
     sendError(res, 422, 'invalid_request', 'key, label and a valid type are required.');
     return;
   }
-  const result = await createDeclaredField(
-    req.params.id as string,
-    req.agent!.agentId,
-    body.data,
-  );
+  const result = await createDeclaredField(req.params.id as string, req.agent!.agentId, body.data);
   if (!result.ok) {
     sendError(res, 409, 'key_taken', 'A declared field with this key already exists.');
     return;

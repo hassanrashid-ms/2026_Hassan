@@ -51,11 +51,11 @@ uses), not based on which filter produced the row.
 
 **Filter bar** (`TicketsFilterBar`), shared by both modes:
 
-| Control     | Behavior                                                                                                                                          |
-| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status      | New. Multi-select over the six queue states. Empty selection = no restriction (all six). In Board mode narrows which columns render; in List mode narrows which queues are unioned. |
-| Created     | New. Date range (from/to). Filters `conversation.createdAt`.                                                                                      |
-| Search, Priority, Label, Subintent, Assignee, Age | Unchanged from the existing spec.                                                                                           |
+| Control                                           | Behavior                                                                                                                                                                            |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Status                                            | New. Multi-select over the six queue states. Empty selection = no restriction (all six). In Board mode narrows which columns render; in List mode narrows which queues are unioned. |
+| Created                                           | New. Date range (from/to). Filters `conversation.createdAt`.                                                                                                                        |
+| Search, Priority, Label, Subintent, Assignee, Age | Unchanged from the existing spec.                                                                                                                                                   |
 
 All controls AND together, same as today.
 
@@ -131,7 +131,7 @@ None. No new columns — `createdAt` already exists on `conversation`; the merge
 
 - Add the Board/List toggle, reading/writing `filters.view`.
 - Board mode: column visibility gains one more condition — hidden if `filters.statuses.length &&
-  !filters.statuses.includes(col.filter)`, alongside the existing empty-and-filtered hide.
+!filters.statuses.includes(col.filter)`, alongside the existing empty-and-filtered hide.
 - List mode: new `TicketsListView` component, structurally the same as today's `QueueColumn` but:
   - `useInfiniteQuery(['tickets', 'all', queryFilters])`, `fetchInbox(token, 'all', queryFilters, pageParam)`.
   - Not resizable/draggable (no per-column height/order state — it's the only "column").

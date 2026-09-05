@@ -47,8 +47,4 @@ botConfigRouter.post('/bot-config/rollback', requireAdminRole, rollbackBotConfig
 botConfigRouter.post('/bot-config/test-turn', canSeeBotConfig, testBotTurnHandler);
 // test-resolution takes no prompt/rules input (just subintent_id, confirm_phase,
 // helped), so there's no arbitrary-execution risk — same gate as test-turn.
-botConfigRouter.post(
-  '/bot-config/test-resolution',
-  canSeeBotConfig,
-  testResolutionAnswerHandler,
-);
+botConfigRouter.post('/bot-config/test-resolution', canSeeBotConfig, testResolutionAnswerHandler);

@@ -130,7 +130,12 @@ export function DeclaredFieldsPanel({
             </TableRow>
           )}
           {fields.map((field) => (
-            <DeclaredFieldRow key={field.id} token={token} workspaceId={workspaceId} field={field} />
+            <DeclaredFieldRow
+              key={field.id}
+              token={token}
+              workspaceId={workspaceId}
+              field={field}
+            />
           ))}
         </TableBody>
       </Table>

@@ -31,18 +31,18 @@ in each version, and full-snapshot restore.
 New table `bot_config_version` (`backend/src/shared/db/schema/audit.ts`), one row per
 save, per workspace:
 
-| column          | type                                    | notes                                       |
-| --------------- | ---------------------------------------- | -------------------------------------------- |
-| `id`            | bigserial PK                             |                                               |
-| `workspaceId`   | uuid, FK → workspace                     |                                               |
-| `version`       | int                                       | `1, 2, 3...` — unique per `(workspaceId)`    |
-| `prompt`        | text                                      | full snapshot, not a diff                    |
-| `rules`         | jsonb                                     | full snapshot                                |
-| `toolsConfig`   | jsonb                                     | full snapshot                                |
-| `limitsConfig`  | jsonb                                     | full snapshot                                |
-| `actorId`       | uuid, FK → agent, NOT NULL                | who triggered the save                      |
-| `changedFields` | text[]                                    | subset of `prompt`/`rules`/`tools_config`/`limits_config` that differ from the prior version — computed at write time |
-| `createdAt`     | timestamptz                              |                                               |
+| column          | type                       | notes                                                                                                                 |
+| --------------- | -------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `id`            | bigserial PK               |                                                                                                                       |
+| `workspaceId`   | uuid, FK → workspace       |                                                                                                                       |
+| `version`       | int                        | `1, 2, 3...` — unique per `(workspaceId)`                                                                             |
+| `prompt`        | text                       | full snapshot, not a diff                                                                                             |
+| `rules`         | jsonb                      | full snapshot                                                                                                         |
+| `toolsConfig`   | jsonb                      | full snapshot                                                                                                         |
+| `limitsConfig`  | jsonb                      | full snapshot                                                                                                         |
+| `actorId`       | uuid, FK → agent, NOT NULL | who triggered the save                                                                                                |
+| `changedFields` | text[]                     | subset of `prompt`/`rules`/`tools_config`/`limits_config` that differ from the prior version — computed at write time |
+| `createdAt`     | timestamptz                |                                                                                                                       |
 
 - Append-only: `REVOKE UPDATE, DELETE`, same as `change_log`.
 - Indexed on `(workspaceId, version)` unique, plus `(workspaceId, createdAt)` for the
@@ -87,7 +87,7 @@ save, per workspace:
     - `prompt`: line/word-level text diff (red/green).
     - `rules` / `tools_config` / `limits_config`: structured diff listing
       added/removed/changed entries in plain language (e.g. `Rule "greeting":
-      enabled → disabled`, `Tool "search_articles": max_calls 3 → 5`), not raw JSON.
+enabled → disabled`, `Tool "search_articles": max_calls 3 → 5`), not raw JSON.
   - "Restore this version" button per row, behind the existing `ConfirmDialog`
     pattern used elsewhere on this page.
   - Empty state (only v1 exists, nothing to compare): "No prior changes."

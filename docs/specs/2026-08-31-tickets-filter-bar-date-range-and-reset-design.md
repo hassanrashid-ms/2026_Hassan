@@ -107,7 +107,7 @@ filter bar's flex row, label "Reset filters".
   Button is `disabled={!hasActiveFilters}` — always visible, so agents always
   know it's there, but inert at rest rather than a jumpy show/hide.
 
-### 3. New table columns: Created, Subintent, Ticket #
+### 3. New table columns: Created, Subintent, Ticket
 
 Two of the three new columns need a backend field that doesn't exist on the
 wire today — `AgentConversationSummary` (`packages/types/src/chat.ts:149`)
@@ -116,6 +116,7 @@ ever used server-side to match a numeric search term
 (`extraFilterConditions`'s `numMatch`), never selected into a response row.
 
 **`AgentConversationSummary` gains:**
+
 ```ts
 created_at: string;        // ISO timestamp
 subintent: { id: string; name: string } | null;
@@ -124,6 +125,7 @@ number: number;
 
 **Backend (`listAllConversations` only — `listConversations` and
 `listResolvedOrClosedConversations`, which feed Board view, are untouched):**
+
 - Add `createdAt: conversation.createdAt`, `subintentId: subintent.id`,
   `subintentName: subintent.name`, `number: conversation.number` to the
   existing `rows` select (the `subintent` join is already present, just
@@ -148,6 +150,7 @@ priority.
 
 **Two columns don't have a natural sort value and get a defined proxy
 instead of an arbitrary one:**
+
 - **Last message** sorts by `last_message_at` (recency) — sorting by the
   message text itself isn't meaningful, and recency is what "Last message"
   already implies to an agent scanning the column.
@@ -156,6 +159,7 @@ instead of an arbitrary one:**
   ("tickets with the most labels").
 
 **Click behavior:**
+
 - Clicking a column not currently in the sort: it becomes the new primary
   sort key (ascending by default), the previous primary demotes to
   secondary, and any previous secondary is dropped.
@@ -177,8 +181,16 @@ id DESC as final tiebreaker) via the three-branch `cursorCondition` OR at
 `conversationsService.ts:376-382`. This becomes a small sort-key registry:
 
 ```ts
-type SortKey = 'player' | 'status' | 'priority' | 'assignee' | 'lastMessage'
-  | 'tags' | 'created' | 'subintent' | 'number';
+type SortKey =
+  | 'player'
+  | 'status'
+  | 'priority'
+  | 'assignee'
+  | 'lastMessage'
+  | 'tags'
+  | 'created'
+  | 'subintent'
+  | 'number';
 
 const SORT_COLUMNS: Record<SortKey, { expr: SQL; nullsLast?: boolean }> = {
   player: { expr: player.externalId },

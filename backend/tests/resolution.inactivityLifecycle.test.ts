@@ -20,13 +20,7 @@ async function sendPlayerMessageOk(ctx: PlayerContext, body: { body: string }) {
 }
 import { runInactivityClock } from '../src/shared/jobs/inactivityClock.ts';
 import { runAutoClose } from '../src/shared/jobs/autoClose.ts';
-import {
-  closeOwnerPool,
-  seedAgent,
-  seedPlayer,
-  seedWorkspace,
-  truncateAll,
-} from './helpers/db.ts';
+import { closeOwnerPool, seedAgent, seedPlayer, seedWorkspace, truncateAll } from './helpers/db.ts';
 
 const T0 = new Date('2026-08-18T12:00:00Z');
 const plusHours = (n: number) => new Date(T0.getTime() + n * 3_600_000);

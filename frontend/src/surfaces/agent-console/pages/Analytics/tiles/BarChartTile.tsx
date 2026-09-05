@@ -1,17 +1,19 @@
-import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { TileFrame } from './TileFrame.tsx'
-import { paletteColor } from './chartPalette.ts'
+import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { TileFrame } from './TileFrame.tsx';
+import { paletteColor } from './chartPalette.ts';
 
 type BarChartTileProps = {
-  title: string
-  data: Array<{ label: string; value: number }>
-}
+  title: string;
+  data: Array<{ label: string; value: number }>;
+};
 
 export function BarChartTile({ title, data }: BarChartTileProps) {
   return (
     <TileFrame title={title}>
       {data.length === 0 ? (
-        <div className="flex h-full items-center justify-center text-sm text-muted">No data in this range</div>
+        <div className="flex h-full items-center justify-center text-sm text-muted">
+          No data in this range
+        </div>
       ) : (
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data}>
@@ -23,5 +25,5 @@ export function BarChartTile({ title, data }: BarChartTileProps) {
         </ResponsiveContainer>
       )}
     </TileFrame>
-  )
+  );
 }

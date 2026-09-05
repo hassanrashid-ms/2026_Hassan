@@ -105,7 +105,8 @@ export async function listBotConfigVersionsForAgent(
           display_name: row.actor.displayName,
           email: row.actor.email,
         },
-        changed_fields: row.changedFields as BotConfigVersionsListResponse['versions'][number]['changed_fields'],
+        changed_fields:
+          row.changedFields as BotConfigVersionsListResponse['versions'][number]['changed_fields'],
         created_at: row.createdAt.toISOString(),
       })),
       next_cursor: page.nextCursor,
@@ -189,9 +190,7 @@ function mergeRulesOverBaseline(snapshotRules: RuleEntry[]): RuleEntry[] {
 
 function mergeToolsOverBaseline(snapshotTools: ToolToggle[]): ToolToggle[] {
   const snapshotNames = new Set(snapshotTools.map((t) => t.tool));
-  const missingFromBaseline = buildBaselineToolsConfig().filter(
-    (t) => !snapshotNames.has(t.tool),
-  );
+  const missingFromBaseline = buildBaselineToolsConfig().filter((t) => !snapshotNames.has(t.tool));
   return [...snapshotTools, ...missingFromBaseline];
 }
 

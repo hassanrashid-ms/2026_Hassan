@@ -58,21 +58,49 @@ const ConversationsQuery = z.object({
   olderThanHours: z.coerce.number().optional(),
   q: z.string().optional(),
   cursor: z.string().optional(),
-  createdFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  createdTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  createdFrom: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  createdTo: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
   statuses: z
     .union([
       z.enum(['unassigned', 'agentAssigned', 'botHandling', 'escalated', 'resolved', 'closed']),
-      z.array(z.enum(['unassigned', 'agentAssigned', 'botHandling', 'escalated', 'resolved', 'closed'])),
+      z.array(
+        z.enum(['unassigned', 'agentAssigned', 'botHandling', 'escalated', 'resolved', 'closed']),
+      ),
     ])
     .optional()
     .transform((v) => (v ? (Array.isArray(v) ? v : [v]) : undefined)),
   sortBy: z
-    .enum(['player', 'status', 'priority', 'assignee', 'lastMessage', 'tags', 'created', 'subintent', 'number'])
+    .enum([
+      'player',
+      'status',
+      'priority',
+      'assignee',
+      'lastMessage',
+      'tags',
+      'created',
+      'subintent',
+      'number',
+    ])
     .optional(),
   sortDir: z.enum(['asc', 'desc']).optional(),
   sortBy2: z
-    .enum(['player', 'status', 'priority', 'assignee', 'lastMessage', 'tags', 'created', 'subintent', 'number'])
+    .enum([
+      'player',
+      'status',
+      'priority',
+      'assignee',
+      'lastMessage',
+      'tags',
+      'created',
+      'subintent',
+      'number',
+    ])
     .optional(),
   sortDir2: z.enum(['asc', 'desc']).optional(),
 });

@@ -18,23 +18,25 @@
 - No new endpoints, so no `openapi.ts` changes.
 - Tier numbers (windowMs always `60_000`):
 
-  | Tier | ipMax | identityMax |
-  |---|---|---|
-  | `auth` | 60 | — |
-  | `reads` | 300 | 60 |
-  | `writes` | 200 | 30 |
-  | `sessionsUploads` | 100 | 10 |
+  | Tier              | ipMax | identityMax |
+  | ----------------- | ----- | ----------- |
+  | `auth`            | 60    | —           |
+  | `reads`           | 300   | 60          |
+  | `writes`          | 200   | 30          |
+  | `sessionsUploads` | 100   | 10          |
 
 ---
 
 ### Task 1: Dependencies + dedicated Redis client
 
 **Files:**
+
 - Modify: `backend/package.json`
 - Create: `backend/src/shared/rateLimit/rateLimitRedis.ts`
 - Test: `backend/tests/rateLimitRedis.test.ts`
 
 **Interfaces:**
+
 - Produces: `rateLimitRedisClient(): IORedis`, `closeRateLimitRedis(): Promise<void>`
 
 - [ ] **Step 1: Add dependencies**
@@ -53,7 +55,10 @@ Run: `pnpm install`
 ```ts
 // backend/tests/rateLimitRedis.test.ts
 import { afterAll, describe, expect, it } from 'vitest';
-import { closeRateLimitRedis, rateLimitRedisClient } from '../src/shared/rateLimit/rateLimitRedis.ts';
+import {
+  closeRateLimitRedis,
+  rateLimitRedisClient,
+} from '../src/shared/rateLimit/rateLimitRedis.ts';
 
 afterAll(async () => {
   await closeRateLimitRedis();
@@ -115,11 +120,13 @@ git commit -m "Add rate limiting Redis client"
 ### Task 2: `rate_limit_hit` schema + `rate_limited` error code
 
 **Files:**
+
 - Create: `backend/src/shared/db/schema/rateLimit.ts`
 - Modify: `backend/src/shared/db/schema/index.ts`
 - Modify: `backend/src/errors.ts`
 
 **Interfaces:**
+
 - Produces: `rateLimitHit` Drizzle table (columns: `id`, `tier`, `keyType`, `keyValue`, `path`, `method`, `createdAt`), `ErrorCode` now includes `'rate_limited'`.
 
 - [ ] **Step 1: Add the schema file**
@@ -186,10 +193,12 @@ git commit -m "Add rate_limit_hit table and rate_limited error code"
 ### Task 3: Persistence helper
 
 **Files:**
+
 - Create: `backend/src/shared/rateLimit/recordRateLimitHit.ts`
 - Test: `backend/tests/recordRateLimitHit.test.ts`
 
 **Interfaces:**
+
 - Consumes: `rateLimitHit` from `../db/schema/index.ts` (Task 2), `withoutWorkspace` from `../db/withWorkspace.ts`.
 - Produces: `recordRateLimitHit(input: { tier: string; keyType: 'ip' | 'identity'; keyValue: string; path: string; method: string }): Promise<void>`
 
@@ -285,12 +294,14 @@ git commit -m "Add rate limit hit persistence helper"
 ### Task 4: Limiter factory (keys, tiers, `createRateLimiter`)
 
 **Files:**
+
 - Create: `backend/src/shared/rateLimit/keys.ts`
 - Create: `backend/src/shared/rateLimit/tiers.ts`
 - Create: `backend/src/shared/rateLimit/limiter.ts`
 - Test: `backend/tests/rateLimit.limiter.test.ts`
 
 **Interfaces:**
+
 - Consumes: `rateLimitRedisClient` (Task 1), `recordRateLimitHit` (Task 3), `sendError` and `ErrorCode` from `../../errors.ts`, `logger` from `../logging/logger.ts`.
 - Produces:
   - `ipKey(req): string`, `agentIdentityKey(req): string`, `playerIdentityKey(req): string`
@@ -399,10 +410,10 @@ describe('createRateLimiter', () => {
     await request(app).get('/probe').expect(429);
 
     await vi.waitFor(async () => {
-      const { rows } = await ownerPool.query('select tier, key_type, path, method from rate_limit_hit');
-      expect(rows).toEqual([
-        { tier: 'test-tier', key_type: 'ip', path: '/probe', method: 'GET' },
-      ]);
+      const { rows } = await ownerPool.query(
+        'select tier, key_type, path, method from rate_limit_hit',
+      );
+      expect(rows).toEqual([{ tier: 'test-tier', key_type: 'ip', path: '/probe', method: 'GET' }]);
     });
   });
 });
@@ -498,11 +509,13 @@ git commit -m "Add rate limiter factory with logging and persistence"
 ### Task 5: Auth-tier wiring (pre-auth routes)
 
 **Files:**
+
 - Modify: `backend/src/app.ts`
 - Modify: `backend/src/agent/routers/authRouter.ts`
 - Test: `backend/tests/rateLimit.auth.test.ts`
 
 **Interfaces:**
+
 - Consumes: `createRateLimiter`, `RATE_LIMIT_TIERS.auth`, `ipKey` (Task 4).
 
 - [ ] **Step 1: Write the failing test**
@@ -555,21 +568,21 @@ import { RATE_LIMIT_TIERS } from './shared/rateLimit/tiers.ts';
 Change:
 
 ```ts
-  app.use('/auth', playerTokenRouter);
+app.use('/auth', playerTokenRouter);
 ```
 
 to:
 
 ```ts
-  const authRateLimiter = createRateLimiter({
-    tier: 'auth',
-    keyType: 'ip',
-    windowMs: RATE_LIMIT_TIERS.auth.windowMs,
-    max: RATE_LIMIT_TIERS.auth.ipMax,
-    keyFn: ipKey,
-  });
+const authRateLimiter = createRateLimiter({
+  tier: 'auth',
+  keyType: 'ip',
+  windowMs: RATE_LIMIT_TIERS.auth.windowMs,
+  max: RATE_LIMIT_TIERS.auth.ipMax,
+  keyFn: ipKey,
+});
 
-  app.use('/auth', authRateLimiter, playerTokenRouter);
+app.use('/auth', authRateLimiter, playerTokenRouter);
 ```
 
 - [ ] **Step 4: Wire the limiter into `authRouter.ts`**
@@ -616,6 +629,7 @@ git commit -m "Wire auth-tier rate limiting on pre-auth routes"
 ### Task 6: Reads-tier baseline wiring (all four authenticated routers)
 
 **Files:**
+
 - Modify: `backend/src/app.ts`
 - Modify: `backend/src/sdk/router.ts`
 - Modify: `backend/src/surface/router.ts`
@@ -624,9 +638,10 @@ git commit -m "Wire auth-tier rate limiting on pre-auth routes"
 - Test: `backend/tests/rateLimit.reads.test.ts`
 
 **Interfaces:**
+
 - Consumes: `createRateLimiter`, `RATE_LIMIT_TIERS.reads`, `ipKey`, `agentIdentityKey`, `playerIdentityKey` (Task 4).
 
-Each router gets two limiters: an **IP** one applied path-scoped in `app.ts` (safe — top-level `app.use(path, ...)` only runs for matching requests), and an **identity** one applied inside the router file itself, immediately after its auth middleware populates `req.player`/`req.agent`, and *before* any sub-router is mounted (so it covers literally everything in that router — no leakage, since it's the very top of that router's chain).
+Each router gets two limiters: an **IP** one applied path-scoped in `app.ts` (safe — top-level `app.use(path, ...)` only runs for matching requests), and an **identity** one applied inside the router file itself, immediately after its auth middleware populates `req.player`/`req.agent`, and _before_ any sub-router is mounted (so it covers literally everything in that router — no leakage, since it's the very top of that router's chain).
 
 - [ ] **Step 1: Write the failing test**
 
@@ -636,7 +651,13 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { req as request } from './helpers/http.ts';
 import { app, mintToken } from './helpers/app.ts';
 import { closeDb } from '../src/shared/db/client.ts';
-import { closeOwnerPool, seedPlayer, seedSession, seedWorkspace, truncateAll } from './helpers/db.ts';
+import {
+  closeOwnerPool,
+  seedPlayer,
+  seedSession,
+  seedWorkspace,
+  truncateAll,
+} from './helpers/db.ts';
 import { closeRateLimitRedis } from '../src/shared/rateLimit/rateLimitRedis.ts';
 
 afterAll(async () => {
@@ -662,9 +683,7 @@ describe('reads-tier baseline rate limiting', () => {
       player_id: playerId,
       external_player_id: 'p1',
     });
-    const res = await request(app)
-      .get('/surface/messages')
-      .set('Authorization', `Bearer ${token}`);
+    const res = await request(app).get('/surface/messages').set('Authorization', `Bearer ${token}`);
     expect(res.headers['ratelimit-limit']).toBe('60');
   });
 });
@@ -680,40 +699,40 @@ Expected: FAIL — no headers set yet.
 Extend the block from Task 5 with one IP limiter per remaining router, applied path-scoped:
 
 ```ts
-  const sdkIpLimiter = createRateLimiter({
-    tier: 'reads',
-    keyType: 'ip',
-    windowMs: RATE_LIMIT_TIERS.reads.windowMs,
-    max: RATE_LIMIT_TIERS.reads.ipMax,
-    keyFn: ipKey,
-  });
-  const surfaceIpLimiter = createRateLimiter({
-    tier: 'reads',
-    keyType: 'ip',
-    windowMs: RATE_LIMIT_TIERS.reads.windowMs,
-    max: RATE_LIMIT_TIERS.reads.ipMax,
-    keyFn: ipKey,
-  });
-  const agentIpLimiter = createRateLimiter({
-    tier: 'reads',
-    keyType: 'ip',
-    windowMs: RATE_LIMIT_TIERS.reads.windowMs,
-    max: RATE_LIMIT_TIERS.reads.ipMax,
-    keyFn: ipKey,
-  });
-  const adminIpLimiter = createRateLimiter({
-    tier: 'reads',
-    keyType: 'ip',
-    windowMs: RATE_LIMIT_TIERS.reads.windowMs,
-    max: RATE_LIMIT_TIERS.reads.ipMax,
-    keyFn: ipKey,
-  });
+const sdkIpLimiter = createRateLimiter({
+  tier: 'reads',
+  keyType: 'ip',
+  windowMs: RATE_LIMIT_TIERS.reads.windowMs,
+  max: RATE_LIMIT_TIERS.reads.ipMax,
+  keyFn: ipKey,
+});
+const surfaceIpLimiter = createRateLimiter({
+  tier: 'reads',
+  keyType: 'ip',
+  windowMs: RATE_LIMIT_TIERS.reads.windowMs,
+  max: RATE_LIMIT_TIERS.reads.ipMax,
+  keyFn: ipKey,
+});
+const agentIpLimiter = createRateLimiter({
+  tier: 'reads',
+  keyType: 'ip',
+  windowMs: RATE_LIMIT_TIERS.reads.windowMs,
+  max: RATE_LIMIT_TIERS.reads.ipMax,
+  keyFn: ipKey,
+});
+const adminIpLimiter = createRateLimiter({
+  tier: 'reads',
+  keyType: 'ip',
+  windowMs: RATE_LIMIT_TIERS.reads.windowMs,
+  max: RATE_LIMIT_TIERS.reads.ipMax,
+  keyFn: ipKey,
+});
 
-  app.use('/auth', authRateLimiter, playerTokenRouter);
-  app.use('/sdk', sdkIpLimiter, sdkRouter);
-  app.use('/surface', surfaceIpLimiter, surfaceRouter);
-  app.use('/agent', agentIpLimiter, agentRouter);
-  app.use('/admin', adminIpLimiter, adminRouter);
+app.use('/auth', authRateLimiter, playerTokenRouter);
+app.use('/sdk', sdkIpLimiter, sdkRouter);
+app.use('/surface', surfaceIpLimiter, surfaceRouter);
+app.use('/agent', agentIpLimiter, agentRouter);
+app.use('/admin', adminIpLimiter, adminRouter);
 ```
 
 (Four separate `createRateLimiter` calls, not a shared instance, so each router gets its own independent Redis counter bucket — otherwise traffic to `/sdk` would eat into `/surface`'s IP budget.)
@@ -832,6 +851,7 @@ git commit -m "Wire reads-tier baseline rate limiting on all authenticated route
 ### Task 7: Writes and sessions/uploads tier overrides on sensitive routes
 
 **Files:**
+
 - Modify: `backend/src/surface/routers/messagesRouter.ts`
 - Modify: `backend/src/surface/routers/newTicketRouter.ts`
 - Modify: `backend/src/surface/routers/formRouter.ts`
@@ -841,6 +861,7 @@ git commit -m "Wire reads-tier baseline rate limiting on all authenticated route
 - Test: `backend/tests/rateLimit.writesAndUploads.test.ts`
 
 **Interfaces:**
+
 - Consumes: `createRateLimiter`, `RATE_LIMIT_TIERS.writes`, `RATE_LIMIT_TIERS.sessionsUploads`, `playerIdentityKey` (Task 4). All six routes below sit under `/surface` or `/sdk`, both player-authenticated, so `playerIdentityKey` is the identity key throughout — there is no agent-facing writes/sessionsUploads route in this design (agent console traffic is covered by the reads tier from Task 6).
 
 These limiters run **in addition to** the reads-tier baseline already wired in Task 6 — a request to a sensitive route passes through both; the stricter one binds first in practice.
@@ -853,7 +874,13 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { req as request } from './helpers/http.ts';
 import { app, mintToken } from './helpers/app.ts';
 import { closeDb } from '../src/shared/db/client.ts';
-import { closeOwnerPool, seedPlayer, seedSession, seedWorkspace, truncateAll } from './helpers/db.ts';
+import {
+  closeOwnerPool,
+  seedPlayer,
+  seedSession,
+  seedWorkspace,
+  truncateAll,
+} from './helpers/db.ts';
 import { closeRateLimitRedis } from '../src/shared/rateLimit/rateLimitRedis.ts';
 
 afterAll(async () => {
@@ -1032,7 +1059,7 @@ sessionsRouter.post('/sessions/start', sessionsUploadsLimiter, sessionsStart);
 sessionsRouter.post('/sessions/end', sessionsEnd);
 ```
 
-(Only session *start* gets the stricter tier, per the design — `/sessions/end` stays on the reads-tier baseline.)
+(Only session _start_ gets the stricter tier, per the design — `/sessions/end` stays on the reads-tier baseline.)
 
 - [ ] **Step 7: Wire the sessionsUploads tier onto `surface/routers/uploadsRouter.ts`**
 

@@ -21,12 +21,14 @@
 ### Task 1: Backend — role, capacity, escalated, and overdue metrics on `getWorkspaceWorkload`
 
 **Files:**
+
 - Modify: `backend/src/agent/services/conversationsService.ts:977-1077` (types + `getWorkspaceWorkload`)
 - Modify: `backend/src/docs/openapi.ts:722-740` (`AgentWorkspaceWorkloadSchema`)
 - Modify: `backend/tests/helpers/db.ts:55-82` (`seedWorkspace` — add `maxAssignedTickets` override)
 - Test: `backend/tests/agent.workload.test.ts`
 
 **Interfaces:**
+
 - Produces: `WorkspaceWorkloadAgent` gains `role: 'agent' | 'team_lead'`, `capacityMax: number`, `escalatedCount: number`, `overdueCount: number`. The `GET /agent/workload` JSON response carries the same four fields per agent (Task 2 consumes exactly this shape on the frontend).
 
 - [ ] **Step 1: Add `maxAssignedTickets` override to the `seedWorkspace` test helper**
@@ -78,7 +80,9 @@ describe('GET /agent/workload — new metrics', () => {
     const workerAgentId = await seedAgent('worker@example.test');
     await seedWorkspaceMember({ workspaceId, agentId: workerAgentId, role: 'agent' });
 
-    const res = await request(app).get('/agent/workload').set('Authorization', `Bearer ${teamLeadToken}`);
+    const res = await request(app)
+      .get('/agent/workload')
+      .set('Authorization', `Bearer ${teamLeadToken}`);
 
     expect(res.status).toBe(200);
     const roles = new Set(res.body.agents.map((a: { role: string }) => a.role));
@@ -91,7 +95,9 @@ describe('GET /agent/workload — new metrics', () => {
     const workerAgentId = await seedAgent('worker@example.test');
     await seedWorkspaceMember({ workspaceId, agentId: workerAgentId, role: 'agent' });
 
-    const res = await request(app).get('/agent/workload').set('Authorization', `Bearer ${teamLeadToken}`);
+    const res = await request(app)
+      .get('/agent/workload')
+      .set('Authorization', `Bearer ${teamLeadToken}`);
 
     expect(res.status).toBe(200);
     for (const a of res.body.agents) {
@@ -106,7 +112,12 @@ describe('GET /agent/workload — new metrics', () => {
     const workerAgentId = await seedAgent('worker@example.test');
     await seedWorkspaceMember({ workspaceId, agentId: workerAgentId, role: 'agent' });
 
-    await seedConversation({ workspaceId, playerId, status: 'open', assignedAgentId: workerAgentId });
+    await seedConversation({
+      workspaceId,
+      playerId,
+      status: 'open',
+      assignedAgentId: workerAgentId,
+    });
     await seedConversation({
       workspaceId,
       playerId,
@@ -114,7 +125,9 @@ describe('GET /agent/workload — new metrics', () => {
       assignedAgentId: workerAgentId,
     });
 
-    const res = await request(app).get('/agent/workload').set('Authorization', `Bearer ${teamLeadToken}`);
+    const res = await request(app)
+      .get('/agent/workload')
+      .set('Authorization', `Bearer ${teamLeadToken}`);
 
     const worker = res.body.agents.find((a: { agentId: string }) => a.agentId === workerAgentId);
     expect(worker.openCount).toBe(2);
@@ -142,7 +155,9 @@ describe('GET /agent/workload — new metrics', () => {
       createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000),
     });
 
-    const res = await request(app).get('/agent/workload').set('Authorization', `Bearer ${teamLeadToken}`);
+    const res = await request(app)
+      .get('/agent/workload')
+      .set('Authorization', `Bearer ${teamLeadToken}`);
     const worker = res.body.agents.find((a: { agentId: string }) => a.agentId === workerAgentId);
     expect(worker.overdueCount).toBe(1);
   });
@@ -168,7 +183,9 @@ describe('GET /agent/workload — new metrics', () => {
       createdAt: new Date(Date.now() - 1 * 60 * 60 * 1000),
     });
 
-    const res = await request(app).get('/agent/workload').set('Authorization', `Bearer ${teamLeadToken}`);
+    const res = await request(app)
+      .get('/agent/workload')
+      .set('Authorization', `Bearer ${teamLeadToken}`);
     const worker = res.body.agents.find((a: { agentId: string }) => a.agentId === workerAgentId);
     expect(worker.overdueCount).toBe(0);
   });
@@ -201,7 +218,9 @@ describe('GET /agent/workload — new metrics', () => {
       createdAt: new Date(Date.now() - 9 * 60 * 60 * 1000),
     });
 
-    const res = await request(app).get('/agent/workload').set('Authorization', `Bearer ${teamLeadToken}`);
+    const res = await request(app)
+      .get('/agent/workload')
+      .set('Authorization', `Bearer ${teamLeadToken}`);
     const worker = res.body.agents.find((a: { agentId: string }) => a.agentId === workerAgentId);
     expect(worker.overdueCount).toBe(0);
   });
@@ -442,11 +461,13 @@ git commit -m "Add role, capacity, escalated, and overdue metrics to workload en
 ### Task 2: Frontend — Team page: remove leave toggle, add new columns
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/agent-console/api/agentApi.ts:348-356` (`AgentWorkloadEntry`)
 - Modify: `frontend/src/surfaces/agent-console/pages/Workload/Workload.tsx` (whole file)
 - Test: `frontend/src/surfaces/agent-console/pages/Workload/Workload.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `WorkspaceWorkloadAgent` shape from Task 1 — `role`, `capacityMax`, `escalatedCount`, `overdueCount` alongside the existing `agentId`, `agentName`, `openCount`, `resolved7d`, `status`, `onLeaveSince`, `onLeaveUntil`.
 
 - [ ] **Step 1: Extend the `AgentWorkloadEntry` type**
@@ -700,8 +721,14 @@ describe('Workload roster metrics', () => {
     const carolRow = screen.getByText('Carol').closest('tr')!;
     const aliceRow = screen.getByText('Alice').closest('tr')!;
     expect(within(bobRow).getByTestId('capacity-cell')).toHaveAttribute('data-at-capacity', 'true');
-    expect(within(carolRow).getByTestId('capacity-cell')).toHaveAttribute('data-at-capacity', 'true');
-    expect(within(aliceRow).getByTestId('capacity-cell')).toHaveAttribute('data-at-capacity', 'false');
+    expect(within(carolRow).getByTestId('capacity-cell')).toHaveAttribute(
+      'data-at-capacity',
+      'true',
+    );
+    expect(within(aliceRow).getByTestId('capacity-cell')).toHaveAttribute(
+      'data-at-capacity',
+      'false',
+    );
   });
 
   it('shows escalated and overdue counts', async () => {

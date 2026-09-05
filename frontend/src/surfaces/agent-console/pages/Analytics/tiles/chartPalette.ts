@@ -12,8 +12,8 @@ export const CHART_PALETTE = [
   '#008300', // green
   '#4a3aa7', // violet
   '#e34948', // red
-]
+];
 
 export function paletteColor(index: number): string {
-  return CHART_PALETTE[index % CHART_PALETTE.length]!
+  return CHART_PALETTE[index % CHART_PALETTE.length]!;
 }

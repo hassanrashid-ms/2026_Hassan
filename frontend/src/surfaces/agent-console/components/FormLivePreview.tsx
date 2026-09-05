@@ -11,13 +11,7 @@ import { MobilePreviewFrame } from './MobilePreviewFrame.tsx';
  * real player's reconnect resumes mid-form instead of resetting. That same
  * behavior would otherwise leave a stale preview after every edit here.
  */
-export function FormLivePreview({
-  formName,
-  fields,
-}: {
-  formName: string;
-  fields: FormField[];
-}) {
+export function FormLivePreview({ formName, fields }: { formName: string; fields: FormField[] }) {
   if (fields.length === 0) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-[var(--color-muted)]">

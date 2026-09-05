@@ -33,7 +33,7 @@ ticket exists and picking an agent by hand.
 
 ## Non-goals
 
-- Rebalancing tickets that are already assigned to a *busy* agent (only tickets
+- Rebalancing tickets that are already assigned to a _busy_ agent (only tickets
   with `assigned_agent_id IS NULL` are touched).
 - Auto-unassigning a ticket when its owning agent goes offline. Only a manual
   release action is in scope; presence-driven auto-unassign is a possible future
@@ -121,10 +121,10 @@ requirement beyond ownership.
 
 ## API surface
 
-| Method | Path | Handler | Notes |
-|---|---|---|---|
-| `POST` | `/conversations/:id/unassign` | `unassignConversationHandler` | 403 if caller isn't the assigned agent |
-| `POST` | `/conversations/sweep-assign` | `sweepAssignHandler` | `requireTeamLeadOrAdmin`; returns `{ assignedCount: number, conversationIds: string[] }` |
+| Method | Path                          | Handler                       | Notes                                                                                    |
+| ------ | ----------------------------- | ----------------------------- | ---------------------------------------------------------------------------------------- |
+| `POST` | `/conversations/:id/unassign` | `unassignConversationHandler` | 403 if caller isn't the assigned agent                                                   |
+| `POST` | `/conversations/sweep-assign` | `sweepAssignHandler`          | `requireTeamLeadOrAdmin`; returns `{ assignedCount: number, conversationIds: string[] }` |
 
 Both must be registered in `backend/src/docs/openapi.ts` per repo convention.
 

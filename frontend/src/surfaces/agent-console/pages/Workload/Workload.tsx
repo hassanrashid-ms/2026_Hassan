@@ -191,9 +191,7 @@ export function Workload() {
                           />
                         </div>
                         <span data-testid="agent-name">{agent.agentName}</span>
-                        {agent.agentId === session.agentId && (
-                          <Badge variant="outline">You</Badge>
-                        )}
+                        {agent.agentId === session.agentId && <Badge variant="outline">You</Badge>}
                         <Badge variant="secondary">{ROLE_LABEL[agent.role]}</Badge>
                         {agent.status === 'on_leave' && agent.onLeaveSince && (
                           <span data-testid="leave-duration" className="text-xs text-muted">

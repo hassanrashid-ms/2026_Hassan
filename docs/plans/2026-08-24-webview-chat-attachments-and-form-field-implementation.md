@@ -1025,14 +1025,12 @@ Check `ChatComposer.tsx`'s current props (it wraps the shared `Composer` and, pe
 
 ```tsx
 it('passes allowAttachments and upload handlers through to the shared Composer', () => {
-  const onUpload = vi
-    .fn()
-    .mockResolvedValue({
-      key: 'pending/ws/player/uuid.png',
-      filename: 'shot.png',
-      mimeType: 'image/png',
-      byteSize: 3,
-    });
+  const onUpload = vi.fn().mockResolvedValue({
+    key: 'pending/ws/player/uuid.png',
+    filename: 'shot.png',
+    mimeType: 'image/png',
+    byteSize: 3,
+  });
   render(<ChatComposer onSend={() => {}} onUpload={onUpload} onCancelUpload={() => {}} />);
   expect(screen.getByLabelText('Attach image')).toBeInTheDocument();
 });

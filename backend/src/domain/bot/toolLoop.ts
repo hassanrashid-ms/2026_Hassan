@@ -337,7 +337,7 @@ export const toolLoopDecider: BotDecider = async (input, overrides) => {
               if (!grounded) {
                 logger.warn(
                   'bot.grounding',
-                  'player_declared_resolved rejected — quoted_text not found verbatim in the player\'s latest message',
+                  "player_declared_resolved rejected — quoted_text not found verbatim in the player's latest message",
                   {
                     workspaceId: input.workspaceId,
                     conversationId: input.conversationId,

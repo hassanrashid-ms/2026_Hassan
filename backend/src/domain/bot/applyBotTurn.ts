@@ -114,7 +114,12 @@ export async function applyBotTurn(
         actorType: 'bot',
         payload: { quoted_text: decision.quotedText },
       });
-      return { posted: [posted], statusChanged: false, phaseChanged: 'player_stated', notification: null };
+      return {
+        posted: [posted],
+        statusChanged: false,
+        phaseChanged: 'player_stated',
+        notification: null,
+      };
     }
 
     case 'resolve': {
@@ -207,7 +212,12 @@ export async function applyBotTurn(
           // Status stays bot_active, no agent is assigned, and no bot_handoff is
           // written. completeFormAndHandoff does all three at terminate — that
           // gate is what keeps a half-filled ticket out of the queue.
-          return { posted: [posted], statusChanged: false, phaseChanged: 'form', notification: null };
+          return {
+            posted: [posted],
+            statusChanged: false,
+            phaseChanged: 'form',
+            notification: null,
+          };
         }
       }
 

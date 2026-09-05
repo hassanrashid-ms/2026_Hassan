@@ -1,6 +1,10 @@
 import type { FormField } from '@support/types';
 
-export type FormFieldDiffEntry = { key: string; kind: 'added' | 'removed' | 'changed'; description: string };
+export type FormFieldDiffEntry = {
+  key: string;
+  kind: 'added' | 'removed' | 'changed';
+  description: string;
+};
 
 export function diffFormFields(before: FormField[], after: FormField[]): FormFieldDiffEntry[] {
   const beforeByKey = new Map(before.map((f) => [f.key, f]));
@@ -32,7 +36,11 @@ export function diffFormFields(before: FormField[], after: FormField[]): FormFie
         description: `Field "${field.label}": type changed from ${prior.type} to ${field.type}`,
       });
     } else if (JSON.stringify(prior.options) !== JSON.stringify(field.options)) {
-      entries.push({ key, kind: 'changed', description: `Field "${field.label}": options changed` });
+      entries.push({
+        key,
+        kind: 'changed',
+        description: `Field "${field.label}": options changed`,
+      });
     }
   }
   for (const [key, field] of beforeByKey) {

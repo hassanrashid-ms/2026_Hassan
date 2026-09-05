@@ -33,10 +33,7 @@ workspacesRouter.post('/workspaces/:id/secret/rotate', rotateSecretHandler);
 
 workspacesRouter.get('/workspaces/:id/declared-fields', listDeclaredFieldsHandler);
 workspacesRouter.post('/workspaces/:id/declared-fields', createDeclaredFieldHandler);
-workspacesRouter.patch(
-  '/workspaces/:id/declared-fields/:fieldId',
-  updateDeclaredFieldHandler,
-);
+workspacesRouter.patch('/workspaces/:id/declared-fields/:fieldId', updateDeclaredFieldHandler);
 workspacesRouter.post(
   '/workspaces/:id/declared-fields/:fieldId/deactivate',
   deactivateDeclaredFieldHandler,

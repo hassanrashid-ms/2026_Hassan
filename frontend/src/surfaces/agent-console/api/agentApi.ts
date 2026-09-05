@@ -188,10 +188,7 @@ export function unassignConversation(
 }
 
 export type SweepAssignStopReason =
-  | 'queue_empty'
-  | 'no_active_agents'
-  | 'all_at_capacity'
-  | 'none_online';
+  'queue_empty' | 'no_active_agents' | 'all_at_capacity' | 'none_online';
 
 export function sweepAssign(token: string): Promise<{
   assignedCount: number;
@@ -471,10 +468,7 @@ export function archiveSubintent(token: string, id: string): Promise<ArchiveSubi
   return call(`/agent/subintents/${id}/archive`, token, { method: 'POST' });
 }
 
-export function unarchiveSubintent(
-  token: string,
-  id: string,
-): Promise<UnarchiveSubintentResponse> {
+export function unarchiveSubintent(token: string, id: string): Promise<UnarchiveSubintentResponse> {
   return call(`/agent/subintents/${id}/unarchive`, token, { method: 'POST' });
 }
 
@@ -621,7 +615,9 @@ export function restoreArticleVersion(
   articleId: string,
   version: number,
 ): Promise<AgentArticleDetail> {
-  return call(`/agent/articles/${articleId}/versions/${version}/restore`, token, { method: 'POST' });
+  return call(`/agent/articles/${articleId}/versions/${version}/restore`, token, {
+    method: 'POST',
+  });
 }
 
 export function removeArticleAttachment(
@@ -673,7 +669,10 @@ export function setFormSubintents(
   });
 }
 
-export function fetchFormVersions(token: string, formId: string): Promise<FormVersionsListResponse> {
+export function fetchFormVersions(
+  token: string,
+  formId: string,
+): Promise<FormVersionsListResponse> {
   return call(`/agent/forms/${formId}/versions`, token);
 }
 

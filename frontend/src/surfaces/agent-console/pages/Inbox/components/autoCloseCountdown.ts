@@ -21,7 +21,9 @@ export function useAutoCloseCountdown(
   autoCloseDays: number | undefined,
 ): string | null {
   const deadline =
-    resolvedAt && autoCloseDays ? new Date(resolvedAt).getTime() + autoCloseDays * 86_400_000 : null;
+    resolvedAt && autoCloseDays
+      ? new Date(resolvedAt).getTime() + autoCloseDays * 86_400_000
+      : null;
 
   const [label, setLabel] = useState<string | null>(() =>
     deadline === null ? null : formatCountdown(deadline - Date.now()),

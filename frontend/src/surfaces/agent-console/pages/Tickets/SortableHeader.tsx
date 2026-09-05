@@ -36,7 +36,12 @@ export function SortableHeader({
     }
     // Not active: promote to primary, demote the old primary to secondary,
     // drop the old secondary — the 2-key cap.
-    onSort({ primary: sortKey, primaryDir: 'asc', secondary: sort.primary, secondaryDir: sort.primaryDir });
+    onSort({
+      primary: sortKey,
+      primaryDir: 'asc',
+      secondary: sort.primary,
+      secondaryDir: sort.primaryDir,
+    });
   }
 
   return (

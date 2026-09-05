@@ -35,20 +35,20 @@ the pattern already established for bot config
 **`article_version`** (new table, `backend/src/shared/db/schema/articles.ts`) — doubles
 as both the version-history table and the one-active-draft-per-article store:
 
-| column | type | notes |
-| --- | --- | --- |
-| `id` | bigserial PK | |
-| `articleId` | uuid, FK → `article` | |
-| `status` | `'draft' \| 'published' \| 'discarded'` | at most one `'draft'` row per `articleId` (partial unique index on `articleId` where `status = 'draft'`) |
-| `version` | int, nullable | assigned only on publish, `MAX(published version for articleId) + 1`; null while `status = 'draft'` |
-| `title` | text | full snapshot |
-| `body` | text | full snapshot |
-| `keywords` | text[] | full snapshot |
-| `attachmentIds` | uuid[] | snapshot of live attachment ids, filled in at publish time |
-| `actorId` | uuid, FK → `agent`, not null | last editor while draft; publisher once published |
-| `changedFields` | text[] | subset of `title`/`body`/`keywords`/`attachments` differing from the prior published version — computed at publish time; empty/unused while draft |
-| `createdAt` | timestamptz | |
-| `updatedAt` | timestamptz | bumped on every draft save |
+| column          | type                                    | notes                                                                                                                                             |
+| --------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`            | bigserial PK                            |                                                                                                                                                   |
+| `articleId`     | uuid, FK → `article`                    |                                                                                                                                                   |
+| `status`        | `'draft' \| 'published' \| 'discarded'` | at most one `'draft'` row per `articleId` (partial unique index on `articleId` where `status = 'draft'`)                                          |
+| `version`       | int, nullable                           | assigned only on publish, `MAX(published version for articleId) + 1`; null while `status = 'draft'`                                               |
+| `title`         | text                                    | full snapshot                                                                                                                                     |
+| `body`          | text                                    | full snapshot                                                                                                                                     |
+| `keywords`      | text[]                                  | full snapshot                                                                                                                                     |
+| `attachmentIds` | uuid[]                                  | snapshot of live attachment ids, filled in at publish time                                                                                        |
+| `actorId`       | uuid, FK → `agent`, not null            | last editor while draft; publisher once published                                                                                                 |
+| `changedFields` | text[]                                  | subset of `title`/`body`/`keywords`/`attachments` differing from the prior published version — computed at publish time; empty/unused while draft |
+| `createdAt`     | timestamptz                             |                                                                                                                                                   |
+| `updatedAt`     | timestamptz                             | bumped on every draft save                                                                                                                        |
 
 - `support_app` (the application DB role) is never granted `DELETE` on any table in
   this schema — nothing can be hard-deleted, full stop. So published rows can't be
@@ -64,8 +64,8 @@ as both the version-history table and the one-active-draft-per-article store:
 
 **`article`** — add one cached column:
 
-| column | type | notes |
-| --- | --- | --- |
+| column    | type                     | notes                                                                                                                                       |
+| --------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | `version` | int, not null, default 1 | cached current live version number, updated alongside `title`/`body`/`keywords` on publish, so list/detail views show "v{N}" without a join |
 
 No other `article` columns change. `title`/`body`/`keywords` remain the live content,
@@ -73,11 +73,11 @@ read by every existing path (player surface, bot grounding, Weaviate index) unch
 
 **`article_attachment`** — add:
 
-| column | type | notes |
-| --- | --- | --- |
-| `draftOnly` | boolean, not null, default false | uploaded during an in-progress draft edit, not yet live |
-| `pendingRemovalAt` | timestamptz, nullable | staged for removal by the current draft; still live/visible until publish |
-| `removedAt` | timestamptz, nullable | soft-removed (no hard deletes, per repo convention) |
+| column             | type                             | notes                                                                     |
+| ------------------ | -------------------------------- | ------------------------------------------------------------------------- |
+| `draftOnly`        | boolean, not null, default false | uploaded during an in-progress draft edit, not yet live                   |
+| `pendingRemovalAt` | timestamptz, nullable            | staged for removal by the current draft; still live/visible until publish |
+| `removedAt`        | timestamptz, nullable            | soft-removed (no hard deletes, per repo convention)                       |
 
 - Live attachments (player view, live editor default) = `removedAt IS NULL AND draftOnly = false`.
 - Draft editor view = live attachments (minus `pendingRemovalAt`-staged ones, shown as

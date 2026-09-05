@@ -14,7 +14,10 @@ export type AdminConsoleBoot = {
  * admin token carries no workspace_id and admin-console's routes never need
  * one.
  */
-export function readAdminConsoleBoot(location: { search: string; hash: string }): AdminConsoleBoot | null {
+export function readAdminConsoleBoot(location: {
+  search: string;
+  hash: string;
+}): AdminConsoleBoot | null {
   const query = new URLSearchParams(location.search);
   const fragment = new URLSearchParams(location.hash.replace(/^#/, ''));
 

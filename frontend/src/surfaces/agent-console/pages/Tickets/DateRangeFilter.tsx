@@ -19,7 +19,8 @@ function fromLocalDateString(value: string): Date | undefined {
 
 function triggerLabel(from: string, to: string): string {
   if (!from && !to) return 'Created date';
-  if (from && to) return `${format(fromLocalDateString(from)!, 'MMM d')} – ${format(fromLocalDateString(to)!, 'MMM d')}`;
+  if (from && to)
+    return `${format(fromLocalDateString(from)!, 'MMM d')} – ${format(fromLocalDateString(to)!, 'MMM d')}`;
   if (from) return `From ${format(fromLocalDateString(from)!, 'MMM d')}`;
   return `Until ${format(fromLocalDateString(to)!, 'MMM d')}`;
 }

@@ -1,15 +1,15 @@
-import { and, eq } from 'drizzle-orm'
-import type { DashboardLayout, DashboardLayoutItem } from '@support/types'
-import { agentDashboardLayout } from '../../shared/db/schema/index.ts'
-import { withWorkspace } from '../../shared/db/withWorkspace.ts'
-import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts'
+import { and, eq } from 'drizzle-orm';
+import type { DashboardLayout, DashboardLayoutItem } from '@support/types';
+import { agentDashboardLayout } from '../../shared/db/schema/index.ts';
+import { withWorkspace } from '../../shared/db/withWorkspace.ts';
+import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts';
 
 // x/w are in a 12-column grid; each row is 1 unit tall in react-grid-layout terms.
 // minW/minH are set to each tile's own shipped w/h — every tile's content was
 // built to fit at that size, so a floor at the default size is what stops a
 // resize from clipping/overflowing a title or a chart's legend.
 function tile(i: string, x: number, y: number, w: number, h: number) {
-  return { i, x, y, w, h, minW: w, minH: h }
+  return { i, x, y, w, h, minW: w, minH: h };
 }
 
 export const DEFAULT_LAYOUT: DashboardLayout = {
@@ -47,18 +47,24 @@ export const DEFAULT_LAYOUT: DashboardLayout = {
     'top-cited-articles',
     'top-read-articles',
   ],
-}
+};
 
-const DEFAULT_ITEM_BY_ID = new Map(DEFAULT_LAYOUT.items.map((item) => [item.i, item]))
+const DEFAULT_ITEM_BY_ID = new Map(DEFAULT_LAYOUT.items.map((item) => [item.i, item]));
 
 // A layout saved before minW/minH existed (or before a tile's size floor
 // changed) can be sitting below the current floor — clamp it back up and
 // attach the floor, so an already-too-small tile self-heals on the next read
 // instead of requiring the agent to notice and resize it themselves.
 function withSizeFloor(item: DashboardLayoutItem): DashboardLayoutItem {
-  const def = DEFAULT_ITEM_BY_ID.get(item.i)
-  if (!def) return item
-  return { ...item, w: Math.max(item.w, def.minW!), h: Math.max(item.h, def.minH!), minW: def.minW, minH: def.minH }
+  const def = DEFAULT_ITEM_BY_ID.get(item.i);
+  if (!def) return item;
+  return {
+    ...item,
+    w: Math.max(item.w, def.minW!),
+    h: Math.max(item.h, def.minH!),
+    minW: def.minW,
+    minH: def.minH,
+  };
 }
 
 // Once an agent's grid is touched at all (drag/resize), the client autosaves
@@ -67,12 +73,15 @@ function withSizeFloor(item: DashboardLayoutItem): DashboardLayoutItem {
 // agent. Merge new default tiles into a saved layout on every read so newly
 // shipped tiles show up without requiring anyone to manually re-edit a layout.
 function mergeNewDefaultTiles(saved: DashboardLayout): DashboardLayout {
-  const savedIds = new Set(saved.items.map((item) => item.i))
-  const newItems = DEFAULT_LAYOUT.items.filter((item) => !savedIds.has(item.i))
+  const savedIds = new Set(saved.items.map((item) => item.i));
+  const newItems = DEFAULT_LAYOUT.items.filter((item) => !savedIds.has(item.i));
   return {
     items: [...saved.items.map(withSizeFloor), ...newItems],
-    visibleTileIds: newItems.length === 0 ? saved.visibleTileIds : [...saved.visibleTileIds, ...newItems.map((item) => item.i)],
-  }
+    visibleTileIds:
+      newItems.length === 0
+        ? saved.visibleTileIds
+        : [...saved.visibleTileIds, ...newItems.map((item) => item.i)],
+  };
 }
 
 export async function getDashboardLayout(ctx: AgentContext): Promise<DashboardLayout> {
@@ -80,13 +89,21 @@ export async function getDashboardLayout(ctx: AgentContext): Promise<DashboardLa
     const [row] = await tx
       .select({ layout: agentDashboardLayout.layout })
       .from(agentDashboardLayout)
-      .where(and(eq(agentDashboardLayout.agentId, ctx.agentId), eq(agentDashboardLayout.workspaceId, ctx.workspaceId)))
-    if (!row?.layout) return DEFAULT_LAYOUT
-    return mergeNewDefaultTiles(row.layout)
-  })
+      .where(
+        and(
+          eq(agentDashboardLayout.agentId, ctx.agentId),
+          eq(agentDashboardLayout.workspaceId, ctx.workspaceId),
+        ),
+      );
+    if (!row?.layout) return DEFAULT_LAYOUT;
+    return mergeNewDefaultTiles(row.layout);
+  });
 }
 
-export async function saveDashboardLayout(ctx: AgentContext, layout: DashboardLayout): Promise<void> {
+export async function saveDashboardLayout(
+  ctx: AgentContext,
+  layout: DashboardLayout,
+): Promise<void> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
     await tx
       .insert(agentDashboardLayout)
@@ -94,6 +111,6 @@ export async function saveDashboardLayout(ctx: AgentContext, layout: DashboardLa
       .onConflictDoUpdate({
         target: [agentDashboardLayout.agentId, agentDashboardLayout.workspaceId],
         set: { layout, updatedAt: new Date() },
-      })
-  })
+      });
+  });
 }

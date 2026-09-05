@@ -247,7 +247,8 @@ function extraFilterConditions(extra: ConversationsListFilters) {
       ),
     );
   }
-  if (extra.createdFrom) conditions.push(sql`${conversation.createdAt} >= ${extra.createdFrom}::date`);
+  if (extra.createdFrom)
+    conditions.push(sql`${conversation.createdAt} >= ${extra.createdFrom}::date`);
   if (extra.createdTo)
     conditions.push(sql`${conversation.createdAt} < (${extra.createdTo}::date + interval '1 day')`);
   if (extra.q) {
@@ -465,7 +466,11 @@ async function listAllConversations(
           ...extraFilterConditions(extra),
         ),
       )
-      .orderBy(orderExpr(primaryKey, primaryDir), orderExpr(secondaryKey, secondaryDir), conversation.id)
+      .orderBy(
+        orderExpr(primaryKey, primaryDir),
+        orderExpr(secondaryKey, secondaryDir),
+        conversation.id,
+      )
       .limit(PAGE_SIZE + 1);
 
     const hasMore = rows.length > PAGE_SIZE;

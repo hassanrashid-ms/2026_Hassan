@@ -1,6 +1,6 @@
 # Getting Started with Support
 
-There is *no frontmatter* in this file, so the title should fall back to this H1.
+There is _no frontmatter_ in this file, so the title should fall back to this H1.
 
 ![Getting started screenshot](images/placeholder-2.svg)
 

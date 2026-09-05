@@ -3,7 +3,7 @@
 ## Problem
 
 "Declared Fields" (promoting raw player-state keys to typed, labeled fields)
-currently lives in agent-console, gated by the *workspace-level* admin role
+currently lives in agent-console, gated by the _workspace-level_ admin role
 (`requireAdminRole` / `isAdmin(agentSession)`). It's schema-configuration for
 the whole workspace, set up once and rarely touched — closer in nature to
 admin-console's existing Members/Secret tabs (workspace setup, cross-workspace
@@ -34,6 +34,7 @@ workspace-id filtering instead of RLS, and a new frontend surface for the UI
 `admin/services/declaredFieldsService.ts`:** the same six operations as
 today's `agent/services/declaredFieldService.ts` (list, create/promote,
 update, deactivate, reactivate, archive), with two changes:
+
 - `ctx: AgentContext` → explicit `workspaceId: string` and `actorId: string`
   params. `actorId` is the calling admin's own `agent.id` — same table,
   same `declaredBy`/change-log actor semantics as before, no schema change.
@@ -50,6 +51,7 @@ same six handlers as today's, reading `workspaceId` from `req.params.id` and
 
 **Routes:** added directly to `admin/routers/workspacesRouter.ts` (no new
 router file — same convention as the existing members/secret sub-resources):
+
 ```
 GET    /workspaces/:id/declared-fields
 POST   /workspaces/:id/declared-fields
@@ -75,6 +77,7 @@ entries, add six `/admin/workspaces/{id}/declared-fields...` entries.
 ## Frontend
 
 **New**, under `surfaces/admin-console/pages/WorkspaceDetail/components/`:
+
 - `DeclaredFieldsPanel.tsx` — port of today's `DeclaredFields.tsx`, rewritten
   against admin-console's own component set (`Table`/`TableRow`/`TableCell`
   instead of a raw `<table>`, matching `MembersTable.tsx`'s existing
@@ -96,6 +99,7 @@ paths. Reuses the existing `@support/types` wire types unchanged
 (`DeclaredFieldsResponse` etc. are generic, not agent-specific).
 
 **Removed from agent-console:**
+
 - `pages/DeclaredFields/` entirely (`DeclaredFields.tsx` + test,
   `components/DeclaredFieldRow.tsx` + test).
 - The six `*DeclaredField*` functions from `agentApi.ts`.

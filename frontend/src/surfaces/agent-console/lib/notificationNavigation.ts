@@ -1,6 +1,10 @@
 import type { QueryClient } from '@tanstack/react-query';
 import type { NavigateFunction } from 'react-router-dom';
-import type { NotificationsResponse, NotificationView, TicketAssignedPayload } from '@support/types';
+import type {
+  NotificationsResponse,
+  NotificationView,
+  TicketAssignedPayload,
+} from '@support/types';
 import { markNotificationRead } from '../api/agentApi.ts';
 import { loadAgentSession, saveAgentSession, saveLastActiveWorkspaceId } from './agentSession.ts';
 

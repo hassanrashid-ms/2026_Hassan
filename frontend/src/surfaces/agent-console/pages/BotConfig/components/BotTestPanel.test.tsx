@@ -129,7 +129,14 @@ describe('BotTestPanel', () => {
           form_name: 'Purchase receipt',
           version: 1,
           fields: [
-            { key: 'store', label: 'Store', type: 'choice', isRequired: true, position: 0, options: ['A', 'B'] },
+            {
+              key: 'store',
+              label: 'Store',
+              type: 'choice',
+              isRequired: true,
+              position: 0,
+              options: ['A', 'B'],
+            },
           ],
         },
       },
@@ -169,7 +176,14 @@ describe('BotTestPanel', () => {
           form_name: 'Purchase receipt',
           version: 1,
           fields: [
-            { key: 'store', label: 'Store', type: 'choice', isRequired: true, position: 0, options: ['A', 'B'] },
+            {
+              key: 'store',
+              label: 'Store',
+              type: 'choice',
+              isRequired: true,
+              position: 0,
+              options: ['A', 'B'],
+            },
           ],
         },
       },

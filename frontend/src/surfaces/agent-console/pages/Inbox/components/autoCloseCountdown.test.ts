@@ -26,7 +26,9 @@ describe('formatCountdown', () => {
 describe('useAutoCloseCountdown', () => {
   it('returns null when resolvedAt or autoCloseDays is missing', () => {
     expect(renderHook(() => useAutoCloseCountdown(null, 7)).result.current).toBeNull();
-    expect(renderHook(() => useAutoCloseCountdown('2026-08-30T00:00:00.000Z', undefined)).result.current).toBeNull();
+    expect(
+      renderHook(() => useAutoCloseCountdown('2026-08-30T00:00:00.000Z', undefined)).result.current,
+    ).toBeNull();
   });
 
   it('computes the deadline from resolvedAt + autoCloseDays and ticks on a 60s interval', () => {

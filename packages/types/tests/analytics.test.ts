@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import type { AnalyticsResponse, DashboardLayout } from '../src/analytics.ts'
+import { describe, expect, it } from 'vitest';
+import type { AnalyticsResponse, DashboardLayout } from '../src/analytics.ts';
 
 describe('analytics types', () => {
   it('AnalyticsResponse shape compiles with every metric group present', () => {
@@ -12,8 +12,18 @@ describe('analytics types', () => {
         byPriority: [{ priority: 'p3', count: 2 }],
       },
       speed: {
-        firstResponse: { avgSeconds: 120, p50Seconds: 90, p90Seconds: 300, series: [{ bucket: '2026-08-01', seconds: 100 }] },
-        resolution: { avgSeconds: 3600, p50Seconds: 2000, p90Seconds: 9000, series: [{ bucket: '2026-08-01', seconds: 3000 }] },
+        firstResponse: {
+          avgSeconds: 120,
+          p50Seconds: 90,
+          p90Seconds: 300,
+          series: [{ bucket: '2026-08-01', seconds: 100 }],
+        },
+        resolution: {
+          avgSeconds: 3600,
+          p50Seconds: 2000,
+          p90Seconds: 9000,
+          series: [{ bucket: '2026-08-01', seconds: 3000 }],
+        },
         timeToClaim: { series: [{ bucket: '2026-08-01', seconds: 60 }] },
       },
       bot: {
@@ -30,15 +40,15 @@ describe('analytics types', () => {
         topCited: [{ articleId: 'a1', title: 'Reset your password', count: 5 }],
         topRead: [{ articleId: 'a2', title: 'Redeem a gift code', count: 8 }],
       },
-    }
-    expect(sample.range.granularity).toBe('day')
-  })
+    };
+    expect(sample.range.granularity).toBe('day');
+  });
 
   it('DashboardLayout carries items and visible tile ids', () => {
     const layout: DashboardLayout = {
       items: [{ i: 'volume-series', x: 0, y: 0, w: 4, h: 2 }],
       visibleTileIds: ['volume-series'],
-    }
-    expect(layout.items).toHaveLength(1)
-  })
-})
+    };
+    expect(layout.items).toHaveLength(1);
+  });
+});

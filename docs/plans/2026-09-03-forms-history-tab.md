@@ -4,14 +4,14 @@
 
 **Goal:** Add a "History" tab to the Forms admin editor showing every published version of a form, a diff against the prior version, and a restore action that copies an old version's fields into the current draft.
 
-**Architecture:** No schema changes — `form_version` (`backend/src/shared/db/schema/forms.ts:40-65`) already stores one immutable snapshot per publish. Two new read endpoints (`GET /forms/:id/versions`, `GET /forms/:id/versions/:version`) expose only *published* rows (`publishedAt IS NOT NULL`) — a draft is the mutable working copy, not history yet, and has no `publishedBy` actor to show. A new `POST /forms/:id/versions/:version/restore` endpoint reuses the existing `updateForm` auto-fork logic (`formsService.ts:156-199`) to copy an old version's fields into the current draft, never publishing directly. The frontend adds a `Tabs` strip (Fields / History) inside `FormEditorSheet`, mirroring `pages/BotConfig`'s existing Prompt/Rules/Tools/History pattern — a new `FormVersionHistoryTab` component fetches the list, diffs adjacent snapshots client-side with a new `diffFormFields` util (mirroring `diffRules`), and gates restore behind the shared `ConfirmDialog`.
+**Architecture:** No schema changes — `form_version` (`backend/src/shared/db/schema/forms.ts:40-65`) already stores one immutable snapshot per publish. Two new read endpoints (`GET /forms/:id/versions`, `GET /forms/:id/versions/:version`) expose only _published_ rows (`publishedAt IS NOT NULL`) — a draft is the mutable working copy, not history yet, and has no `publishedBy` actor to show. A new `POST /forms/:id/versions/:version/restore` endpoint reuses the existing `updateForm` auto-fork logic (`formsService.ts:156-199`) to copy an old version's fields into the current draft, never publishing directly. The frontend adds a `Tabs` strip (Fields / History) inside `FormEditorSheet`, mirroring `pages/BotConfig`'s existing Prompt/Rules/Tools/History pattern — a new `FormVersionHistoryTab` component fetches the list, diffs adjacent snapshots client-side with a new `diffFormFields` util (mirroring `diffRules`), and gates restore behind the shared `ConfirmDialog`.
 
 **Tech Stack:** Express 5 + Zod + Drizzle ORM (backend), React + TanStack Query + Radix `Tabs` (frontend), Vitest + Testing Library.
 
 ## Global Constraints
 
 - Auth: `GET /forms/:id/versions` and `GET /forms/:id/versions/:version` use `requireTeamLeadOrAdmin` (same as other form reads). `POST /forms/:id/versions/:version/restore` uses `requireTeamLeadOrAdmin` too — restore only edits the draft, exactly like `PATCH /forms/:id`, which is Team Lead + Admin, not Admin-only (publish/archive are the Admin-only actions).
-- No hard deletes, no mutation of `form_version` rows once written — restore always creates/updates the *draft* row, never touches a published row's `fields`.
+- No hard deletes, no mutation of `form_version` rows once written — restore always creates/updates the _draft_ row, never touches a published row's `fields`.
 - Register every new route in `backend/src/docs/openapi.ts` (repo convention, see CLAUDE.md "General").
 - Tailwind v4 utilities only in any new frontend markup — no hand-written CSS classes.
 - Every mutating frontend action that changes persisted state beyond a form field edit must go through `ConfirmDialog` — restore must never fire directly from a row button.
@@ -21,6 +21,7 @@
 ### Task 1: Backend — list and get form version endpoints
 
 **Files:**
+
 - Modify: `packages/types/src/forms.ts` (add version view types near `FormVersionView`, line 162)
 - Modify: `backend/src/agent/services/formsService.ts` (add `listFormVersions`, `getFormVersion`)
 - Modify: `backend/src/agent/controllers/formsController.ts` (add two handlers)
@@ -29,6 +30,7 @@
 - Test: `backend/tests/formsAdmin.test.ts` (add cases)
 
 **Interfaces:**
+
 - Produces: `FormVersionActorView = { id: string; display_name: string; email: string }`, `FormVersionSummaryView = { version: number; published_at: string; actor: FormVersionActorView }`, `FormVersionSnapshotView = FormVersionSummaryView & { fields: FormField[] }`, `FormVersionsListResponse = { versions: FormVersionSummaryView[] }` (all in `@support/types`)
 - Produces: `listFormVersions(ctx: AgentContext, formId: string): Promise<FormVersionsListResponse | null>` — `null` means form not found
 - Produces: `getFormVersion(ctx: AgentContext, formId: string, version: number): Promise<FormVersionSnapshotView | null>` — `null` means form or version not found
@@ -195,7 +197,11 @@ export async function listFormVersions(
   formId: string,
 ): Promise<FormVersionsListResponse | null> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
-    const [formRow] = await tx.select({ id: form.id }).from(form).where(eq(form.id, formId)).limit(1);
+    const [formRow] = await tx
+      .select({ id: form.id })
+      .from(form)
+      .where(eq(form.id, formId))
+      .limit(1);
     if (!formRow) return null;
 
     const rows = await tx
@@ -410,6 +416,7 @@ git commit -m "feat: add form version list/get endpoints"
 ### Task 2: Backend — restore form version endpoint
 
 **Files:**
+
 - Modify: `backend/src/agent/services/formsService.ts` (add `restoreFormVersion`)
 - Modify: `backend/src/agent/controllers/formsController.ts` (add handler)
 - Modify: `backend/src/agent/routers/formsRouter.ts` (add route)
@@ -417,6 +424,7 @@ git commit -m "feat: add form version list/get endpoints"
 - Test: `backend/tests/formsAdmin.test.ts`
 
 **Interfaces:**
+
 - Consumes: `updateForm` (Task 1's file, already in `formsService.ts:156-199`) — `UpdateFormInput`/`UpdateFormResult`
 - Produces: `RestoreFormVersionResult = { ok: true; form: FormDetail } | { ok: false; reason: 'not_found' } | { ok: false; reason: 'version_not_found' }`
 - Produces: `restoreFormVersion(ctx: AgentContext, formId: string, version: number): Promise<RestoreFormVersionResult>`
@@ -529,7 +537,11 @@ export async function restoreFormVersion(
   version: number,
 ): Promise<RestoreFormVersionResult> {
   const target = await withWorkspace(ctx.workspaceId, async (tx) => {
-    const [formRow] = await tx.select({ id: form.id }).from(form).where(eq(form.id, formId)).limit(1);
+    const [formRow] = await tx
+      .select({ id: form.id })
+      .from(form)
+      .where(eq(form.id, formId))
+      .limit(1);
     if (!formRow) return { ok: false as const, reason: 'not_found' as const };
 
     const [row] = await tx
@@ -590,11 +602,7 @@ export const restoreFormVersionHandler: RequestHandler = async (req, res) => {
 In `backend/src/agent/routers/formsRouter.ts`, add `restoreFormVersionHandler` to the controller import and append:
 
 ```ts
-formsRouter.post(
-  '/forms/:id/versions/:version/restore',
-  canBuildForms,
-  restoreFormVersionHandler,
-);
+formsRouter.post('/forms/:id/versions/:version/restore', canBuildForms, restoreFormVersionHandler);
 ```
 
 - [ ] **Step 6: Register in openapi.ts**
@@ -640,10 +648,12 @@ git commit -m "feat: add form version restore endpoint"
 ### Task 3: Frontend — `diffFormFields` utility
 
 **Files:**
+
 - Create: `frontend/src/surfaces/agent-console/pages/Forms/lib/diffFormFields.ts`
 - Test: `frontend/src/surfaces/agent-console/pages/Forms/lib/diffFormFields.test.ts`
 
 **Interfaces:**
+
 - Produces: `type FormFieldDiffEntry = { key: string; kind: 'added' | 'removed' | 'changed'; description: string }`
 - Produces: `diffFormFields(before: FormField[], after: FormField[]): FormFieldDiffEntry[]`
 - Consumes: `FormField` from `@support/types` (`key`, `label`, `type`, `isRequired`, `position`, `options`)
@@ -736,7 +746,11 @@ Create `frontend/src/surfaces/agent-console/pages/Forms/lib/diffFormFields.ts`:
 ```ts
 import type { FormField } from '@support/types';
 
-export type FormFieldDiffEntry = { key: string; kind: 'added' | 'removed' | 'changed'; description: string };
+export type FormFieldDiffEntry = {
+  key: string;
+  kind: 'added' | 'removed' | 'changed';
+  description: string;
+};
 
 export function diffFormFields(before: FormField[], after: FormField[]): FormFieldDiffEntry[] {
   const beforeByKey = new Map(before.map((f) => [f.key, f]));
@@ -768,7 +782,11 @@ export function diffFormFields(before: FormField[], after: FormField[]): FormFie
         description: `Field "${field.label}": type changed from ${prior.type} to ${field.type}`,
       });
     } else if (JSON.stringify(prior.options) !== JSON.stringify(field.options)) {
-      entries.push({ key, kind: 'changed', description: `Field "${field.label}": options changed` });
+      entries.push({
+        key,
+        kind: 'changed',
+        description: `Field "${field.label}": options changed`,
+      });
     }
   }
   for (const [key, field] of beforeByKey) {
@@ -797,11 +815,13 @@ git commit -m "feat: add diffFormFields utility"
 ### Task 4: Frontend — `FormVersionHistoryTab` component
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/agent-console/api/agentApi.ts` (add `fetchFormVersions`, `fetchFormVersion`, `restoreFormVersion`)
 - Create: `frontend/src/surfaces/agent-console/pages/Forms/components/FormVersionHistoryTab.tsx`
 - Test: `frontend/src/surfaces/agent-console/pages/Forms/components/FormVersionHistoryTab.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `diffFormFields` (Task 3), `ConfirmDialog` (`components/ConfirmDialog.tsx`), `Button`/`ScrollArea` (`components/ui/*`)
 - Produces: `fetchFormVersions(token: string, formId: string): Promise<FormVersionsListResponse>`
 - Produces: `fetchFormVersion(token: string, formId: string, version: number): Promise<FormVersionSnapshotView>`
@@ -813,7 +833,10 @@ git commit -m "feat: add diffFormFields utility"
 In `frontend/src/surfaces/agent-console/api/agentApi.ts`, add to the `@support/types` import block: `FormVersionsListResponse`, `FormVersionSnapshotView`. Then add after `setFormSubintents` (after line 668):
 
 ```ts
-export function fetchFormVersions(token: string, formId: string): Promise<FormVersionsListResponse> {
+export function fetchFormVersions(
+  token: string,
+  formId: string,
+): Promise<FormVersionsListResponse> {
   return call(`/agent/forms/${formId}/versions`, token);
 }
 
@@ -1126,10 +1149,12 @@ git commit -m "feat: add FormVersionHistoryTab component"
 ### Task 5: Frontend — wire the History tab into `FormEditorSheet`
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/agent-console/pages/Forms/components/FormEditorSheet.tsx`
 - Modify: `frontend/src/surfaces/agent-console/pages/Forms/Forms.test.tsx` (verify no regression)
 
 **Interfaces:**
+
 - Consumes: `FormVersionHistoryTab` (Task 4), `Tabs`/`TabsList`/`TabsTrigger`/`TabsContent` from `../../../components/ui/tabs.tsx`
 
 - [ ] **Step 1: Write the failing test**
@@ -1137,19 +1162,17 @@ git commit -m "feat: add FormVersionHistoryTab component"
 Add to `frontend/src/surfaces/agent-console/pages/Forms/Forms.test.tsx`, inside `describe('Forms route-driven selection', ...)` (after the existing two `it` blocks, before the closing `});` at line 74):
 
 ```tsx
-  it('shows a History tab for an existing form that switches away from Fields', async () => {
-    vi.spyOn(agentApi, 'fetchFormVersions').mockResolvedValue({ versions: [] });
+it('shows a History tab for an existing form that switches away from Fields', async () => {
+  vi.spyOn(agentApi, 'fetchFormVersions').mockResolvedValue({ versions: [] });
 
-    renderAt('/forms/form-1');
+  renderAt('/forms/form-1');
 
-    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
-    expect(screen.getByRole('tab', { name: 'History' })).toBeInTheDocument();
+  await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+  expect(screen.getByRole('tab', { name: 'History' })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
-    await waitFor(() =>
-      expect(screen.getByText('No published versions yet.')).toBeInTheDocument(),
-    );
-  });
+  fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+  await waitFor(() => expect(screen.getByText('No published versions yet.')).toBeInTheDocument());
+});
 ```
 
 Add `fireEvent` to the existing `@testing-library/react` import (line 2):
@@ -1175,37 +1198,37 @@ import { FormVersionHistoryTab } from './FormVersionHistoryTab.tsx';
 Add tab state inside `FormEditorForm`, right after the existing `useState` declarations (after line 143, `const [archiveConfirmOpen, ...]`):
 
 ```ts
-  const [activeTab, setActiveTab] = useState<'fields' | 'history'>('fields');
+const [activeTab, setActiveTab] = useState<'fields' | 'history'>('fields');
 ```
 
 Replace the outer wrapper `<div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">` (line 231) through its matching closing `</div>` (line 453) with a `Tabs`-wrapped version. The existing content between those two lines (the left column with Name/Fields/ShownForPicker, and the right-hand live-preview column) becomes the `fields` tab's content unchanged:
 
 ```tsx
-      <Tabs
-        value={activeTab}
-        onValueChange={(v) => setActiveTab(v as 'fields' | 'history')}
-        className="flex min-h-0 flex-1 flex-col gap-0"
-      >
-        <TabsList className="mx-4 mt-2 w-fit">
-          <TabsTrigger value="fields">Fields</TabsTrigger>
-          {formId && <TabsTrigger value="history">History</TabsTrigger>}
-        </TabsList>
-        <TabsContent
-          value="fields"
-          className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden"
-        >
-          {/* ...unchanged existing content from line 232 through line 452... */}
-        </TabsContent>
-        {formId && (
-          <TabsContent value="history" className="min-h-0 flex-1 overflow-auto p-4">
-            <FormVersionHistoryTab
-              token={token}
-              formId={formId}
-              onRestored={() => setActiveTab('fields')}
-            />
-          </TabsContent>
-        )}
-      </Tabs>
+<Tabs
+  value={activeTab}
+  onValueChange={(v) => setActiveTab(v as 'fields' | 'history')}
+  className="flex min-h-0 flex-1 flex-col gap-0"
+>
+  <TabsList className="mx-4 mt-2 w-fit">
+    <TabsTrigger value="fields">Fields</TabsTrigger>
+    {formId && <TabsTrigger value="history">History</TabsTrigger>}
+  </TabsList>
+  <TabsContent
+    value="fields"
+    className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden"
+  >
+    {/* ...unchanged existing content from line 232 through line 452... */}
+  </TabsContent>
+  {formId && (
+    <TabsContent value="history" className="min-h-0 flex-1 overflow-auto p-4">
+      <FormVersionHistoryTab
+        token={token}
+        formId={formId}
+        onRestored={() => setActiveTab('fields')}
+      />
+    </TabsContent>
+  )}
+</Tabs>
 ```
 
 Do not move or alter anything inside the unchanged block (the `{archived && (...)}` banner through the `<FormLivePreview .../>` closing div) — it moves as-is into the `fields` `TabsContent`.

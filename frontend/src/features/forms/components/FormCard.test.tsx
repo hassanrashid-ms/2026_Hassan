@@ -252,7 +252,9 @@ describe('FormCard', () => {
       />,
     );
     expect(screen.getByLabelText('Attach image or video')).toBeInTheDocument();
-    expect(screen.queryByText('This question cannot be answered here yet.')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('This question cannot be answered here yet.'),
+    ).not.toBeInTheDocument();
   });
 
   it('uploads on pick but waits for Next to send the answer and advance', async () => {
@@ -336,7 +338,13 @@ describe('FormCard', () => {
       form_name: 'Proof of purchase',
       version: 1,
       fields: [
-        { key: 'proof', label: 'Upload a photo', type: 'attachment', isRequired: false, position: 0 },
+        {
+          key: 'proof',
+          label: 'Upload a photo',
+          type: 'attachment',
+          isRequired: false,
+          position: 0,
+        },
       ],
       answers: [],
     };
@@ -352,7 +360,9 @@ describe('FormCard', () => {
       />,
     );
     const first = makeFile('first.png', 'image/png', 3);
-    fireEvent.change(screen.getByLabelText('Attach image or video'), { target: { files: [first] } });
+    fireEvent.change(screen.getByLabelText('Attach image or video'), {
+      target: { files: [first] },
+    });
     await screen.findByAltText('first.png');
 
     fireEvent.click(screen.getByLabelText('Remove attachment'));
@@ -362,7 +372,9 @@ describe('FormCard', () => {
     ).toBeInTheDocument();
 
     const second = makeFile('second.png', 'image/png', 3);
-    fireEvent.change(screen.getByLabelText('Attach image or video'), { target: { files: [second] } });
+    fireEvent.change(screen.getByLabelText('Attach image or video'), {
+      target: { files: [second] },
+    });
     await screen.findByAltText('second.png');
 
     fireEvent.click(screen.getByRole('button', { name: 'Submit' }));
@@ -387,7 +399,13 @@ describe('FormCard', () => {
       form_name: 'Proof of purchase',
       version: 1,
       fields: [
-        { key: 'proof', label: 'Upload a photo', type: 'attachment', isRequired: false, position: 0 },
+        {
+          key: 'proof',
+          label: 'Upload a photo',
+          type: 'attachment',
+          isRequired: false,
+          position: 0,
+        },
       ],
       answers: [],
     };
@@ -416,7 +434,13 @@ describe('FormCard', () => {
       form_name: 'Proof of purchase',
       version: 1,
       fields: [
-        { key: 'proof', label: 'Upload a photo', type: 'attachment', isRequired: false, position: 0 },
+        {
+          key: 'proof',
+          label: 'Upload a photo',
+          type: 'attachment',
+          isRequired: false,
+          position: 0,
+        },
       ],
       answers: [],
     };
@@ -444,7 +468,13 @@ describe('FormCard', () => {
       form_name: 'Proof of purchase',
       version: 1,
       fields: [
-        { key: 'proof', label: 'Upload a photo', type: 'attachment', isRequired: false, position: 0 },
+        {
+          key: 'proof',
+          label: 'Upload a photo',
+          type: 'attachment',
+          isRequired: false,
+          position: 0,
+        },
       ],
       answers: [],
     };
@@ -474,7 +504,13 @@ describe('FormCard', () => {
       form_name: 'Proof of purchase',
       version: 1,
       fields: [
-        { key: 'proof', label: 'Upload a video', type: 'attachment', isRequired: false, position: 0 },
+        {
+          key: 'proof',
+          label: 'Upload a video',
+          type: 'attachment',
+          isRequired: false,
+          position: 0,
+        },
       ],
       answers: [],
     };
@@ -504,7 +540,13 @@ describe('FormCard', () => {
       form_name: 'Proof of purchase',
       version: 1,
       fields: [
-        { key: 'proof', label: 'Upload a photo', type: 'attachment', isRequired: false, position: 0 },
+        {
+          key: 'proof',
+          label: 'Upload a photo',
+          type: 'attachment',
+          isRequired: false,
+          position: 0,
+        },
       ],
       answers: [],
     };
@@ -550,7 +592,13 @@ describe('FormCard', () => {
       form_name: 'Proof of purchase',
       version: 1,
       fields: [
-        { key: 'proof', label: 'Upload a photo', type: 'attachment', isRequired: false, position: 0 },
+        {
+          key: 'proof',
+          label: 'Upload a photo',
+          type: 'attachment',
+          isRequired: false,
+          position: 0,
+        },
       ],
       answers: [],
     };
@@ -594,7 +642,13 @@ describe('FormCard', () => {
       form_name: 'Proof of purchase',
       version: 1,
       fields: [
-        { key: 'proof', label: 'Upload a photo', type: 'attachment', isRequired: false, position: 0 },
+        {
+          key: 'proof',
+          label: 'Upload a photo',
+          type: 'attachment',
+          isRequired: false,
+          position: 0,
+        },
       ],
       answers: [],
     };

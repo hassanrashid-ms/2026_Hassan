@@ -20,7 +20,11 @@ export default tseslint.config(
         { type: 'webview', pattern: '**/src/surfaces/webview/**/*' },
         { type: 'shared', pattern: '**/src/**/*' },
       ],
-      'boundaries/ignore': ['**/src/routes/AppRoutes.tsx', '**/src/routes/Login.tsx', '**/src/routes/Login.test.tsx'],
+      'boundaries/ignore': [
+        '**/src/routes/AppRoutes.tsx',
+        '**/src/routes/Login.tsx',
+        '**/src/routes/Login.test.tsx',
+      ],
     },
     rules: {
       'boundaries/dependencies': [
@@ -107,7 +111,12 @@ export default tseslint.config(
     // shells, Login.tsx is the single picker that decides which one a signed
     // in agent lands in.
     files: ['**/src/**/*.{ts,tsx}'],
-    ignores: ['**/src/surfaces/**', '**/src/routes/AppRoutes.tsx', '**/src/routes/Login.tsx', '**/src/routes/Login.test.tsx'],
+    ignores: [
+      '**/src/surfaces/**',
+      '**/src/routes/AppRoutes.tsx',
+      '**/src/routes/Login.tsx',
+      '**/src/routes/Login.test.tsx',
+    ],
     rules: {
       'no-restricted-imports': [
         'error',

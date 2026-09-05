@@ -159,9 +159,7 @@ export function IntentRow({
         )}
       </div>
       {archive.isError && <p className="pl-0 text-xs text-red-600">{archive.error?.message}</p>}
-      {unarchive.isError && (
-        <p className="pl-0 text-xs text-red-600">{unarchive.error?.message}</p>
-      )}
+      {unarchive.isError && <p className="pl-0 text-xs text-red-600">{unarchive.error?.message}</p>}
       {addingSubintent && (
         <div className="mt-1 flex items-center gap-2 pl-3">
           <Input

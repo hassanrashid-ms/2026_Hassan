@@ -105,9 +105,6 @@ describe('Taxonomy', () => {
     await screen.findByText('Taxonomy');
     const addButton = screen.getByText('+ Add intent');
     expect(addButton).toBeDisabled();
-    expect(addButton.closest('[title]')).toHaveAttribute(
-      'title',
-      'Only an admin can add intents.',
-    );
+    expect(addButton.closest('[title]')).toHaveAttribute('title', 'Only an admin can add intents.');
   });
 });

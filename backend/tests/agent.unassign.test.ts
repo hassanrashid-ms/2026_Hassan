@@ -41,9 +41,10 @@ afterAll(async () => {
 beforeEach(truncateAll);
 
 async function conversationRow(id: string) {
-  const { rows } = await ownerPool.query(`select assigned_agent_id from conversation where id = $1`, [
-    id,
-  ]);
+  const { rows } = await ownerPool.query(
+    `select assigned_agent_id from conversation where id = $1`,
+    [id],
+  );
   return rows[0];
 }
 async function eventsFor(id: string) {
@@ -55,7 +56,7 @@ async function eventsFor(id: string) {
 }
 
 describe('POST /agent/conversations/:id/unassign', () => {
-  it('releases the caller\'s own ticket back to the unassigned queue', async () => {
+  it("releases the caller's own ticket back to the unassigned queue", async () => {
     const workspaceId = await seedWorkspace();
     const playerId = await seedPlayer(workspaceId);
     const agentId = await seedAgent();

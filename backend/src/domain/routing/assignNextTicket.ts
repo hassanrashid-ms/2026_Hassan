@@ -42,7 +42,10 @@ export async function assignNextTicket(workspaceId: string): Promise<AssignNextT
       })
       .from(conversation)
       .where(
-        and(isNull(conversation.assignedAgentId), inArray(conversation.status, UNASSIGNED_STATUSES)),
+        and(
+          isNull(conversation.assignedAgentId),
+          inArray(conversation.status, UNASSIGNED_STATUSES),
+        ),
       )
       .orderBy(asc(conversation.priority), asc(conversation.createdAt), asc(conversation.id))
       .limit(1);

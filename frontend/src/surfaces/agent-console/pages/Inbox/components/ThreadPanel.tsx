@@ -253,7 +253,9 @@ export function ThreadPanel({
       );
       if (error instanceof ApiError && error.status === 409) {
         toast.error('This ticket was just resolved — your message was not sent.');
-        void queryClient.invalidateQueries({ queryKey: ['conversation', conversationId, 'detail'] });
+        void queryClient.invalidateQueries({
+          queryKey: ['conversation', conversationId, 'detail'],
+        });
       }
     },
   });
@@ -484,9 +486,7 @@ export function ThreadPanel({
               still reachable via the TagPicker's attached-tags state, this is
               just the header's glance, not the source of truth. */}
             {tags.length > MAX_VISIBLE_HEADER_TAGS && (
-              <span className="text-xs text-muted">
-                +{tags.length - MAX_VISIBLE_HEADER_TAGS}
-              </span>
+              <span className="text-xs text-muted">+{tags.length - MAX_VISIBLE_HEADER_TAGS}</span>
             )}
             {conversationId && (
               <TagPicker

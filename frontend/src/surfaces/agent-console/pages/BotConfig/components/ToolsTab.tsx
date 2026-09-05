@@ -143,9 +143,7 @@ export function ToolsTab({ token, config }: { token: string; config: BotConfigVi
             Save changes
           </Button>
         </div>
-        {saveLimits.isError && (
-          <p className="text-xs text-red-600">{saveLimits.error?.message}</p>
-        )}
+        {saveLimits.isError && <p className="text-xs text-red-600">{saveLimits.error?.message}</p>}
       </div>
       <ConfirmDialog
         open={toolsConfirmOpen}

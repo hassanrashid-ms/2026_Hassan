@@ -91,7 +91,7 @@ business-rule check inside the service, not a shape check.
 ## Testing
 
 - Backend: service-level test that `updateDeclaredField` on a seeded row (`declaredBy:
-  null`) rejects a `type`-only patch and a combined `label`+`type` patch, but accepts a
+null`) rejects a `type`-only patch and a combined `label`+`type` patch, but accepts a
   `label`-only patch; a parallel test that the same patches all succeed on a
   promoted/reviveable row (`declaredBy` set).
 - Frontend: component test that `DeclaredFieldRow`'s `type` select is `disabled` for a row

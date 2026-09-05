@@ -218,7 +218,11 @@ describe('PATCH /admin/workspaces/:id/declared-fields/:fieldId', () => {
       .send({ label: 'Player Level (v2)' })
       .expect(200);
 
-    expect(res.body).toMatchObject({ key: 'player_level', label: 'Player Level (v2)', type: 'number' });
+    expect(res.body).toMatchObject({
+      key: 'player_level',
+      label: 'Player Level (v2)',
+      type: 'number',
+    });
   });
 
   it('writes a change_log row per changed field, attributed to the admin', async () => {
@@ -245,7 +249,9 @@ describe('PATCH /admin/workspaces/:id/declared-fields/:fieldId', () => {
     const { token } = await adminToken();
 
     await request(app)
-      .patch(`/admin/workspaces/${workspaceId}/declared-fields/00000000-0000-0000-0000-000000000000`)
+      .patch(
+        `/admin/workspaces/${workspaceId}/declared-fields/00000000-0000-0000-0000-000000000000`,
+      )
       .set('Authorization', `Bearer ${token}`)
       .send({ label: 'VIP tier' })
       .expect(404);

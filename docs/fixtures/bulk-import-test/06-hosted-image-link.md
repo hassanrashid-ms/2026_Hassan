@@ -11,7 +11,7 @@ render correctly after import — nothing about bulk import needs to touch it.
 Compare this to `01-full-frontmatter.md` and `02-h1-fallback.md`, which
 reference `images/placeholder-*.svg` bundled in this same zip:
 
-- Hosted URLs → *render fine*
+- Hosted URLs → _render fine_
 - Zip-relative paths → **broken image**, always
 
 Local zip-relative paths are never uploaded anywhere.

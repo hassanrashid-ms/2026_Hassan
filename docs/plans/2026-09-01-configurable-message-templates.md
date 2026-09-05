@@ -23,6 +23,7 @@
 ### Task 1: `message_template` schema + migration
 
 **Files:**
+
 - Create: `backend/src/shared/db/schema/templates.ts`
 - Modify: `backend/src/shared/db/schema/index.ts` (add `export * from './templates.ts';`)
 - Modify: `backend/tests/helpers/db.ts` (add `'message_template'` to `SCOPED_TABLES`)
@@ -30,6 +31,7 @@
 - Test: `backend/tests/rls.test.ts` (existing test, run as verification — no new test file needed, see Step 4)
 
 **Interfaces:**
+
 - Produces: `messageTemplate` Drizzle table, columns `id, workspaceId, kind ('system'|'canned'), key (text|null), label (text|null), body (text), sortOrder (integer), isActive (boolean), createdByAgentId (uuid|null), createdAt, updatedAt`. Later tasks import this from `../../shared/db/schema/index.ts`.
 
 - [ ] **Step 1: Write the schema file**
@@ -129,10 +131,12 @@ git commit -m "feat: add message_template table"
 ### Task 2: Redis cache-aside module
 
 **Files:**
+
 - Create: `backend/src/domain/templates/templateCache.ts`
 - Test: `backend/tests/templateCache.test.ts`
 
 **Interfaces:**
+
 - Consumes: `getEnv().REDIS_URL` from `backend/src/env.ts` (same as `wsAuthCache.ts`).
 - Produces: `TemplatesCachePayload` type, `getCachedTemplates(workspaceId): Promise<TemplatesCachePayload | null>`, `setCachedTemplates(workspaceId, payload): Promise<void>`, `invalidateCachedTemplates(workspaceId): Promise<void>`, `closeTemplateCacheRedis(): Promise<void>` (test teardown). Task 3 imports all four.
 
@@ -287,10 +291,12 @@ git commit -m "feat: add Redis cache-aside layer for message templates"
 ### Task 3: `templateService.ts` read path (`loadTemplates`, `getSystemMessage`, `getHandoffMessage`, `listCannedReplies`)
 
 **Files:**
+
 - Create: `backend/src/domain/templates/templateService.ts`
 - Test: `backend/tests/templateService.test.ts`
 
 **Interfaces:**
+
 - Consumes: `messageTemplate` table (Task 1), `getCachedTemplates`/`setCachedTemplates` (Task 2), `Tx` type from `backend/src/shared/db/withWorkspace.ts`, `HANDOFF_PLAYER_MESSAGES`/`NO_AGENTS_ONLINE_MESSAGE` from `../bot/messages.ts`, `FORM_SUMMARY_MESSAGES`-equivalent from `../forms/messages.ts` (that file currently exports only `formSummaryMessage`, not the map itself — Step 1 below adds `FORM_SUMMARY_MESSAGES` to its exports since this module needs the raw map, not the picker function).
 - Produces: `getSystemMessage(tx: Tx, workspaceId: string, key: Exclude<SystemMessageKey, 'handoff'>): Promise<string>`, `getHandoffMessage(tx: Tx, workspaceId: string): Promise<string>`, `listCannedReplies(tx: Tx, workspaceId: string): Promise<CannedReplyEntry[]>`. Task 6 (call-site migration) and Task 7 (API) both import these.
 
@@ -548,10 +554,7 @@ export async function getHandoffMessage(tx: Tx, workspaceId: string): Promise<st
   return variants[Math.floor(Math.random() * variants.length)]!;
 }
 
-export async function listCannedReplies(
-  tx: Tx,
-  workspaceId: string,
-): Promise<CannedReplyEntry[]> {
+export async function listCannedReplies(tx: Tx, workspaceId: string): Promise<CannedReplyEntry[]> {
   const { canned } = await loadTemplates(tx, workspaceId);
   return canned;
 }
@@ -574,10 +577,12 @@ git commit -m "feat: add template service read path with default fallback"
 ### Task 4: `templateService.ts` write path (create / update / deactivate)
 
 **Files:**
+
 - Modify: `backend/src/domain/templates/templateService.ts`
 - Test: `backend/tests/templateService.test.ts` (extend)
 
 **Interfaces:**
+
 - Consumes: `withWorkspace` from `backend/src/shared/db/withWorkspace.ts`, `invalidateCachedTemplates` from `templateCache.ts`, `AgentContext` type from `backend/src/shared/middleware/requireAgentSession.ts`.
 - Produces: `TemplateRowView` type (`{id, kind, key, label, body, sort_order, is_active}`), `createSystemTemplate(ctx, args: {key: Exclude<SystemMessageKey,'handoff'>, body: string}): Promise<TemplateRowView>`, `addHandoffVariant(ctx, body: string): Promise<TemplateRowView>`, `createCannedReply(ctx, args: {label: string, body: string}): Promise<TemplateRowView>`, `updateTemplate(ctx, id: string, patch: {body?: string, label?: string, isActive?: boolean}): Promise<TemplateRowView>`. Task 5 (controller) imports all four writers plus `TemplateRowView`.
 
@@ -602,7 +607,9 @@ import { signAgentSession } from '../src/shared/auth/agentSession.ts';
 // append inside a new describe block at the bottom of the file
 describe('templateService write path', () => {
   async function ctxFor(workspaceId: string) {
-    const { rows } = await (await import('./helpers/db.ts')).ownerPool.query<{ id: string }>(
+    const { rows } = await (
+      await import('./helpers/db.ts')
+    ).ownerPool.query<{ id: string }>(
       `insert into agent (email, display_name, is_admin) values ($1, 'Test Admin', true) returning id`,
       [`admin-${randomUUID()}@example.test`],
     );
@@ -652,9 +659,7 @@ describe('templateService write path', () => {
     await updateTemplate(ctx, created.id, { body: 'Hi, {{agent_name}} here.' });
 
     const replies = await withWorkspace(workspaceId, (tx) => listCannedReplies(tx, workspaceId));
-    expect(replies).toEqual([
-      { id: created.id, label: 'Intro', body: 'Hi, {{agent_name}} here.' },
-    ]);
+    expect(replies).toEqual([{ id: created.id, label: 'Intro', body: 'Hi, {{agent_name}} here.' }]);
   });
 
   it('updateTemplate with isActive:false removes it from the active list', async () => {
@@ -827,9 +832,7 @@ export async function updateTemplate(
     const [updated] = await tx
       .update(messageTemplate)
       .set({ ...patch, updatedAt: new Date() })
-      .where(
-        and(eq(messageTemplate.id, id), eq(messageTemplate.workspaceId, ctx.workspaceId)),
-      )
+      .where(and(eq(messageTemplate.id, id), eq(messageTemplate.workspaceId, ctx.workspaceId)))
       .returning();
     if (!updated) throw new Error('Template not found in this workspace');
     await invalidateCachedTemplates(ctx.workspaceId);
@@ -857,6 +860,7 @@ git commit -m "feat: add template service write path with cache invalidation"
 ### Task 5: `/agent/templates` API router
 
 **Files:**
+
 - Create: `backend/src/agent/services/templatesAdminService.ts`
 - Create: `backend/src/agent/controllers/templatesController.ts`
 - Create: `backend/src/agent/routers/templatesRouter.ts`
@@ -865,6 +869,7 @@ git commit -m "feat: add template service write path with cache invalidation"
 - Test: `backend/tests/agent.templates.test.ts`
 
 **Interfaces:**
+
 - Consumes: `createSystemTemplate`, `addHandoffVariant`, `createCannedReply`, `updateTemplate`, `loadTemplates`, `TemplateRowView` from `templateService.ts` (Tasks 3–4); `requireTeamLeadOrAdmin`, `requireAdminRole` middleware; `withWorkspace`.
 - Produces: `GET /agent/templates`, `POST /agent/templates`, `PATCH /agent/templates/:id` — consumed by the frontend in Task 8.
 
@@ -1050,7 +1055,10 @@ const SINGLETON_SYSTEM_KEYS = [
 ] as const;
 
 export type TemplatesAdminView = {
-  system: Record<SystemMessageKey, { id: string | null; body: string } | { id: string; body: string }[]>;
+  system: Record<
+    SystemMessageKey,
+    { id: string | null; body: string } | { id: string; body: string }[]
+  >;
   canned: { id: string; label: string; body: string }[];
 };
 
@@ -1236,14 +1244,21 @@ registry.registerPath({
               ]),
               body: z.string().min(1),
             }),
-            z.object({ kind: z.literal('canned'), label: z.string().min(1), body: z.string().min(1) }),
+            z.object({
+              kind: z.literal('canned'),
+              label: z.string().min(1),
+              body: z.string().min(1),
+            }),
           ]),
         },
       },
     },
   },
   responses: {
-    201: { description: 'The created template row', content: { 'application/json': { schema: TemplateRowSchema } } },
+    201: {
+      description: 'The created template row',
+      content: { 'application/json': { schema: TemplateRowSchema } },
+    },
     403: { description: 'Forbidden — admin role required' },
     422: { description: 'Missing or invalid kind/key/label/body' },
   },
@@ -1270,7 +1285,10 @@ registry.registerPath({
     },
   },
   responses: {
-    200: { description: 'The updated template row', content: { 'application/json': { schema: TemplateRowSchema } } },
+    200: {
+      description: 'The updated template row',
+      content: { 'application/json': { schema: TemplateRowSchema } },
+    },
     403: { description: 'Forbidden — admin role required' },
     422: { description: 'No recognised field to update' },
   },
@@ -1297,12 +1315,14 @@ git commit -m "feat: add /agent/templates admin API"
 ### Task 6: Switch bot/forms call sites to the workspace-aware templates
 
 **Files:**
+
 - Modify: `backend/src/domain/bot/applyBotTurn.ts:4,144,243,258,294`
 - Modify: `backend/src/domain/forms/completeFormAndHandoff.ts:15-16,131,177`
 - Modify: `backend/src/surface/services/messagesService.ts:26,418`
 - Modify: `backend/src/domain/bot/index.ts` (export the new service)
 
 **Interfaces:**
+
 - Consumes: `getSystemMessage`, `getHandoffMessage` from `backend/src/domain/templates/templateService.ts` (Task 3).
 - Produces: no new exports — this task only rewires existing callers. `botFailureNote` stays untouched (it's not a template, it's an internal-only note built from `decision.reason`).
 
@@ -1322,6 +1342,7 @@ import { getHandoffMessage, getSystemMessage } from '../templates/templateServic
 ```
 
 Then, at each call site, thread `tx` and `ctx.workspaceId` through and await the result:
+
 - Line 144: `body: pickHandoffMessage(),` → `body: await getHandoffMessage(tx, ctx.workspaceId),`
 - Line 243: `body: NO_AGENTS_ONLINE_MESSAGE,` → `body: await getSystemMessage(tx, ctx.workspaceId, 'no_agents_online'),`
 - Line 258: `body: pickHandoffMessage(),` → `body: await getHandoffMessage(tx, ctx.workspaceId),`
@@ -1348,6 +1369,7 @@ import { getSystemMessage } from '../templates/templateService.ts';
 (`formSummaryMessage` stays a plain sync default-lookup, since form-summary messages are also configurable and go through the templates layer — see the next sub-step.)
 
 Then:
+
 - Line 131: `body: NO_AGENTS_ONLINE_MESSAGE,` → `body: await getSystemMessage(tx, ctx.workspaceId, 'no_agents_online'),`
 - Line 177: `body: formSummaryMessage(formStatus),` → `body: await getSystemMessage(tx, ctx.workspaceId, \`form_summary_${formStatus}\` as const),`
 
@@ -1391,9 +1413,11 @@ git commit -m "feat: route bot/form system messages through per-workspace templa
 ### Task 7: Frontend API client — `agentApi.ts` additions
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/agent-console/api/agentApi.ts`
 
 **Interfaces:**
+
 - Consumes: the `call()` helper already defined in this file (same one `fetchWorkspaceSettings` uses).
 - Produces: `TemplatesAdminView`, `TemplateRowView` types, `fetchTemplates(token)`, `createTemplate(token, args)`, `updateTemplate(token, id, patch)`. Task 8 (Templates page) and Task 9 (Composer) import these.
 
@@ -1408,10 +1432,7 @@ Append to `frontend/src/surfaces/agent-console/api/agentApi.ts`, after the `save
  * WorkspaceSettingsView above — not sourced from @support/types.
  */
 export type SystemMessageKey =
-  | 'no_agents_online'
-  | 'form_summary_completed'
-  | 'form_summary_partial'
-  | 'form_summary_skipped';
+  'no_agents_online' | 'form_summary_completed' | 'form_summary_partial' | 'form_summary_skipped';
 
 export type TemplateRowView = {
   id: string;
@@ -1473,12 +1494,14 @@ git commit -m "feat: add templates API client functions"
 ### Task 8: Templates admin page + nav entry
 
 **Files:**
+
 - Create: `frontend/src/surfaces/agent-console/pages/Templates/Templates.tsx`
 - Modify: `frontend/src/surfaces/agent-console/components/AgentConsoleShell.tsx`
 - Modify: `frontend/src/surfaces/agent-console/lib/routePreload.ts`
 - Modify: `frontend/src/routes/AppRoutes.tsx`
 
 **Interfaces:**
+
 - Consumes: `fetchTemplates`, `createTemplate`, `updateTemplate`, `TemplatesAdminView` from `agentApi.ts` (Task 7); `loadAgentSession`, `isAdmin` from `agentSession.ts`; `Button`, `Input` UI components (same as `WorkspaceSettings.tsx`).
 - Produces: the `Templates` page component, `/templates` route, `Manage`-group nav entry.
 
@@ -1613,9 +1636,7 @@ export function Templates() {
             />
           ))}
           {!readOnly && (
-            <NewCannedReplyForm
-              onAdd={(label, body) => addCannedReply.mutate({ label, body })}
-            />
+            <NewCannedReplyForm onAdd={(label, body) => addCannedReply.mutate({ label, body })} />
           )}
         </section>
       </div>
@@ -1688,7 +1709,13 @@ function HandoffEditor({
           >
             Save
           </Button>
-          <Button type="button" size="sm" variant="outline" disabled={readOnly} onClick={() => onRemove(variant.id)}>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={readOnly}
+            onClick={() => onRemove(variant.id)}
+          >
             Remove
           </Button>
         </div>
@@ -1743,7 +1770,12 @@ function CannedReplyEditor({
         <Input value={body} disabled={readOnly} onChange={(e) => setBody(e.target.value)} />
       </div>
       <div className="flex gap-2">
-        <Button type="button" size="sm" disabled={readOnly || !dirty} onClick={() => onUpdate(label, body)}>
+        <Button
+          type="button"
+          size="sm"
+          disabled={readOnly || !dirty}
+          onClick={() => onUpdate(label, body)}
+        >
           Save
         </Button>
         <Button type="button" size="sm" variant="outline" disabled={readOnly} onClick={onRemove}>
@@ -1837,6 +1869,7 @@ and in its `'/bot-config': importBotConfig,` map, add:
 ```
 
 In `frontend/src/routes/AppRoutes.tsx`:
+
 - Add `importTemplates` to the destructured import from `routePreload.ts` (~line 15).
 - Add `const TemplatesPage = lazy(async () => ({ default: (await importTemplates()).Templates }));` after the `WorkspaceSettingsPage` declaration (~line 45).
 - Add the route after `workspace-settings` (~line 138):
@@ -1869,12 +1902,14 @@ git commit -m "feat: add Templates admin page and nav entry"
 ### Task 9: Composer — canned-reply picker with `{{agent_name}}` resolution
 
 **Files:**
+
 - Create: `frontend/src/features/chat/lib/resolveTemplateBody.ts`
 - Create: `frontend/src/features/chat/lib/resolveTemplateBody.test.ts`
 - Modify: `frontend/src/features/chat/components/Composer.tsx`
 - Modify: `frontend/src/surfaces/agent-console/pages/Inbox/components/ThreadPanel.tsx`
 
 **Interfaces:**
+
 - Consumes: `fetchTemplates` from `agentApi.ts` (Task 7); `loadAgentSession` (already imported in `ThreadPanel.tsx`).
 - Produces: `resolveTemplateBody(body: string, agentName: string): string`; a new optional `cannedReplies?: {id: string; label: string; body: string}[]` prop on `Composer`.
 
@@ -1944,36 +1979,38 @@ Add a `NotebookText` (or similar) icon import from `lucide-react` at the top, ne
 Add the picker button in the toolbar row, right before the `allowAttachments && (...)` block (~line 189):
 
 ```tsx
-{cannedReplies && cannedReplies.length > 0 && (
-  <div className="relative">
-    <button
-      type="button"
-      onClick={() => setTemplatesOpen((open) => !open)}
-      className="flex size-9 shrink-0 items-center justify-center rounded-md border border-muted/20 text-muted"
-      aria-label="Insert template"
-      aria-expanded={templatesOpen}
-    >
-      <NotebookText className="size-4" />
-    </button>
-    {templatesOpen && (
-      <div className="absolute bottom-full left-0 mb-1 w-64 rounded-md border border-muted/20 bg-bg p-1 shadow-md">
-        {cannedReplies.map((reply) => (
-          <button
-            key={reply.id}
-            type="button"
-            onClick={() => {
-              setValue(reply.body);
-              setTemplatesOpen(false);
-            }}
-            className="block w-full rounded px-2 py-1.5 text-left text-sm hover:bg-accent-soft"
-          >
-            {reply.label}
-          </button>
-        ))}
-      </div>
-    )}
-  </div>
-)}
+{
+  cannedReplies && cannedReplies.length > 0 && (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setTemplatesOpen((open) => !open)}
+        className="flex size-9 shrink-0 items-center justify-center rounded-md border border-muted/20 text-muted"
+        aria-label="Insert template"
+        aria-expanded={templatesOpen}
+      >
+        <NotebookText className="size-4" />
+      </button>
+      {templatesOpen && (
+        <div className="absolute bottom-full left-0 mb-1 w-64 rounded-md border border-muted/20 bg-bg p-1 shadow-md">
+          {cannedReplies.map((reply) => (
+            <button
+              key={reply.id}
+              type="button"
+              onClick={() => {
+                setValue(reply.body);
+                setTemplatesOpen(false);
+              }}
+              className="block w-full rounded px-2 py-1.5 text-left text-sm hover:bg-accent-soft"
+            >
+              {reply.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 ```
 
 Add the state hook near the other `useState` calls at the top of the component: `const [templatesOpen, setTemplatesOpen] = useState(false);`.

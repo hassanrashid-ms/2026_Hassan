@@ -152,9 +152,10 @@ describe('bulkImportArticles', () => {
     const result = await bulkImportArticles({ agentId, workspaceId, isAdmin: false }, key);
 
     expect(result).toEqual({ ok: false, reason: 'too_many_files' });
-    const { rows } = await ownerPool.query(`select count(*)::int from article where workspace_id = $1`, [
-      workspaceId,
-    ]);
+    const { rows } = await ownerPool.query(
+      `select count(*)::int from article where workspace_id = $1`,
+      [workspaceId],
+    );
     expect(rows[0].count).toBe(0);
   });
 

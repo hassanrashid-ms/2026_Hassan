@@ -78,14 +78,14 @@ function toQueryFilters(f: ReturnType<typeof useTicketsFilters>[0]): TicketsQuer
 function hasActiveFilters(f: TicketsQueryFilters): boolean {
   return Boolean(
     f.q ||
-      f.priority ||
-      f.labelIds ||
-      f.subintentIds ||
-      f.assigneeIds ||
-      f.olderThanHours ||
-      f.statuses ||
-      f.createdFrom ||
-      f.createdTo,
+    f.priority ||
+    f.labelIds ||
+    f.subintentIds ||
+    f.assigneeIds ||
+    f.olderThanHours ||
+    f.statuses ||
+    f.createdFrom ||
+    f.createdTo,
   );
 }
 
@@ -328,108 +328,113 @@ function TicketsListView({
         onScroll={handleScroll}
       >
         <table className="w-full min-w-[860px] border-collapse text-sm">
-        <thead className="sticky top-0 z-10 bg-accent-soft/40">
-          <tr className="border-b border-border text-left text-xs font-semibold tracking-wide text-muted uppercase">
-            <SortableHeader label="Player" sortKey="player" sort={sort} onSort={onSort} />
-            <SortableHeader label="Status" sortKey="status" sort={sort} onSort={onSort} />
-            <SortableHeader label="Priority" sortKey="priority" sort={sort} onSort={onSort} />
-            <SortableHeader label="Assignee" sortKey="assignee" sort={sort} onSort={onSort} />
-            <SortableHeader label="Last message" sortKey="lastMessage" sort={sort} onSort={onSort} />
-            <SortableHeader label="Tags" sortKey="tags" sort={sort} onSort={onSort} />
-            <SortableHeader label="Created" sortKey="created" sort={sort} onSort={onSort} />
-            <SortableHeader label="Subintent" sortKey="subintent" sort={sort} onSort={onSort} />
-            <SortableHeader label="Ticket #" sortKey="number" sort={sort} onSort={onSort} />
-            <th className="px-4 py-2.5" />
-          </tr>
-        </thead>
-        <tbody>
-          {conversations.length === 0 && !queue.isLoading ? (
-            <tr>
-              <td colSpan={10} className="p-3 text-xs text-muted">
-                No tickets match your filters.
-              </td>
+          <thead className="sticky top-0 z-10 bg-accent-soft/40">
+            <tr className="border-b border-border text-left text-xs font-semibold tracking-wide text-muted uppercase">
+              <SortableHeader label="Player" sortKey="player" sort={sort} onSort={onSort} />
+              <SortableHeader label="Status" sortKey="status" sort={sort} onSort={onSort} />
+              <SortableHeader label="Priority" sortKey="priority" sort={sort} onSort={onSort} />
+              <SortableHeader label="Assignee" sortKey="assignee" sort={sort} onSort={onSort} />
+              <SortableHeader
+                label="Last message"
+                sortKey="lastMessage"
+                sort={sort}
+                onSort={onSort}
+              />
+              <SortableHeader label="Tags" sortKey="tags" sort={sort} onSort={onSort} />
+              <SortableHeader label="Created" sortKey="created" sort={sort} onSort={onSort} />
+              <SortableHeader label="Subintent" sortKey="subintent" sort={sort} onSort={onSort} />
+              <SortableHeader label="Ticket #" sortKey="number" sort={sort} onSort={onSort} />
+              <th className="px-4 py-2.5" />
             </tr>
-          ) : (
-            conversations.map((conversation) => {
-              const claimable =
-                conversation.assigned_agent_id === null &&
-                (conversation.status === 'open' || conversation.status === 'escalated');
-              return (
-                <tr
-                  key={conversation.id}
-                  tabIndex={0}
-                  onClick={() => onSelect(conversation.id)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') onSelect(conversation.id);
-                  }}
-                  className="cursor-pointer border-b border-border transition-colors last:border-b-0 hover:bg-accent-soft/50"
-                >
-                  <td className="max-w-40 truncate px-4 py-2.5 font-medium">
-                    {conversation.player.external_player_id}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <Badge variant={STATUS_BADGE_VARIANT[conversation.status]}>
-                      {formatStatus(conversation.status)}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <Badge variant={PRIORITY_BADGE_VARIANT[conversation.priority]}>
-                      {conversation.priority.toUpperCase()}
-                    </Badge>
-                  </td>
-                  <td className="max-w-32 truncate px-4 py-2.5 text-muted">
-                    {conversation.assigned_agent_name ?? 'Unassigned'}
-                  </td>
-                  <td className="max-w-xs truncate px-4 py-2.5 text-muted">
-                    {conversation.last_message_preview ?? '(no messages)'}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <span className="flex max-w-[160px] flex-wrap items-center gap-1 overflow-hidden">
-                      {conversation.tags.slice(0, 2).map((tag) => (
-                        <Badge
-                          key={tag.id}
-                          className={cn('max-w-20 truncate', tagBadgeClassName(tag.colorIndex))}
+          </thead>
+          <tbody>
+            {conversations.length === 0 && !queue.isLoading ? (
+              <tr>
+                <td colSpan={10} className="p-3 text-xs text-muted">
+                  No tickets match your filters.
+                </td>
+              </tr>
+            ) : (
+              conversations.map((conversation) => {
+                const claimable =
+                  conversation.assigned_agent_id === null &&
+                  (conversation.status === 'open' || conversation.status === 'escalated');
+                return (
+                  <tr
+                    key={conversation.id}
+                    tabIndex={0}
+                    onClick={() => onSelect(conversation.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') onSelect(conversation.id);
+                    }}
+                    className="cursor-pointer border-b border-border transition-colors last:border-b-0 hover:bg-accent-soft/50"
+                  >
+                    <td className="max-w-40 truncate px-4 py-2.5 font-medium">
+                      {conversation.player.external_player_id}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <Badge variant={STATUS_BADGE_VARIANT[conversation.status]}>
+                        {formatStatus(conversation.status)}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <Badge variant={PRIORITY_BADGE_VARIANT[conversation.priority]}>
+                        {conversation.priority.toUpperCase()}
+                      </Badge>
+                    </td>
+                    <td className="max-w-32 truncate px-4 py-2.5 text-muted">
+                      {conversation.assigned_agent_name ?? 'Unassigned'}
+                    </td>
+                    <td className="max-w-xs truncate px-4 py-2.5 text-muted">
+                      {conversation.last_message_preview ?? '(no messages)'}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <span className="flex max-w-[160px] flex-wrap items-center gap-1 overflow-hidden">
+                        {conversation.tags.slice(0, 2).map((tag) => (
+                          <Badge
+                            key={tag.id}
+                            className={cn('max-w-20 truncate', tagBadgeClassName(tag.colorIndex))}
+                          >
+                            {tag.name}
+                          </Badge>
+                        ))}
+                        {conversation.tags.length > 2 && (
+                          <span className="shrink-0 text-xs text-muted">
+                            +{conversation.tags.length - 2}
+                          </span>
+                        )}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5 text-muted">
+                      {format(new Date(conversation.created_at), 'MMM d, yyyy h:mm a')}
+                    </td>
+                    <td className="max-w-32 truncate px-4 py-2.5 text-muted">
+                      {conversation.subintent?.name ?? '—'}
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-mono text-muted">
+                      {conversation.number}
+                    </td>
+                    <td className="px-4 py-2.5 text-right">
+                      {claimable && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={claim.isPending}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            claim.mutate(conversation.id);
+                          }}
                         >
-                          {tag.name}
-                        </Badge>
-                      ))}
-                      {conversation.tags.length > 2 && (
-                        <span className="shrink-0 text-xs text-muted">
-                          +{conversation.tags.length - 2}
-                        </span>
+                          Claim
+                        </Button>
                       )}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2.5 text-muted">
-                    {format(new Date(conversation.created_at), 'MMM d, yyyy h:mm a')}
-                  </td>
-                  <td className="max-w-32 truncate px-4 py-2.5 text-muted">
-                    {conversation.subintent?.name ?? '—'}
-                  </td>
-                  <td className="px-4 py-2.5 text-right font-mono text-muted">
-                    {conversation.number}
-                  </td>
-                  <td className="px-4 py-2.5 text-right">
-                    {claimable && (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        disabled={claim.isPending}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          claim.mutate(conversation.id);
-                        }}
-                      >
-                        Claim
-                      </Button>
-                    )}
-                  </td>
-                </tr>
-              );
-            })
-          )}
-        </tbody>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
         </table>
         {queue.isFetchingNextPage && <p className="p-3 text-xs text-muted">Loading more...</p>}
         {queue.isError && <p className="p-3 text-xs text-muted">Could not load tickets.</p>}
@@ -651,7 +656,11 @@ export function Tickets() {
             summaryQueries.every((q) => q.data!.conversations.length === 0) && (
               <EmptyState message="Nothing to show" />
             )}
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
             <SortableContext items={columnOrder} strategy={rectSortingStrategy}>
               <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
                 {[
@@ -665,8 +674,8 @@ export function Tickets() {
                       const summaryQuery = summaryQueries[queryIndex];
                       const isHidden = Boolean(
                         summaryQuery?.data &&
-                          summaryQuery.data.conversations.length === 0 &&
-                          !filtersActive,
+                        summaryQuery.data.conversations.length === 0 &&
+                        !filtersActive,
                       );
                       const excludedByStatusFilter =
                         filters.statuses.length > 0 && !filters.statuses.includes(filter);

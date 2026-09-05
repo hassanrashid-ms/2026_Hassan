@@ -29,6 +29,7 @@ Slightly warm `--color-border` if needed once applied — otherwise leave as
 is.
 
 **2. `ConversationRow.tsx`**
+
 - `py-3` → `py-3.5` for more breathing room.
 - Selected row gets a 2px accent-colored left border in addition to the
   existing `bg-accent-soft` tint, so selection reads at a glance without
@@ -49,6 +50,7 @@ reads as two groups instead of one flat strip. No control is added, removed,
 or reordered across the divider.
 
 **5. `ChatThread.tsx` bubbles**
+
 - `rounded-2xl` → `rounded-card` (the shared token, consistent with the
   webview's own bubble shape without sharing the component).
 - Padding `px-3 py-2` → `px-3.5 py-2.5`.

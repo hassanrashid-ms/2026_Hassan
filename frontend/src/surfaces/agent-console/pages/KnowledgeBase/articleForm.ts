@@ -6,9 +6,7 @@ export function canEditFields(state: ArticleStateValue): boolean {
 }
 
 export function canPublish(state: ArticleStateValue, title: string, body: string): boolean {
-  return (
-    (state === 'draft' || state === 'published') && title.trim() !== '' && body.trim() !== ''
-  );
+  return (state === 'draft' || state === 'published') && title.trim() !== '' && body.trim() !== '';
 }
 
 export function parseKeywordsInput(raw: string): string[] {

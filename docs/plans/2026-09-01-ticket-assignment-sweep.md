@@ -22,11 +22,13 @@
 ### Task 1: Extract the shared least-loaded-online-agent picker
 
 **Files:**
+
 - Create: `backend/src/domain/routing/pickEligibleAgent.ts`
 - Modify: `backend/src/domain/bot/assignOnHandoff.ts`
 - Test: `backend/tests/bot.assignment.test.ts` (existing — must still pass unmodified, proving the refactor is behavior-preserving)
 
 **Interfaces:**
+
 - Produces: `pickEligibleAgent(tx: Tx, workspaceId: string): Promise<string | null>` — the exact candidate-selection logic currently inline in `assignOnHandoff`. Task 2 depends on this signature.
 
 - [ ] **Step 1: Run the existing test suite to capture the baseline**
@@ -153,10 +155,12 @@ git commit -m "refactor: extract pickEligibleAgent from assignOnHandoff for reus
 ### Task 2: `assignNextTicket` — single-ticket assignment
 
 **Files:**
+
 - Create: `backend/src/domain/routing/assignNextTicket.ts`
 - Test: `backend/tests/routing.assignNextTicket.test.ts`
 
 **Interfaces:**
+
 - Consumes: `pickEligibleAgent(tx, workspaceId)` from Task 1.
 - Produces: `assignNextTicket(workspaceId: string): Promise<{ conversationId: string; agentId: string; status: 'open' | 'escalated' } | null>`. Task 3 depends on this signature.
 
@@ -347,7 +351,10 @@ export async function assignNextTicket(
       })
       .from(conversation)
       .where(
-        and(isNull(conversation.assignedAgentId), inArray(conversation.status, UNASSIGNED_STATUSES)),
+        and(
+          isNull(conversation.assignedAgentId),
+          inArray(conversation.status, UNASSIGNED_STATUSES),
+        ),
       )
       .orderBy(asc(conversation.priority), asc(conversation.createdAt), asc(conversation.id))
       .limit(1);
@@ -402,10 +409,12 @@ git commit -m "feat: add assignNextTicket, single-ticket priority>time>free-agen
 ### Task 3: `sweepUnassignedQueue` — bounded drain loop
 
 **Files:**
+
 - Create: `backend/src/domain/routing/sweepUnassignedQueue.ts`
 - Test: `backend/tests/routing.sweepUnassignedQueue.test.ts`
 
 **Interfaces:**
+
 - Consumes: `assignNextTicket(workspaceId)` from Task 2.
 - Produces: `sweepUnassignedQueue(workspaceId: string): Promise<{ assignedCount: number; assignments: AssignNextTicketResult[] }>`. Tasks 5 and 6 depend on this signature.
 
@@ -561,7 +570,10 @@ async function countUnassigned(workspaceId: string): Promise<number> {
       .select({ count: sql<number>`count(*)` })
       .from(conversation)
       .where(
-        and(isNull(conversation.assignedAgentId), inArray(conversation.status, UNASSIGNED_STATUSES)),
+        and(
+          isNull(conversation.assignedAgentId),
+          inArray(conversation.status, UNASSIGNED_STATUSES),
+        ),
       );
     return Number(row?.count ?? 0);
   });
@@ -613,6 +625,7 @@ git commit -m "feat: add sweepUnassignedQueue, bounded drain loop over assignNex
 ### Task 4: Manual unassign — service, controller, route, OpenAPI
 
 **Files:**
+
 - Modify: `backend/src/agent/services/conversationsService.ts`
 - Modify: `backend/src/agent/controllers/conversationsController.ts`
 - Modify: `backend/src/agent/routers/conversationsRouter.ts`
@@ -620,6 +633,7 @@ git commit -m "feat: add sweepUnassignedQueue, bounded drain loop over assignNex
 - Test: `backend/tests/agent.unassign.test.ts`
 
 **Interfaces:**
+
 - Produces: `unassignConversation(ctx: AgentContext, conversationId: string): Promise<UnassignResult>` where `UnassignResult = { ok: true; status: string } | { ok: false; reason: 'not_found' | 'not_owner' | 'invalid_status' }`.
 - Route: `POST /agent/conversations/:id/unassign` → `{ unassigned: boolean }`.
 
@@ -669,9 +683,10 @@ afterAll(async () => {
 beforeEach(truncateAll);
 
 async function conversationRow(id: string) {
-  const { rows } = await ownerPool.query(`select assigned_agent_id from conversation where id = $1`, [
-    id,
-  ]);
+  const { rows } = await ownerPool.query(
+    `select assigned_agent_id from conversation where id = $1`,
+    [id],
+  );
   return rows[0];
 }
 async function eventsFor(id: string) {
@@ -683,7 +698,7 @@ async function eventsFor(id: string) {
 }
 
 describe('POST /agent/conversations/:id/unassign', () => {
-  it('releases the caller\'s own ticket back to the unassigned queue', async () => {
+  it("releases the caller's own ticket back to the unassigned queue", async () => {
     const workspaceId = await seedWorkspace();
     const playerId = await seedPlayer(workspaceId);
     const agentId = await seedAgent();
@@ -932,12 +947,14 @@ git commit -m "feat: add POST /conversations/:id/unassign, owning-agent-only rel
 ### Task 5: Manual sweep-assign route — Team Lead/Admin only
 
 **Files:**
+
 - Modify: `backend/src/agent/controllers/conversationsController.ts`
 - Modify: `backend/src/agent/routers/conversationsRouter.ts`
 - Modify: `backend/src/docs/openapi.ts`
 - Test: `backend/tests/agent.sweepAssign.test.ts`
 
 **Interfaces:**
+
 - Consumes: `sweepUnassignedQueue(workspaceId)` from Task 3.
 - Route: `POST /agent/conversations/sweep-assign` (Team Lead/Admin) → `{ assignedCount: number; conversationIds: string[] }`.
 
@@ -1072,11 +1089,7 @@ export const sweepAssignHandler: RequestHandler = async (req, res) => {
 // backend/src/agent/routers/conversationsRouter.ts
 // add sweepAssignHandler to the import block, then, placed before the
 // '/conversations/:id' routes so it never risks being shadowed by a param route:
-conversationsRouter.post(
-  '/conversations/sweep-assign',
-  requireTeamLeadOrAdmin,
-  sweepAssignHandler,
-);
+conversationsRouter.post('/conversations/sweep-assign', requireTeamLeadOrAdmin, sweepAssignHandler);
 ```
 
 Note: Express matches routes in registration order and `/conversations/sweep-assign` has no `:id` segment overlap with `/conversations/:id/...` routes, so exact placement doesn't affect correctness here — this ordering just keeps it visually grouped with `/workload`.
@@ -1128,10 +1141,12 @@ git commit -m "feat: add POST /conversations/sweep-assign, team-lead/admin manua
 ### Task 6: Trigger a sweep when an agent's presence flips online
 
 **Files:**
+
 - Modify: `backend/src/shared/realtime/socketServer.ts`
 - Test: `backend/tests/realtime.presenceSweep.test.ts`
 
 **Interfaces:**
+
 - Consumes: `sweepUnassignedQueue(workspaceId)` from Task 3.
 
 - [ ] **Step 1: Write the failing test**
@@ -1169,9 +1184,10 @@ afterAll(async () => {
 });
 
 async function conversationRow(id: string) {
-  const { rows } = await ownerPool.query(`select assigned_agent_id from conversation where id = $1`, [
-    id,
-  ]);
+  const { rows } = await ownerPool.query(
+    `select assigned_agent_id from conversation where id = $1`,
+    [id],
+  );
   return rows[0];
 }
 
@@ -1217,38 +1233,37 @@ import { sweepUnassignedQueue } from '../../domain/routing/sweepUnassignedQueue.
 Modify the `wasFirstConnection` block (currently lines 149-172) to also kick off a sweep per workspace, after the presence broadcast:
 
 ```typescript
-      void incrementPresence(data.agentId)
-        .then(({ wasFirstConnection }) => {
-          if (wasFirstConnection && !closing) {
-            for (const workspaceId of data.workspaceIds) {
-              io.to(inboxRoom(workspaceId)).emit('presence_changed', {
-                agentId: data.agentId,
-                status: 'online',
-              });
-            }
-            // Fire-and-forget: draining the queue must never block or fail
-            // the socket connect itself. Runs once per workspace this agent
-            // belongs to, so a multi-workspace admin's connect drains every
-            // workspace's queue against everyone currently online there.
-            for (const workspaceId of data.workspaceIds) {
-              void sweepUnassignedQueue(workspaceId)
-                .then(({ assignments }) => {
-                  if (closing) return;
-                  for (const a of assignments) {
-                    emitInboxChanged(io, workspaceId, a.conversationId, a.status);
-                  }
-                })
-                .catch((error) => {
-                  logger.error(
-                    'presence',
-                    `sweepUnassignedQueue failed for workspace ${workspaceId}: ${
-                      error instanceof Error ? error.message : String(error)
-                    }`,
-                  );
-                });
-            }
+void incrementPresence(data.agentId).then(({ wasFirstConnection }) => {
+  if (wasFirstConnection && !closing) {
+    for (const workspaceId of data.workspaceIds) {
+      io.to(inboxRoom(workspaceId)).emit('presence_changed', {
+        agentId: data.agentId,
+        status: 'online',
+      });
+    }
+    // Fire-and-forget: draining the queue must never block or fail
+    // the socket connect itself. Runs once per workspace this agent
+    // belongs to, so a multi-workspace admin's connect drains every
+    // workspace's queue against everyone currently online there.
+    for (const workspaceId of data.workspaceIds) {
+      void sweepUnassignedQueue(workspaceId)
+        .then(({ assignments }) => {
+          if (closing) return;
+          for (const a of assignments) {
+            emitInboxChanged(io, workspaceId, a.conversationId, a.status);
           }
         })
+        .catch((error) => {
+          logger.error(
+            'presence',
+            `sweepUnassignedQueue failed for workspace ${workspaceId}: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
+        });
+    }
+  }
+});
 ```
 
 - [ ] **Step 4: Run the test to verify it passes**
@@ -1276,9 +1291,11 @@ git commit -m "feat: sweep the unassigned queue when an agent's presence flips o
 ### Task 7: Frontend API client — unassign and sweep-assign
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/agent-console/api/agentApi.ts`
 
 **Interfaces:**
+
 - Produces: `unassignConversation(token, conversationId): Promise<{ unassigned: boolean }>`, `sweepAssign(token): Promise<{ assignedCount: number; conversationIds: string[] }>`. Tasks 8 and 9 depend on these.
 
 - [ ] **Step 1: Add the two functions**
@@ -1317,11 +1334,13 @@ git commit -m "feat: add unassignConversation and sweepAssign to the agent API c
 ### Task 8: Frontend — "Release ticket" button
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/agent-console/pages/Inbox/components/ThreadPanel.tsx`
 - Modify: `frontend/src/surfaces/agent-console/components/ConversationDetailPane.tsx`
 - Test: `frontend/src/surfaces/agent-console/pages/Inbox/components/ThreadPanel.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `unassignConversation(token, conversationId)` from Task 7.
 
 - [ ] **Step 1: Read the existing `ThreadPanel.test.tsx` to match its mocking conventions**
@@ -1388,6 +1407,7 @@ Add to the props destructure and type (alongside `takeOverAvailable`, `claimAvai
 ```typescript
   releaseAvailable = false,
 ```
+
 ```typescript
   releaseAvailable?: boolean;
 ```
@@ -1395,39 +1415,41 @@ Add to the props destructure and type (alongside `takeOverAvailable`, `claimAvai
 Add the mutation near the existing `claim`/`takeOver` mutations (after line 331):
 
 ```typescript
-  const release = useMutation({
-    mutationFn: () => unassignConversation(token, conversationId!),
-    onSuccess: invalidateAfterTakeOver,
-    onError: () => toast.error("Couldn't release this ticket."),
-  });
+const release = useMutation({
+  mutationFn: () => unassignConversation(token, conversationId!),
+  onSuccess: invalidateAfterTakeOver,
+  onError: () => toast.error("Couldn't release this ticket."),
+});
 ```
 
 Add the button in the `div.ml-auto` row (near `takeOverAvailable`/`claimAvailable`, after line 512):
 
 ```tsx
-            {releaseAvailable && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={release.isPending}
-                onClick={() => release.mutate()}
-              >
-                Release ticket
-              </Button>
-            )}
+{
+  releaseAvailable && (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      disabled={release.isPending}
+      onClick={() => release.mutate()}
+    >
+      Release ticket
+    </Button>
+  );
+}
 ```
 
 - [ ] **Step 5: Compute `releaseAvailable` in `ConversationDetailPane.tsx` and pass it down**
 
 ```typescript
 // after the existing isOwnedByMe computation (line 63)
-  const releaseAvailable = isOwnedByMe && status !== 'resolved' && status !== 'closed';
+const releaseAvailable = isOwnedByMe && status !== 'resolved' && status !== 'closed';
 ```
 
 ```tsx
-        // add alongside the existing takeOverAvailable/claimAvailable props
-        releaseAvailable={releaseAvailable}
+// add alongside the existing takeOverAvailable/claimAvailable props
+releaseAvailable = { releaseAvailable };
 ```
 
 - [ ] **Step 6: Run the test to verify it passes**
@@ -1450,10 +1472,12 @@ git commit -m "feat: add Release ticket button, owning-agent-only manual unassig
 ### Task 9: Frontend — "Assign next" sweep button on the Tickets tab
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/agent-console/pages/Tickets/Tickets.tsx`
 - Modify: `frontend/src/surfaces/agent-console/pages/Tickets/Tickets.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `sweepAssign(token)` from Task 7, `canBuildForms(session)` from `frontend/src/surfaces/agent-console/lib/agentSession.ts` (team-lead-or-admin predicate, already used to gate `AssignPicker` in `ThreadPanel.tsx`).
 
 - [ ] **Step 1: Write the failing tests**
@@ -1529,15 +1553,15 @@ import { toast } from 'sonner';
 Inside the `Tickets()` component, add the mutation (near the other hooks, after `queryClient` is defined):
 
 ```typescript
-  const sweep = useMutation({
-    mutationFn: () => sweepAssign(session!.token),
-    onSuccess: (result) => {
-      void queryClient.invalidateQueries({ queryKey: ['tickets'] });
-      void queryClient.invalidateQueries({ queryKey: ['tickets-summary'] });
-      toast.success(`Assigned ${result.assignedCount} tickets.`);
-    },
-    onError: () => toast.error("Couldn't run the assignment sweep."),
-  });
+const sweep = useMutation({
+  mutationFn: () => sweepAssign(session!.token),
+  onSuccess: (result) => {
+    void queryClient.invalidateQueries({ queryKey: ['tickets'] });
+    void queryClient.invalidateQueries({ queryKey: ['tickets-summary'] });
+    toast.success(`Assigned ${result.assignedCount} tickets.`);
+  },
+  onError: () => toast.error("Couldn't run the assignment sweep."),
+});
 ```
 
 Add the `useMutation` import if not already present (it already is — used by `QueueColumn`'s `claim` mutation — no new import needed for the hook itself, only for `sweepAssign`, `canBuildForms`, and `toast` above).
@@ -1545,17 +1569,19 @@ Add the `useMutation` import if not already present (it already is — used by `
 Add the button in the toolbar row, next to the Board/List toggle (inside the `mb-4 flex items-start justify-between` div, after the toggle group):
 
 ```tsx
-        {session && canBuildForms(session) && (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={sweep.isPending}
-            onClick={() => sweep.mutate()}
-          >
-            Assign next
-          </Button>
-        )}
+{
+  session && canBuildForms(session) && (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      disabled={sweep.isPending}
+      onClick={() => sweep.mutate()}
+    >
+      Assign next
+    </Button>
+  );
+}
 ```
 
 `Button` is already imported in this file (line 25).

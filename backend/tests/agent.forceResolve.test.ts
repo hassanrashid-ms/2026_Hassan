@@ -69,9 +69,7 @@ async function eventsFor(id: string) {
   return rows;
 }
 async function messagesFor(id: string) {
-  const { rows } = await ownerPool.query(`select id from message where conversation_id = $1`, [
-    id,
-  ]);
+  const { rows } = await ownerPool.query(`select id from message where conversation_id = $1`, [id]);
   return rows;
 }
 

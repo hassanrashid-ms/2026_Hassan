@@ -801,7 +801,13 @@ describe('GET /agent/conversations?status=all', () => {
 
     const res = await request(app)
       .get('/conversations')
-      .query({ status: 'all', sortBy: 'assignee', sortDir: 'desc', sortBy2: 'number', sortDir2: 'asc' })
+      .query({
+        status: 'all',
+        sortBy: 'assignee',
+        sortDir: 'desc',
+        sortBy2: 'number',
+        sortDir2: 'asc',
+      })
       .set('Authorization', `Bearer ${token}`)
       .set('X-Workspace-Id', workspaceId)
       .expect(200);
@@ -822,7 +828,13 @@ describe('GET /agent/conversations?status=all', () => {
 
     const page1 = await request(app)
       .get('/conversations')
-      .query({ status: 'all', sortBy: 'created', sortDir: 'desc', sortBy2: 'number', sortDir2: 'desc' })
+      .query({
+        status: 'all',
+        sortBy: 'created',
+        sortDir: 'desc',
+        sortBy2: 'number',
+        sortDir2: 'desc',
+      })
       .set('Authorization', `Bearer ${token}`)
       .set('X-Workspace-Id', workspaceId)
       .expect(200);

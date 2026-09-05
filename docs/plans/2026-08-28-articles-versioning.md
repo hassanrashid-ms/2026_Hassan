@@ -42,6 +42,7 @@ wins and this plan has a bug.
 ### Task 1: Schema — `article_version` table, `article.version`, attachment staging columns
 
 **Files:**
+
 - Modify: `backend/src/shared/db/schema/articles.ts`
 - Modify: `backend/src/shared/db/sql/002_rls.sql`
 - Create (generated): `backend/drizzle/00XX_article_version.sql` (via `pnpm db:generate`)
@@ -52,11 +53,12 @@ wins and this plan has a bug.
 - Test: `backend/tests/schema.article-version.test.ts`
 
 **Interfaces:**
+
 - Produces: `article` gains column `version: integer` (Drizzle: `article.version`).
   `articleAttachment` gains `draftOnly: boolean`, `pendingRemovalAt: timestamp | null`,
   `removedAt: timestamp | null`. New export `articleVersion` (Drizzle table) with
   columns `id, articleId, status, version, title, body, keywords, attachmentIds,
-  actorId, changedFields, createdAt, updatedAt`, `status` is a new pgEnum
+actorId, changedFields, createdAt, updatedAt`, `status` is a new pgEnum
   `articleVersionStatus = ['draft', 'published', 'discarded']`.
 
 - [ ] **Step 1: Add the enum and `article_version` table to the schema**
@@ -195,6 +197,7 @@ schema builder here doesn't express a `WHERE` clause on `unique()`.
 - [ ] **Step 2: Generate the migration, then hand-add the partial index and trigger**
 
 Run:
+
 ```bash
 pnpm db:generate
 ```
@@ -347,9 +350,11 @@ future change to how `app.workspace_id` is read only has one place to update.)
 - [ ] **Step 4: Apply the migrations locally**
 
 Run:
+
 ```bash
 pnpm db:setup
 ```
+
 Expected: completes without error. If the trigger or backfill SQL has a typo, this is
 where it surfaces.
 
@@ -428,9 +433,10 @@ describe('article_version constraints', () => {
     await ownerPool.query(`update article_version set title = 'Z' where article_id = $1`, [
       articleId,
     ]);
-    const { rows } = await ownerPool.query(`select title from article_version where article_id = $1`, [
-      articleId,
-    ]);
+    const { rows } = await ownerPool.query(
+      `select title from article_version where article_id = $1`,
+      [articleId],
+    );
     expect(rows[0].title).toBe('Z');
   });
 });
@@ -452,10 +458,12 @@ git commit -m "Add article_version table, article.version, attachment staging co
 ### Task 2: `@support/types` — versioning types and request/response shapes
 
 **Files:**
+
 - Modify: `packages/types/src/articles.ts`
 - Test: none (pure types + Zod schemas; exercised by Task 3+ tests)
 
 **Interfaces:**
+
 - Consumes: nothing new.
 - Produces (all imported as `@support/types` by later tasks):
   `ArticleVersionedField`, `ArticleVersionActorView`, `ArticleVersionSummaryView`,
@@ -571,10 +579,12 @@ git commit -m "Add article versioning types to @support/types"
 ### Task 3: Backend service — `saveArticleDraft` and `discardArticleDraft`
 
 **Files:**
+
 - Modify: `backend/src/agent/services/articlesService.ts`
 - Test: `backend/tests/agent.articles.test.ts`
 
 **Interfaces:**
+
 - Consumes: `articleVersion` table (Task 1), `AgentArticleDetail`/`ArticleDraftView`
   types (Task 2).
 - Produces: `saveArticleDraft(ctx, articleId, patch): Promise<SaveArticleDraftResult>`,
@@ -719,7 +729,12 @@ import type {
   ArticleDraftView,
   FinalizeArticleAttachmentBody,
 } from '@support/types';
-import { article, articleAttachment, articleVersion, intent } from '../../shared/db/schema/index.ts';
+import {
+  article,
+  articleAttachment,
+  articleVersion,
+  intent,
+} from '../../shared/db/schema/index.ts';
 ```
 
 Add `draftFor` right after `attachmentsFor` (which stays unchanged):
@@ -767,7 +782,9 @@ Update `toDetail` to include `version` (drop the `Omit<..., 'attachments'>` — 
 also omits `draft`, computed separately since it needs a query):
 
 ```typescript
-function toDetail(row: typeof article.$inferSelect): Omit<AgentArticleDetail, 'attachments' | 'draft'> {
+function toDetail(
+  row: typeof article.$inferSelect,
+): Omit<AgentArticleDetail, 'attachments' | 'draft'> {
   return {
     id: row.id,
     title: row.title,
@@ -818,8 +835,7 @@ Add the new service functions after `updateArticle`:
 ```typescript
 export type SaveArticleDraftInput = { title?: string; body?: string; keywords?: string[] };
 export type SaveArticleDraftResult =
-  | { ok: true; article: AgentArticleDetail }
-  | { ok: false; reason: 'not_found' | 'not_published' };
+  { ok: true; article: AgentArticleDetail } | { ok: false; reason: 'not_found' | 'not_published' };
 
 export async function saveArticleDraft(
   ctx: AgentContext,
@@ -871,8 +887,7 @@ export async function saveArticleDraft(
 }
 
 export type DiscardArticleDraftResult =
-  | { ok: true; article: AgentArticleDetail }
-  | { ok: false; reason: 'not_found' | 'no_draft' };
+  { ok: true; article: AgentArticleDetail } | { ok: false; reason: 'not_found' | 'no_draft' };
 
 export async function discardArticleDraft(
   ctx: AgentContext,
@@ -928,7 +943,7 @@ Run: `pnpm --filter @support/api test agent.articles`
 Expected: the pre-existing tests (create/patch/publish/archive) still PASS — `toDetail`
 now needs `draft`/`version`, which every call site provides. The four new
 draft-overlay tests remain FAIL (404) until Task 7 wires the routes — confirm the
-*failure reason* is 404, not a 500/type error, so Task 7 has a clean baseline.
+_failure reason_ is 404, not a 500/type error, so Task 7 has a clean baseline.
 
 - [ ] **Step 5: Commit**
 
@@ -942,10 +957,12 @@ git commit -m "Add saveArticleDraft/discardArticleDraft service functions"
 ### Task 4: Backend service — rewrite `publishArticle` to promote a draft
 
 **Files:**
+
 - Modify: `backend/src/agent/services/articlesService.ts`
 - Test: `backend/tests/agent.articles.test.ts`
 
 **Interfaces:**
+
 - Consumes: `saveArticleDraft`/`draftFor` from Task 3.
 - Produces: `publishArticle` behavior change — same signature and `PublishArticleResult`
   type, new branch when a draft exists.
@@ -1103,7 +1120,10 @@ export async function publishArticle(ctx: AgentContext, id: string): Promise<Pub
     if (changedFields.length === 0 && liveAttachmentIds.length === draftRow.attachmentIds.length) {
       // Nothing actually changed (draft saved, then untouched) — still clear it, but
       // don't mint an empty version.
-      await tx.update(articleVersion).set({ status: 'discarded' }).where(eq(articleVersion.id, draftRow.id));
+      await tx
+        .update(articleVersion)
+        .set({ status: 'discarded' })
+        .where(eq(articleVersion.id, draftRow.id));
       return {
         ok: true,
         article: { ...toDetail(existing), attachments: await attachmentsFor(tx, id), draft: null },
@@ -1196,10 +1216,12 @@ git commit -m "Promote a draft to a new version on publish"
 ### Task 5: Backend service — list/get/restore versions
 
 **Files:**
+
 - Modify: `backend/src/agent/services/articlesService.ts`
 - Test: `backend/tests/agent.articles.test.ts`
 
 **Interfaces:**
+
 - Consumes: `articleVersion`, `agent` tables; `ArticleVersionSummaryView`,
   `ArticleVersionSnapshotView`, `ArticleVersionsListResponse` types (Task 2).
 - Produces: `listArticleVersions(ctx, articleId, opts): Promise<ListArticleVersionsResult>`,
@@ -1351,8 +1373,7 @@ Add to `backend/src/agent/services/articlesService.ts`, after `discardArticleDra
 
 ```typescript
 export type ListArticleVersionsResult =
-  | { ok: true; versions: ArticleVersionsListResponse }
-  | { ok: false; reason: 'not_found' };
+  { ok: true; versions: ArticleVersionsListResponse } | { ok: false; reason: 'not_found' };
 
 export async function listArticleVersions(
   ctx: AgentContext,
@@ -1360,7 +1381,11 @@ export async function listArticleVersions(
   opts: { limit: number; cursor?: number },
 ): Promise<ListArticleVersionsResult> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
-    const [existing] = await tx.select({ id: article.id }).from(article).where(eq(article.id, articleId)).limit(1);
+    const [existing] = await tx
+      .select({ id: article.id })
+      .from(article)
+      .where(eq(article.id, articleId))
+      .limit(1);
     if (!existing) return { ok: false, reason: 'not_found' };
 
     const where =
@@ -1402,8 +1427,7 @@ export async function listArticleVersions(
 }
 
 export type GetArticleVersionResult =
-  | { ok: true; version: ArticleVersionSnapshotView }
-  | { ok: false; reason: 'not_found' };
+  { ok: true; version: ArticleVersionSnapshotView } | { ok: false; reason: 'not_found' };
 
 export async function getArticleVersion(
   ctx: AgentContext,
@@ -1439,7 +1463,10 @@ export async function getArticleVersion(
     const attachmentRows =
       row.attachmentIds.length === 0
         ? []
-        : await tx.select().from(articleAttachment).where(inArray(articleAttachment.id, row.attachmentIds));
+        : await tx
+            .select()
+            .from(articleAttachment)
+            .where(inArray(articleAttachment.id, row.attachmentIds));
     const attachments = await Promise.all(
       attachmentRows.map(async (a) => ({
         id: a.id,
@@ -1534,10 +1561,12 @@ git commit -m "Add listArticleVersions/getArticleVersion/restoreArticleVersion"
 ### Task 6: Backend — attachment staging on finalize + new remove-attachment route
 
 **Files:**
+
 - Modify: `backend/src/agent/services/articlesService.ts`
 - Test: `backend/tests/agent.articles.test.ts`
 
 **Interfaces:**
+
 - Consumes: `articleAttachment.draftOnly`/`pendingRemovalAt` (Task 1).
 - Produces: `finalizeArticleAttachment` gains a `draftOnly` flag on the inserted row;
   new `removeArticleAttachment(ctx, articleId, attachmentId): Promise<RemoveArticleAttachmentResult>`.
@@ -1704,8 +1733,7 @@ Add the new `removeArticleAttachment` function after `finalizeArticleAttachment`
 
 ```typescript
 export type RemoveArticleAttachmentResult =
-  | { ok: true; article: AgentArticleDetail }
-  | { ok: false; reason: 'not_found' };
+  { ok: true; article: AgentArticleDetail } | { ok: false; reason: 'not_found' };
 
 export async function removeArticleAttachment(
   ctx: AgentContext,
@@ -1718,7 +1746,9 @@ export async function removeArticleAttachment(
     const [attachment] = await tx
       .select()
       .from(articleAttachment)
-      .where(and(eq(articleAttachment.id, attachmentId), eq(articleAttachment.articleId, articleId)))
+      .where(
+        and(eq(articleAttachment.id, attachmentId), eq(articleAttachment.articleId, articleId)),
+      )
       .limit(1);
     if (!attachment) return { ok: false, reason: 'not_found' };
 
@@ -1787,6 +1817,7 @@ git commit -m "Stage attachment adds/removals during a draft edit"
 ### Task 7: Backend — controller, routes, OpenAPI registration
 
 **Files:**
+
 - Modify: `backend/src/agent/controllers/articlesController.ts`
 - Modify: `backend/src/agent/routers/articlesRouter.ts`
 - Modify: `backend/src/docs/openapi.ts`
@@ -1794,6 +1825,7 @@ git commit -m "Stage attachment adds/removals during a draft edit"
   3–6's tests go green)
 
 **Interfaces:**
+
 - Consumes: every service function from Tasks 3–6.
 - Produces: the six new HTTP endpoints listed in the design doc.
 
@@ -1834,7 +1866,10 @@ Add these handlers at the end of the file:
 
 ```typescript
 const ArticleAttachmentParams = z.object({ id: z.uuid(), attachmentId: z.uuid() });
-const ArticleVersionParams = z.object({ id: z.uuid(), version: z.coerce.number().int().positive() });
+const ArticleVersionParams = z.object({
+  id: z.uuid(),
+  version: z.coerce.number().int().positive(),
+});
 
 export const saveArticleDraftHandler: RequestHandler = async (req, res) => {
   const params = ArticleIdParams.safeParse(req.params);
@@ -1926,7 +1961,11 @@ export const removeArticleAttachmentHandler: RequestHandler = async (req, res) =
     sendError(res, 422, 'invalid_request', 'Invalid ids.');
     return;
   }
-  const result = await removeArticleAttachment(req.agent!, params.data.id, params.data.attachmentId);
+  const result = await removeArticleAttachment(
+    req.agent!,
+    params.data.id,
+    params.data.attachmentId,
+  );
   if (!result.ok) {
     sendError(res, 404, 'not_found', 'Article or attachment not found.');
     return;
@@ -2091,7 +2130,10 @@ registry.registerPath({
     'On a published article with a draft in progress, stages the removal (applied at publish). Otherwise removes immediately.',
   security: [{ [bearerAgentJwt.name]: [] }],
   request: { params: z.object({ id: z.uuid(), attachmentId: z.uuid() }) },
-  responses: { 200: { description: 'Removed or staged for removal' }, 404: { description: 'Not found' } },
+  responses: {
+    200: { description: 'Removed or staged for removal' },
+    404: { description: 'Not found' },
+  },
 });
 ```
 
@@ -2134,11 +2176,13 @@ git commit -m "Wire draft/discard/version-history/restore/remove-attachment rout
 ### Task 8: Frontend API client
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/agent-console/api/agentApi.ts`
 - Test: none (thin HTTP wrappers; exercised through Task 9/10 component tests if any
   exist, otherwise manually in Task 9/10's browser check)
 
 **Interfaces:**
+
 - Consumes: `@support/types` shapes from Task 2 (`AgentArticleDetail` now includes
   `draft`/`version`; new `ArticleVersionsListResponse`, `ArticleVersionSnapshotView`).
 - Produces: `saveArticleDraft`, `discardArticleDraft`, `fetchArticleVersions`,
@@ -2191,7 +2235,9 @@ export function restoreArticleVersion(
   articleId: string,
   version: number,
 ): Promise<AgentArticleDetail> {
-  return call(`/agent/articles/${articleId}/versions/${version}/restore`, token, { method: 'POST' });
+  return call(`/agent/articles/${articleId}/versions/${version}/restore`, token, {
+    method: 'POST',
+  });
 }
 
 export function removeArticleAttachment(
@@ -2246,11 +2292,13 @@ git commit -m "Add frontend API client functions for article versioning"
 ### Task 9: Frontend — `ArticleEditorSheet`: draft banner, live-version badge, discard action
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/agent-console/pages/KnowledgeBase/components/ArticleEditorSheet.tsx`
 - Modify: `frontend/src/surfaces/agent-console/pages/KnowledgeBase/hooks/useArticleAutosave.ts`
 - Modify: `frontend/src/surfaces/agent-console/pages/KnowledgeBase/articleForm.ts`
 
 **Interfaces:**
+
 - Consumes: `saveArticleDraft`, `discardArticleDraft` from Task 8;
   `AgentArticleDetail.draft`/`version` from Task 2.
 - Produces: no new exports — this is UI wiring, verified by manual browser check in
@@ -2333,11 +2381,7 @@ export function canEditFields(state: ArticleStateValue): boolean {
   return state === 'draft' || state === 'published';
 }
 
-export function canPublish(
-  state: ArticleStateValue,
-  title: string,
-  body: string,
-): boolean {
+export function canPublish(state: ArticleStateValue, title: string, body: string): boolean {
   // A draft-state article publishes its own title/body directly (first-ever
   // publish). A published article's Publish button always targets its draft
   // overlay, so the same non-empty check applies to whatever text is currently
@@ -2387,16 +2431,18 @@ non-goals: only `title`/`body`/`keywords`/attachments are versioned.)
    `{!editable && ...}` block:
 
 ```tsx
-{hasLiveContent && (
-  <div className="flex items-center justify-between rounded-md bg-slate-100 px-3 py-2 text-xs">
-    <span className="font-medium">Live: v{article!.version}</span>
-    {draftView && (
-      <span className="text-muted">
-        Draft in progress · saved {new Date(draftView.updated_at).toLocaleTimeString()}
-      </span>
-    )}
-  </div>
-)}
+{
+  hasLiveContent && (
+    <div className="flex items-center justify-between rounded-md bg-slate-100 px-3 py-2 text-xs">
+      <span className="font-medium">Live: v{article!.version}</span>
+      {draftView && (
+        <span className="text-muted">
+          Draft in progress · saved {new Date(draftView.updated_at).toLocaleTimeString()}
+        </span>
+      )}
+    </div>
+  );
+}
 ```
 
 5. Add a `discardDraft` mutation next to the existing `publish`/`archive` mutations:
@@ -2417,41 +2463,46 @@ Import `discardArticleDraft` alongside the other `agentApi.ts` imports.
    when `draftView` exists:
 
 ```tsx
-{canPublishOrArchive && draftView && (
-  <Button
-    type="button"
-    variant="outline"
-    onClick={() => discardDraft.mutate()}
-    disabled={discardDraft.isPending}
-  >
-    Discard draft
-  </Button>
-)}
+{
+  canPublishOrArchive && draftView && (
+    <Button
+      type="button"
+      variant="outline"
+      onClick={() => discardDraft.mutate()}
+      disabled={discardDraft.isPending}
+    >
+      Discard draft
+    </Button>
+  );
+}
 ```
 
 7. The `editable` flag computed earlier (`const editable = articleId === null ||
-   canEditFields(state);`) now correctly returns `true` for `published` too, per Step
+canEditFields(state);`) now correctly returns `true` for `published` too, per Step
    2's change — no further edit needed there, but double check the banner text at the
    top ("This article is {state} and can no longer be edited") only shows for
    `archived`:
 
 ```tsx
-{state === 'archived' && (
-  <p className="rounded-md bg-amber-100 px-3 py-2 text-xs text-amber-900">
-    This article is archived and can no longer be edited.
-  </p>
-)}
+{
+  state === 'archived' && (
+    <p className="rounded-md bg-amber-100 px-3 py-2 text-xs text-amber-900">
+      This article is archived and can no longer be edited.
+    </p>
+  );
+}
 ```
 
 - [ ] **Step 4: Manual browser verification**
 
 Use the `run` skill to start the app locally. In the agent console's Knowledge Base
 page:
+
 1. Create a new article, publish it. Confirm the "Live: v1" badge appears and there's
    no "Draft in progress" text.
 2. Edit the title. Confirm "Draft in progress" appears, the badge still says "v1", and
    the live article (check via a second tab on the public-facing surface, or `GET
-   /surface/articles/:id`) still shows the old title.
+/surface/articles/:id`) still shows the old title.
 3. Click Publish. Confirm the badge updates to "v2" and the draft banner disappears.
 4. Edit again, then click "Discard draft". Confirm the banner disappears and the form
    reverts to the v2 content.
@@ -2474,16 +2525,18 @@ git commit -m "Add draft banner, live-version badge, discard action to article e
 ### Task 10: Frontend — version history tab and article list badges
 
 **Files:**
+
 - Create: `frontend/src/surfaces/agent-console/pages/KnowledgeBase/components/ArticleVersionHistoryTab.tsx`
 - Create: `frontend/src/surfaces/agent-console/pages/KnowledgeBase/lib/diffArticleVersion.ts`
 - Modify: `frontend/src/surfaces/agent-console/pages/KnowledgeBase/components/ArticleEditorSheet.tsx`
 - Modify: `frontend/src/surfaces/agent-console/pages/KnowledgeBase/components/ArticleTable.tsx`
 
 **Interfaces:**
+
 - Consumes: `fetchArticleVersions`/`fetchArticleVersion`/`restoreArticleVersion` (Task
   8); `ArticleVersionSummaryView`/`ArticleVersionSnapshotView` (Task 2).
 - Produces: `ArticleVersionHistoryTab` component (props: `token: string, articleId:
-  string, onRestored: () => void`); `diffArticleKeywords`, `diffArticleAttachments`
+string, onRestored: () => void`); `diffArticleKeywords`, `diffArticleAttachments`
   helper functions other code doesn't need to know about internally, but are exported
   for potential reuse/testing.
 
@@ -2507,7 +2560,8 @@ export function diffKeywords(before: string[], after: string[]): FieldDiffEntry[
   const added = after.filter((k) => !beforeSet.has(k));
   const removed = before.filter((k) => !afterSet.has(k));
   const entries: FieldDiffEntry[] = [];
-  if (added.length) entries.push({ key: 'keywords-added', description: `Added: ${added.join(', ')}` });
+  if (added.length)
+    entries.push({ key: 'keywords-added', description: `Added: ${added.join(', ')}` });
   if (removed.length)
     entries.push({ key: 'keywords-removed', description: `Removed: ${removed.join(', ')}` });
   return entries;
@@ -2521,7 +2575,8 @@ export function diffAttachments(
   const afterIds = new Set(after.map((a) => a.id));
   const entries: FieldDiffEntry[] = [];
   for (const a of after) {
-    if (!beforeIds.has(a.id)) entries.push({ key: `att-add-${a.id}`, description: `Added "${a.filename}"` });
+    if (!beforeIds.has(a.id))
+      entries.push({ key: `att-add-${a.id}`, description: `Added "${a.filename}"` });
   }
   for (const a of before) {
     if (!afterIds.has(a.id))
@@ -2541,10 +2596,11 @@ diffing from scratch.
 Model directly on `frontend/src/surfaces/agent-console/pages/BotConfig/components/
 VersionHistoryTab.tsx` (read it in full first — Task planning already has its complete
 source). Key differences from that component:
+
 - Query keys are `['article-versions', articleId]` / `['article-version', articleId,
-  version]`, not `['bot-config-versions']`.
+version]`, not `['bot-config-versions']`.
 - Restore does not invalidate `['bot-config']` — it invalidates `['admin-article',
-  articleId]` (so the editor sheet's draft banner picks up the newly-populated draft)
+articleId]` (so the editor sheet's draft banner picks up the newly-populated draft)
   and calls the passed-in `onRestored` callback, which the sheet uses to switch back to
   its main edit view (see Step 3).
 - The confirm dialog copy differs: "Restore this version?" / "This loads it into your
@@ -2811,10 +2867,7 @@ visible, since those actions apply regardless of which tab is showing.
     <Badge variant={STATE_BADGE_VARIANT[a.state]}>{a.state}</Badge>
     {a.state === 'published' && <span className="text-xs text-muted">v{a.version}</span>}
     {a.has_draft && (
-      <span
-        className="h-1.5 w-1.5 rounded-full bg-amber-500"
-        title="Draft in progress"
-      />
+      <span className="h-1.5 w-1.5 rounded-full bg-amber-500" title="Draft in progress" />
     )}
   </div>
 </TableCell>
@@ -2859,6 +2912,7 @@ per-row, avoiding an N+1.)
 - [ ] **Step 5: Manual browser verification**
 
 Using the same running app from Task 9:
+
 1. Publish an article, edit it (creating a draft), go back to the list — confirm the
    amber dot appears next to its row and the version still reads "v1" (not yet bumped).
 2. Open the article, switch to the History tab — confirm v1 is listed as "Current"

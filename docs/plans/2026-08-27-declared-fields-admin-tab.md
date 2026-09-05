@@ -52,12 +52,14 @@ frontend/src/routes/AppRoutes.tsx                       MODIFY — route + Requi
 ### Task 1: Schema — `status` enum column and migration
 
 **Files:**
+
 - Modify: `backend/src/shared/db/schema/enums.ts`
 - Modify: `backend/src/shared/db/schema/playerState.ts:27-42`
 - Modify: `backend/src/shared/playerState/declaredKeys.ts`
 - Create: `backend/drizzle/00XX_*.sql` (generated, exact name TBD by drizzle-kit)
 
 **Interfaces:**
+
 - Produces: `declaredFieldStatus` pg enum (`'active' | 'inactive' | 'archived'`), `declaredField.status` (Drizzle column, `not null`, `default('active')`), `loadDeclaredKeys(tx)` now excludes `inactive`/`archived` rows — every later task's queries read/write this.
 
 - [ ] **Step 1: Add the enum**
@@ -190,9 +192,11 @@ git commit -m "Add three-state status enum to declared_field, filter loadDeclare
 ### Task 2: Shared types — `@support/types` CRUD contract
 
 **Files:**
+
 - Modify: `packages/types/src/player-state.ts`
 
 **Interfaces:**
+
 - Consumes: existing `DeclaredFieldType` (already defined in this file: `'string' | 'number' | 'boolean' | 'timestamp'`)
 - Produces: `DeclaredFieldStatus`, `CreateDeclaredFieldBody`, `UpdateDeclaredFieldBody` (Zod schemas), `DeclaredFieldView`, `DeclaredFieldsResponse`, `CreateDeclaredFieldResponse`, `UpdateDeclaredFieldResponse`, `DeactivateDeclaredFieldResponse`, `ReactivateDeclaredFieldResponse`, `ArchiveDeclaredFieldResponse` (types) — every backend controller and frontend `agentApi.ts` function in later tasks imports these from `@support/types`.
 
@@ -265,10 +269,12 @@ git commit -m "Add declared-field CRUD types (three-state status) to @support/ty
 ### Task 3: Backend service — `declaredFieldService.ts`
 
 **Files:**
+
 - Create: `backend/src/agent/services/declaredFieldService.ts`
 - Test: integration tests land in Task 6, against the router — the taxonomy service precedent is tested only through its router's integration tests, and this plan follows that.
 
 **Interfaces:**
+
 - Consumes: `AgentContext` (`backend/src/shared/middleware/requireAgentSession.ts`, shape `{ agentId: string; workspaceId: string; isAdmin: boolean }`), `withWorkspace` (`backend/src/shared/db/withWorkspace.ts`), `appendChangeLog` (`backend/src/shared/changeLog/appendChangeLog.ts`, signature `(tx, { workspaceId, entityType, entityId, actorId, changes }) => Promise<void>`), `declaredField`/`agent` Drizzle tables (`backend/src/shared/db/schema/index.ts`), types from Task 2
 - Produces: `listDeclaredFields(ctx)`, `createDeclaredField(ctx, { key, label, type })`, `updateDeclaredField(ctx, id, { label?, type? })`, `deactivateDeclaredField(ctx, id)`, `reactivateDeclaredField(ctx, id)`, `archiveDeclaredField(ctx, id)` — Task 4's controller calls these directly by name.
 
@@ -356,8 +362,7 @@ export async function listDeclaredFields(ctx: AgentContext): Promise<DeclaredFie
 }
 
 export type CreateDeclaredFieldResult =
-  | { ok: true; field: CreateDeclaredFieldResponse }
-  | { ok: false; reason: 'key_taken' };
+  { ok: true; field: CreateDeclaredFieldResponse } | { ok: false; reason: 'key_taken' };
 
 /**
  * Re-promoting a key that is currently `inactive` or `archived` revives the
@@ -403,8 +408,7 @@ export async function createDeclaredField(
 }
 
 export type UpdateDeclaredFieldResult =
-  | { ok: true; field: UpdateDeclaredFieldResponse }
-  | { ok: false; reason: 'not_found' };
+  { ok: true; field: UpdateDeclaredFieldResponse } | { ok: false; reason: 'not_found' };
 
 /** Operates on `active` or `inactive` rows. An `archived` row 404s, same as a missing id. */
 export async function updateDeclaredField(
@@ -448,8 +452,7 @@ export async function updateDeclaredField(
 }
 
 export type DeactivateDeclaredFieldResult =
-  | { ok: true; field: DeactivateDeclaredFieldResponse }
-  | { ok: false; reason: 'not_found' };
+  { ok: true; field: DeactivateDeclaredFieldResponse } | { ok: false; reason: 'not_found' };
 
 /** Only a currently-`active` row can be deactivated. */
 export async function deactivateDeclaredField(
@@ -479,8 +482,7 @@ export async function deactivateDeclaredField(
 }
 
 export type ReactivateDeclaredFieldResult =
-  | { ok: true; field: ReactivateDeclaredFieldResponse }
-  | { ok: false; reason: 'not_found' };
+  { ok: true; field: ReactivateDeclaredFieldResponse } | { ok: false; reason: 'not_found' };
 
 /**
  * Only a currently-`inactive` row can be reactivated this way. An `archived`
@@ -514,8 +516,7 @@ export async function reactivateDeclaredField(
 }
 
 export type ArchiveDeclaredFieldResult =
-  | { ok: true; field: ArchiveDeclaredFieldResponse }
-  | { ok: false; reason: 'not_found' };
+  { ok: true; field: ArchiveDeclaredFieldResponse } | { ok: false; reason: 'not_found' };
 
 /** Works from `active` or `inactive`. Already-`archived` (or missing) 404s. */
 export async function archiveDeclaredField(
@@ -563,9 +564,11 @@ git commit -m "Add declaredFieldService: list, create, update, deactivate, react
 ### Task 4: Backend controller — `declaredFieldController.ts`
 
 **Files:**
+
 - Create: `backend/src/agent/controllers/declaredFieldController.ts`
 
 **Interfaces:**
+
 - Consumes: `CreateDeclaredFieldBody`, `UpdateDeclaredFieldBody` (Zod, from `@support/types`, Task 2), `sendError` (`backend/src/errors.ts`, signature `(res, status, code, message) => void`), the six service functions (Task 3)
 - Produces: `listDeclaredFieldsHandler`, `createDeclaredFieldHandler`, `updateDeclaredFieldHandler`, `deactivateDeclaredFieldHandler`, `reactivateDeclaredFieldHandler`, `archiveDeclaredFieldHandler` (Express `RequestHandler`s) — Task 5's router wires these to routes by name.
 
@@ -686,11 +689,13 @@ git commit -m "Add declaredFieldController"
 ### Task 5: Backend router — mount + OpenAPI registration
 
 **Files:**
+
 - Create: `backend/src/agent/routers/declaredFieldRouter.ts`
 - Modify: `backend/src/agent/router.ts`
 - Modify: `backend/src/docs/openapi.ts`
 
 **Interfaces:**
+
 - Consumes: `requireAdminRole` (`backend/src/shared/middleware/requireAdminRole.ts`), the six handlers from Task 4
 - Produces: `declaredFieldRouter` (Express `Router`) mounted on `agentRouter`, exposing `GET/POST /agent/declared-fields`, `PATCH /agent/declared-fields/:id`, `POST /agent/declared-fields/:id/deactivate`, `POST /agent/declared-fields/:id/reactivate`, `POST /agent/declared-fields/:id/archive` — Task 6's tests hit these paths directly.
 
@@ -757,16 +762,21 @@ registry.registerPath({
   method: 'get',
   path: '/agent/declared-fields',
   summary: 'Agent List Declared Fields',
-  description: 'Lists active and inactive declared fields for the workspace (archived rows are hidden). Admin-only.',
+  description:
+    'Lists active and inactive declared fields for the workspace (archived rows are hidden). Admin-only.',
   security: [{ [bearerAgentJwt.name]: [] }],
-  responses: { 200: { description: 'Declared fields' }, 403: { description: 'Forbidden — admin role required' } },
+  responses: {
+    200: { description: 'Declared fields' },
+    403: { description: 'Forbidden — admin role required' },
+  },
 });
 
 registry.registerPath({
   method: 'post',
   path: '/agent/declared-fields',
   summary: 'Agent Promote Declared Field',
-  description: 'Promotes a key to declared, or revives a previously inactive/archived one with the same key. Admin-only.',
+  description:
+    'Promotes a key to declared, or revives a previously inactive/archived one with the same key. Admin-only.',
   security: [{ [bearerAgentJwt.name]: [] }],
   request: {
     body: {
@@ -792,7 +802,8 @@ registry.registerPath({
   method: 'patch',
   path: '/agent/declared-fields/{id}',
   summary: 'Agent Update Declared Field',
-  description: 'Edits the label and/or type of an active or inactive declared field. The key is immutable. Admin-only.',
+  description:
+    'Edits the label and/or type of an active or inactive declared field. The key is immutable. Admin-only.',
   security: [{ [bearerAgentJwt.name]: [] }],
   request: {
     params: z.object({ id: z.uuid() }),
@@ -818,7 +829,8 @@ registry.registerPath({
   method: 'post',
   path: '/agent/declared-fields/{id}/deactivate',
   summary: 'Agent Deactivate Declared Field',
-  description: 'Pauses an active declared field: excluded from future splits, but stays visible. Admin-only.',
+  description:
+    'Pauses an active declared field: excluded from future splits, but stays visible. Admin-only.',
   security: [{ [bearerAgentJwt.name]: [] }],
   request: { params: z.object({ id: z.uuid() }) },
   responses: {
@@ -846,7 +858,8 @@ registry.registerPath({
   method: 'post',
   path: '/agent/declared-fields/{id}/archive',
   summary: 'Agent Archive Declared Field',
-  description: 'Soft-removes a declared field, hiding it from the list. Future snapshots for this key fall back into raw. Admin-only.',
+  description:
+    'Soft-removes a declared field, hiding it from the list. Future snapshots for this key fall back into raw. Admin-only.',
   security: [{ [bearerAgentJwt.name]: [] }],
   request: { params: z.object({ id: z.uuid() }) },
   responses: {
@@ -877,9 +890,11 @@ git commit -m "Add declaredFieldRouter, mount it, register OpenAPI routes"
 ### Task 6: Backend integration tests
 
 **Files:**
+
 - Create: `backend/tests/agent.declaredFields.test.ts`
 
 **Interfaces:**
+
 - Consumes: `declaredFieldRouter` (Task 5), test helpers `req as request` (`backend/tests/helpers/http.ts`), `closeDb`/`closeAdminDb`, `errorMiddleware`, `requireAgentSession`, `resolveConsoleWorkspace`, `signAgentSession`, `closeWsAuthRedis`, `closeSocketServer`/`createSocketServer`, `closeOwnerPool, ownerPool, seedWorkspace, truncateAll` (`backend/tests/helpers/db.ts`) — all identical to the pattern in `backend/tests/agent.workspaceSettings.test.ts`.
 
 - [ ] **Step 1: Write the test file**
@@ -1379,9 +1394,11 @@ git commit -m "Add integration tests for declared-field three-state CRUD and rol
 ### Task 7: Frontend API client
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/agent-console/api/agentApi.ts`
 
 **Interfaces:**
+
 - Consumes: `call<T>(path, token, init?)` (private helper already in this file, wraps `apiCall` from `../../../lib/httpClient.ts` with the session's `workspaceId`), types from `@support/types` (Task 2)
 - Produces: `fetchDeclaredFields(token)`, `createDeclaredField(token, input)`, `updateDeclaredField(token, id, patch)`, `deactivateDeclaredField(token, id)`, `reactivateDeclaredField(token, id)`, `archiveDeclaredField(token, id)` — Task 8/9 components import these.
 
@@ -1469,10 +1486,12 @@ git commit -m "Add declared-field client functions to agentApi"
 ### Task 8: Frontend — `DeclaredFieldRow` component
 
 **Files:**
+
 - Create: `frontend/src/surfaces/agent-console/pages/DeclaredFields/components/DeclaredFieldRow.tsx`
 - Test: `frontend/src/surfaces/agent-console/pages/DeclaredFields/components/DeclaredFieldRow.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `updateDeclaredField`, `deactivateDeclaredField`, `reactivateDeclaredField`, `archiveDeclaredField` (Task 7), `DeclaredFieldView`/`DeclaredFieldType` (from `@support/types`, Task 2), `ConfirmDialog` (`frontend/src/surfaces/agent-console/components/ConfirmDialog.tsx` — **verify this path exists before importing; if it doesn't, copy `admin-console/components/ConfirmDialog.tsx` to `agent-console/components/ConfirmDialog.tsx` unchanged first — `IntentRow.tsx` already imports `'../../../components/ConfirmDialog.tsx'` successfully, meaning an agent-console copy already exists**), shadcn `Select`/`SelectTrigger`/`SelectContent`/`SelectItem`/`SelectValue` (`../../../components/ui/select.tsx`), `Badge`, `Button`, `Input` (same `ui/` folder)
 - Produces: `DeclaredFieldRow({ token, field }: { token: string; field: DeclaredFieldView })` — a `<tr>` whose action buttons depend on `field.status` (`active` shows Edit/Deactivate/Archive; `inactive` shows Edit/Reactivate/Archive) — Task 9's page renders one per row inside a `<tbody>`.
 
@@ -1866,10 +1885,12 @@ git commit -m "Add DeclaredFieldRow: inline edit, deactivate/reactivate, and arc
 ### Task 9: Frontend — `DeclaredFields` page
 
 **Files:**
+
 - Create: `frontend/src/surfaces/agent-console/pages/DeclaredFields/DeclaredFields.tsx`
 - Test: `frontend/src/surfaces/agent-console/pages/DeclaredFields/DeclaredFields.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `fetchDeclaredFields`, `createDeclaredField` (Task 7), `loadAgentSession` (`../../lib/agentSession.ts`), `DeclaredFieldRow` (Task 8), `ConfirmDialog`, `EmptyState`, `ScrollArea`, `Select*`, `Button`, `Input` (existing `ui/`)
 - Produces: `DeclaredFields()` component — Task 10 wires this into the router as the `/declared-fields` route's element. The list this page renders includes both `active` and `inactive` rows (per `GET /agent/declared-fields`'s scope from Task 3/5) — `archived` rows are never returned, so no client-side filtering is needed here.
 
@@ -2146,11 +2167,13 @@ git commit -m "Add DeclaredFields page: list, promote form, confirm-gated"
 ### Task 10: Nav item, route, and preload wiring
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/agent-console/lib/routePreload.ts`
 - Modify: `frontend/src/surfaces/agent-console/components/AgentConsoleShell.tsx`
 - Modify: `frontend/src/routes/AppRoutes.tsx`
 
 **Interfaces:**
+
 - Consumes: `DeclaredFields` (Task 9), `isAdmin`/`canBuildForms` (`../lib/agentSession.ts`, already defined — `isAdmin` returns true only for `session.role === 'admin'` or an undefined role), `RequireRole` (`../components/RequireRole.tsx`)
 - Produces: nav link + route at `/declared-fields`, reachable only when `isAdmin(session)` is true, both client-side (nav hidden, route redirects to `/inbox`) — the real enforcement is the Task 5 `requireAdminRole` middleware.
 
@@ -2159,8 +2182,7 @@ git commit -m "Add DeclaredFields page: list, promote form, confirm-gated"
 In `frontend/src/surfaces/agent-console/lib/routePreload.ts`, add after `importWorkspaceSettings`:
 
 ```ts
-export const importDeclaredFields = () =>
-  import('../pages/DeclaredFields/DeclaredFields.tsx');
+export const importDeclaredFields = () => import('../pages/DeclaredFields/DeclaredFields.tsx');
 ```
 
 Add to the `agentRoutePreload` map, after `'/workspace-settings': importWorkspaceSettings,`:
@@ -2219,30 +2241,30 @@ const DECLARED_FIELDS_NAV_ITEM = {
 Change the `navItems` construction from:
 
 ```ts
-  const navItems = canBuildForms(session)
-    ? [
-        ...NAV_ITEMS,
-        FORMS_NAV_ITEM,
-        WORKLOAD_NAV_ITEM,
-        BOT_CONFIG_NAV_ITEM,
-        WORKSPACE_SETTINGS_NAV_ITEM,
-      ]
-    : NAV_ITEMS;
+const navItems = canBuildForms(session)
+  ? [
+      ...NAV_ITEMS,
+      FORMS_NAV_ITEM,
+      WORKLOAD_NAV_ITEM,
+      BOT_CONFIG_NAV_ITEM,
+      WORKSPACE_SETTINGS_NAV_ITEM,
+    ]
+  : NAV_ITEMS;
 ```
 
 to:
 
 ```ts
-  const navItems = canBuildForms(session)
-    ? [
-        ...NAV_ITEMS,
-        FORMS_NAV_ITEM,
-        WORKLOAD_NAV_ITEM,
-        BOT_CONFIG_NAV_ITEM,
-        WORKSPACE_SETTINGS_NAV_ITEM,
-        ...(isAdmin(session) ? [DECLARED_FIELDS_NAV_ITEM] : []),
-      ]
-    : NAV_ITEMS;
+const navItems = canBuildForms(session)
+  ? [
+      ...NAV_ITEMS,
+      FORMS_NAV_ITEM,
+      WORKLOAD_NAV_ITEM,
+      BOT_CONFIG_NAV_ITEM,
+      WORKSPACE_SETTINGS_NAV_ITEM,
+      ...(isAdmin(session) ? [DECLARED_FIELDS_NAV_ITEM] : []),
+    ]
+  : NAV_ITEMS;
 ```
 
 (`isAdmin(session) === true` always implies `canBuildForms(session) === true`, since `canBuildForms` already accepts `'admin'` — so nesting the admin check inside the `canBuildForms` branch is correct and never silently hides the tab from a real admin.)
@@ -2289,14 +2311,14 @@ const DeclaredFieldsPage = lazy(async () => ({
 Add the route after the `workspace-settings` route, before `<Route path="*" element={<AgentNotFound />} />`:
 
 ```tsx
-        <Route
-          path="declared-fields"
-          element={
-            <RequireRole allow={isAdmin}>
-              <DeclaredFieldsPage />
-            </RequireRole>
-          }
-        />
+<Route
+  path="declared-fields"
+  element={
+    <RequireRole allow={isAdmin}>
+      <DeclaredFieldsPage />
+    </RequireRole>
+  }
+/>
 ```
 
 - [ ] **Step 4: Typecheck and manually verify**
@@ -2304,6 +2326,7 @@ Add the route after the `workspace-settings` route, before `<Route path="*" elem
 Run: `pnpm --filter @support/web typecheck`
 
 Then run the dev server and log in as an admin session vs. a non-admin session, confirming:
+
 - Admin: "Declared Fields" appears in the Manage nav group, `/declared-fields` renders the page.
 - Team lead / agent: no "Declared Fields" nav item, and navigating to `/declared-fields` directly redirects to `/inbox`.
 
@@ -2341,6 +2364,7 @@ Expected: no errors across `@support/api`, `@support/web`, and `@support/types`.
 - [ ] **Step 4: Manual smoke test**
 
 Start `pnpm dev`, log in as an admin, and walk the golden path end to end:
+
 1. Open the "Declared Fields" tab — confirm the 11 seeded fields (`player_id`, `client_version`, etc. — see `DECLARED_FIELD_SEED` in `packages/types/src/player-state.ts`) are listed, all `active`.
 2. Promote a new field (e.g. `key: test_flag`, `label: Test flag`, `type: boolean`) — confirm the dialog appears, confirm it, and the row appears as `active`.
 3. Edit that row's label — confirm the dialog appears, confirm it, and the label updates.

@@ -21,9 +21,7 @@ describe('BulkImportDialog', () => {
 
   it('rejects a file over the 20MB client-side cap without calling the API', async () => {
     const onImported = vi.fn();
-    render(
-      <BulkImportDialog open token="t" onOpenChange={() => {}} onImported={onImported} />,
-    );
+    render(<BulkImportDialog open token="t" onOpenChange={() => {}} onImported={onImported} />);
     const input = screen.getByLabelText(/choose.*zip/i);
     const tooBig = makeZipFile('big.zip', 21 * 1024 * 1024);
     fireEvent.change(input, { target: { files: [tooBig] } });
@@ -41,9 +39,7 @@ describe('BulkImportDialog', () => {
       summary: { total: 2, created: 1, failed: 1 },
     });
     const onImported = vi.fn();
-    render(
-      <BulkImportDialog open token="t" onOpenChange={() => {}} onImported={onImported} />,
-    );
+    render(<BulkImportDialog open token="t" onOpenChange={() => {}} onImported={onImported} />);
     const input = screen.getByLabelText(/choose.*zip/i);
     fireEvent.change(input, { target: { files: [makeZipFile()] } });
 

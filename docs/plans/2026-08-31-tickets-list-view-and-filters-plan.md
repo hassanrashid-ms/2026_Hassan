@@ -24,12 +24,14 @@
 ## Task 1: Backend — Created-date range filter, applied to every existing mode
 
 **Files:**
+
 - Modify: `backend/src/agent/services/conversationsService.ts:45-53` (`ConversationsListFilters`), `:118-140` (`extraFilterConditions`)
 - Modify: `backend/src/agent/controllers/conversationsController.ts:28-57` (`ConversationsQuery`)
 - Modify: `backend/src/docs/openapi.ts:602-623` (`/agent/conversations` query schema)
 - Test: `backend/tests/agent.conversations.test.ts`
 
 **Interfaces:**
+
 - Consumes: nothing new — extends the existing `ConversationsListFilters` type and `extraFilterConditions(extra)` function already used by every filter mode.
 - Produces: `ConversationsListFilters.createdFrom?: string` and `.createdTo?: string` (`YYYY-MM-DD`), applied as two more conditions inside `extraFilterConditions`. Later tasks (Task 2) build on this same `extra` object.
 
@@ -107,7 +109,8 @@ function extraFilterConditions(extra: ConversationsListFilters) {
       ),
     );
   }
-  if (extra.createdFrom) conditions.push(sql`${conversation.createdAt} >= ${extra.createdFrom}::date`);
+  if (extra.createdFrom)
+    conditions.push(sql`${conversation.createdAt} >= ${extra.createdFrom}::date`);
   if (extra.createdTo)
     conditions.push(sql`${conversation.createdAt} < (${extra.createdTo}::date + interval '1 day')`);
   if (extra.q) {
@@ -153,8 +156,14 @@ const ConversationsQuery = z.object({
   olderThanHours: z.coerce.number().optional(),
   q: z.string().optional(),
   cursor: z.string().optional(),
-  createdFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  createdTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  createdFrom: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  createdTo: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
 });
 ```
 
@@ -192,12 +201,14 @@ git commit -m "Add createdFrom/createdTo date-range filter to agent conversation
 ## Task 2: Backend — merged `'all'` queue with Status subset, priority+activity sort, pagination
 
 **Files:**
+
 - Modify: `backend/src/agent/services/conversationsService.ts` (add `ConversationsFilter = 'all'`, `ConversationsListFilters.statuses`, `queueCondition`, `resolvedOrClosedCondition`, `listAllConversations`, dispatcher branch)
 - Modify: `backend/src/agent/controllers/conversationsController.ts` (`status` enum gains `'all'`, new `statuses` param)
 - Modify: `backend/src/docs/openapi.ts` (mirror both)
 - Test: `backend/tests/agent.conversations.test.ts`
 
 **Interfaces:**
+
 - Consumes: `extraFilterConditions(extra)` and the `createdFrom`/`createdTo` fields from Task 1; `PAGE_SIZE`, `Tx` type, `withWorkspace`, existing table imports — all already present in the file.
 - Produces: `listConversations(ctx, 'all', extra)` — same `ConversationsPage` return shape (`{ conversations, nextCursor }`) as every other mode. `ConversationsListFilters.statuses?: Exclude<ConversationsFilter, 'all' | 'mine'>[]` — later tasks (frontend) send this as repeated `statuses` query params.
 
@@ -587,7 +598,9 @@ const ConversationsQuery = z.object({
   statuses: z
     .union([
       z.enum(['unassigned', 'agentAssigned', 'botHandling', 'escalated', 'resolved', 'closed']),
-      z.array(z.enum(['unassigned', 'agentAssigned', 'botHandling', 'escalated', 'resolved', 'closed'])),
+      z.array(
+        z.enum(['unassigned', 'agentAssigned', 'botHandling', 'escalated', 'resolved', 'closed']),
+      ),
     ])
     .optional()
     .transform((v) => (v ? (Array.isArray(v) ? v : [v]) : undefined)),
@@ -618,12 +631,14 @@ git commit -m "Add merged 'all' conversations queue with status subset and prior
 ## Task 3: Frontend — shared queue options, `agentApi.ts` types and query builder
 
 **Files:**
+
 - Create: `frontend/src/surfaces/agent-console/pages/Tickets/queues.ts`
 - Modify: `frontend/src/surfaces/agent-console/pages/Tickets/Tickets.tsx:38-45` (`COLUMNS`, to build off the shared list instead of duplicating it)
 - Modify: `frontend/src/surfaces/agent-console/api/agentApi.ts:118-146` (`ConversationListFilter`, `TicketsQueryFilters`, `buildTicketsQuery`)
 - Test: none new (covered by Task 4/5/6 tests exercising these through the UI); typecheck is the gate here.
 
 **Interfaces:**
+
 - Consumes: nothing new.
 - Produces: `QUEUE_OPTIONS: { value: Exclude<ConversationListFilter, 'mine' | 'all'>; title: string }[]` — the single source of the six queue names, consumed by Task 5 (`TicketsFilterBar`'s Status filter) and Task 6 (`Tickets.tsx` board mode + list mode). `ConversationListFilter` gains `'all'`. `TicketsQueryFilters` gains `statuses?: string[]`, `createdFrom?: string`, `createdTo?: string`.
 
@@ -722,10 +737,12 @@ git commit -m "Extract shared Tickets queue list, add 'all' filter and widened q
 ## Task 4: Frontend — `useTicketsFilters`: `statuses`, `createdFrom`, `createdTo`, `view`
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/agent-console/pages/Tickets/useTicketsFilters.ts`
 - Test: `frontend/src/surfaces/agent-console/pages/Tickets/useTicketsFilters.test.tsx`
 
 **Interfaces:**
+
 - Consumes: nothing new.
 - Produces: `TicketsFilters.statuses: string[]`, `.createdFrom: string`, `.createdTo: string`, `.view: 'board' | 'list'` — consumed by Task 5 (`TicketsFilterBar`) and Task 6 (`Tickets.tsx`).
 
@@ -883,10 +900,12 @@ git commit -m "Add statuses, createdFrom, createdTo, and view fields to useTicke
 ## Task 5: Frontend — `TicketsFilterBar`: Status multi-select and Created date range
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/agent-console/pages/Tickets/TicketsFilterBar.tsx`
 - Test: `frontend/src/surfaces/agent-console/pages/Tickets/TicketsFilterBar.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `QUEUE_OPTIONS` (Task 3), `TicketsFilters.statuses/createdFrom/createdTo` (Task 4), `MultiSelectFilter` (existing), `Input` (existing, `type="date"` supported natively).
 - Produces: nothing new consumed elsewhere — this is a leaf UI component; `onChange` calls already flow into `useTicketsFilters`'s `update`.
 
@@ -1107,10 +1126,12 @@ git commit -m "Add Status and Created-date filters to TicketsFilterBar"
 ## Task 6: Frontend — `Tickets.tsx`: view toggle, status-filtered columns, merged `TicketsListView`
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/agent-console/pages/Tickets/Tickets.tsx`
 - Test: `frontend/src/surfaces/agent-console/pages/Tickets/Tickets.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `filters.view`/`filters.statuses`/`filters.createdFrom`/`filters.createdTo` (Task 4), `QUEUE_OPTIONS` (Task 3), `fetchInbox`/`claimConversation` (existing `agentApi.ts`), `ConversationRow` (existing, unchanged props).
 - Produces: `TicketsListView` — a new, locally-scoped component in this file, not exported elsewhere (matches `QueueColumn`'s existing scoping).
 
@@ -1202,14 +1223,14 @@ function toQueryFilters(f: ReturnType<typeof useTicketsFilters>[0]): TicketsQuer
 function hasActiveFilters(f: TicketsQueryFilters): boolean {
   return Boolean(
     f.q ||
-      f.priority ||
-      f.labelIds ||
-      f.subintentIds ||
-      f.assigneeIds ||
-      f.olderThanHours ||
-      f.statuses ||
-      f.createdFrom ||
-      f.createdTo,
+    f.priority ||
+    f.labelIds ||
+    f.subintentIds ||
+    f.assigneeIds ||
+    f.olderThanHours ||
+    f.statuses ||
+    f.createdFrom ||
+    f.createdTo,
   );
 }
 ```
@@ -1283,86 +1304,88 @@ function TicketsListView({
 In the `Tickets` component: add the view toggle next to the filter bar, gate column visibility by `filters.statuses`, and branch the body on `filters.view`:
 
 ```tsx
-      <div className="mb-4 flex items-center gap-4">
-        <TicketsFilterBar token={session.token} filters={filters} onChange={updateFilters} />
-        <div className="flex shrink-0 gap-1 rounded-md border border-slate-200 p-0.5">
-          <button
-            type="button"
-            aria-pressed={filters.view === 'board'}
-            className={cn(
-              'rounded px-2 py-1 text-xs font-medium',
-              filters.view === 'board' ? 'bg-accent-soft text-accent-fg' : 'text-muted',
-            )}
-            onClick={() => updateFilters({ view: 'board' })}
-          >
-            Board
-          </button>
-          <button
-            type="button"
-            aria-pressed={filters.view === 'list'}
-            className={cn(
-              'rounded px-2 py-1 text-xs font-medium',
-              filters.view === 'list' ? 'bg-accent-soft text-accent-fg' : 'text-muted',
-            )}
-            onClick={() => updateFilters({ view: 'list' })}
-          >
-            List
-          </button>
-        </div>
-      </div>
-      {filters.view === 'list' ? (
-        <TicketsListView
-          token={session.token}
-          queryFilters={queryFilters}
-          onSelect={(id) => navigate(`/tickets/${id}`)}
-        />
-      ) : (
-        <>
-          {!filtersActive &&
-            summaryQueries.every((q) => q.data) &&
-            summaryQueries.every((q) => q.data!.conversations.length === 0) && (
-              <EmptyState message="Nothing to show" />
-            )}
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <SortableContext items={columnOrder} strategy={rectSortingStrategy}>
-              <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
-                {[
-                  columnOrder.filter((_, i) => i % 2 === 0),
-                  columnOrder.filter((_, i) => i % 2 === 1),
-                ].map((filters_, columnIndex) => (
-                  <div key={columnIndex} className="flex flex-col gap-4">
-                    {filters_.map((filter) => {
-                      const col = COLUMNS.find((c) => c.filter === filter)!;
-                      const queryIndex = COLUMNS.findIndex((c) => c.filter === filter);
-                      const summaryQuery = summaryQueries[queryIndex];
-                      const emptyAndUnfiltered = Boolean(
-                        summaryQuery?.data &&
-                          summaryQuery.data.conversations.length === 0 &&
-                          !filtersActive,
-                      );
-                      const excludedByStatusFilter =
-                        filters.statuses.length > 0 && !filters.statuses.includes(filter);
-                      if (emptyAndUnfiltered || excludedByStatusFilter) return null;
-
-                      return (
-                        <SortableQueueColumn
-                          key={filter}
-                          id={filter}
-                          col={col}
-                          token={session.token}
-                          queryFilters={queryFilters}
-                          filtersActive={filtersActive}
-                          onSelect={(id) => navigate(`/tickets/${id}`)}
-                        />
-                      );
-                    })}
-                  </div>
-                ))}
-              </div>
-            </SortableContext>
-          </DndContext>
-        </>
+<div className="mb-4 flex items-center gap-4">
+  <TicketsFilterBar token={session.token} filters={filters} onChange={updateFilters} />
+  <div className="flex shrink-0 gap-1 rounded-md border border-slate-200 p-0.5">
+    <button
+      type="button"
+      aria-pressed={filters.view === 'board'}
+      className={cn(
+        'rounded px-2 py-1 text-xs font-medium',
+        filters.view === 'board' ? 'bg-accent-soft text-accent-fg' : 'text-muted',
       )}
+      onClick={() => updateFilters({ view: 'board' })}
+    >
+      Board
+    </button>
+    <button
+      type="button"
+      aria-pressed={filters.view === 'list'}
+      className={cn(
+        'rounded px-2 py-1 text-xs font-medium',
+        filters.view === 'list' ? 'bg-accent-soft text-accent-fg' : 'text-muted',
+      )}
+      onClick={() => updateFilters({ view: 'list' })}
+    >
+      List
+    </button>
+  </div>
+</div>;
+{
+  filters.view === 'list' ? (
+    <TicketsListView
+      token={session.token}
+      queryFilters={queryFilters}
+      onSelect={(id) => navigate(`/tickets/${id}`)}
+    />
+  ) : (
+    <>
+      {!filtersActive &&
+        summaryQueries.every((q) => q.data) &&
+        summaryQueries.every((q) => q.data!.conversations.length === 0) && (
+          <EmptyState message="Nothing to show" />
+        )}
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <SortableContext items={columnOrder} strategy={rectSortingStrategy}>
+          <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
+            {[
+              columnOrder.filter((_, i) => i % 2 === 0),
+              columnOrder.filter((_, i) => i % 2 === 1),
+            ].map((filters_, columnIndex) => (
+              <div key={columnIndex} className="flex flex-col gap-4">
+                {filters_.map((filter) => {
+                  const col = COLUMNS.find((c) => c.filter === filter)!;
+                  const queryIndex = COLUMNS.findIndex((c) => c.filter === filter);
+                  const summaryQuery = summaryQueries[queryIndex];
+                  const emptyAndUnfiltered = Boolean(
+                    summaryQuery?.data &&
+                    summaryQuery.data.conversations.length === 0 &&
+                    !filtersActive,
+                  );
+                  const excludedByStatusFilter =
+                    filters.statuses.length > 0 && !filters.statuses.includes(filter);
+                  if (emptyAndUnfiltered || excludedByStatusFilter) return null;
+
+                  return (
+                    <SortableQueueColumn
+                      key={filter}
+                      id={filter}
+                      col={col}
+                      token={session.token}
+                      queryFilters={queryFilters}
+                      filtersActive={filtersActive}
+                      onSelect={(id) => navigate(`/tickets/${id}`)}
+                    />
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        </SortableContext>
+      </DndContext>
+    </>
+  );
+}
 ```
 
 (The inner `.map((filters, columnIndex) => ...)` callback param is renamed `filters_` here purely to avoid shadowing the outer `filters` from `useTicketsFilters` that `excludedByStatusFilter` now needs — the existing code already shadowed it harmlessly since it never referenced the outer one before.)
@@ -1372,10 +1395,10 @@ Add the `cn` import used by the toggle buttons: `import { cn } from '../../../..
 In the existing `conversation:changed` socket handler inside `Tickets()` (the `useEffect` that builds `filtersToInvalidate` and invalidates `['tickets', filter]` per status), add one unconditional invalidation of the merged list — any status change can affect which rows the `'all'` query returns, so unlike the five status-specific branches there's no cheap way to know in advance whether it applies:
 
 ```ts
-        for (const filter of filtersToInvalidate)
-          void queryClient.invalidateQueries({ queryKey: ['tickets', filter] });
-        void queryClient.invalidateQueries({ queryKey: ['tickets', 'all'] });
-        const changedId = payload.conversation_id;
+for (const filter of filtersToInvalidate)
+  void queryClient.invalidateQueries({ queryKey: ['tickets', filter] });
+void queryClient.invalidateQueries({ queryKey: ['tickets', 'all'] });
+const changedId = payload.conversation_id;
 ```
 
 - [ ] **Step 4: Run tests to verify they pass**
@@ -1391,6 +1414,7 @@ Expected: PASS
 - [ ] **Step 6: Manually verify in the browser**
 
 Run: `pnpm dev`, open the agent console's Tickets page.
+
 - Toggle to List view with no filters — confirm one merged, scrollable list appears sorted priority-first.
 - Apply a Status filter of just "Escalated" in Board view — confirm only the Escalated column renders.
 - Apply the same Status filter in List view — confirm only escalated tickets appear.

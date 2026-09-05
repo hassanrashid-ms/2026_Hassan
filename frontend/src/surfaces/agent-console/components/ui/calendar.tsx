@@ -4,11 +4,7 @@ import { DayPicker } from 'react-day-picker';
 import { cn } from '../../lib/cn.ts';
 import { buttonVariants } from './button.tsx';
 
-function Calendar({
-  className,
-  classNames,
-  ...props
-}: React.ComponentProps<typeof DayPicker>) {
+function Calendar({ className, classNames, ...props }: React.ComponentProps<typeof DayPicker>) {
   return (
     <DayPicker
       className={cn('p-3', className)}

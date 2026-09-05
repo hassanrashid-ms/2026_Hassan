@@ -55,7 +55,7 @@ export async function notifyAgentReplyOwed(
   workspace (query `workspaceMember` where `role = 'team_lead'` and `deactivatedAt is null`), since
   there's no specific agent to notify.
 - Both cases emit `emitNotificationNew` through the job's existing `tryIo('jobs', { workspaceId,
-  conversationId })` pattern (already used in this file for `emitMessageToRooms`/
+conversationId })` pattern (already used in this file for `emitMessageToRooms`/
   `emitPhaseChanged`), so the notification pushes live over the socket the same way every other
   notification does.
 
@@ -72,7 +72,7 @@ out, and leave `confirmPhase` at `'none'`. This means:
 
 - The agent gets nudged again only after another full silent window, not every tick.
 - Stage 2's timeout logic can never fire off this path (it requires `confirmPhase =
-  'inactivity_ask'`, which this path never sets) — so an unanswered ticket can no longer
+'inactivity_ask'`, which this path never sets) — so an unanswered ticket can no longer
   auto-resolve as `timed_out` while genuinely still waiting on the agent, which was possible before
   this fix in the edge case where the player's message itself was old enough to satisfy both
   windows.
@@ -85,7 +85,7 @@ Append a new event type `reply_owed_reminder_sent` (payload: `{ source: 'inactiv
 ## What doesn't change
 
 - `supportOwedFlag` / stage 2's timeout logic: unchanged. It still exists for the case where an ask
-  *was* sent (agent had replied at the time) and the player then went silent.
+  _was_ sent (agent had replied at the time) and the player then went silent.
 - `touchInactivityClock`'s trigger (any public message resets the clock): unchanged. This fix only
   changes what stage 1 does when the window expires, not what resets it.
 - No schema/migration changes — `notification.type` is free text, no enum to extend.

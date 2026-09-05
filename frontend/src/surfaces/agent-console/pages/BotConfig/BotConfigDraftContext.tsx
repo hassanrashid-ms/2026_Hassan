@@ -1,5 +1,10 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
-import type { BotConfigView, LimitToggleValue, RuleEntryValue, ToolToggleValue } from '@support/types';
+import type {
+  BotConfigView,
+  LimitToggleValue,
+  RuleEntryValue,
+  ToolToggleValue,
+} from '@support/types';
 
 export type BotConfigDraft = {
   prompt: string;

@@ -441,13 +441,17 @@ describe('SupportChat form attachment upload', () => {
       form_name: 'Proof of purchase',
       version: 1,
       fields: [
-        { key: 'proof', label: 'Upload a photo', type: 'attachment', isRequired: false, position: 0 },
+        {
+          key: 'proof',
+          label: 'Upload a photo',
+          type: 'attachment',
+          isRequired: false,
+          position: 0,
+        },
       ],
       answers: [],
     };
-    vi.mocked(fetchPlayerMessages).mockResolvedValue(
-      messages({ confirm_phase: 'form', form }),
-    );
+    vi.mocked(fetchPlayerMessages).mockResolvedValue(messages({ confirm_phase: 'form', form }));
     vi.mocked(requestUpload).mockResolvedValue({
       key: 'pending/ws/player/uuid.png',
       upload_url: 'https://upload.example/put',
@@ -486,7 +490,12 @@ describe('SupportChat form attachment upload', () => {
         't',
         '',
         's',
-        { key: 'pending/ws/player/uuid.png', filename: 'shot.png', mimeType: 'image/png', byteSize: 3 },
+        {
+          key: 'pending/ws/player/uuid.png',
+          filename: 'shot.png',
+          mimeType: 'image/png',
+          byteSize: 3,
+        },
         'proof',
       ),
     );

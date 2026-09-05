@@ -61,7 +61,8 @@ function VersionDiff({
   const prior = priorQuery.data;
   if (!current) return null;
 
-  const titleTokens = current.title !== prior.title ? diffPromptText(prior.title, current.title) : null;
+  const titleTokens =
+    current.title !== prior.title ? diffPromptText(prior.title, current.title) : null;
   const bodyTokens = current.body !== prior.body ? diffPromptText(prior.body, current.body) : null;
   const keywordEntries = diffKeywords(prior.keywords, current.keywords);
   const attachmentEntries = diffAttachments(prior.attachments, current.attachments);

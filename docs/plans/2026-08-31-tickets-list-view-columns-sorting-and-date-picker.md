@@ -26,6 +26,7 @@ Builds on top of `docs/plans/2026-08-21-tickets-search-and-filters.md` and `docs
 ## Task 1: Backend — expose `created_at`, `subintent`, `number` on `AgentConversationSummary`
 
 **Files:**
+
 - Modify: `packages/types/src/chat.ts:149-167` (`AgentConversationSummary`)
 - Modify: `backend/src/agent/services/conversationsService.ts:384-434` (`listAllConversations`'s `rows` select and `summaries` push)
 - Test: `backend/tests/agent.conversations.test.ts`
@@ -33,6 +34,7 @@ Builds on top of `docs/plans/2026-08-21-tickets-search-and-filters.md` and `docs
 No `openapi.ts` change in this task — `/agent/conversations`'s existing registration (`:596-638`) only documents the request query shape, not a response schema, and this task doesn't touch the query shape (Task 2 does).
 
 **Interfaces:**
+
 - Consumes: nothing new.
 - Produces: `AgentConversationSummary.created_at: string`, `.subintent: { id: string; name: string } | null`, `.number: number` — Task 8 (frontend columns) reads these three fields directly off each row.
 
@@ -41,33 +43,33 @@ No `openapi.ts` change in this task — `/agent/conversations`'s existing regist
 Add to the `describe('GET /agent/conversations?status=all', ...)` block in `backend/tests/agent.conversations.test.ts` (after the existing tests, before the closing `});` at line 820):
 
 ```ts
-  it('includes created_at, subintent, and ticket number on each row', async () => {
-    const workspaceId = await seedWorkspace();
-    const playerId = await seedPlayer(workspaceId);
-    const intentId = await seedIntent({ workspaceId, name: 'Billing' });
-    const subintentId = await seedSubintent({ workspaceId, intentId, name: 'Refund request' });
-    const createdAt = new Date('2026-08-15T10:00:00Z');
-    const conversationId = await seedConversation({
-      workspaceId,
-      playerId,
-      status: 'open',
-      createdAt,
-      subintentId,
-    });
-    const { token } = await setupAgent(workspaceId);
-
-    const res = await request(app)
-      .get('/conversations')
-      .query({ status: 'all' })
-      .set('Authorization', `Bearer ${token}`)
-      .set('X-Workspace-Id', workspaceId)
-      .expect(200);
-
-    const row = res.body.conversations.find((c: { id: string }) => c.id === conversationId);
-    expect(row.created_at).toBe(createdAt.toISOString());
-    expect(row.subintent).toEqual({ id: subintentId, name: 'Refund request' });
-    expect(typeof row.number).toBe('number');
+it('includes created_at, subintent, and ticket number on each row', async () => {
+  const workspaceId = await seedWorkspace();
+  const playerId = await seedPlayer(workspaceId);
+  const intentId = await seedIntent({ workspaceId, name: 'Billing' });
+  const subintentId = await seedSubintent({ workspaceId, intentId, name: 'Refund request' });
+  const createdAt = new Date('2026-08-15T10:00:00Z');
+  const conversationId = await seedConversation({
+    workspaceId,
+    playerId,
+    status: 'open',
+    createdAt,
+    subintentId,
   });
+  const { token } = await setupAgent(workspaceId);
+
+  const res = await request(app)
+    .get('/conversations')
+    .query({ status: 'all' })
+    .set('Authorization', `Bearer ${token}`)
+    .set('X-Workspace-Id', workspaceId)
+    .expect(200);
+
+  const row = res.body.conversations.find((c: { id: string }) => c.id === conversationId);
+  expect(row.created_at).toBe(createdAt.toISOString());
+  expect(row.subintent).toEqual({ id: subintentId, name: 'Refund request' });
+  expect(typeof row.number).toBe('number');
+});
 ```
 
 Check `seedIntent`'s and `seedSubintent`'s exact signatures in `backend/tests/helpers/db.ts` before running — if either takes different argument names than shown, match what's there rather than what's written here.
@@ -93,41 +95,40 @@ In `packages/types/src/chat.ts`, inside `AgentConversationSummary` (after the `t
 In `backend/src/agent/services/conversationsService.ts`, in `listAllConversations`'s `rows` select (around line 384-394), add three columns:
 
 ```ts
-    const rows = await tx
-      .select({
-        id: conversation.id,
-        status: conversation.status,
-        externalPlayerId: player.externalId,
-        confirmPhase: conversation.confirmPhase,
-        assignedAgentId: conversation.assignedAgentId,
-        assignedAgentName: agent.displayName,
-        priority: conversation.priority,
-        activity,
-        createdAt: conversation.createdAt,
-        subintentId: subintent.id,
-        subintentName: subintent.name,
-        number: conversation.number,
-      })
+const rows = await tx.select({
+  id: conversation.id,
+  status: conversation.status,
+  externalPlayerId: player.externalId,
+  confirmPhase: conversation.confirmPhase,
+  assignedAgentId: conversation.assignedAgentId,
+  assignedAgentName: agent.displayName,
+  priority: conversation.priority,
+  activity,
+  createdAt: conversation.createdAt,
+  subintentId: subintent.id,
+  subintentName: subintent.name,
+  number: conversation.number,
+});
 ```
 
 Then in the `summaries.push(...)` block right below (around line 422-433), add the three fields:
 
 ```ts
-      summaries.push({
-        id: row.id,
-        player: { external_player_id: row.externalPlayerId },
-        status: row.status,
-        confirm_phase: row.confirmPhase,
-        last_message_preview: last?.body ?? null,
-        last_message_at: last?.createdAt.toISOString() ?? null,
-        assigned_agent_id: row.assignedAgentId,
-        assigned_agent_name: row.assignedAgentName,
-        priority: row.priority,
-        tags,
-        created_at: row.createdAt.toISOString(),
-        subintent: row.subintentId ? { id: row.subintentId, name: row.subintentName! } : null,
-        number: row.number,
-      });
+summaries.push({
+  id: row.id,
+  player: { external_player_id: row.externalPlayerId },
+  status: row.status,
+  confirm_phase: row.confirmPhase,
+  last_message_preview: last?.body ?? null,
+  last_message_at: last?.createdAt.toISOString() ?? null,
+  assigned_agent_id: row.assignedAgentId,
+  assigned_agent_name: row.assignedAgentName,
+  priority: row.priority,
+  tags,
+  created_at: row.createdAt.toISOString(),
+  subintent: row.subintentId ? { id: row.subintentId, name: row.subintentName! } : null,
+  number: row.number,
+});
 ```
 
 - [ ] **Step 5: Run test to verify it passes**
@@ -154,152 +155,166 @@ git commit -m "feat: expose created_at, subintent, and ticket number on conversa
 ## Task 2: Backend — generalize `listAllConversations` sort into a 2-key registry + keyset cursor
 
 **Files:**
+
 - Modify: `backend/src/agent/services/conversationsService.ts:173-193` (`AllCursor`/`encodeAllCursor`/`decodeAllCursor`), `:359-448` (`listAllConversations`)
 - Modify: `backend/src/agent/controllers/conversationsController.ts:28-67` (`ConversationsQuery`)
 - Modify: `backend/src/docs/openapi.ts:596-638` (`/agent/conversations` query schema)
 - Test: `backend/tests/agent.conversations.test.ts`
 
 **Interfaces:**
+
 - Consumes: nothing new from Task 1 other than the already-selected `createdAt`/`subintentId`/`subintentName`/`number` columns (reused as sortable columns, not re-selected).
 - Produces: `ConversationsListFilters.sortBy?: SortKey`, `.sortDir?: 'asc' | 'desc'`, `.sortBy2?: SortKey`, `.sortDir2?: 'asc' | 'desc'` where `SortKey = 'player' | 'status' | 'priority' | 'assignee' | 'lastMessage' | 'tags' | 'created' | 'subintent' | 'number'`. Defaults when unset: `sortBy: 'priority', sortDir: 'asc', sortBy2: 'created', sortDir2: 'asc'`. Task 3 (frontend `agentApi.ts`) sends these four params by name.
 
 - [ ] **Step 1: Write the failing backend tests**
 
-Replace the existing first test in `describe('GET /agent/conversations?status=all', ...)` (`'merges unassigned, escalated, and resolved conversations, sorted by priority then activity'`, lines 705-769) — its ordering assertions describe the *old* default (priority, then most-recent-activity). The new default is priority, then created-at ascending. Since `p1Escalated` is seeded before `p1ResolvedRecent` in that test, `createdAt` ordering happens to produce the same relative order as the old activity-based assertion for those two rows, but the test's comment is about to be wrong and must be corrected, and a new dedicated ordering test should replace reliance on that coincidence:
+Replace the existing first test in `describe('GET /agent/conversations?status=all', ...)` (`'merges unassigned, escalated, and resolved conversations, sorted by priority then activity'`, lines 705-769) — its ordering assertions describe the _old_ default (priority, then most-recent-activity). The new default is priority, then created-at ascending. Since `p1Escalated` is seeded before `p1ResolvedRecent` in that test, `createdAt` ordering happens to produce the same relative order as the old activity-based assertion for those two rows, but the test's comment is about to be wrong and must be corrected, and a new dedicated ordering test should replace reliance on that coincidence:
 
 ```ts
-  it('merges unassigned, escalated, and resolved conversations, sorted by priority then created (default)', async () => {
-    const workspaceId = await seedWorkspace();
-    const playerId = await seedPlayer(workspaceId);
+it('merges unassigned, escalated, and resolved conversations, sorted by priority then created (default)', async () => {
+  const workspaceId = await seedWorkspace();
+  const playerId = await seedPlayer(workspaceId);
 
-    const p2Unassigned = await seedConversation({
-      workspaceId,
-      playerId,
-      status: 'open',
-      priority: 'p2',
-      createdAt: new Date('2026-08-01T00:00:00Z'),
-    });
-    const p1Older = await seedConversation({
-      workspaceId,
-      playerId,
-      status: 'escalated',
-      priority: 'p1',
-      createdAt: new Date('2026-08-01T00:00:00Z'),
-    });
-    const p1Newer = await seedConversation({
-      workspaceId,
-      playerId,
-      status: 'resolved',
-      priority: 'p1',
-      createdAt: new Date('2026-08-10T00:00:00Z'),
-    });
-    await seedResolutionCycle({
-      workspaceId,
-      conversationId: p1Newer,
-      resolvedAt: new Date(),
-    });
-    const p1ResolvedStale = await seedConversation({
-      workspaceId,
-      playerId,
-      status: 'resolved',
-      priority: 'p1',
-      createdAt: new Date('2026-08-02T00:00:00Z'),
-    });
-    await seedResolutionCycle({
-      workspaceId,
-      conversationId: p1ResolvedStale,
-      resolvedAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000),
-    });
-    const { token } = await setupAgent(workspaceId);
-
-    const res = await request(app)
-      .get('/conversations')
-      .query({ status: 'all' })
-      .set('Authorization', `Bearer ${token}`)
-      .set('X-Workspace-Id', workspaceId)
-      .expect(200);
-
-    const ids = res.body.conversations.map((c: { id: string }) => c.id);
-    expect(ids).toContain(p2Unassigned);
-    expect(ids).toContain(p1Older);
-    expect(ids).toContain(p1Newer);
-    // Outside the 7-day resolved window — excluded exactly like the dedicated resolved queue.
-    expect(ids).not.toContain(p1ResolvedStale);
-    // Both p1s sort before the p2 (priority is primary), and among the p1s
-    // the older-created one sorts first (created asc is the secondary key).
-    expect(ids.indexOf(p1Older)).toBeLessThan(ids.indexOf(p2Unassigned));
-    expect(ids.indexOf(p1Newer)).toBeLessThan(ids.indexOf(p2Unassigned));
-    expect(ids.indexOf(p1Older)).toBeLessThan(ids.indexOf(p1Newer));
+  const p2Unassigned = await seedConversation({
+    workspaceId,
+    playerId,
+    status: 'open',
+    priority: 'p2',
+    createdAt: new Date('2026-08-01T00:00:00Z'),
   });
-
-  it('sorts by an explicit two-key request (assignee desc, number asc)', async () => {
-    const workspaceId = await seedWorkspace();
-    const playerId = await seedPlayer(workspaceId);
-    const { agentId: bravoId } = await setupAssignedAgentNamed(workspaceId, 'Bravo');
-    const { agentId: alphaId } = await setupAssignedAgentNamed(workspaceId, 'Alpha');
-    const unassigned = await seedConversation({ workspaceId, playerId, status: 'open' });
-    const assignedToAlpha = await seedConversation({
-      workspaceId,
-      playerId,
-      status: 'open',
-      assignedAgentId: alphaId,
-    });
-    const assignedToBravo = await seedConversation({
-      workspaceId,
-      playerId,
-      status: 'open',
-      assignedAgentId: bravoId,
-    });
-    const { token } = await setupAgent(workspaceId);
-
-    const res = await request(app)
-      .get('/conversations')
-      .query({ status: 'all', sortBy: 'assignee', sortDir: 'desc', sortBy2: 'number', sortDir2: 'asc' })
-      .set('Authorization', `Bearer ${token}`)
-      .set('X-Workspace-Id', workspaceId)
-      .expect(200);
-
-    const ids = res.body.conversations.map((c: { id: string }) => c.id);
-    // desc + nulls-last: Bravo, then Alpha, then the unassigned (null) row last.
-    expect(ids.indexOf(assignedToBravo)).toBeLessThan(ids.indexOf(assignedToAlpha));
-    expect(ids.indexOf(assignedToAlpha)).toBeLessThan(ids.indexOf(unassigned));
+  const p1Older = await seedConversation({
+    workspaceId,
+    playerId,
+    status: 'escalated',
+    priority: 'p1',
+    createdAt: new Date('2026-08-01T00:00:00Z'),
   });
-
-  it('paginates with a stable keyset cursor under a non-default sort', async () => {
-    const workspaceId = await seedWorkspace();
-    const playerId = await seedPlayer(workspaceId);
-    for (let i = 0; i < 30; i++) {
-      await seedConversation({ workspaceId, playerId, status: 'open', priority: 'p3' });
-    }
-    const { token } = await setupAgent(workspaceId);
-
-    const page1 = await request(app)
-      .get('/conversations')
-      .query({ status: 'all', sortBy: 'created', sortDir: 'desc', sortBy2: 'number', sortDir2: 'desc' })
-      .set('Authorization', `Bearer ${token}`)
-      .set('X-Workspace-Id', workspaceId)
-      .expect(200);
-    expect(page1.body.conversations).toHaveLength(25);
-
-    const page2 = await request(app)
-      .get('/conversations')
-      .query({
-        status: 'all',
-        sortBy: 'created',
-        sortDir: 'desc',
-        sortBy2: 'number',
-        sortDir2: 'desc',
-        cursor: page1.body.nextCursor,
-      })
-      .set('Authorization', `Bearer ${token}`)
-      .set('X-Workspace-Id', workspaceId)
-      .expect(200);
-    expect(page2.body.conversations).toHaveLength(5);
-
-    const page1Ids = page1.body.conversations.map((c: { id: string }) => c.id);
-    const page2Ids = page2.body.conversations.map((c: { id: string }) => c.id);
-    expect(new Set([...page1Ids, ...page2Ids]).size).toBe(30);
+  const p1Newer = await seedConversation({
+    workspaceId,
+    playerId,
+    status: 'resolved',
+    priority: 'p1',
+    createdAt: new Date('2026-08-10T00:00:00Z'),
   });
+  await seedResolutionCycle({
+    workspaceId,
+    conversationId: p1Newer,
+    resolvedAt: new Date(),
+  });
+  const p1ResolvedStale = await seedConversation({
+    workspaceId,
+    playerId,
+    status: 'resolved',
+    priority: 'p1',
+    createdAt: new Date('2026-08-02T00:00:00Z'),
+  });
+  await seedResolutionCycle({
+    workspaceId,
+    conversationId: p1ResolvedStale,
+    resolvedAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000),
+  });
+  const { token } = await setupAgent(workspaceId);
+
+  const res = await request(app)
+    .get('/conversations')
+    .query({ status: 'all' })
+    .set('Authorization', `Bearer ${token}`)
+    .set('X-Workspace-Id', workspaceId)
+    .expect(200);
+
+  const ids = res.body.conversations.map((c: { id: string }) => c.id);
+  expect(ids).toContain(p2Unassigned);
+  expect(ids).toContain(p1Older);
+  expect(ids).toContain(p1Newer);
+  // Outside the 7-day resolved window — excluded exactly like the dedicated resolved queue.
+  expect(ids).not.toContain(p1ResolvedStale);
+  // Both p1s sort before the p2 (priority is primary), and among the p1s
+  // the older-created one sorts first (created asc is the secondary key).
+  expect(ids.indexOf(p1Older)).toBeLessThan(ids.indexOf(p2Unassigned));
+  expect(ids.indexOf(p1Newer)).toBeLessThan(ids.indexOf(p2Unassigned));
+  expect(ids.indexOf(p1Older)).toBeLessThan(ids.indexOf(p1Newer));
+});
+
+it('sorts by an explicit two-key request (assignee desc, number asc)', async () => {
+  const workspaceId = await seedWorkspace();
+  const playerId = await seedPlayer(workspaceId);
+  const { agentId: bravoId } = await setupAssignedAgentNamed(workspaceId, 'Bravo');
+  const { agentId: alphaId } = await setupAssignedAgentNamed(workspaceId, 'Alpha');
+  const unassigned = await seedConversation({ workspaceId, playerId, status: 'open' });
+  const assignedToAlpha = await seedConversation({
+    workspaceId,
+    playerId,
+    status: 'open',
+    assignedAgentId: alphaId,
+  });
+  const assignedToBravo = await seedConversation({
+    workspaceId,
+    playerId,
+    status: 'open',
+    assignedAgentId: bravoId,
+  });
+  const { token } = await setupAgent(workspaceId);
+
+  const res = await request(app)
+    .get('/conversations')
+    .query({
+      status: 'all',
+      sortBy: 'assignee',
+      sortDir: 'desc',
+      sortBy2: 'number',
+      sortDir2: 'asc',
+    })
+    .set('Authorization', `Bearer ${token}`)
+    .set('X-Workspace-Id', workspaceId)
+    .expect(200);
+
+  const ids = res.body.conversations.map((c: { id: string }) => c.id);
+  // desc + nulls-last: Bravo, then Alpha, then the unassigned (null) row last.
+  expect(ids.indexOf(assignedToBravo)).toBeLessThan(ids.indexOf(assignedToAlpha));
+  expect(ids.indexOf(assignedToAlpha)).toBeLessThan(ids.indexOf(unassigned));
+});
+
+it('paginates with a stable keyset cursor under a non-default sort', async () => {
+  const workspaceId = await seedWorkspace();
+  const playerId = await seedPlayer(workspaceId);
+  for (let i = 0; i < 30; i++) {
+    await seedConversation({ workspaceId, playerId, status: 'open', priority: 'p3' });
+  }
+  const { token } = await setupAgent(workspaceId);
+
+  const page1 = await request(app)
+    .get('/conversations')
+    .query({
+      status: 'all',
+      sortBy: 'created',
+      sortDir: 'desc',
+      sortBy2: 'number',
+      sortDir2: 'desc',
+    })
+    .set('Authorization', `Bearer ${token}`)
+    .set('X-Workspace-Id', workspaceId)
+    .expect(200);
+  expect(page1.body.conversations).toHaveLength(25);
+
+  const page2 = await request(app)
+    .get('/conversations')
+    .query({
+      status: 'all',
+      sortBy: 'created',
+      sortDir: 'desc',
+      sortBy2: 'number',
+      sortDir2: 'desc',
+      cursor: page1.body.nextCursor,
+    })
+    .set('Authorization', `Bearer ${token}`)
+    .set('X-Workspace-Id', workspaceId)
+    .expect(200);
+  expect(page2.body.conversations).toHaveLength(5);
+
+  const page1Ids = page1.body.conversations.map((c: { id: string }) => c.id);
+  const page2Ids = page2.body.conversations.map((c: { id: string }) => c.id);
+  expect(new Set([...page1Ids, ...page2Ids]).size).toBe(30);
+});
 ```
 
 Add a `setupAssignedAgentNamed` helper right above the `describe('GET /agent/conversations?status=all', ...)` block (the existing `setupAssignedAgent` at line 68 hardcodes the display name — this variant parameterizes it):
@@ -494,7 +509,11 @@ async function listAllConversations(
           ...extraFilterConditions(extra),
         ),
       )
-      .orderBy(orderExpr(primaryKey, primaryDir), orderExpr(secondaryKey, secondaryDir), conversation.id)
+      .orderBy(
+        orderExpr(primaryKey, primaryDir),
+        orderExpr(secondaryKey, secondaryDir),
+        conversation.id,
+      )
       .limit(PAGE_SIZE + 1);
 
     const hasMore = rows.length > PAGE_SIZE;
@@ -566,10 +585,12 @@ git commit -m "feat: generalize list-view sort into a 2-key registry with keyset
 ## Task 3: Frontend — `agentApi.ts` sends the four sort params
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/agent-console/api/agentApi.ts:128-159` (`TicketsQueryFilters`, `buildTicketsQuery`)
 - Test: `frontend/src/surfaces/agent-console/api/agentApi.test.ts` if it exists — check with `ls frontend/src/surfaces/agent-console/api/*.test.ts` first; if there's no existing test file for this module, skip a dedicated unit test here and rely on Task 9's `TicketsListView` integration test to exercise the full path (this repo doesn't unit-test `buildTicketsQuery` directly today — grep confirms `TicketsFilterBar.test.tsx` and `Tickets.test.tsx` are the coverage for this query-building logic).
 
 **Interfaces:**
+
 - Consumes: nothing new.
 - Produces: `TicketsQueryFilters.sortBy?: string`, `.sortDir?: 'asc' | 'desc'`, `.sortBy2?: string`, `.sortDir2?: 'asc' | 'desc'`. Task 4 (`useTicketsFilters`) and Task 9 (`TicketsListView`) build this object.
 
@@ -598,10 +619,10 @@ export type TicketsQueryFilters = {
 Add to `buildTicketsQuery` (after the `createdTo` line, before `if (cursor)`):
 
 ```ts
-  if (filters?.sortBy) params.set('sortBy', filters.sortBy);
-  if (filters?.sortDir) params.set('sortDir', filters.sortDir);
-  if (filters?.sortBy2) params.set('sortBy2', filters.sortBy2);
-  if (filters?.sortDir2) params.set('sortDir2', filters.sortDir2);
+if (filters?.sortBy) params.set('sortBy', filters.sortBy);
+if (filters?.sortDir) params.set('sortDir', filters.sortDir);
+if (filters?.sortBy2) params.set('sortBy2', filters.sortBy2);
+if (filters?.sortDir2) params.set('sortDir2', filters.sortDir2);
 ```
 
 - [ ] **Step 2: Typecheck**
@@ -621,38 +642,40 @@ git commit -m "feat: add sort query params to fetchInbox"
 ## Task 4: Frontend — sort state on `useTicketsFilters`
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/agent-console/pages/Tickets/useTicketsFilters.ts`
 - Test: `frontend/src/surfaces/agent-console/pages/Tickets/useTicketsFilters.test.tsx`
 
 **Interfaces:**
+
 - Consumes: nothing new.
 - Produces: `TicketsFilters.sortBy: string`, `.sortDir: 'asc' | 'desc'`, `.sortBy2: string`, `.sortDir2: 'asc' | 'desc'` — defaulting to `'priority'`/`'asc'`/`'created'`/`'asc'` when absent from the URL. Task 9 (`TicketsListView`) reads and writes these through the same `update` function every other filter uses.
 
 - [ ] **Step 1: Fix the existing exact-match default-filters test, and write the failing new tests**
 
-`useTicketsFilters.test.tsx` already has a test called `'defaults to empty filters with no params'` that asserts the *entire* filters object with `toEqual` against a fixed literal (no `sortBy`/`sortDir`/etc. keys). Adding the four new fields to `TicketsFilters` will make that literal incomplete and fail. Update it in place to include the four new defaults:
+`useTicketsFilters.test.tsx` already has a test called `'defaults to empty filters with no params'` that asserts the _entire_ filters object with `toEqual` against a fixed literal (no `sortBy`/`sortDir`/etc. keys). Adding the four new fields to `TicketsFilters` will make that literal incomplete and fail. Update it in place to include the four new defaults:
 
 ```ts
-  it('defaults to empty filters with no params', () => {
-    const { result } = renderWithRouter('/tickets');
-    const [filters] = result.current;
-    expect(filters).toEqual({
-      q: '',
-      priority: [],
-      labelIds: [],
-      subintentIds: [],
-      assigneeIds: [],
-      olderThanHours: '',
-      statuses: [],
-      createdFrom: '',
-      createdTo: '',
-      view: 'board',
-      sortBy: 'priority',
-      sortDir: 'asc',
-      sortBy2: 'created',
-      sortDir2: 'asc',
-    });
+it('defaults to empty filters with no params', () => {
+  const { result } = renderWithRouter('/tickets');
+  const [filters] = result.current;
+  expect(filters).toEqual({
+    q: '',
+    priority: [],
+    labelIds: [],
+    subintentIds: [],
+    assigneeIds: [],
+    olderThanHours: '',
+    statuses: [],
+    createdFrom: '',
+    createdTo: '',
+    view: 'board',
+    sortBy: 'priority',
+    sortDir: 'asc',
+    sortBy2: 'created',
+    sortDir2: 'asc',
   });
+});
 ```
 
 Then add two new tests using the file's existing `renderWithRouter(initialEntry)` helper (defined at the top of the file — it wraps `useTicketsFilters()` in a `MemoryRouter` and returns the `renderHook` result, whose `result.current` is the `[filters, update]` tuple):
@@ -724,10 +747,10 @@ In the `filters` object construction:
 In `update`, after the `view` line:
 
 ```ts
-    if (merged.sortBy !== 'priority') nextParams.set('sortBy', merged.sortBy);
-    if (merged.sortDir !== 'asc') nextParams.set('sortDir', merged.sortDir);
-    if (merged.sortBy2 !== 'created') nextParams.set('sortBy2', merged.sortBy2);
-    if (merged.sortDir2 !== 'asc') nextParams.set('sortDir2', merged.sortDir2);
+if (merged.sortBy !== 'priority') nextParams.set('sortBy', merged.sortBy);
+if (merged.sortDir !== 'asc') nextParams.set('sortDir', merged.sortDir);
+if (merged.sortBy2 !== 'created') nextParams.set('sortBy2', merged.sortBy2);
+if (merged.sortDir2 !== 'asc') nextParams.set('sortDir2', merged.sortDir2);
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
@@ -747,11 +770,13 @@ git commit -m "feat: add sort state to useTicketsFilters"
 ## Task 5: Frontend — add `react-day-picker`/`date-fns` and the `Calendar` primitive
 
 **Files:**
+
 - Modify: `frontend/package.json` (new dependencies)
 - Create: `frontend/src/surfaces/agent-console/components/ui/calendar.tsx`
 - Test: none (a styled wrapper around a third-party component; exercised indirectly by Task 6's `DateRangeFilter` test)
 
 **Interfaces:**
+
 - Consumes: `Button`/`buttonVariants` from `./button.tsx` (already exists, shown above).
 - Produces: `Calendar` component with props `{ mode: 'range'; selected?: { from?: Date; to?: Date }; onSelect: (range: { from?: Date; to?: Date } | undefined) => void }` (react-day-picker's own `DateRange` type). Task 6 renders `<Calendar mode="range" .../>` inside a `Popover`.
 
@@ -770,11 +795,7 @@ import { DayPicker } from 'react-day-picker';
 import { cn } from '../../lib/cn.ts';
 import { buttonVariants } from './button.tsx';
 
-function Calendar({
-  className,
-  classNames,
-  ...props
-}: React.ComponentProps<typeof DayPicker>) {
+function Calendar({ className, classNames, ...props }: React.ComponentProps<typeof DayPicker>) {
   return (
     <DayPicker
       className={cn('p-3', className)}
@@ -844,10 +865,12 @@ git commit -m "feat: add shadcn Calendar primitive (react-day-picker)"
 ## Task 6: Frontend — `DateRangeFilter` component
 
 **Files:**
+
 - Create: `frontend/src/surfaces/agent-console/pages/Tickets/DateRangeFilter.tsx`
 - Test: `frontend/src/surfaces/agent-console/pages/Tickets/DateRangeFilter.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `Calendar` (Task 5), `Popover`/`PopoverTrigger`/`PopoverContent` (existing), `Button` (existing).
 - Produces: `DateRangeFilter({ from, to, onChange }: { from: string; to: string; onChange: (next: { createdFrom: string; createdTo: string }) => void })`. Task 7 (`TicketsFilterBar`) renders this in place of the two native date inputs.
 
@@ -921,7 +944,8 @@ function fromLocalDateString(value: string): Date | undefined {
 
 function triggerLabel(from: string, to: string): string {
   if (!from && !to) return 'Created date';
-  if (from && to) return `${format(fromLocalDateString(from)!, 'MMM d')} – ${format(fromLocalDateString(to)!, 'MMM d')}`;
+  if (from && to)
+    return `${format(fromLocalDateString(from)!, 'MMM d')} – ${format(fromLocalDateString(to)!, 'MMM d')}`;
   if (from) return `From ${format(fromLocalDateString(from)!, 'MMM d')}`;
   return `Until ${format(fromLocalDateString(to)!, 'MMM d')}`;
 }
@@ -977,10 +1001,12 @@ git commit -m "feat: add DateRangeFilter shadcn date-range picker"
 ## Task 7: Frontend — wire `DateRangeFilter` + add "Reset filters" into `TicketsFilterBar`
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/agent-console/pages/Tickets/TicketsFilterBar.tsx`
 - Modify: `frontend/src/surfaces/agent-console/pages/Tickets/TicketsFilterBar.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `DateRangeFilter` (Task 6).
 - Produces: nothing new consumed by later tasks — this is a leaf UI change.
 
@@ -989,63 +1015,63 @@ git commit -m "feat: add DateRangeFilter shadcn date-range picker"
 In `TicketsFilterBar.test.tsx`, replace the last test (`'changing the Created-from date calls onChange'`, lines 73-79):
 
 ```tsx
-  it('selecting a date range calls onChange with both bounds', async () => {
-    const { onChange } = renderBar();
-    await userEvent.click(screen.getByRole('button', { name: /Created date/ }));
-    const day1 = await screen.findByRole('gridcell', { name: '1' });
-    await userEvent.click(day1.querySelector('button')!);
-    const day5 = screen.getByRole('gridcell', { name: '5' });
-    await userEvent.click(day5.querySelector('button')!);
+it('selecting a date range calls onChange with both bounds', async () => {
+  const { onChange } = renderBar();
+  await userEvent.click(screen.getByRole('button', { name: /Created date/ }));
+  const day1 = await screen.findByRole('gridcell', { name: '1' });
+  await userEvent.click(day1.querySelector('button')!);
+  const day5 = screen.getByRole('gridcell', { name: '5' });
+  await userEvent.click(day5.querySelector('button')!);
 
-    expect(onChange).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        createdFrom: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
-        createdTo: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
-      }),
-    );
-  });
+  expect(onChange).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      createdFrom: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+      createdTo: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+    }),
+  );
+});
 ```
 
 Add new tests for the reset button:
 
 ```tsx
-  it('disables Reset filters when no filters are active', () => {
-    renderBar();
-    expect(screen.getByRole('button', { name: /Reset filters/ })).toBeDisabled();
+it('disables Reset filters when no filters are active', () => {
+  renderBar();
+  expect(screen.getByRole('button', { name: /Reset filters/ })).toBeDisabled();
+});
+
+it('enables Reset filters once a filter is set, and clears everything on click', async () => {
+  const onChange = vi.fn();
+  vi.mocked(agentApi.fetchTags).mockResolvedValue([]);
+  vi.mocked(agentApi.fetchIntents).mockResolvedValue({ intents: [] });
+  vi.mocked(agentApi.fetchWorkspaceAgents).mockResolvedValue({ agents: [] });
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={queryClient}>
+      <TicketsFilterBar
+        token="t"
+        filters={{ ...EMPTY_FILTERS, priority: ['p1'] }}
+        onChange={onChange}
+      />
+    </QueryClientProvider>,
+  );
+
+  const resetButton = screen.getByRole('button', { name: /Reset filters/ });
+  expect(resetButton).not.toBeDisabled();
+  await userEvent.click(resetButton);
+
+  expect(onChange).toHaveBeenCalledWith({
+    q: '',
+    priority: [],
+    labelIds: [],
+    subintentIds: [],
+    assigneeIds: [],
+    olderThanHours: '',
+    statuses: [],
+    createdFrom: '',
+    createdTo: '',
   });
-
-  it('enables Reset filters once a filter is set, and clears everything on click', async () => {
-    const onChange = vi.fn();
-    vi.mocked(agentApi.fetchTags).mockResolvedValue([]);
-    vi.mocked(agentApi.fetchIntents).mockResolvedValue({ intents: [] });
-    vi.mocked(agentApi.fetchWorkspaceAgents).mockResolvedValue({ agents: [] });
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    render(
-      <QueryClientProvider client={queryClient}>
-        <TicketsFilterBar
-          token="t"
-          filters={{ ...EMPTY_FILTERS, priority: ['p1'] }}
-          onChange={onChange}
-        />
-      </QueryClientProvider>,
-    );
-
-    const resetButton = screen.getByRole('button', { name: /Reset filters/ });
-    expect(resetButton).not.toBeDisabled();
-    await userEvent.click(resetButton);
-
-    expect(onChange).toHaveBeenCalledWith({
-      q: '',
-      priority: [],
-      labelIds: [],
-      subintentIds: [],
-      assigneeIds: [],
-      olderThanHours: '',
-      statuses: [],
-      createdFrom: '',
-      createdTo: '',
-    });
-  });
+});
 ```
 
 This second test renders directly instead of through `renderBar()` because it needs non-default `filters` — `renderBar()` hardcodes `EMPTY_FILTERS`. `QueryClient`/`QueryClientProvider` and `render` are already imported at the top of the file (lines 2, 4), so no new imports are needed beyond what's already there.
@@ -1066,53 +1092,53 @@ import { DateRangeFilter } from './DateRangeFilter.tsx';
 Replace the two `<label>...<Input type="date" .../></label>` blocks (lines 129-167) with:
 
 ```tsx
-      <DateRangeFilter
-        from={filters.createdFrom}
-        to={filters.createdTo}
-        onChange={(next) => onChange(next)}
-      />
+<DateRangeFilter
+  from={filters.createdFrom}
+  to={filters.createdTo}
+  onChange={(next) => onChange(next)}
+/>
 ```
 
 Add the reset button after it:
 
 ```tsx
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        disabled={!hasActiveFilters}
-        onClick={() => {
-          setSearchInput('');
-          onChange({
-            q: '',
-            priority: [],
-            labelIds: [],
-            subintentIds: [],
-            assigneeIds: [],
-            olderThanHours: '',
-            statuses: [],
-            createdFrom: '',
-            createdTo: '',
-          });
-        }}
-      >
-        Reset filters
-      </Button>
+<Button
+  type="button"
+  variant="ghost"
+  size="sm"
+  disabled={!hasActiveFilters}
+  onClick={() => {
+    setSearchInput('');
+    onChange({
+      q: '',
+      priority: [],
+      labelIds: [],
+      subintentIds: [],
+      assigneeIds: [],
+      olderThanHours: '',
+      statuses: [],
+      createdFrom: '',
+      createdTo: '',
+    });
+  }}
+>
+  Reset filters
+</Button>
 ```
 
 Add the `Button` import (`import { Button } from '../../components/ui/button.tsx';`) and compute `hasActiveFilters` right before the `return` statement:
 
 ```ts
-  const hasActiveFilters =
-    filters.q !== '' ||
-    filters.priority.length > 0 ||
-    filters.labelIds.length > 0 ||
-    filters.subintentIds.length > 0 ||
-    filters.assigneeIds.length > 0 ||
-    filters.olderThanHours !== '' ||
-    filters.statuses.length > 0 ||
-    filters.createdFrom !== '' ||
-    filters.createdTo !== '';
+const hasActiveFilters =
+  filters.q !== '' ||
+  filters.priority.length > 0 ||
+  filters.labelIds.length > 0 ||
+  filters.subintentIds.length > 0 ||
+  filters.assigneeIds.length > 0 ||
+  filters.olderThanHours !== '' ||
+  filters.statuses.length > 0 ||
+  filters.createdFrom !== '' ||
+  filters.createdTo !== '';
 ```
 
 - [ ] **Step 4: Run tests to verify they pass**
@@ -1132,10 +1158,12 @@ git commit -m "feat: swap native date inputs for DateRangeFilter, add Reset filt
 ## Task 8: Frontend — Created/Subintent/Ticket# columns in `TicketsListView`
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/agent-console/pages/Tickets/Tickets.tsx` (`TicketsListView`)
 - Modify: `frontend/src/surfaces/agent-console/pages/Tickets/Tickets.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `conversation.created_at`/`.subintent`/`.number` (Task 1).
 - Produces: nothing new consumed elsewhere — table markup only. Task 9 adds sort behavior on top of these same `<th>` cells.
 
@@ -1144,21 +1172,21 @@ git commit -m "feat: swap native date inputs for DateRangeFilter, add Reset filt
 `Tickets.test.tsx` already has a local `row(id, status, assignedAgentId)` helper (used by `'renders a claim action only for unassigned rows in list view'`) that builds an `AgentConversationSummary`-shaped object without `created_at`/`subintent`/`number`. Once Task 1 lands, that helper will fail to typecheck. Update it in place:
 
 ```ts
-    const row = (id: string, status: 'open' | 'escalated', assignedAgentId: string | null) => ({
-      id,
-      player: { external_player_id: id },
-      status,
-      confirm_phase: 'none' as const,
-      last_message_preview: null,
-      last_message_at: null,
-      assigned_agent_id: assignedAgentId,
-      assigned_agent_name: assignedAgentId ? 'Agent One' : null,
-      priority: 'p3' as const,
-      tags: [],
-      created_at: '2026-08-01T00:00:00.000Z',
-      subintent: null,
-      number: 1,
-    });
+const row = (id: string, status: 'open' | 'escalated', assignedAgentId: string | null) => ({
+  id,
+  player: { external_player_id: id },
+  status,
+  confirm_phase: 'none' as const,
+  last_message_preview: null,
+  last_message_at: null,
+  assigned_agent_id: assignedAgentId,
+  assigned_agent_name: assignedAgentId ? 'Agent One' : null,
+  priority: 'p3' as const,
+  tags: [],
+  created_at: '2026-08-01T00:00:00.000Z',
+  subintent: null,
+  number: 1,
+});
 ```
 
 Then add a new test using the file's existing `renderTickets(path)` helper (defined at the top of the file, takes an optional path and defaults to `/tickets`):
@@ -1247,11 +1275,13 @@ git commit -m "feat: add Created, Subintent, and Ticket # columns to Tickets lis
 ## Task 9: Frontend — sortable column headers in `TicketsListView`
 
 **Files:**
+
 - Create: `frontend/src/surfaces/agent-console/pages/Tickets/SortableHeader.tsx`
 - Modify: `frontend/src/surfaces/agent-console/pages/Tickets/Tickets.tsx` (`TicketsListView`, `toQueryFilters`)
 - Test: `frontend/src/surfaces/agent-console/pages/Tickets/SortableHeader.test.tsx`, `Tickets.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `TicketsFilters.sortBy`/`.sortDir`/`.sortBy2`/`.sortDir2` (Task 4), `useTicketsFilters`'s `update` function.
 - Produces: nothing consumed by later tasks — this is the final piece.
 
@@ -1271,7 +1301,17 @@ describe('SortableHeader', () => {
       <table>
         <thead>
           <tr>
-            <SortableHeader label="Player" sortKey="player" sort={{ primary: 'priority', primaryDir: 'asc', secondary: 'created', secondaryDir: 'asc' }} onSort={vi.fn()} />
+            <SortableHeader
+              label="Player"
+              sortKey="player"
+              sort={{
+                primary: 'priority',
+                primaryDir: 'asc',
+                secondary: 'created',
+                secondaryDir: 'asc',
+              }}
+              onSort={vi.fn()}
+            />
           </tr>
         </thead>
       </table>,
@@ -1284,7 +1324,17 @@ describe('SortableHeader', () => {
       <table>
         <thead>
           <tr>
-            <SortableHeader label="Priority" sortKey="priority" sort={{ primary: 'priority', primaryDir: 'asc', secondary: 'created', secondaryDir: 'asc' }} onSort={vi.fn()} />
+            <SortableHeader
+              label="Priority"
+              sortKey="priority"
+              sort={{
+                primary: 'priority',
+                primaryDir: 'asc',
+                secondary: 'created',
+                secondaryDir: 'asc',
+              }}
+              onSort={vi.fn()}
+            />
           </tr>
         </thead>
       </table>,
@@ -1298,7 +1348,17 @@ describe('SortableHeader', () => {
       <table>
         <thead>
           <tr>
-            <SortableHeader label="Assignee" sortKey="assignee" sort={{ primary: 'priority', primaryDir: 'asc', secondary: 'created', secondaryDir: 'asc' }} onSort={onSort} />
+            <SortableHeader
+              label="Assignee"
+              sortKey="assignee"
+              sort={{
+                primary: 'priority',
+                primaryDir: 'asc',
+                secondary: 'created',
+                secondaryDir: 'asc',
+              }}
+              onSort={onSort}
+            />
           </tr>
         </thead>
       </table>,
@@ -1318,7 +1378,17 @@ describe('SortableHeader', () => {
       <table>
         <thead>
           <tr>
-            <SortableHeader label="Priority" sortKey="priority" sort={{ primary: 'priority', primaryDir: 'asc', secondary: 'created', secondaryDir: 'asc' }} onSort={onSort} />
+            <SortableHeader
+              label="Priority"
+              sortKey="priority"
+              sort={{
+                primary: 'priority',
+                primaryDir: 'asc',
+                secondary: 'created',
+                secondaryDir: 'asc',
+              }}
+              onSort={onSort}
+            />
           </tr>
         </thead>
       </table>,
@@ -1338,7 +1408,17 @@ describe('SortableHeader', () => {
       <table>
         <thead>
           <tr>
-            <SortableHeader label="Created" sortKey="created" sort={{ primary: 'priority', primaryDir: 'asc', secondary: 'created', secondaryDir: 'asc' }} onSort={onSort} />
+            <SortableHeader
+              label="Created"
+              sortKey="created"
+              sort={{
+                primary: 'priority',
+                primaryDir: 'asc',
+                secondary: 'created',
+                secondaryDir: 'asc',
+              }}
+              onSort={onSort}
+            />
           </tr>
         </thead>
       </table>,
@@ -1402,7 +1482,12 @@ export function SortableHeader({
     }
     // Not active: promote to primary, demote the old primary to secondary,
     // drop the old secondary — the 2-key cap.
-    onSort({ primary: sortKey, primaryDir: 'asc', secondary: sort.primary, secondaryDir: sort.primaryDir });
+    onSort({
+      primary: sortKey,
+      primaryDir: 'asc',
+      secondary: sort.primary,
+      secondaryDir: sort.primaryDir,
+    });
   }
 
   return (
@@ -1457,7 +1542,12 @@ it('clicking a column header re-fetches with the new sort params', async () => {
     expect(agentApi.fetchInbox).toHaveBeenCalledWith(
       expect.anything(),
       'all',
-      expect.objectContaining({ sortBy: 'assignee', sortDir: 'asc', sortBy2: 'priority', sortDir2: 'asc' }),
+      expect.objectContaining({
+        sortBy: 'assignee',
+        sortDir: 'asc',
+        sortBy2: 'priority',
+        sortDir2: 'asc',
+      }),
       undefined,
     ),
   );
@@ -1516,42 +1606,42 @@ Import `SortableHeader`/`SortState`: `import { SortableHeader, type SortState } 
 Replace every plain `<th>` in the `<thead>` (Player, Status, Priority, Assignee, Last message, Tags, and the three new ones from Task 8) with `<SortableHeader>`:
 
 ```tsx
-            <tr className="border-b border-slate-200 text-left text-xs font-semibold tracking-wide text-muted uppercase">
-              <SortableHeader label="Player" sortKey="player" sort={sort} onSort={onSort} />
-              <SortableHeader label="Status" sortKey="status" sort={sort} onSort={onSort} />
-              <SortableHeader label="Priority" sortKey="priority" sort={sort} onSort={onSort} />
-              <SortableHeader label="Assignee" sortKey="assignee" sort={sort} onSort={onSort} />
-              <SortableHeader label="Last message" sortKey="lastMessage" sort={sort} onSort={onSort} />
-              <SortableHeader label="Tags" sortKey="tags" sort={sort} onSort={onSort} />
-              <SortableHeader label="Created" sortKey="created" sort={sort} onSort={onSort} />
-              <SortableHeader label="Subintent" sortKey="subintent" sort={sort} onSort={onSort} />
-              <SortableHeader label="Ticket #" sortKey="number" sort={sort} onSort={onSort} />
-              <th className="px-4 py-2.5" />
-            </tr>
+<tr className="border-b border-slate-200 text-left text-xs font-semibold tracking-wide text-muted uppercase">
+  <SortableHeader label="Player" sortKey="player" sort={sort} onSort={onSort} />
+  <SortableHeader label="Status" sortKey="status" sort={sort} onSort={onSort} />
+  <SortableHeader label="Priority" sortKey="priority" sort={sort} onSort={onSort} />
+  <SortableHeader label="Assignee" sortKey="assignee" sort={sort} onSort={onSort} />
+  <SortableHeader label="Last message" sortKey="lastMessage" sort={sort} onSort={onSort} />
+  <SortableHeader label="Tags" sortKey="tags" sort={sort} onSort={onSort} />
+  <SortableHeader label="Created" sortKey="created" sort={sort} onSort={onSort} />
+  <SortableHeader label="Subintent" sortKey="subintent" sort={sort} onSort={onSort} />
+  <SortableHeader label="Ticket #" sortKey="number" sort={sort} onSort={onSort} />
+  <th className="px-4 py-2.5" />
+</tr>
 ```
 
 In `Tickets()`, where `<TicketsListView .../>` is rendered (list-view branch near the end of the component), pass the sort props through from `filters`/`updateFilters`:
 
 ```tsx
-        <TicketsListView
-          token={session.token}
-          queryFilters={queryFilters}
-          sort={{
-            primary: filters.sortBy,
-            primaryDir: filters.sortDir,
-            secondary: filters.sortBy2,
-            secondaryDir: filters.sortDir2,
-          }}
-          onSort={(next) =>
-            updateFilters({
-              sortBy: next.primary,
-              sortDir: next.primaryDir,
-              sortBy2: next.secondary,
-              sortDir2: next.secondaryDir,
-            })
-          }
-          onSelect={(id) => navigate(`/tickets/${id}`)}
-        />
+<TicketsListView
+  token={session.token}
+  queryFilters={queryFilters}
+  sort={{
+    primary: filters.sortBy,
+    primaryDir: filters.sortDir,
+    secondary: filters.sortBy2,
+    secondaryDir: filters.sortDir2,
+  }}
+  onSort={(next) =>
+    updateFilters({
+      sortBy: next.primary,
+      sortDir: next.primaryDir,
+      sortBy2: next.secondary,
+      sortDir2: next.secondaryDir,
+    })
+  }
+  onSelect={(id) => navigate(`/tickets/${id}`)}
+/>
 ```
 
 - [ ] **Step 8: Run tests to verify they pass**
@@ -1590,6 +1680,7 @@ Expected: PASS across `@support/api`, `@support/web`, and `@support/types`.
 - [ ] **Step 3: Manual smoke test**
 
 Run: `pnpm dev`, open the agent console, navigate to Tickets → List view:
+
 - Confirm the date-range picker opens a calendar popover, selecting a range filters the list and updates the URL.
 - Confirm "Reset filters" is disabled at rest, enables once any filter is set, and clears everything except the board/list toggle when clicked.
 - Confirm Created/Subintent/Ticket # columns render real data.

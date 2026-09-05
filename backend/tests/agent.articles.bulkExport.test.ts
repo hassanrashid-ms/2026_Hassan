@@ -71,7 +71,11 @@ describe('bulkExportArticles', () => {
     const workspaceId = await seedWorkspace();
     const { agentId } = await seedAgent(workspaceId);
     const ctx = { agentId, workspaceId, isAdmin: false };
-    const a = await createArticle(ctx, { title: 'Refund Policy', body: 'Body A.', keywords: ['refund'] });
+    const a = await createArticle(ctx, {
+      title: 'Refund Policy',
+      body: 'Body A.',
+      keywords: ['refund'],
+    });
     const b = await createArticle(ctx, { title: 'Getting Started', body: 'Body B.', keywords: [] });
     if (!a.ok || !b.ok) throw new Error('seed failed');
 
@@ -128,10 +132,9 @@ describe('bulkExportArticles', () => {
   it('rejects when none of the given ids resolve to a row in this workspace', async () => {
     const workspaceId = await seedWorkspace();
     const { agentId } = await seedAgent(workspaceId);
-    const result = await bulkExportArticles(
-      { agentId, workspaceId, isAdmin: false },
-      ['00000000-0000-0000-0000-000000000000'],
-    );
+    const result = await bulkExportArticles({ agentId, workspaceId, isAdmin: false }, [
+      '00000000-0000-0000-0000-000000000000',
+    ]);
     expect(result).toEqual({ ok: false, reason: 'not_found' });
   });
 });

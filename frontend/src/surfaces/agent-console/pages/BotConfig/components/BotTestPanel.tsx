@@ -281,8 +281,8 @@ export function BotTestPanel({ token }: { token: string }) {
           </Select>
         </div>
         <p className="text-[11px] leading-snug text-muted">
-          Read-only — reflects the simulated conversation's state as the bot classifies and
-          replies, same as a real conversation's columns. Not settable by hand.
+          Read-only — reflects the simulated conversation's state as the bot classifies and replies,
+          same as a real conversation's columns. Not settable by hand.
         </p>
         {(subintentId || confirmPhase !== 'none') && (
           <div className="flex flex-wrap gap-1.5">
@@ -319,7 +319,12 @@ export function BotTestPanel({ token }: { token: string }) {
             Answered deterministically, same as a real tap — not sent to the model.
           </p>
           <div className="mt-3 flex items-center gap-2">
-            <Button type="button" size="sm" disabled={sending} onClick={() => void answerResolution(true)}>
+            <Button
+              type="button"
+              size="sm"
+              disabled={sending}
+              onClick={() => void answerResolution(true)}
+            >
               Yes
             </Button>
             <Button

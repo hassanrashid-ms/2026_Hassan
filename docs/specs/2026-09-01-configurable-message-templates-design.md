@@ -49,6 +49,7 @@ message_template
 ```
 
 Rules:
+
 - `no_agents_online`, `form_summary_completed`, `form_summary_partial`, `form_summary_skipped` each have exactly one active row per workspace.
 - `handoff` has N active rows per workspace (today: 5); the system picks one at random per send, same as `pickHandoffMessage()` today.
 - `canned` rows have no `key`; `label` + `body` are both required.
@@ -81,6 +82,7 @@ New module `backend/src/domain/templates/templateService.ts`:
 All read helpers go through `getTemplates()` (which hits the Redis cache-aside path above) rather than querying Postgres directly.
 
 Call sites that change:
+
 - `backend/src/domain/bot/applyBotTurn.ts` — `pickHandoffMessage()` / `NO_AGENTS_ONLINE_MESSAGE` become `await getHandoffMessage(workspaceId)` / `await getSystemMessage(workspaceId, 'no_agents_online')`.
 - `backend/src/domain/forms/completeFormAndHandoff.ts` — same pattern for form summary messages.
 - `backend/src/domain/bot/messages.ts` and `backend/src/domain/forms/messages.ts` are deleted once callers are migrated (their content lives on as seeded rows).
@@ -89,11 +91,11 @@ Call sites that change:
 
 New router `backend/src/routes/templates.ts`, registered in `backend/src/docs/openapi.ts` per repo rule:
 
-| Route | Method | Access |
-|---|---|---|
-| `/agent/templates` | GET | team_lead + admin (same gate as Bot Config / Workspace Settings) |
-| `/agent/templates` | POST | admin only |
-| `/agent/templates/:id` | PATCH | admin only (edit body/label/sort_order, or set `is_active: false`) |
+| Route                  | Method | Access                                                             |
+| ---------------------- | ------ | ------------------------------------------------------------------ |
+| `/agent/templates`     | GET    | team_lead + admin (same gate as Bot Config / Workspace Settings)   |
+| `/agent/templates`     | POST   | admin only                                                         |
+| `/agent/templates/:id` | PATCH  | admin only (edit body/label/sort_order, or set `is_active: false`) |
 
 No DELETE route — deactivation is a PATCH, consistent with the no-hard-deletes rule.
 

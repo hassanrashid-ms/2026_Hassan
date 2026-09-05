@@ -2,7 +2,13 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { req as request } from './helpers/http.ts';
 import { app, mintToken } from './helpers/app.ts';
 import { closeDb } from '../src/shared/db/client.ts';
-import { closeOwnerPool, seedPlayer, seedSession, seedWorkspace, truncateAll } from './helpers/db.ts';
+import {
+  closeOwnerPool,
+  seedPlayer,
+  seedSession,
+  seedWorkspace,
+  truncateAll,
+} from './helpers/db.ts';
 import { closeRateLimitRedis } from '../src/shared/rateLimit/rateLimitRedis.ts';
 
 afterAll(async () => {
@@ -28,9 +34,7 @@ describe('reads-tier baseline rate limiting', () => {
       player_id: playerId,
       external_player_id: 'p1',
     });
-    const res = await request(app)
-      .get('/surface/messages')
-      .set('Authorization', `Bearer ${token}`);
+    const res = await request(app).get('/surface/messages').set('Authorization', `Bearer ${token}`);
     expect(res.headers['ratelimit']).toMatch(/^limit=240,/);
   });
 });

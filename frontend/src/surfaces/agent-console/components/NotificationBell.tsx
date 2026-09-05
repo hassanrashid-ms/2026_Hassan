@@ -1,7 +1,11 @@
 import { Bell } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { NotificationsResponse, NotificationView, TicketAssignedPayload } from '@support/types';
+import type {
+  NotificationsResponse,
+  NotificationView,
+  TicketAssignedPayload,
+} from '@support/types';
 import {
   DropdownMenu,
   DropdownMenuContent,

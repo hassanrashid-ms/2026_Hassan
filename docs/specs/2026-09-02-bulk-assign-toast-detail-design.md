@@ -16,7 +16,7 @@ some tickets remain stuck versus the queue simply being empty already.
 
 ## Goal
 
-Surface *why* the sweep stopped short of clearing the queue, and how many
+Surface _why_ the sweep stopped short of clearing the queue, and how many
 tickets are still unassigned, so a Team Lead/Admin knows whether to wait, add
 capacity, or bring an agent online.
 
@@ -116,11 +116,11 @@ onSuccess: (result) => {
 
 where `reasonText` maps:
 
-| `stopReason` | text |
-|---|---|
+| `stopReason`       | text                                       |
+| ------------------ | ------------------------------------------ |
 | `no_active_agents` | "no agents are assigned to this workspace" |
-| `all_at_capacity` | "all agents are at capacity" |
-| `none_online` | "no agents are online" |
+| `all_at_capacity`  | "all agents are at capacity"               |
+| `none_online`      | "no agents are online"                     |
 
 (`queue_empty` never reaches `reasonText` — it's handled by the first branch.)
 

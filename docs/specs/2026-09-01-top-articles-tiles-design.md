@@ -30,8 +30,8 @@ there's nothing in range.
 
 ```ts
 articles: {
-  topCited: Array<{ articleId: string; title: string; count: number }>
-  topRead: Array<{ articleId: string; title: string; count: number }>
+  topCited: Array<{ articleId: string; title: string; count: number }>;
+  topRead: Array<{ articleId: string; title: string; count: number }>;
 }
 ```
 

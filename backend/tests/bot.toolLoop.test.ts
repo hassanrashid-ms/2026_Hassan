@@ -654,7 +654,7 @@ describe('player_declared_resolved', () => {
    * than a prompt request. The rejected call costs one loop iteration; the
    * model is told why and given the chance to answer normally instead.
    */
-  it('rejects a quoted_text not actually present in the player\'s latest message, and continues the turn', async () => {
+  it("rejects a quoted_text not actually present in the player's latest message, and continues the turn", async () => {
     const { workspaceId, conversationId } = await fixture();
     mockCallModel
       .mockResolvedValueOnce({

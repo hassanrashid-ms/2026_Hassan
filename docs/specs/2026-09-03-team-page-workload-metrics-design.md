@@ -27,7 +27,7 @@ Given that reach, this pass removes only the UI surface:
 - Remove the `handleConfirmLeave` handler and related dialog state.
 - Leave `PresenceDot`'s `on_leave` color and the `DisplayStatus` type as-is — an agent's status can
   still be `on_leave` in the DB (set previously, or via direct API/job), and the dot should still
-  render it correctly. Only the *action* to set/clear it from this page is removed.
+  render it correctly. Only the _action_ to set/clear it from this page is removed.
 - Backend route, service, job, DB columns/enum: untouched. This keeps the change small and
   reversible; a full teardown (dropping the column/enum/job) is a separate, larger change if ever
   needed.
@@ -45,7 +45,7 @@ Final column order: **Agent** (avatar + name + role badge) → **Status** (prese
 - **Escalated** — count of the agent's open conversations with `status = 'escalated'`. Same
   grouped-by-`assignedAgentId` shape as the existing open-count query, just filtered further.
 - **Overdue** — count of the agent's open conversations where the **player's** last message has
-  gone unanswered for **more than 4 hours**. This is deliberately *not* based on
+  gone unanswered for **more than 4 hours**. This is deliberately _not_ based on
   `resolutionCycle.inactivityDueAt` — that clock resets on a message from either side and is a
   general silence timer, not an agent-responsiveness signal. Overdue here means: latest message on
   the conversation is from the player, and it's older than 4 hours, and the conversation is still

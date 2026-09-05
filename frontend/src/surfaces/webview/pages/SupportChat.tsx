@@ -224,11 +224,7 @@ export function SupportChat() {
    * own reopen path (messagesService.ts REOPENABLE_STATUSES) would silently
    * revive the old, already-closed conversation instead of starting a new one.
    */
-  const onComposerSend = (
-    body: string,
-    attachment?: UploadedAttachment,
-    formFieldKey?: string,
-  ) => {
+  const onComposerSend = (body: string, attachment?: UploadedAttachment, formFieldKey?: string) => {
     if (closed) {
       newTicket.mutate(undefined, {
         onSuccess: () => send.mutate({ body, attachment, formFieldKey }),

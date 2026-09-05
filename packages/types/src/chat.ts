@@ -205,12 +205,7 @@ export type MessageReadEvent = {
  * means, which is why the webview never branches on it.
  */
 export type ConfirmPhaseValue =
-  | 'none'
-  | 'bot_article'
-  | 'agent_ask'
-  | 'form'
-  | 'inactivity_ask'
-  | 'player_stated';
+  'none' | 'bot_article' | 'agent_ask' | 'form' | 'inactivity_ask' | 'player_stated';
 
 /**
  * The banner's Yes/No. No conversation id: the thread is resolved from the

@@ -51,12 +51,12 @@ other tenants or degrading the API for everyone.
 
 ## Route tiers and limits
 
-| Tier | Routes | Identity limit | IP limit |
-|---|---|---|---|
-| Auth / token issuance | agent OAuth login, `/sdk/auth/player-token` | — (no identity yet) | 60/min |
-| Message / ticket / form writes | chat message posting, ticket/form submission | 30/min | 200/min |
-| Session start / uploads | `/sdk/sessions/start`, attachment uploads | 10/min | 100/min |
-| General reads | conversation/article browsing, admin panel, agent console | 240/min | 300/min |
+| Tier                           | Routes                                                    | Identity limit      | IP limit |
+| ------------------------------ | --------------------------------------------------------- | ------------------- | -------- |
+| Auth / token issuance          | agent OAuth login, `/sdk/auth/player-token`               | — (no identity yet) | 60/min   |
+| Message / ticket / form writes | chat message posting, ticket/form submission              | 30/min              | 200/min  |
+| Session start / uploads        | `/sdk/sessions/start`, attachment uploads                 | 10/min              | 100/min  |
+| General reads                  | conversation/article browsing, admin panel, agent console | 240/min             | 300/min  |
 
 Numbers are sized against real usage, not arbitrary round numbers: a human can't sustain much
 faster than ~1 message per 2 seconds even typing fast (30/min), session start and uploads are

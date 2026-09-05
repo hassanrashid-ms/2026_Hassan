@@ -21,9 +21,11 @@
 ### Task 1: Extend `BotTestTurnDecision`'s handoff variant with a resolved form
 
 **Files:**
+
 - Modify: `packages/types/src/bot.ts:150`
 
 **Interfaces:**
+
 - Produces: `BotTestTurnDecision`'s `handoff` case gains `form: { form_id: string; form_name: string; version: number; fields: FormField[] } | null`.
 
 - [ ] **Step 1: Add the `FormField` import and extend the type**
@@ -68,10 +70,12 @@ git commit -m "Add resolved form to BotTestTurnDecision's handoff variant"
 ### Task 2: Resolve the subintent's form in `runTestBotTurn`, without persisting anything
 
 **Files:**
+
 - Modify: `backend/src/domain/bot/botTestTurn.ts`
 - Test: `backend/tests/botTestTurn.test.ts`
 
 **Interfaces:**
+
 - Consumes: `resolveSubintentForm(tx: Tx, subintentId: string): Promise<ResolvedForm | null>` from `backend/src/domain/forms/resolveSubintentForm.ts` (`ResolvedForm = { formId: string; formName: string; version: number; fields: FormField[] }`); `withWorkspace(workspaceId: string, fn: (tx: Tx) => Promise<T>): Promise<T>` from `backend/src/shared/db/withWorkspace.ts`.
 - Produces: `runTestBotTurn`'s `handoff` decisions now carry `form`.
 
@@ -96,7 +100,14 @@ it('resolves and attaches a published form when the handoff subintent has one', 
     formId,
     version: 1,
     fields: [
-      { key: 'store', label: 'Store', type: 'choice', isRequired: true, position: 0, options: ['A', 'B'] },
+      {
+        key: 'store',
+        label: 'Store',
+        type: 'choice',
+        isRequired: true,
+        position: 0,
+        options: ['A', 'B'],
+      },
     ],
     publishedAt: new Date(),
   });
@@ -149,7 +160,14 @@ it('never attaches a form when the handoff reason is asked_for_person, even with
     formId,
     version: 1,
     fields: [
-      { key: 'store', label: 'Store', type: 'choice', isRequired: true, position: 0, options: ['A', 'B'] },
+      {
+        key: 'store',
+        label: 'Store',
+        type: 'choice',
+        isRequired: true,
+        position: 0,
+        options: ['A', 'B'],
+      },
     ],
     publishedAt: new Date(),
   });
@@ -276,6 +294,7 @@ git commit -m "Resolve subintent form on test-chat handoff decisions"
 ### Task 3: Relocate `FormLivePreview` and `MobilePreviewFrame` to the surface's shared components
 
 **Files:**
+
 - Move: `frontend/src/surfaces/agent-console/pages/Forms/components/FormLivePreview.tsx` → `frontend/src/surfaces/agent-console/components/FormLivePreview.tsx`
 - Move: `frontend/src/surfaces/agent-console/pages/Forms/components/FormLivePreview.test.tsx` → `frontend/src/surfaces/agent-console/components/FormLivePreview.test.tsx`
 - Move: `frontend/src/surfaces/agent-console/pages/Forms/components/MobilePreviewFrame.tsx` → `frontend/src/surfaces/agent-console/components/MobilePreviewFrame.tsx`
@@ -283,6 +302,7 @@ git commit -m "Resolve subintent form on test-chat handoff decisions"
 - Modify: `frontend/src/surfaces/agent-console/pages/Forms/components/FormEditorSheet.tsx:43`
 
 **Interfaces:**
+
 - Produces: `FormLivePreview` and `MobilePreviewFrame` importable from `frontend/src/surfaces/agent-console/components/FormLivePreview.tsx` / `MobilePreviewFrame.tsx`. No change to either component's props or behavior.
 
 - [ ] **Step 1: Move the four files**
@@ -332,10 +352,12 @@ git commit -m "Relocate FormLivePreview and MobilePreviewFrame to agent-console/
 ### Task 4: Render the resolved form in the test chat
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/agent-console/pages/BotConfig/components/BotTestPanel.tsx`
 - Test: `frontend/src/surfaces/agent-console/pages/BotConfig/components/BotTestPanel.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `FormLivePreview({ formName: string; fields: FormField[] })` from `frontend/src/surfaces/agent-console/components/FormLivePreview.tsx` (Task 3); `BotTestTurnDecision`'s `handoff.form: { form_id, form_name, version, fields } | null` (Task 1/2).
 
 - [ ] **Step 1: Write the failing tests**
@@ -354,7 +376,14 @@ it('renders the resolved form when a handoff decision carries one', async () => 
         form_name: 'Purchase receipt',
         version: 1,
         fields: [
-          { key: 'store', label: 'Store', type: 'choice', isRequired: true, position: 0, options: ['A', 'B'] },
+          {
+            key: 'store',
+            label: 'Store',
+            type: 'choice',
+            isRequired: true,
+            position: 0,
+            options: ['A', 'B'],
+          },
         ],
       },
     },
@@ -394,7 +423,14 @@ it('clears the form panel on reset', async () => {
         form_name: 'Purchase receipt',
         version: 1,
         fields: [
-          { key: 'store', label: 'Store', type: 'choice', isRequired: true, position: 0, options: ['A', 'B'] },
+          {
+            key: 'store',
+            label: 'Store',
+            type: 'choice',
+            isRequired: true,
+            position: 0,
+            options: ['A', 'B'],
+          },
         ],
       },
     },
@@ -459,7 +495,10 @@ function nextConfirmPhase(
 Add state, alongside the existing `useState` calls in `BotTestPanel`:
 
 ```ts
-const [activeTestForm, setActiveTestForm] = useState<{ formName: string; fields: FormField[] } | null>(null);
+const [activeTestForm, setActiveTestForm] = useState<{
+  formName: string;
+  fields: FormField[];
+} | null>(null);
 ```
 
 In `reset`, clear it too:
@@ -486,23 +525,25 @@ setActiveTestForm(
 In the JSX, render the form between the message list `div` and `<Composer>`:
 
 ```tsx
-      <div className="min-h-0 flex-1">
-        <ChatThread messages={messages} currentAuthorType="agent" isTyping={sending} />
-        {messages.map(
-          (m) =>
-            m.toolActivity && (
-              <div key={`activity-${m.id}`} className="px-3">
-                {m.toolActivity}
-              </div>
-            ),
-        )}
-      </div>
-      {activeTestForm && (
-        <div className="border-t border-slate-200 p-4">
-          <FormLivePreview formName={activeTestForm.formName} fields={activeTestForm.fields} />
+<div className="min-h-0 flex-1">
+  <ChatThread messages={messages} currentAuthorType="agent" isTyping={sending} />
+  {messages.map(
+    (m) =>
+      m.toolActivity && (
+        <div key={`activity-${m.id}`} className="px-3">
+          {m.toolActivity}
         </div>
-      )}
-      <Composer onSend={(body) => void send(body)} disabled={sending || !draft} />
+      ),
+  )}
+</div>;
+{
+  activeTestForm && (
+    <div className="border-t border-slate-200 p-4">
+      <FormLivePreview formName={activeTestForm.formName} fields={activeTestForm.fields} />
+    </div>
+  );
+}
+<Composer onSend={(body) => void send(body)} disabled={sending || !draft} />;
 ```
 
 - [ ] **Step 4: Run the tests to verify they pass**
@@ -531,6 +572,7 @@ After all four tasks are committed, run the full suite once and confirm against 
 Run: `pnpm typecheck && pnpm test`
 
 Checklist against `docs/specs/2026-09-02-bot-config-test-chat-forms-design.md`:
+
 - [ ] A handoff to a subintent with a published form shows an interactive `FormCard` in the test chat, styled via `MobilePreviewFrame` — Task 4.
 - [ ] No `formSubmission` row is written and no real `conversation` row's `confirmPhase` is touched for a test turn — Task 2 never opens a mutating transaction; `withWorkspace` here only reads.
 - [ ] A handoff with `reason: 'asked_for_person'` never resolves or attaches a form — Task 2's guard, tested.

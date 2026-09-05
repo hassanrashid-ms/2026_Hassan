@@ -40,7 +40,7 @@ created (the agent needs to see the photo, same as today); only the
 
 - **Upload** happens the moment a file is picked (unchanged: instant local
   preview, real progress overlay). It returns `UploadedAttachment` (`{ key,
-  filename, mimeType, byteSize }` — the type `Composer.tsx` already exports
+filename, mimeType, byteSize }` — the type `Composer.tsx` already exports
   and `SupportChat.tsx` already imports) but does **not** post a message or
   advance the form.
 - **Send** happens only when the player taps Next/Submit, exactly like every
@@ -91,7 +91,7 @@ player-side webview can skip rendering them.
   `body.form_field_key` names a real, live, pending attachment field before
   writing the `formAnswer` row. Add one more statement in that same block,
   same transaction: `UPDATE message SET form_field_key = field.key WHERE id
-  = posted.id`. Deliberately a follow-up update rather than passing it into
+= posted.id`. Deliberately a follow-up update rather than passing it into
   `postMessage` at insert time — `postMessage` is the one shared choke point
   every message send (agent, bot, system, player) funnels through, and the
   field/submission validation this depends on only exists in the player
@@ -127,6 +127,7 @@ player-side webview can skip rendering them.
 ## Files touched
 
 **Backend:**
+
 1. `backend/src/shared/db/schema/conversations.ts` — add nullable
    `form_field_key` column to `message`; generate the migration
    (`pnpm db:generate`).
@@ -135,19 +136,17 @@ player-side webview can skip rendering them.
 3. `backend/src/domain/conversations/serializers.ts` — `toPlayerView` emits
    `form_field_key`.
 4. `packages/types/src/chat.ts` — `PlayerMessageView` gains `form_field_key:
-   string | null`.
+string | null`.
 5. `backend/src/surface/services/messagesService.ts` — select
    `message.formFieldKey` in `getPlayerMessages`'s query; add the
    `UPDATE message SET form_field_key = ...` statement in `sendPlayerMessage`.
 
-**Frontend:**
-6. `frontend/src/surfaces/webview/components/chat/FormCard.tsx` —
-   `AttachmentField` becomes value/`onChange`-driven with a remove/change
-   affordance; `FormCardProps.onSendAttachment` signature changes to
-   `(fieldKey: string, attachment: UploadedAttachment) => Promise<void>`
-   (drops `onProgress`); `advance()` gains the attachment branch.
-7. `frontend/src/surfaces/webview/pages/SupportChat.tsx` — split the current
-   `onSendAttachment` prop into `onUploadAttachment` (upload only, keeps the
-   `onProgress` threading from the prior task) and `onSendAttachment`
-   (posts the message only, called at confirm time); filter
-   `form_field_key`-tagged messages out of the rendered thread.
+**Frontend:** 6. `frontend/src/surfaces/webview/components/chat/FormCard.tsx` —
+`AttachmentField` becomes value/`onChange`-driven with a remove/change
+affordance; `FormCardProps.onSendAttachment` signature changes to
+`(fieldKey: string, attachment: UploadedAttachment) => Promise<void>`
+(drops `onProgress`); `advance()` gains the attachment branch. 7. `frontend/src/surfaces/webview/pages/SupportChat.tsx` — split the current
+`onSendAttachment` prop into `onUploadAttachment` (upload only, keeps the
+`onProgress` threading from the prior task) and `onSendAttachment`
+(posts the message only, called at confirm time); filter
+`form_field_key`-tagged messages out of the rendered thread.

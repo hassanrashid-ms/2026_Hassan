@@ -173,7 +173,12 @@ export function DeclaredFieldRow({
                   Reactivate
                 </Button>
               )}
-              <Button type="button" size="sm" variant="outline" onClick={() => setConfirmArchive(true)}>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setConfirmArchive(true)}
+              >
                 ×
               </Button>
             </>

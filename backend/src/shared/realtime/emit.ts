@@ -1,5 +1,9 @@
 import type { Server } from 'socket.io';
-import type { ConversationPhaseChangedEvent, MessageReadEvent, NotificationView } from '@support/types';
+import type {
+  ConversationPhaseChangedEvent,
+  MessageReadEvent,
+  NotificationView,
+} from '@support/types';
 import { agentNotificationRoom, agentRoom, inboxRoom, playerRoom } from './rooms.ts';
 
 /**

@@ -63,28 +63,25 @@ async function setupAssignedAgent(workspaceId: string, conversationId: string) {
 }
 
 describe('POST /agent/messages', () => {
-  it.each(['resolved', 'closed'] as const)(
-    '409s when the conversation is %s',
-    async (status) => {
-      const workspaceId = await seedWorkspace();
-      const playerId = await seedPlayer(workspaceId);
-      const conversationId = await seedConversation({ workspaceId, playerId, status });
-      const { token } = await setupAssignedAgent(workspaceId, conversationId);
+  it.each(['resolved', 'closed'] as const)('409s when the conversation is %s', async (status) => {
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId, status });
+    const { token } = await setupAssignedAgent(workspaceId, conversationId);
 
-      await request(app)
-        .post('/messages')
-        .set('Authorization', `Bearer ${token}`)
-        .set('X-Workspace-Id', workspaceId)
-        .send({ conversation_id: conversationId, body: 'still here?' })
-        .expect(409);
+    await request(app)
+      .post('/messages')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ conversation_id: conversationId, body: 'still here?' })
+      .expect(409);
 
-      const { rows } = await ownerPool.query(
-        `select count(*)::int as count from message where conversation_id = $1`,
-        [conversationId],
-      );
-      expect(rows[0].count).toBe(0);
-    },
-  );
+    const { rows } = await ownerPool.query(
+      `select count(*)::int as count from message where conversation_id = $1`,
+      [conversationId],
+    );
+    expect(rows[0].count).toBe(0);
+  });
 
   it('sends a message when the caller is the assigned agent', async () => {
     const workspaceId = await seedWorkspace();

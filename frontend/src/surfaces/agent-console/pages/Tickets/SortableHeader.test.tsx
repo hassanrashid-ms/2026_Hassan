@@ -9,7 +9,17 @@ describe('SortableHeader', () => {
       <table>
         <thead>
           <tr>
-            <SortableHeader label="Player" sortKey="player" sort={{ primary: 'priority', primaryDir: 'asc', secondary: 'created', secondaryDir: 'asc' }} onSort={vi.fn()} />
+            <SortableHeader
+              label="Player"
+              sortKey="player"
+              sort={{
+                primary: 'priority',
+                primaryDir: 'asc',
+                secondary: 'created',
+                secondaryDir: 'asc',
+              }}
+              onSort={vi.fn()}
+            />
           </tr>
         </thead>
       </table>,
@@ -22,7 +32,17 @@ describe('SortableHeader', () => {
       <table>
         <thead>
           <tr>
-            <SortableHeader label="Priority" sortKey="priority" sort={{ primary: 'priority', primaryDir: 'asc', secondary: 'created', secondaryDir: 'asc' }} onSort={vi.fn()} />
+            <SortableHeader
+              label="Priority"
+              sortKey="priority"
+              sort={{
+                primary: 'priority',
+                primaryDir: 'asc',
+                secondary: 'created',
+                secondaryDir: 'asc',
+              }}
+              onSort={vi.fn()}
+            />
           </tr>
         </thead>
       </table>,
@@ -36,7 +56,17 @@ describe('SortableHeader', () => {
       <table>
         <thead>
           <tr>
-            <SortableHeader label="Assignee" sortKey="assignee" sort={{ primary: 'priority', primaryDir: 'asc', secondary: 'created', secondaryDir: 'asc' }} onSort={onSort} />
+            <SortableHeader
+              label="Assignee"
+              sortKey="assignee"
+              sort={{
+                primary: 'priority',
+                primaryDir: 'asc',
+                secondary: 'created',
+                secondaryDir: 'asc',
+              }}
+              onSort={onSort}
+            />
           </tr>
         </thead>
       </table>,
@@ -56,7 +86,17 @@ describe('SortableHeader', () => {
       <table>
         <thead>
           <tr>
-            <SortableHeader label="Priority" sortKey="priority" sort={{ primary: 'priority', primaryDir: 'asc', secondary: 'created', secondaryDir: 'asc' }} onSort={onSort} />
+            <SortableHeader
+              label="Priority"
+              sortKey="priority"
+              sort={{
+                primary: 'priority',
+                primaryDir: 'asc',
+                secondary: 'created',
+                secondaryDir: 'asc',
+              }}
+              onSort={onSort}
+            />
           </tr>
         </thead>
       </table>,
@@ -76,7 +116,17 @@ describe('SortableHeader', () => {
       <table>
         <thead>
           <tr>
-            <SortableHeader label="Created" sortKey="created" sort={{ primary: 'priority', primaryDir: 'asc', secondary: 'created', secondaryDir: 'asc' }} onSort={onSort} />
+            <SortableHeader
+              label="Created"
+              sortKey="created"
+              sort={{
+                primary: 'priority',
+                primaryDir: 'asc',
+                secondary: 'created',
+                secondaryDir: 'asc',
+              }}
+              onSort={onSort}
+            />
           </tr>
         </thead>
       </table>,

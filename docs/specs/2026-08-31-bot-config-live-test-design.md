@@ -4,7 +4,7 @@
 
 Admins editing `BotConfig` (prompt, rules, tools, limits) have no way to see how their
 changes actually change bot behavior short of saving, opening a real conversation, and
-playing a player. That's slow, pollutes real conversation data, and doesn't show *why*
+playing a player. That's slow, pollutes real conversation data, and doesn't show _why_
 the bot answered the way it did (which article it cited, whether grounding passed,
 why it handed off).
 
@@ -72,14 +72,14 @@ currently branch prompt behavior:
 Under each bot reply, a compact strip built directly from the returned
 `BotTurnDecision`, no new computation on the frontend:
 
-| `decision.kind` | Strip shows |
-|---|---|
-| `answer` (with `articleId`) | Cited article title/id, grounding score, ungrounded words if any |
-| `answer` (no article) | "Answered without a citation" |
-| `handoff` | `decision.reason`, rendered in plain language (e.g. `unhelped_cap` → "Gave up after too many unhelpful replies") |
-| `resolve` | "Marked resolved" |
-| `unavailable` | `decision.reason` as an error state, red border on the strip |
-| `confirm_player_resolution` | The quoted text it's confirming against |
+| `decision.kind`             | Strip shows                                                                                                      |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `answer` (with `articleId`) | Cited article title/id, grounding score, ungrounded words if any                                                 |
+| `answer` (no article)       | "Answered without a citation"                                                                                    |
+| `handoff`                   | `decision.reason`, rendered in plain language (e.g. `unhelped_cap` → "Gave up after too many unhelpful replies") |
+| `resolve`                   | "Marked resolved"                                                                                                |
+| `unavailable`               | `decision.reason` as an error state, red border on the strip                                                     |
+| `confirm_player_resolution` | The quoted text it's confirming against                                                                          |
 
 If `decision.searches` is non-empty (regardless of kind — a search can precede any
 outcome), a nested "Searched: `<query>` → N results" line per search.

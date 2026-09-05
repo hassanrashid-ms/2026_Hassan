@@ -13,7 +13,13 @@ import type {
   FinalizeArticleAttachmentBody,
 } from '@support/types';
 import type { z } from 'zod';
-import { agent, article, articleAttachment, articleVersion, intent } from '../../shared/db/schema/index.ts';
+import {
+  agent,
+  article,
+  articleAttachment,
+  articleVersion,
+  intent,
+} from '../../shared/db/schema/index.ts';
 import { withWorkspace, type Tx } from '../../shared/db/withWorkspace.ts';
 import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts';
 import {
@@ -28,7 +34,9 @@ import {
 import { deleteArticleObject, upsertArticleObject } from '../../shared/weaviate/articlesIndex.ts';
 import { parseMarkdownEntry, MAX_IMPORT_FILES } from './articleMarkdownImport.ts';
 
-function toDetail(row: typeof article.$inferSelect): Omit<AgentArticleDetail, 'attachments' | 'draft'> {
+function toDetail(
+  row: typeof article.$inferSelect,
+): Omit<AgentArticleDetail, 'attachments' | 'draft'> {
   return {
     id: row.id,
     title: row.title,
@@ -272,13 +280,19 @@ function slugifyForExportFilename(title: string): string {
   return slug || 'untitled';
 }
 
-function toMarkdownExport(a: { title: string; body: string; keywords: string[]; state: string }): string {
+function toMarkdownExport(a: {
+  title: string;
+  body: string;
+  keywords: string[];
+  state: string;
+}): string {
   const tagsLine =
     a.keywords.length > 0 ? `tags: [${a.keywords.map((k) => JSON.stringify(k)).join(', ')}]\n` : '';
   return `---\ntitle: ${JSON.stringify(a.title)}\n${tagsLine}state: ${a.state}\n---\n\n${a.body}\n`;
 }
 
-export type BulkExportArticlesResult = { ok: true; zip: Buffer } | { ok: false; reason: 'not_found' };
+export type BulkExportArticlesResult =
+  { ok: true; zip: Buffer } | { ok: false; reason: 'not_found' };
 
 /**
  * Export is read-only and best-effort at the id level: an id that doesn't
@@ -371,8 +385,7 @@ export async function updateArticle(
 
 export type SaveArticleDraftInput = { title?: string; body?: string; keywords?: string[] };
 export type SaveArticleDraftResult =
-  | { ok: true; article: AgentArticleDetail }
-  | { ok: false; reason: 'not_found' | 'not_published' };
+  { ok: true; article: AgentArticleDetail } | { ok: false; reason: 'not_found' | 'not_published' };
 
 export async function saveArticleDraft(
   ctx: AgentContext,
@@ -424,8 +437,7 @@ export async function saveArticleDraft(
 }
 
 export type DiscardArticleDraftResult =
-  | { ok: true; article: AgentArticleDetail }
-  | { ok: false; reason: 'not_found' | 'no_draft' };
+  { ok: true; article: AgentArticleDetail } | { ok: false; reason: 'not_found' | 'no_draft' };
 
 export async function discardArticleDraft(
   ctx: AgentContext,
@@ -469,8 +481,7 @@ export async function discardArticleDraft(
 }
 
 export type ListArticleVersionsResult =
-  | { ok: true; versions: ArticleVersionsListResponse }
-  | { ok: false; reason: 'not_found' };
+  { ok: true; versions: ArticleVersionsListResponse } | { ok: false; reason: 'not_found' };
 
 export async function listArticleVersions(
   ctx: AgentContext,
@@ -478,7 +489,11 @@ export async function listArticleVersions(
   opts: { limit: number; cursor?: number },
 ): Promise<ListArticleVersionsResult> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
-    const [existing] = await tx.select({ id: article.id }).from(article).where(eq(article.id, articleId)).limit(1);
+    const [existing] = await tx
+      .select({ id: article.id })
+      .from(article)
+      .where(eq(article.id, articleId))
+      .limit(1);
     if (!existing) return { ok: false, reason: 'not_found' };
 
     const where =
@@ -520,8 +535,7 @@ export async function listArticleVersions(
 }
 
 export type GetArticleVersionResult =
-  | { ok: true; version: ArticleVersionSnapshotView }
-  | { ok: false; reason: 'not_found' };
+  { ok: true; version: ArticleVersionSnapshotView } | { ok: false; reason: 'not_found' };
 
 export async function getArticleVersion(
   ctx: AgentContext,
@@ -557,7 +571,10 @@ export async function getArticleVersion(
     const attachmentRows =
       row.attachmentIds.length === 0
         ? []
-        : await tx.select().from(articleAttachment).where(inArray(articleAttachment.id, row.attachmentIds));
+        : await tx
+            .select()
+            .from(articleAttachment)
+            .where(inArray(articleAttachment.id, row.attachmentIds));
     const attachments = await Promise.all(
       attachmentRows.map(async (a) => ({
         id: a.id,
@@ -707,8 +724,7 @@ export async function finalizeArticleAttachment(
 }
 
 export type RemoveArticleAttachmentResult =
-  | { ok: true; article: AgentArticleDetail }
-  | { ok: false; reason: 'not_found' };
+  { ok: true; article: AgentArticleDetail } | { ok: false; reason: 'not_found' };
 
 export async function removeArticleAttachment(
   ctx: AgentContext,
@@ -721,7 +737,9 @@ export async function removeArticleAttachment(
     const [attachment] = await tx
       .select()
       .from(articleAttachment)
-      .where(and(eq(articleAttachment.id, attachmentId), eq(articleAttachment.articleId, articleId)))
+      .where(
+        and(eq(articleAttachment.id, attachmentId), eq(articleAttachment.articleId, articleId)),
+      )
       .limit(1);
     if (!attachment) return { ok: false, reason: 'not_found' };
 
@@ -846,7 +864,10 @@ export async function publishArticle(ctx: AgentContext, id: string): Promise<Pub
     if (changedFields.length === 0 && liveAttachmentIds.length === draftRow.attachmentIds.length) {
       // Nothing actually changed (draft saved, then untouched) — still clear it, but
       // don't mint an empty version.
-      await tx.update(articleVersion).set({ status: 'discarded' }).where(eq(articleVersion.id, draftRow.id));
+      await tx
+        .update(articleVersion)
+        .set({ status: 'discarded' })
+        .where(eq(articleVersion.id, draftRow.id));
       return {
         ok: true,
         article: { ...toDetail(existing), attachments: await attachmentsFor(tx, id), draft: null },
@@ -896,8 +917,7 @@ export async function publishArticle(ctx: AgentContext, id: string): Promise<Pub
 }
 
 export type ArchiveArticleResult =
-  | { ok: true; article: AgentArticleDetail }
-  | { ok: false; reason: 'not_found' | 'not_published' };
+  { ok: true; article: AgentArticleDetail } | { ok: false; reason: 'not_found' | 'not_published' };
 
 /**
  * Archive only ever applies to a published article — a draft was never live,
@@ -929,8 +949,7 @@ export async function archiveArticle(ctx: AgentContext, id: string): Promise<Arc
 }
 
 export type UnarchiveArticleResult =
-  | { ok: true; article: AgentArticleDetail }
-  | { ok: false; reason: 'not_found' | 'not_archived' };
+  { ok: true; article: AgentArticleDetail } | { ok: false; reason: 'not_found' | 'not_archived' };
 
 export async function unarchiveArticle(
   ctx: AgentContext,

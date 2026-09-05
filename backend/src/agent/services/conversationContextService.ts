@@ -74,7 +74,10 @@ export async function getConversationDetail(
       // how many past cycles a reopened conversation has.
       .leftJoin(
         resolutionCycle,
-        and(eq(resolutionCycle.conversationId, conversation.id), isNotNull(resolutionCycle.resolvedAt)),
+        and(
+          eq(resolutionCycle.conversationId, conversation.id),
+          isNotNull(resolutionCycle.resolvedAt),
+        ),
       )
       .where(eq(conversation.id, conversationId))
       .orderBy(desc(resolutionCycle.resolvedAt))

@@ -88,7 +88,11 @@ export async function applyResolutionAnswer(
         ? 'player'
         : 'agent';
   const resolutionKind =
-    askedBy === 'inactivity' ? 'player_confirmed' : askedBy === 'player' ? 'player_stated' : 'agent';
+    askedBy === 'inactivity'
+      ? 'player_confirmed'
+      : askedBy === 'player'
+        ? 'player_stated'
+        : 'agent';
 
   if (helped) {
     // Posted before the status flip so the transcript reads in the order it

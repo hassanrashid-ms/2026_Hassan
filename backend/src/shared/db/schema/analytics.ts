@@ -1,8 +1,8 @@
-import { jsonb, pgTable, primaryKey, timestamp, uuid } from 'drizzle-orm/pg-core'
-import type { DashboardLayout } from '@support/types'
-import { agent, workspace } from './identity.ts'
+import { jsonb, pgTable, primaryKey, timestamp, uuid } from 'drizzle-orm/pg-core';
+import type { DashboardLayout } from '@support/types';
+import { agent, workspace } from './identity.ts';
 
-const tz = { withTimezone: true, mode: 'date' } as const
+const tz = { withTimezone: true, mode: 'date' } as const;
 
 /**
  * One row per agent per workspace: an agent's tile layout in workspace A
@@ -22,4 +22,4 @@ export const agentDashboardLayout = pgTable(
     updatedAt: timestamp('updated_at', tz).notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.agentId, t.workspaceId] })],
-)
+);

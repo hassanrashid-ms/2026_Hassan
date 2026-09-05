@@ -21,12 +21,14 @@
 ### Task 1: Backend — reject `type` changes on seeded declared fields
 
 **Files:**
+
 - Modify: `backend/src/errors.ts:5-33` (add `'seeded_field_locked'` to `ErrorCode`)
 - Modify: `backend/src/agent/services/declaredFieldService.ts:128-171` (`updateDeclaredField`)
 - Modify: `backend/src/agent/controllers/declaredFieldController.ts:34-52` (`updateDeclaredFieldHandler`)
 - Test: `backend/tests/agent.declaredFields.test.ts` (extend the existing `describe('PATCH /declared-fields/:id', ...)` block)
 
 **Interfaces:**
+
 - Consumes: existing `declaredField` Drizzle table (`backend/src/shared/db/schema/index.ts` re-export), existing `withWorkspace`, `appendChangeLog`, `sendError` helpers — no new imports needed beyond what these files already have.
 - Produces: `UpdateDeclaredFieldResult` gains a third variant `{ ok: false; reason: 'seeded_type_locked' }` (alongside the existing `{ ok: true; field }` and `{ ok: false; reason: 'not_found' }`). The controller maps this new reason to HTTP `409` with error code `seeded_field_locked`. No other file in this task depends on new exports.
 
@@ -35,51 +37,51 @@
 Add this test inside the existing `describe('PATCH /declared-fields/:id', () => { ... })` block in `backend/tests/agent.declaredFields.test.ts`, right after the `'404s on an archived field'` test (around line 273). It inserts a seeded-style row directly (no `declaredBy`, mirroring the real seed) rather than going through `promote()`, which always stamps `declaredBy`:
 
 ```ts
-  it('rejects a type change on a seeded field (no declaredBy), but allows the label', async () => {
-    const workspaceId = await seedWorkspace();
-    const { token } = await seedAgentWithRole(workspaceId, 'admin');
+it('rejects a type change on a seeded field (no declaredBy), but allows the label', async () => {
+  const workspaceId = await seedWorkspace();
+  const { token } = await seedAgentWithRole(workspaceId, 'admin');
 
-    const { rows } = await ownerPool.query<{ id: string }>(
-      `insert into declared_field (workspace_id, key, label, type, status)
+  const { rows } = await ownerPool.query<{ id: string }>(
+    `insert into declared_field (workspace_id, key, label, type, status)
        values ($1, 'player_level', 'Player level', 'number', 'active')
        returning id`,
-      [workspaceId],
-    );
-    const seededId = rows[0]!.id;
+    [workspaceId],
+  );
+  const seededId = rows[0]!.id;
 
-    await request(app)
-      .patch(`/declared-fields/${seededId}`)
-      .set('Authorization', `Bearer ${token}`)
-      .set('X-Workspace-Id', workspaceId)
-      .send({ type: 'string' })
-      .expect(409);
+  await request(app)
+    .patch(`/declared-fields/${seededId}`)
+    .set('Authorization', `Bearer ${token}`)
+    .set('X-Workspace-Id', workspaceId)
+    .send({ type: 'string' })
+    .expect(409);
 
-    const res = await request(app)
-      .patch(`/declared-fields/${seededId}`)
-      .set('Authorization', `Bearer ${token}`)
-      .set('X-Workspace-Id', workspaceId)
-      .send({ label: 'Player Level (v2)' })
-      .expect(200);
+  const res = await request(app)
+    .patch(`/declared-fields/${seededId}`)
+    .set('Authorization', `Bearer ${token}`)
+    .set('X-Workspace-Id', workspaceId)
+    .send({ label: 'Player Level (v2)' })
+    .expect(200);
 
-    expect(res.body).toMatchObject({
-      key: 'player_level',
-      label: 'Player Level (v2)',
-      type: 'number',
-    });
+  expect(res.body).toMatchObject({
+    key: 'player_level',
+    label: 'Player Level (v2)',
+    type: 'number',
   });
+});
 
-  it('allows a type change on a promoted (non-seeded) field', async () => {
-    const workspaceId = await seedWorkspace();
-    const { token } = await seedAgentWithRole(workspaceId, 'admin');
-    const created = await promote(app, token, workspaceId);
+it('allows a type change on a promoted (non-seeded) field', async () => {
+  const workspaceId = await seedWorkspace();
+  const { token } = await seedAgentWithRole(workspaceId, 'admin');
+  const created = await promote(app, token, workspaceId);
 
-    await request(app)
-      .patch(`/declared-fields/${created.id}`)
-      .set('Authorization', `Bearer ${token}`)
-      .set('X-Workspace-Id', workspaceId)
-      .send({ type: 'number' })
-      .expect(200);
-  });
+  await request(app)
+    .patch(`/declared-fields/${created.id}`)
+    .set('Authorization', `Bearer ${token}`)
+    .set('X-Workspace-Id', workspaceId)
+    .send({ type: 'number' })
+    .expect(200);
+});
 ```
 
 - [ ] **Step 2: Run the tests to verify they fail**
@@ -225,10 +227,12 @@ git commit -m "fix: lock type edits on seeded declared fields"
 ### Task 2: Frontend — disable the type select for seeded rows
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/agent-console/pages/DeclaredFields/components/DeclaredFieldRow.tsx:82-98`
 - Test: `frontend/src/surfaces/agent-console/pages/DeclaredFields/components/DeclaredFieldRow.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `DeclaredFieldView.declaredBy: string | null` (`packages/types/src/player-state.ts:77-86`, already on the type and already passed to `DeclaredFieldRow` — no prop changes needed).
 - Produces: no new exports; this task only changes `DeclaredFieldRow`'s internal render output (adds `disabled` + a hint span on the existing `type` `Select`).
 
@@ -252,24 +256,24 @@ const seededField: DeclaredFieldView = {
 Then add this test in the `describe('DeclaredFieldRow', ...)` block:
 
 ```tsx
-  it('disables the type select for a seeded field but keeps label editable', async () => {
-    renderWithClient(<DeclaredFieldRow token="t" field={seededField} />);
+it('disables the type select for a seeded field but keeps label editable', async () => {
+  renderWithClient(<DeclaredFieldRow token="t" field={seededField} />);
 
-    const user = userEvent.setup();
-    await user.click(screen.getByText('Edit'));
+  const user = userEvent.setup();
+  await user.click(screen.getByText('Edit'));
 
-    expect(screen.getByRole('combobox')).toBeDisabled();
-    expect(screen.getByDisplayValue('Player level')).not.toBeDisabled();
-  });
+  expect(screen.getByRole('combobox')).toBeDisabled();
+  expect(screen.getByDisplayValue('Player level')).not.toBeDisabled();
+});
 
-  it('keeps the type select enabled for a promoted (non-seeded) field', async () => {
-    renderWithClient(<DeclaredFieldRow token="t" field={activeField} />);
+it('keeps the type select enabled for a promoted (non-seeded) field', async () => {
+  renderWithClient(<DeclaredFieldRow token="t" field={activeField} />);
 
-    const user = userEvent.setup();
-    await user.click(screen.getByText('Edit'));
+  const user = userEvent.setup();
+  await user.click(screen.getByText('Edit'));
 
-    expect(screen.getByRole('combobox')).not.toBeDisabled();
-  });
+  expect(screen.getByRole('combobox')).not.toBeDisabled();
+});
 ```
 
 - [ ] **Step 2: Run the test to verify it fails**
@@ -282,41 +286,39 @@ Expected: FAIL — `toBeDisabled()` fails on the first new test because the `Sel
 In `frontend/src/surfaces/agent-console/pages/DeclaredFields/components/DeclaredFieldRow.tsx`, replace lines 82-98:
 
 ```tsx
-      <td className="px-3 py-2">
-        {editing ? (
-          <div className="flex items-center gap-2">
-            <Select
-              value={type}
-              onValueChange={(v) => setType(v as DeclaredFieldType)}
-              disabled={isSeeded}
-            >
-              <SelectTrigger className="h-8 w-32">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {TYPES.map((t) => (
-                  <SelectItem key={t} value={t}>
-                    {t}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {isSeeded && (
-              <span className="text-xs text-muted">Type is locked for built-in fields</span>
-            )}
-          </div>
-        ) : (
-          <Badge variant="secondary">{field.type}</Badge>
-        )}
-      </td>
+<td className="px-3 py-2">
+  {editing ? (
+    <div className="flex items-center gap-2">
+      <Select
+        value={type}
+        onValueChange={(v) => setType(v as DeclaredFieldType)}
+        disabled={isSeeded}
+      >
+        <SelectTrigger className="h-8 w-32">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {TYPES.map((t) => (
+            <SelectItem key={t} value={t}>
+              {t}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {isSeeded && <span className="text-xs text-muted">Type is locked for built-in fields</span>}
+    </div>
+  ) : (
+    <Badge variant="secondary">{field.type}</Badge>
+  )}
+</td>
 ```
 
 Add the `isSeeded` constant next to the existing `dirty`/`isActive` constants (around line 69-70):
 
 ```ts
-  const dirty = label !== field.label || type !== field.type;
-  const isActive = field.status === 'active';
-  const isSeeded = field.declaredBy === null;
+const dirty = label !== field.label || type !== field.type;
+const isActive = field.status === 'active';
+const isSeeded = field.declaredBy === null;
 ```
 
 - [ ] **Step 4: Run the test to verify it passes**

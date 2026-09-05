@@ -68,9 +68,10 @@ describe('article_version constraints', () => {
     await ownerPool.query(`update article_version set title = 'Z' where article_id = $1`, [
       articleId,
     ]);
-    const { rows } = await ownerPool.query(`select title from article_version where article_id = $1`, [
-      articleId,
-    ]);
+    const { rows } = await ownerPool.query(
+      `select title from article_version where article_id = $1`,
+      [articleId],
+    );
     expect(rows[0].title).toBe('Z');
   });
 });

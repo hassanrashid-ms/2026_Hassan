@@ -338,9 +338,9 @@
   <section>
     <h2>The tenancy boundary</h2>
     <p>
-      <strong>Exactly two tables have no <code>workspace_id</code>:</strong> <code>workspace</code>
-      and <code>agent</code>. Every other table carries one and gets the identical RLS policy,
-      applied structurally in <code>002_rls.sql</code> — any base table with a
+      <strong>Exactly two tables have no <code>workspace_id</code>:</strong>
+      <code>workspace</code> and <code>agent</code>. Every other table carries one and gets the
+      identical RLS policy, applied structurally in <code>002_rls.sql</code> — any base table with a
       <code>workspace_id</code> column, not a hand-maintained list — so a new table can never ship
       without its policy.
     </p>
@@ -414,12 +414,12 @@
             <td><strong>Composite FK on (workspace_id, id)</strong></td>
             <td>
               Applied where a client-supplied id could otherwise cross a tenant boundary through a
-              parent chain the database can't see through RLS alone (FK checks run with row
-              security suspended) — <code>conversation → subintent</code>,
+              parent chain the database can't see through RLS alone (FK checks run with row security
+              suspended) — <code>conversation → subintent</code>,
               <code>resolution_cycle/form_submission → conversation</code>,
               <code>form_version/form_submission → form</code>,
-              <code>form_answer → form_submission</code>, <code>conversation_tag → conversation, tag</code>,
-              <code>subintent → form</code>. See
+              <code>form_answer → form_submission</code>,
+              <code>conversation_tag → conversation, tag</code>, <code>subintent → form</code>. See
               <code>docs/decisions/2026-08-04-composite-foreign-keys-for-tenancy.md</code>. Simpler
               parent references (<code>session → player</code>, <code>conversation → player</code>,
               <code>message → conversation</code>, <code>event → conversation/session</code>) stay
@@ -438,9 +438,9 @@
           <tr>
             <td><strong>Column-scoped GRANT</strong></td>
             <td>
-              <code>workspace</code> itself is otherwise read-only to <code>support_app</code>
-              (writing <code>secret_hash</code> would let a bug lock out another tenant's players);
-              <code>ticket_seq</code>, <code>max_assigned_tickets</code>,
+              <code>workspace</code> itself is otherwise read-only to
+              <code>support_app</code> (writing <code>secret_hash</code> would let a bug lock out
+              another tenant's players); <code>ticket_seq</code>, <code>max_assigned_tickets</code>,
               <code>auto_close_days</code>, <code>inactivity_window_hours</code> and
               <code>form_timeout_minutes</code> are granted back column-by-column for the request
               paths that legitimately bump or tune them.
@@ -462,7 +462,9 @@
 
     <h3>1 · Identity, tenancy, players &amp; sessions</h3>
     <div class="diagram">
-      <div class="mermaid-render" id="mmd-1"><span class="mermaid-loading">Rendering diagram…</span></div>
+      <div class="mermaid-render" id="mmd-1">
+        <span class="mermaid-loading">Rendering diagram…</span>
+      </div>
       <pre class="mermaid-src" id="mmd-src-1">
 erDiagram
     WORKSPACE ||--o{ WORKSPACE_MEMBER : "grants roles in"
@@ -554,11 +556,13 @@ erDiagram
     }
       </pre>
     </div>
-    <p class="cap src-caption">Table definitions for the diagram above — the exact mermaid/schema source.</p>
+    <p class="cap src-caption">
+      Table definitions for the diagram above — the exact mermaid/schema source.
+    </p>
     <p class="cap">
       <code>agent</code> holds a Google identity, not a credential — there are no passwords in the
-      product, and <code>google_subject</code> is only null for a seeded row awaiting its first
-      real login. <code>workspace.secret_hash</code> from the original design was replaced by
+      product, and <code>google_subject</code> is only null for a seeded row awaiting its first real
+      login. <code>workspace.secret_hash</code> from the original design was replaced by
       <code>workspace_secret</code> as its own table: rotation inserts a row rather than overwriting
       one, so the previous secret keeps working through a grace window while a game studio
       redeploys. <code>session.id</code> is the one primary key the server does not generate — the
@@ -566,8 +570,8 @@ erDiagram
       via <code>ON CONFLICT (id) DO NOTHING</code>, not a dedupe table.
     </p>
     <div class="note">
-      <strong>Promotion is not retroactive.</strong> <code>declared_field</code> is the admin-managed
-      key set; the split between <code>player_state_snapshot.declared</code> and
+      <strong>Promotion is not retroactive.</strong> <code>declared_field</code> is the
+      admin-managed key set; the split between <code>player_state_snapshot.declared</code> and
       <code>.raw</code> is decided at write time, against whatever was promoted <em>then</em>.
       Promote a key today and every earlier snapshot keeps it in <code>raw</code> — there is no
       backfill, ever.
@@ -575,7 +579,9 @@ erDiagram
 
     <h3>2 · Taxonomy, tags &amp; the knowledge base</h3>
     <div class="diagram">
-      <div class="mermaid-render" id="mmd-2"><span class="mermaid-loading">Rendering diagram…</span></div>
+      <div class="mermaid-render" id="mmd-2">
+        <span class="mermaid-loading">Rendering diagram…</span>
+      </div>
       <pre class="mermaid-src" id="mmd-src-2">
 erDiagram
     INTENT    ||--o{ SUBINTENT : parents
@@ -664,28 +670,32 @@ erDiagram
     }
       </pre>
     </div>
-    <p class="cap src-caption">Table definitions for the diagram above — the exact mermaid/schema source.</p>
+    <p class="cap src-caption">
+      Table definitions for the diagram above — the exact mermaid/schema source.
+    </p>
     <p class="cap">
       There is no rules engine or label table here — the original design's <code>RULE</code>,
-      <code>RULE_FIRING</code> and <code>LABEL</code>/<code>CONVERSATION_LABEL</code> never
-      shipped. <code>tag</code>/<code>conversation_tag</code> is what exists instead: flat,
-      admin-created tags with soft removal, applied and removed directly rather than auto-derived
-      from a subintent mapping. <code>article_version</code> doubles as both the draft store and the
-      append-only version history — exactly one <code>draft</code> row per article (partial unique
-      index), one <code>published</code> row per publish, and <code>discarded</code> for an
-      abandoned draft that is never deleted.
+      <code>RULE_FIRING</code> and <code>LABEL</code>/<code>CONVERSATION_LABEL</code> never shipped.
+      <code>tag</code>/<code>conversation_tag</code> is what exists instead: flat, admin-created
+      tags with soft removal, applied and removed directly rather than auto-derived from a subintent
+      mapping. <code>article_version</code> doubles as both the draft store and the append-only
+      version history — exactly one <code>draft</code> row per article (partial unique index), one
+      <code>published</code> row per publish, and <code>discarded</code> for an abandoned draft that
+      is never deleted.
     </p>
     <div class="note">
       <strong>Retrieval is Weaviate, not a column here.</strong> The original design put embeddings
       in <code>pgvector</code>/HNSW as their own table. Bot retrieval is now BM25 search over
-      Weaviate Cloud (see <code>docs/specs/2026-08-07-weaviate-faq-search-design.md</code>), external
-      to Postgres — there is no <code>article_embedding</code> or <code>article_phrasing</code> table
-      to keep in sync with it.
+      Weaviate Cloud (see <code>docs/specs/2026-08-07-weaviate-faq-search-design.md</code>),
+      external to Postgres — there is no <code>article_embedding</code> or
+      <code>article_phrasing</code> table to keep in sync with it.
     </div>
 
     <h3>3 · Conversations, resolution cycles &amp; messages</h3>
     <div class="diagram">
-      <div class="mermaid-render" id="mmd-3"><span class="mermaid-loading">Rendering diagram…</span></div>
+      <div class="mermaid-render" id="mmd-3">
+        <span class="mermaid-loading">Rendering diagram…</span>
+      </div>
       <pre class="mermaid-src" id="mmd-src-3">
 erDiagram
     PLAYER       ||--o{ CONVERSATION : raises
@@ -753,28 +763,34 @@ erDiagram
     }
       </pre>
     </div>
-    <p class="cap src-caption">Table definitions for the diagram above — the exact mermaid/schema source.</p>
+    <p class="cap src-caption">
+      Table definitions for the diagram above — the exact mermaid/schema source.
+    </p>
     <p class="cap">
       <code>message.seq</code> is server-assigned, never a device clock — order matters, gaps don't,
       and internal notes still consume sequence numbers so the player's view legitimately has holes.
-      <code>visibility</code> is never filtered in a query; two serializers (<code>toAgentView</code>,
-      <code>toPlayerView</code>) do that, so anything unexpected fails closed rather than leaking a
-      note. <code>resolution_cycle</code> is a mutable projection, not an append-only log — unlike
+      <code>visibility</code> is never filtered in a query; two serializers
+      (<code>toAgentView</code>, <code>toPlayerView</code>) do that, so anything unexpected fails
+      closed rather than leaking a note. <code>resolution_cycle</code> is a mutable projection, not
+      an append-only log — unlike
       <code>event</code>/<code>change_log</code>/<code>form_answer</code>, it has no REVOKE UPDATE,
       because <code>inactivity_due_at</code> ticks forward for the life of the cycle. A partial
       unique index (<code>WHERE resolved_at IS NULL</code>) makes "at most one open cycle per
       conversation" a database guarantee rather than a reopen-handler responsibility.
     </p>
     <div class="note">
-      <strong>Attachment claim is a state, not a lifecycle column.</strong> No <code>attachment</code>
-      row exists until the owning message actually sends — an abandoned upload is bytes in
-      object storage under a per-player prefix, never a database row. There is deliberately no
+      <strong>Attachment claim is a state, not a lifecycle column.</strong> No
+      <code>attachment</code>
+      row exists until the owning message actually sends — an abandoned upload is bytes in object
+      storage under a per-player prefix, never a database row. There is deliberately no
       <code>status</code> column and no reaper job for this table.
     </div>
 
     <h3>4 · Forms &amp; submissions</h3>
     <div class="diagram">
-      <div class="mermaid-render" id="mmd-4"><span class="mermaid-loading">Rendering diagram…</span></div>
+      <div class="mermaid-render" id="mmd-4">
+        <span class="mermaid-loading">Rendering diagram…</span>
+      </div>
       <pre class="mermaid-src" id="mmd-src-4">
 erDiagram
     FORM            ||--o{ FORM_VERSION : mints
@@ -821,7 +837,9 @@ erDiagram
     }
       </pre>
     </div>
-    <p class="cap src-caption">Table definitions for the diagram above — the exact mermaid/schema source.</p>
+    <p class="cap src-caption">
+      Table definitions for the diagram above — the exact mermaid/schema source.
+    </p>
     <p class="cap">
       Fields live as a <code>jsonb</code> array on <code>form_version</code>, not a separate
       <code>form_field</code> table — editing a live form mints a new version and its fields move
@@ -834,7 +852,9 @@ erDiagram
 
     <h3>5 · Events, bot config &amp; audit</h3>
     <div class="diagram">
-      <div class="mermaid-render" id="mmd-5"><span class="mermaid-loading">Rendering diagram…</span></div>
+      <div class="mermaid-render" id="mmd-5">
+        <span class="mermaid-loading">Rendering diagram…</span>
+      </div>
       <pre class="mermaid-src" id="mmd-src-5">
 erDiagram
     WORKSPACE    ||--o{ EVENT : accumulates
@@ -890,12 +910,15 @@ erDiagram
     }
       </pre>
     </div>
-    <p class="cap src-caption">Table definitions for the diagram above — the exact mermaid/schema source.</p>
+    <p class="cap src-caption">
+      Table definitions for the diagram above — the exact mermaid/schema source.
+    </p>
     <p class="cap">
       <code>bot_config</code> is the one table keyed directly by <code>workspace_id</code> as its
       primary key — there is exactly one row per workspace, seeded the moment a workspace is
-      provisioned, and its only writer is <code>INSERT ... ON CONFLICT (workspace_id) DO UPDATE</code>
-      (which is why it keeps <code>UPDATE</code> where the other three logs on this page don't).
+      provisioned, and its only writer is
+      <code>INSERT ... ON CONFLICT (workspace_id) DO UPDATE</code> (which is why it keeps
+      <code>UPDATE</code> where the other three logs on this page don't).
       <code>bot_config_version</code> and <code>change_log</code> both audit it, at different
       grains: <code>bot_config_version</code> is a full four-field snapshot per save (so "what did
       the whole bot look like at v3" is one row), while <code>change_log</code> is generic and
@@ -933,7 +956,9 @@ erDiagram
       startOnLoad: false,
       securityLevel: 'strict',
       theme: isDark() ? 'dark' : 'default',
-      themeVariables: { fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace' },
+      themeVariables: {
+        fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+      },
     });
 
     const sources = document.querySelectorAll('pre.mermaid-src');

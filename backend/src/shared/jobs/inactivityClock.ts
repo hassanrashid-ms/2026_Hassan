@@ -190,7 +190,10 @@ async function runAskStage(workspaceId: string, now: Date): Promise<number> {
             conversationId: row.conversationId,
             actorId: null,
             actorType: 'system',
-            payload: { source: 'inactivity', notified: locked.assignedAgentId ? 'agent' : 'team_leads' },
+            payload: {
+              source: 'inactivity',
+              notified: locked.assignedAgentId ? 'agent' : 'team_leads',
+            },
           });
 
           return { kind: 'reply_owed', notifications };

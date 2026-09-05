@@ -31,8 +31,7 @@ const LIVE_STATUSES = ['open', 'awaiting_player', 'escalated'] as const;
 export type PickEligibleAgentStopReason = 'no_active_agents' | 'all_at_capacity' | 'none_online';
 
 export type PickEligibleAgentResult =
-  | { agentId: string }
-  | { agentId: null; reason: PickEligibleAgentStopReason };
+  { agentId: string } | { agentId: null; reason: PickEligibleAgentStopReason };
 
 export async function pickEligibleAgent(
   tx: Tx,
@@ -65,7 +64,7 @@ export async function pickEligibleAgent(
     .orderBy(liveCount, asc(agent.id));
 
   if (rows.length === 0) {
-    const reason = await hasAnyActiveMember(tx, workspaceId)
+    const reason = (await hasAnyActiveMember(tx, workspaceId))
       ? 'all_at_capacity'
       : 'no_active_agents';
     return { agentId: null, reason };

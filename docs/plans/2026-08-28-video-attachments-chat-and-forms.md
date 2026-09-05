@@ -573,14 +573,14 @@ import {
 Replace the defense-in-depth re-check inside `sendAgentMessage`:
 
 ```ts
-    if (
-      !ALLOWED_CHAT_ATTACHMENT_MIME_TYPES.includes(
-        real.contentType as (typeof ALLOWED_CHAT_ATTACHMENT_MIME_TYPES)[number],
-      ) ||
-      real.contentLength > maxBytesForAttachment(real.contentType)
-    ) {
-      return { outcome: 'attachment_mismatch' };
-    }
+if (
+  !ALLOWED_CHAT_ATTACHMENT_MIME_TYPES.includes(
+    real.contentType as (typeof ALLOWED_CHAT_ATTACHMENT_MIME_TYPES)[number],
+  ) ||
+  real.contentLength > maxBytesForAttachment(real.contentType)
+) {
+  return { outcome: 'attachment_mismatch' };
+}
 ```
 
 (The rest of the function — `extensionFor(real.contentType)` on the next line — needs no change; Task 2 already made it video-aware.)
@@ -683,16 +683,16 @@ import {
 Replace the defense-in-depth re-check inside `sendPlayerMessage`:
 
 ```ts
-    // Defense-in-depth: re-check the allowlist/size cap against the real,
-    // HEAD-verified values at claim time too, not only at presign time.
-    if (
-      !ALLOWED_CHAT_ATTACHMENT_MIME_TYPES.includes(
-        real.contentType as (typeof ALLOWED_CHAT_ATTACHMENT_MIME_TYPES)[number],
-      ) ||
-      real.contentLength > maxBytesForAttachment(real.contentType)
-    ) {
-      return { outcome: 'attachment_mismatch' };
-    }
+// Defense-in-depth: re-check the allowlist/size cap against the real,
+// HEAD-verified values at claim time too, not only at presign time.
+if (
+  !ALLOWED_CHAT_ATTACHMENT_MIME_TYPES.includes(
+    real.contentType as (typeof ALLOWED_CHAT_ATTACHMENT_MIME_TYPES)[number],
+  ) ||
+  real.contentLength > maxBytesForAttachment(real.contentType)
+) {
+  return { outcome: 'attachment_mismatch' };
+}
 ```
 
 (The extension is already derived from the client-supplied key's own suffix a few lines below — no `extensionFor` call to update here.)
@@ -825,84 +825,86 @@ function maxBytesForAttachment(mimeType: string): number {
 ```
 
 ```tsx
-  const handleFilePicked = async (file: File) => {
-    if (!onUpload) return;
-    setUploadError(null);
+const handleFilePicked = async (file: File) => {
+  if (!onUpload) return;
+  setUploadError(null);
 
-    if (!ALLOWED_CHAT_ATTACHMENT_MIME_TYPES.includes(file.type)) {
-      setUploadError('Only PNG, JPEG, WebP, GIF images or MP4/WebM videos are supported.');
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      return;
-    }
-    const cap = maxBytesForAttachment(file.type);
-    if (file.size > cap) {
-      setUploadError(
-        VIDEO_MIME_TYPES.has(file.type)
-          ? 'Videos must be 50 MB or smaller.'
-          : 'Images must be 10 MB or smaller.',
-      );
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      return;
-    }
+  if (!ALLOWED_CHAT_ATTACHMENT_MIME_TYPES.includes(file.type)) {
+    setUploadError('Only PNG, JPEG, WebP, GIF images or MP4/WebM videos are supported.');
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    return;
+  }
+  const cap = maxBytesForAttachment(file.type);
+  if (file.size > cap) {
+    setUploadError(
+      VIDEO_MIME_TYPES.has(file.type)
+        ? 'Videos must be 50 MB or smaller.'
+        : 'Images must be 10 MB or smaller.',
+    );
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    return;
+  }
 
-    setUploading(true);
-    try {
-      const uploaded = await onUpload(file);
-      setPendingAttachment(uploaded);
-      setPreviewUrl(URL.createObjectURL(file));
-    } catch {
-      setUploadError('Upload failed. Please try again.');
-    } finally {
-      setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-  };
+  setUploading(true);
+  try {
+    const uploaded = await onUpload(file);
+    setPendingAttachment(uploaded);
+    setPreviewUrl(URL.createObjectURL(file));
+  } catch {
+    setUploadError('Upload failed. Please try again.');
+  } finally {
+    setUploading(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }
+};
 ```
 
 Replace the pending-attachment preview block and the file input's `accept`/`aria-label`:
 
 ```tsx
-      {pendingAttachment && previewUrl && (
-        <div className="flex items-center gap-2">
-          {VIDEO_MIME_TYPES.has(pendingAttachment.mimeType) ? (
-            <video
-              data-testid="pending-video-preview"
-              src={previewUrl}
-              muted
-              className="h-14 w-14 rounded-md object-cover"
-            />
-          ) : (
-            <img
-              src={previewUrl}
-              alt={pendingAttachment.filename}
-              className="h-14 w-14 rounded-md object-cover"
-            />
-          )}
-          <button
-            type="button"
-            aria-label="Remove attachment"
-            onClick={clearAttachment}
-            className="rounded-full bg-muted/20 p-1"
-          >
-            <X className="size-3.5" />
-          </button>
-        </div>
+{
+  pendingAttachment && previewUrl && (
+    <div className="flex items-center gap-2">
+      {VIDEO_MIME_TYPES.has(pendingAttachment.mimeType) ? (
+        <video
+          data-testid="pending-video-preview"
+          src={previewUrl}
+          muted
+          className="h-14 w-14 rounded-md object-cover"
+        />
+      ) : (
+        <img
+          src={previewUrl}
+          alt={pendingAttachment.filename}
+          className="h-14 w-14 rounded-md object-cover"
+        />
       )}
+      <button
+        type="button"
+        aria-label="Remove attachment"
+        onClick={clearAttachment}
+        className="rounded-full bg-muted/20 p-1"
+      >
+        <X className="size-3.5" />
+      </button>
+    </div>
+  );
+}
 ```
 
 ```tsx
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm"
-              aria-label="Attach image or video"
-              className="hidden"
-              disabled={disabled || uploading}
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) void handleFilePicked(file);
-              }}
-            />
+<input
+  ref={fileInputRef}
+  type="file"
+  accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm"
+  aria-label="Attach image or video"
+  className="hidden"
+  disabled={disabled || uploading}
+  onChange={(event) => {
+    const file = event.target.files?.[0];
+    if (file) void handleFilePicked(file);
+  }}
+/>
 ```
 
 Everything else in `Composer.tsx` (props, `submit`, `clearAttachment`, visibility toggle, textarea, send button) is unchanged.
@@ -914,11 +916,13 @@ In `frontend/src/surfaces/agent-console/pages/Inbox/components/ThreadPanel.test.
 - [ ] **Step 5: Run the tests to verify they pass**
 
 Run:
+
 ```bash
 cd frontend
 pnpm exec vitest run src/features/chat/components/Composer.test.tsx
 pnpm exec vitest run src/surfaces/agent-console/pages/Inbox/components/ThreadPanel.test.tsx
 ```
+
 Expected: both PASS.
 
 - [ ] **Step 6: Commit**
@@ -1014,69 +1018,71 @@ function maxBytesForAttachment(mimeType: string): number {
 Replace `handleFilePicked`:
 
 ```tsx
-  const handleFilePicked = async (file: File) => {
-    if (!onUpload) return;
-    setUploadError(null);
+const handleFilePicked = async (file: File) => {
+  if (!onUpload) return;
+  setUploadError(null);
 
-    if (!ALLOWED_CHAT_ATTACHMENT_MIME_TYPES.includes(file.type)) {
-      setUploadError('Only PNG, JPEG, WebP, GIF images or MP4/WebM videos are supported.');
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      return;
-    }
-    const cap = maxBytesForAttachment(file.type);
-    if (file.size > cap) {
-      setUploadError(
-        VIDEO_MIME_TYPES.has(file.type)
-          ? 'Videos must be 50 MB or smaller.'
-          : 'Images must be 10 MB or smaller.',
-      );
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      return;
-    }
+  if (!ALLOWED_CHAT_ATTACHMENT_MIME_TYPES.includes(file.type)) {
+    setUploadError('Only PNG, JPEG, WebP, GIF images or MP4/WebM videos are supported.');
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    return;
+  }
+  const cap = maxBytesForAttachment(file.type);
+  if (file.size > cap) {
+    setUploadError(
+      VIDEO_MIME_TYPES.has(file.type)
+        ? 'Videos must be 50 MB or smaller.'
+        : 'Images must be 10 MB or smaller.',
+    );
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    return;
+  }
 
-    setUploading(true);
-    try {
-      const uploaded = await onUpload(file);
-      setPendingAttachment(uploaded);
-      setPreviewUrl(URL.createObjectURL(file));
-    } catch {
-      setUploadError('Upload failed. Please try again.');
-    } finally {
-      setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-  };
+  setUploading(true);
+  try {
+    const uploaded = await onUpload(file);
+    setPendingAttachment(uploaded);
+    setPreviewUrl(URL.createObjectURL(file));
+  } catch {
+    setUploadError('Upload failed. Please try again.');
+  } finally {
+    setUploading(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }
+};
 ```
 
 Replace the pending-attachment preview block:
 
 ```tsx
-      {pendingAttachment && previewUrl && (
-        <div className="flex items-center gap-2">
-          {VIDEO_MIME_TYPES.has(pendingAttachment.mimeType) ? (
-            <video
-              data-testid="pending-video-preview"
-              src={previewUrl}
-              muted
-              className="h-14 w-14 rounded-card object-cover"
-            />
-          ) : (
-            <img
-              src={previewUrl}
-              alt={pendingAttachment.filename}
-              className="h-14 w-14 rounded-card object-cover"
-            />
-          )}
-          <button
-            type="button"
-            aria-label="Remove attachment"
-            onClick={clearAttachment}
-            className="rounded-full bg-surface p-1 text-muted"
-          >
-            <X className="size-3.5" />
-          </button>
-        </div>
+{
+  pendingAttachment && previewUrl && (
+    <div className="flex items-center gap-2">
+      {VIDEO_MIME_TYPES.has(pendingAttachment.mimeType) ? (
+        <video
+          data-testid="pending-video-preview"
+          src={previewUrl}
+          muted
+          className="h-14 w-14 rounded-card object-cover"
+        />
+      ) : (
+        <img
+          src={previewUrl}
+          alt={pendingAttachment.filename}
+          className="h-14 w-14 rounded-card object-cover"
+        />
       )}
+      <button
+        type="button"
+        aria-label="Remove attachment"
+        onClick={clearAttachment}
+        className="rounded-full bg-surface p-1 text-muted"
+      >
+        <X className="size-3.5" />
+      </button>
+    </div>
+  );
+}
 ```
 
 Replace the file input and trigger button's labels/accept:
@@ -1120,11 +1126,13 @@ In `frontend/src/surfaces/webview/pages/SupportChat.test.tsx`, update both `quer
 - [ ] **Step 5: Run the tests to verify they pass**
 
 Run:
+
 ```bash
 cd frontend
 pnpm exec vitest run src/surfaces/webview/components/chat/ChatComposer.test.tsx
 pnpm exec vitest run src/surfaces/webview/pages/SupportChat.test.tsx
 ```
+
 Expected: both PASS.
 
 - [ ] **Step 6: Commit**

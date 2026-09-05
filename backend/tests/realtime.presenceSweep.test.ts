@@ -30,9 +30,10 @@ afterAll(async () => {
 });
 
 async function conversationRow(id: string) {
-  const { rows } = await ownerPool.query(`select assigned_agent_id from conversation where id = $1`, [
-    id,
-  ]);
+  const { rows } = await ownerPool.query(
+    `select assigned_agent_id from conversation where id = $1`,
+    [id],
+  );
   return rows[0];
 }
 

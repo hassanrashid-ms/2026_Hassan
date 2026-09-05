@@ -153,7 +153,11 @@ export async function listFormVersions(
   formId: string,
 ): Promise<FormVersionsListResponse | null> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
-    const [formRow] = await tx.select({ id: form.id }).from(form).where(eq(form.id, formId)).limit(1);
+    const [formRow] = await tx
+      .select({ id: form.id })
+      .from(form)
+      .where(eq(form.id, formId))
+      .limit(1);
     if (!formRow) return null;
 
     const rows = await tx
@@ -397,7 +401,11 @@ export async function restoreFormVersion(
   version: number,
 ): Promise<RestoreFormVersionResult> {
   const target = await withWorkspace(ctx.workspaceId, async (tx) => {
-    const [formRow] = await tx.select({ id: form.id }).from(form).where(eq(form.id, formId)).limit(1);
+    const [formRow] = await tx
+      .select({ id: form.id })
+      .from(form)
+      .where(eq(form.id, formId))
+      .limit(1);
     if (!formRow) return { ok: false as const, reason: 'not_found' as const };
 
     const [row] = await tx

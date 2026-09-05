@@ -5,6 +5,7 @@
 **Why now:** The attachment field and chat attachment send/read paths (shipped in `2026-08-24-webview-chat-attachments-and-form-field-implementation.md`) currently hard-restrict to `ALLOWED_IMAGE_MIME_TYPES` (PNG/JPEG/WEBP/GIF, 10MB). Players and agents want to send short video clips (e.g. a bug repro) the same way they already send screenshots.
 
 **Architecture — policy + rendering change, not a data-model change:** The `attachment` table, presigned S3 upload/claim flow, and `sendAgentMessage`/`sendPlayerMessage` are already mime-type/blob-agnostic — they store `mimeType`/`storageKey` generically and never branch on content type server-side except at the allowlist/size-cap check. This plan only:
+
 1. Widens the allowed-mime-type and size-cap policy for chat/forms (articles keep their own, untouched policy).
 2. Branches rendering (`<img>` vs `<video>`) on `attachment.mimeType` client-side.
 
@@ -60,6 +61,7 @@ Mirrors the backend policy, duplicated on purpose (frontend doesn't import backe
 - `frontend/src/surfaces/webview/components/chat/FormCard.tsx`
 
 Each gets:
+
 - `ALLOWED_CHAT_ATTACHMENT_MIME_TYPES` (images + `video/mp4`/`video/webm`) replacing the local `ALLOWED_IMAGE_MIME_TYPES` array.
 - `accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm"`.
 - A `maxBytesForAttachment(contentType)`-equivalent local helper (mirrors 10MB images / 50MB video) replacing the flat `MAX_ATTACHMENT_BYTES` check.

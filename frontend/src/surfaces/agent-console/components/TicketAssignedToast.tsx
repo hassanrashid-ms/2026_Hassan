@@ -33,7 +33,9 @@ export function TicketAssignedToast({
     >
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium">
-          {ticketNumber ? `Ticket #${ticketNumber} assigned to you` : 'A ticket was assigned to you'}
+          {ticketNumber
+            ? `Ticket #${ticketNumber} assigned to you`
+            : 'A ticket was assigned to you'}
         </p>
         {workspaceName && <p className="text-sm text-accent-fg/85">in {workspaceName}</p>}
       </div>

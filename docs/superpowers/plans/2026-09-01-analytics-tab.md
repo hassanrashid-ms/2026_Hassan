@@ -75,11 +75,13 @@ frontend/package.json                           modify: add react-grid-layout
 ## Task 1: Shared types
 
 **Files:**
+
 - Create: `packages/types/src/analytics.ts`
 - Modify: `packages/types/src/index.ts`
 - Test: `packages/types/src/analytics.test.ts`
 
 **Interfaces:**
+
 - Produces: `DashboardLayoutItem`, `DashboardLayout`, `AnalyticsGranularity`, `AnalyticsRange`,
   `AnalyticsResponse` — every later backend and frontend task imports these from `@support/types`.
 
@@ -87,8 +89,8 @@ frontend/package.json                           modify: add react-grid-layout
 
 ```typescript
 // packages/types/src/analytics.test.ts
-import { describe, expect, it } from 'vitest'
-import type { AnalyticsResponse, DashboardLayout } from './analytics.ts'
+import { describe, expect, it } from 'vitest';
+import type { AnalyticsResponse, DashboardLayout } from './analytics.ts';
 
 describe('analytics types', () => {
   it('AnalyticsResponse shape compiles with every metric group present', () => {
@@ -101,8 +103,18 @@ describe('analytics types', () => {
         byPriority: [{ priority: 'p3', count: 2 }],
       },
       speed: {
-        firstResponse: { avgSeconds: 120, p50Seconds: 90, p90Seconds: 300, series: [{ bucket: '2026-08-01', seconds: 100 }] },
-        resolution: { avgSeconds: 3600, p50Seconds: 2000, p90Seconds: 9000, series: [{ bucket: '2026-08-01', seconds: 3000 }] },
+        firstResponse: {
+          avgSeconds: 120,
+          p50Seconds: 90,
+          p90Seconds: 300,
+          series: [{ bucket: '2026-08-01', seconds: 100 }],
+        },
+        resolution: {
+          avgSeconds: 3600,
+          p50Seconds: 2000,
+          p90Seconds: 9000,
+          series: [{ bucket: '2026-08-01', seconds: 3000 }],
+        },
         timeToClaim: { series: [{ bucket: '2026-08-01', seconds: 60 }] },
       },
       bot: {
@@ -114,18 +126,18 @@ describe('analytics types', () => {
         avgOpenPerActiveAgent: 4.2,
         unassignedQueueDepth: { series: [{ bucket: '2026-08-01', depth: 5 }] },
       },
-    }
-    expect(sample.range.granularity).toBe('day')
-  })
+    };
+    expect(sample.range.granularity).toBe('day');
+  });
 
   it('DashboardLayout carries items and visible tile ids', () => {
     const layout: DashboardLayout = {
       items: [{ i: 'volume-series', x: 0, y: 0, w: 4, h: 2 }],
       visibleTileIds: ['volume-series'],
-    }
-    expect(layout.items).toHaveLength(1)
-  })
-})
+    };
+    expect(layout.items).toHaveLength(1);
+  });
+});
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -137,58 +149,58 @@ Expected: FAIL — `Cannot find module './analytics.ts'`
 
 ```typescript
 // packages/types/src/analytics.ts
-export type AnalyticsGranularity = 'day' | 'week'
+export type AnalyticsGranularity = 'day' | 'week';
 
 export type AnalyticsRange = {
-  from: string
-  to: string
-  granularity: AnalyticsGranularity
-}
+  from: string;
+  to: string;
+  granularity: AnalyticsGranularity;
+};
 
-export type SeriesPoint<K extends string> = { bucket: string } & Record<K, number>
+export type SeriesPoint<K extends string> = { bucket: string } & Record<K, number>;
 
 export type AnalyticsResponse = {
-  range: AnalyticsRange
+  range: AnalyticsRange;
   volume: {
-    series: Array<{ bucket: string; opened: number; resolved: number }>
-    byStatus: Array<{ status: string; count: number }>
-    openTotal: number
-    byPriority: Array<{ priority: string; count: number }>
-  }
+    series: Array<{ bucket: string; opened: number; resolved: number }>;
+    byStatus: Array<{ status: string; count: number }>;
+    openTotal: number;
+    byPriority: Array<{ priority: string; count: number }>;
+  };
   speed: {
     firstResponse: {
-      avgSeconds: number | null
-      p50Seconds: number | null
-      p90Seconds: number | null
-      series: Array<{ bucket: string; seconds: number | null }>
-    }
+      avgSeconds: number | null;
+      p50Seconds: number | null;
+      p90Seconds: number | null;
+      series: Array<{ bucket: string; seconds: number | null }>;
+    };
     resolution: {
-      avgSeconds: number | null
-      p50Seconds: number | null
-      p90Seconds: number | null
-      series: Array<{ bucket: string; seconds: number | null }>
-    }
+      avgSeconds: number | null;
+      p50Seconds: number | null;
+      p90Seconds: number | null;
+      series: Array<{ bucket: string; seconds: number | null }>;
+    };
     timeToClaim: {
-      series: Array<{ bucket: string; seconds: number | null }>
-    }
-  }
+      series: Array<{ bucket: string; seconds: number | null }>;
+    };
+  };
   bot: {
-    containmentRate: number | null
-    handoff: { rate: number | null; byReason: Array<{ reason: string; count: number }> }
-    articleHitRate: number | null
-  }
+    containmentRate: number | null;
+    handoff: { rate: number | null; byReason: Array<{ reason: string; count: number }> };
+    articleHitRate: number | null;
+  };
   team: {
-    avgOpenPerActiveAgent: number | null
-    unassignedQueueDepth: { series: Array<{ bucket: string; depth: number }> }
-  }
-}
+    avgOpenPerActiveAgent: number | null;
+    unassignedQueueDepth: { series: Array<{ bucket: string; depth: number }> };
+  };
+};
 
-export type DashboardLayoutItem = { i: string; x: number; y: number; w: number; h: number }
+export type DashboardLayoutItem = { i: string; x: number; y: number; w: number; h: number };
 
 export type DashboardLayout = {
-  items: DashboardLayoutItem[]
-  visibleTileIds: string[]
-}
+  items: DashboardLayoutItem[];
+  visibleTileIds: string[];
+};
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
@@ -200,7 +212,7 @@ Expected: PASS
 
 ```typescript
 // packages/types/src/index.ts — add this line among the existing export * lines
-export * from './analytics.ts'
+export * from './analytics.ts';
 ```
 
 ```bash
@@ -213,10 +225,12 @@ git commit -m "Add shared analytics and dashboard-layout types"
 ## Task 2: `agent_dashboard_layout` schema + migration
 
 **Files:**
+
 - Create: `backend/src/shared/db/schema/analytics.ts`
 - Modify: `backend/src/shared/db/schema/index.ts`
 
 **Interfaces:**
+
 - Consumes: `agent`, `workspace` tables from `./identity.ts`.
 - Produces: `agentDashboardLayout` Drizzle table — Task 3's service imports this.
 
@@ -224,11 +238,11 @@ git commit -m "Add shared analytics and dashboard-layout types"
 
 ```typescript
 // backend/src/shared/db/schema/analytics.ts
-import { jsonb, pgTable, primaryKey, timestamp, uuid } from 'drizzle-orm/pg-core'
-import type { DashboardLayout } from '@support/types'
-import { agent, workspace } from './identity.ts'
+import { jsonb, pgTable, primaryKey, timestamp, uuid } from 'drizzle-orm/pg-core';
+import type { DashboardLayout } from '@support/types';
+import { agent, workspace } from './identity.ts';
 
-const tz = { withTimezone: true, mode: 'date' } as const
+const tz = { withTimezone: true, mode: 'date' } as const;
 
 /**
  * One row per agent per workspace: an agent's tile layout in workspace A
@@ -248,14 +262,14 @@ export const agentDashboardLayout = pgTable(
     updatedAt: timestamp('updated_at', tz).notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.agentId, t.workspaceId] })],
-)
+);
 ```
 
 - [ ] **Step 2: Export it from the schema index**
 
 ```typescript
 // backend/src/shared/db/schema/index.ts — add alongside the existing export * lines
-export * from './analytics.ts'
+export * from './analytics.ts';
 ```
 
 - [ ] **Step 3: Generate the migration**
@@ -289,6 +303,7 @@ git commit -m "Add agent_dashboard_layout table"
 ## Task 3: Layout service + routes
 
 **Files:**
+
 - Create: `backend/src/agent/services/dashboardLayoutService.ts`
 - Create: `backend/src/agent/controllers/analyticsController.ts` (layout handlers only in this task)
 - Create: `backend/src/agent/routers/analyticsRouter.ts`
@@ -296,6 +311,7 @@ git commit -m "Add agent_dashboard_layout table"
 - Test: `backend/tests/agent.dashboardLayout.test.ts`
 
 **Interfaces:**
+
 - Consumes: `agentDashboardLayout` (Task 2), `AgentContext` from `requireAgentSession.ts`,
   `withWorkspace` from `../../shared/db/withWorkspace.ts`, `DashboardLayout` from `@support/types`.
 - Produces: `getDashboardLayout(ctx): Promise<DashboardLayout>`,
@@ -307,86 +323,106 @@ git commit -m "Add agent_dashboard_layout table"
 
 ```typescript
 // backend/tests/agent.dashboardLayout.test.ts
-import { createServer } from 'node:http'
-import express from 'express'
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import { req as request } from './helpers/http.ts'
-import { closeDb } from '../src/shared/db/client.ts'
-import { requireAgentSession } from '../src/shared/middleware/requireAgentSession.ts'
-import { errorMiddleware } from '../src/errors.ts'
-import { signAgentSession } from '../src/shared/auth/agentSession.ts'
-import { analyticsRouter } from '../src/agent/routers/analyticsRouter.ts'
-import { closeOwnerPool, ownerPool, seedWorkspace, truncateAll } from './helpers/db.ts'
+import { createServer } from 'node:http';
+import express from 'express';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { req as request } from './helpers/http.ts';
+import { closeDb } from '../src/shared/db/client.ts';
+import { requireAgentSession } from '../src/shared/middleware/requireAgentSession.ts';
+import { errorMiddleware } from '../src/errors.ts';
+import { signAgentSession } from '../src/shared/auth/agentSession.ts';
+import { analyticsRouter } from '../src/agent/routers/analyticsRouter.ts';
+import { closeOwnerPool, ownerPool, seedWorkspace, truncateAll } from './helpers/db.ts';
 
-const app = express()
-app.use(express.json())
-app.use(requireAgentSession, analyticsRouter)
-app.use(errorMiddleware)
+const app = express();
+app.use(express.json());
+app.use(requireAgentSession, analyticsRouter);
+app.use(errorMiddleware);
 
 afterAll(async () => {
-  await closeDb()
-  await closeOwnerPool()
-})
+  await closeDb();
+  await closeOwnerPool();
+});
 
-beforeEach(truncateAll)
+beforeEach(truncateAll);
 
 async function setupAgent(workspaceId: string) {
   const { rows } = await ownerPool.query<{ id: string }>(
     `insert into agent (email, display_name) values ('agent1@example.test', 'Agent One') returning id`,
-  )
-  const agentId = rows[0]!.id
-  await ownerPool.query(`insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`, [
-    workspaceId,
-    agentId,
-  ])
-  const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId })
-  return { agentId, token }
+  );
+  const agentId = rows[0]!.id;
+  await ownerPool.query(
+    `insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`,
+    [workspaceId, agentId],
+  );
+  const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId });
+  return { agentId, token };
 }
 
 describe('GET /agent/analytics/layout', () => {
   it('returns the default layout when the agent has no saved row', async () => {
-    const workspaceId = await seedWorkspace()
-    const { token } = await setupAgent(workspaceId)
+    const workspaceId = await seedWorkspace();
+    const { token } = await setupAgent(workspaceId);
 
-    const res = await request(app).get('/analytics/layout').set('Authorization', `Bearer ${token}`).expect(200)
+    const res = await request(app)
+      .get('/analytics/layout')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
 
-    expect(res.body.layout.items.length).toBeGreaterThan(0)
-  })
-})
+    expect(res.body.layout.items.length).toBeGreaterThan(0);
+  });
+});
 
 describe('PUT /agent/analytics/layout', () => {
   it('round-trips a saved layout', async () => {
-    const workspaceId = await seedWorkspace()
-    const { token } = await setupAgent(workspaceId)
-    const layout = { items: [{ i: 'volume-series', x: 0, y: 0, w: 4, h: 2 }], visibleTileIds: ['volume-series'] }
+    const workspaceId = await seedWorkspace();
+    const { token } = await setupAgent(workspaceId);
+    const layout = {
+      items: [{ i: 'volume-series', x: 0, y: 0, w: 4, h: 2 }],
+      visibleTileIds: ['volume-series'],
+    };
 
-    await request(app).put('/analytics/layout').set('Authorization', `Bearer ${token}`).send({ layout }).expect(200)
-    const res = await request(app).get('/analytics/layout').set('Authorization', `Bearer ${token}`).expect(200)
+    await request(app)
+      .put('/analytics/layout')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ layout })
+      .expect(200);
+    const res = await request(app)
+      .get('/analytics/layout')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
 
-    expect(res.body.layout).toEqual(layout)
-  })
+    expect(res.body.layout).toEqual(layout);
+  });
 
-  it('does not affect another agent\'s layout in the same workspace', async () => {
-    const workspaceId = await seedWorkspace()
-    const agentA = await setupAgent(workspaceId)
+  it("does not affect another agent's layout in the same workspace", async () => {
+    const workspaceId = await seedWorkspace();
+    const agentA = await setupAgent(workspaceId);
     const { rows } = await ownerPool.query<{ id: string }>(
       `insert into agent (email, display_name) values ('agent2@example.test', 'Agent Two') returning id`,
-    )
-    const agentBId = rows[0]!.id
-    await ownerPool.query(`insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`, [
-      workspaceId,
-      agentBId,
-    ])
-    const { signAgentSession: sign } = await import('../src/shared/auth/agentSession.ts')
-    const tokenB = await sign({ agent_id: agentBId, workspace_id: workspaceId })
+    );
+    const agentBId = rows[0]!.id;
+    await ownerPool.query(
+      `insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`,
+      [workspaceId, agentBId],
+    );
+    const { signAgentSession: sign } = await import('../src/shared/auth/agentSession.ts');
+    const tokenB = await sign({ agent_id: agentBId, workspace_id: workspaceId });
 
-    const layoutA = { items: [{ i: 'x', x: 0, y: 0, w: 1, h: 1 }], visibleTileIds: ['x'] }
-    await request(app).put('/analytics/layout').set('Authorization', `Bearer ${agentA.token}`).send({ layout: layoutA }).expect(200)
+    const layoutA = { items: [{ i: 'x', x: 0, y: 0, w: 1, h: 1 }], visibleTileIds: ['x'] };
+    await request(app)
+      .put('/analytics/layout')
+      .set('Authorization', `Bearer ${agentA.token}`)
+      .send({ layout: layoutA })
+      .expect(200);
 
-    const resB = await request(app).get('/analytics/layout').set('Authorization', `Bearer ${tokenB}`).expect(200)
-    expect(resB.body.layout).not.toEqual(layoutA)
-  })
-})
+    const resB = await request(app)
+      .get('/analytics/layout')
+      .set('Authorization', `Bearer ${tokenB}`)
+      .expect(200);
+    expect(resB.body.layout).not.toEqual(layoutA);
+  });
+});
 ```
 
 - [ ] **Step 2: Run to verify it fails**
@@ -398,11 +434,11 @@ Expected: FAIL — `Cannot find module '../src/agent/routers/analyticsRouter.ts'
 
 ```typescript
 // backend/src/agent/services/dashboardLayoutService.ts
-import { eq, and } from 'drizzle-orm'
-import type { DashboardLayout } from '@support/types'
-import { agentDashboardLayout } from '../../shared/db/schema/index.ts'
-import { withWorkspace } from '../../shared/db/withWorkspace.ts'
-import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts'
+import { eq, and } from 'drizzle-orm';
+import type { DashboardLayout } from '@support/types';
+import { agentDashboardLayout } from '../../shared/db/schema/index.ts';
+import { withWorkspace } from '../../shared/db/withWorkspace.ts';
+import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts';
 
 // x/w are in a 12-column grid; each row is 1 unit tall in react-grid-layout terms.
 export const DEFAULT_LAYOUT: DashboardLayout = {
@@ -434,19 +470,27 @@ export const DEFAULT_LAYOUT: DashboardLayout = {
     'avg-open-per-agent',
     'unassigned-queue-depth',
   ],
-}
+};
 
 export async function getDashboardLayout(ctx: AgentContext): Promise<DashboardLayout> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
     const [row] = await tx
       .select({ layout: agentDashboardLayout.layout })
       .from(agentDashboardLayout)
-      .where(and(eq(agentDashboardLayout.agentId, ctx.agentId), eq(agentDashboardLayout.workspaceId, ctx.workspaceId)))
-    return row?.layout ?? DEFAULT_LAYOUT
-  })
+      .where(
+        and(
+          eq(agentDashboardLayout.agentId, ctx.agentId),
+          eq(agentDashboardLayout.workspaceId, ctx.workspaceId),
+        ),
+      );
+    return row?.layout ?? DEFAULT_LAYOUT;
+  });
 }
 
-export async function saveDashboardLayout(ctx: AgentContext, layout: DashboardLayout): Promise<void> {
+export async function saveDashboardLayout(
+  ctx: AgentContext,
+  layout: DashboardLayout,
+): Promise<void> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
     await tx
       .insert(agentDashboardLayout)
@@ -454,8 +498,8 @@ export async function saveDashboardLayout(ctx: AgentContext, layout: DashboardLa
       .onConflictDoUpdate({
         target: [agentDashboardLayout.agentId, agentDashboardLayout.workspaceId],
         set: { layout, updatedAt: new Date() },
-      })
-  })
+      });
+  });
 }
 ```
 
@@ -463,10 +507,10 @@ export async function saveDashboardLayout(ctx: AgentContext, layout: DashboardLa
 
 ```typescript
 // backend/src/agent/controllers/analyticsController.ts
-import type { RequestHandler } from 'express'
-import { z } from 'zod'
-import { sendError } from '../../errors.ts'
-import { getDashboardLayout, saveDashboardLayout } from '../services/dashboardLayoutService.ts'
+import type { RequestHandler } from 'express';
+import { z } from 'zod';
+import { sendError } from '../../errors.ts';
+import { getDashboardLayout, saveDashboardLayout } from '../services/dashboardLayoutService.ts';
 
 const DashboardLayoutItemSchema = z.object({
   i: z.string().min(1),
@@ -474,50 +518,53 @@ const DashboardLayoutItemSchema = z.object({
   y: z.number().int().nonnegative(),
   w: z.number().int().positive(),
   h: z.number().int().positive(),
-})
+});
 
 const SaveLayoutBody = z.object({
   layout: z.object({
     items: z.array(DashboardLayoutItemSchema),
     visibleTileIds: z.array(z.string()),
   }),
-})
+});
 
 export const getDashboardLayoutHandler: RequestHandler = async (req, res) => {
-  const ctx = req.agent!
-  const layout = await getDashboardLayout(ctx)
-  res.status(200).json({ layout })
-}
+  const ctx = req.agent!;
+  const layout = await getDashboardLayout(ctx);
+  res.status(200).json({ layout });
+};
 
 export const saveDashboardLayoutHandler: RequestHandler = async (req, res) => {
-  const ctx = req.agent!
-  const body = SaveLayoutBody.safeParse(req.body)
+  const ctx = req.agent!;
+  const body = SaveLayoutBody.safeParse(req.body);
   if (!body.success) {
-    sendError(res, 422, 'invalid_request', 'layout must have items[] and visibleTileIds[].')
-    return
+    sendError(res, 422, 'invalid_request', 'layout must have items[] and visibleTileIds[].');
+    return;
   }
-  await saveDashboardLayout(ctx, body.data.layout)
-  res.status(200).json({ ok: true })
-}
+  await saveDashboardLayout(ctx, body.data.layout);
+  res.status(200).json({ ok: true });
+};
 ```
 
 - [ ] **Step 5: Write the router and mount it**
 
 ```typescript
 // backend/src/agent/routers/analyticsRouter.ts
-import { Router } from 'express'
-import { getDashboardLayoutHandler, saveDashboardLayoutHandler } from '../controllers/analyticsController.ts'
+import { Router } from 'express';
+import {
+  getDashboardLayoutHandler,
+  saveDashboardLayoutHandler,
+} from '../controllers/analyticsController.ts';
 
-export const analyticsRouter = Router()
-analyticsRouter.get('/analytics/layout', getDashboardLayoutHandler)
-analyticsRouter.put('/analytics/layout', saveDashboardLayoutHandler)
+export const analyticsRouter = Router();
+analyticsRouter.get('/analytics/layout', getDashboardLayoutHandler);
+analyticsRouter.put('/analytics/layout', saveDashboardLayoutHandler);
 ```
 
 ```typescript
 // backend/src/agent/router.ts — add import and mount alongside the other routers
-import { analyticsRouter } from './routers/analyticsRouter.ts'
+import { analyticsRouter } from './routers/analyticsRouter.ts';
 // ...
-agentRouter.use(analyticsRouter)
+agentRouter.use(analyticsRouter);
 ```
 
 - [ ] **Step 6: Run to verify it passes**
@@ -537,10 +584,12 @@ git commit -m "Add dashboard layout get/save endpoints"
 ## Task 4: Analytics service — volume & status metrics
 
 **Files:**
+
 - Create: `backend/src/agent/services/analyticsService.ts`
 - Test: `backend/tests/agent.analytics.test.ts`
 
 **Interfaces:**
+
 - Consumes: `event`, `conversation` tables; `withWorkspace`; `AgentContext`; `AnalyticsRange` type.
 - Produces: `getVolumeMetrics(ctx, range): Promise<AnalyticsResponse['volume']>` — Task 8's route
   handler calls this alongside the other three metric-group functions added in Tasks 5–7.
@@ -549,49 +598,55 @@ git commit -m "Add dashboard layout get/save endpoints"
 
 ```typescript
 // backend/tests/agent.analytics.test.ts (new file — later tasks append more describe blocks to it)
-import { afterAll, beforeEach, describe, expect, it } from 'vitest'
-import { closeDb } from '../src/shared/db/client.ts'
-import { getVolumeMetrics } from '../src/agent/services/analyticsService.ts'
-import { closeOwnerPool, seedConversation, seedPlayer, seedWorkspace, truncateAll } from './helpers/db.ts'
+import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { closeDb } from '../src/shared/db/client.ts';
+import { getVolumeMetrics } from '../src/agent/services/analyticsService.ts';
+import {
+  closeOwnerPool,
+  seedConversation,
+  seedPlayer,
+  seedWorkspace,
+  truncateAll,
+} from './helpers/db.ts';
 
 afterAll(async () => {
-  await closeDb()
-  await closeOwnerPool()
-})
+  await closeDb();
+  await closeOwnerPool();
+});
 
-beforeEach(truncateAll)
+beforeEach(truncateAll);
 
-const RANGE = { from: '2026-08-01', to: '2026-08-31', granularity: 'day' as const }
+const RANGE = { from: '2026-08-01', to: '2026-08-31', granularity: 'day' as const };
 
 describe('getVolumeMetrics', () => {
   it('counts open conversations and groups by status/priority', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    await seedConversation({ workspaceId, playerId, status: 'open' })
-    await seedConversation({ workspaceId, playerId, status: 'resolved' })
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    await seedConversation({ workspaceId, playerId, status: 'open' });
+    await seedConversation({ workspaceId, playerId, status: 'resolved' });
 
-    const result = await getVolumeMetrics({ agentId: 'unused', workspaceId }, RANGE)
+    const result = await getVolumeMetrics({ agentId: 'unused', workspaceId }, RANGE);
 
-    expect(result.openTotal).toBe(1)
+    expect(result.openTotal).toBe(1);
     expect(result.byStatus).toEqual(
       expect.arrayContaining([
         { status: 'open', count: 1 },
         { status: 'resolved', count: 1 },
       ]),
-    )
-  })
+    );
+  });
 
-  it('never reflects another workspace\'s conversations', async () => {
-    const workspaceA = await seedWorkspace()
-    const workspaceB = await seedWorkspace()
-    const playerB = await seedPlayer(workspaceB)
-    await seedConversation({ workspaceId: workspaceB, playerId: playerB, status: 'open' })
+  it("never reflects another workspace's conversations", async () => {
+    const workspaceA = await seedWorkspace();
+    const workspaceB = await seedWorkspace();
+    const playerB = await seedPlayer(workspaceB);
+    await seedConversation({ workspaceId: workspaceB, playerId: playerB, status: 'open' });
 
-    const result = await getVolumeMetrics({ agentId: 'unused', workspaceId: workspaceA }, RANGE)
+    const result = await getVolumeMetrics({ agentId: 'unused', workspaceId: workspaceA }, RANGE);
 
-    expect(result.openTotal).toBe(0)
-  })
-})
+    expect(result.openTotal).toBe(0);
+  });
+});
 ```
 
 - [ ] **Step 2: Run to verify it fails**
@@ -603,11 +658,11 @@ Expected: FAIL — `Cannot find module '../src/agent/services/analyticsService.t
 
 ```typescript
 // backend/src/agent/services/analyticsService.ts
-import { and, eq, gte, lte, notInArray, sql } from 'drizzle-orm'
-import type { AnalyticsRange, AnalyticsResponse } from '@support/types'
-import { conversation } from '../../shared/db/schema/index.ts'
-import { withWorkspace } from '../../shared/db/withWorkspace.ts'
-import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts'
+import { and, eq, gte, lte, notInArray, sql } from 'drizzle-orm';
+import type { AnalyticsRange, AnalyticsResponse } from '@support/types';
+import { conversation } from '../../shared/db/schema/index.ts';
+import { withWorkspace } from '../../shared/db/withWorkspace.ts';
+import type { AgentContext } from '../../shared/middleware/requireAgentSession.ts';
 
 const OPEN_STATUSES: (typeof conversation.status.enumValues)[number][] = [
   'new',
@@ -615,17 +670,17 @@ const OPEN_STATUSES: (typeof conversation.status.enumValues)[number][] = [
   'open',
   'awaiting_player',
   'escalated',
-]
+];
 
 export async function getVolumeMetrics(
   ctx: Pick<AgentContext, 'workspaceId'>,
   range: AnalyticsRange,
 ): Promise<AnalyticsResponse['volume']> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
-    const from = new Date(range.from)
-    const to = new Date(range.to)
+    const from = new Date(range.from);
+    const to = new Date(range.to);
 
-    const inRange = and(gte(conversation.createdAt, from), lte(conversation.createdAt, to))
+    const inRange = and(gte(conversation.createdAt, from), lte(conversation.createdAt, to));
 
     const seriesRows = await tx
       .select({
@@ -635,7 +690,7 @@ export async function getVolumeMetrics(
       .from(conversation)
       .where(inRange)
       .groupBy(sql`1`)
-      .orderBy(sql`1`)
+      .orderBy(sql`1`);
 
     const resolvedRows = await tx
       .select({
@@ -645,39 +700,41 @@ export async function getVolumeMetrics(
       .from(conversation)
       .where(and(gte(conversation.resolvedAt, from), lte(conversation.resolvedAt, to)))
       .groupBy(sql`1`)
-      .orderBy(sql`1`)
+      .orderBy(sql`1`);
 
-    const seriesByBucket = new Map<string, { bucket: string; opened: number; resolved: number }>()
-    for (const row of seriesRows) seriesByBucket.set(row.bucket, { bucket: row.bucket, opened: row.opened, resolved: 0 })
+    const seriesByBucket = new Map<string, { bucket: string; opened: number; resolved: number }>();
+    for (const row of seriesRows)
+      seriesByBucket.set(row.bucket, { bucket: row.bucket, opened: row.opened, resolved: 0 });
     for (const row of resolvedRows) {
-      const existing = seriesByBucket.get(row.bucket)
-      if (existing) existing.resolved = row.resolved
-      else seriesByBucket.set(row.bucket, { bucket: row.bucket, opened: 0, resolved: row.resolved })
+      const existing = seriesByBucket.get(row.bucket);
+      if (existing) existing.resolved = row.resolved;
+      else
+        seriesByBucket.set(row.bucket, { bucket: row.bucket, opened: 0, resolved: row.resolved });
     }
 
     const byStatusRows = await tx
       .select({ status: conversation.status, count: sql<number>`count(*)::int` })
       .from(conversation)
-      .groupBy(conversation.status)
+      .groupBy(conversation.status);
 
     const [{ openTotal }] = await tx
       .select({ openTotal: sql<number>`count(*)::int` })
       .from(conversation)
-      .where(notInArray(conversation.status, ['resolved', 'closed']))
+      .where(notInArray(conversation.status, ['resolved', 'closed']));
 
     const byPriorityRows = await tx
       .select({ priority: conversation.priority, count: sql<number>`count(*)::int` })
       .from(conversation)
       .where(notInArray(conversation.status, ['resolved', 'closed']))
-      .groupBy(conversation.priority)
+      .groupBy(conversation.priority);
 
     return {
       series: [...seriesByBucket.values()].sort((a, b) => a.bucket.localeCompare(b.bucket)),
       byStatus: byStatusRows.map((r) => ({ status: r.status, count: r.count })),
       openTotal,
       byPriority: byPriorityRows.map((r) => ({ priority: r.priority, count: r.count })),
-    }
-  })
+    };
+  });
 }
 ```
 
@@ -704,10 +761,12 @@ git commit -m "Add volume & status analytics metrics"
 ## Task 5: Analytics service — speed metrics
 
 **Files:**
+
 - Modify: `backend/src/agent/services/analyticsService.ts`
 - Modify: `backend/tests/agent.analytics.test.ts`
 
 **Interfaces:**
+
 - Consumes: `event` table (`conversation_opened`, `conversation_assigned_bot`, `message_sent`,
   `conversation_assigned`, `conversation_resolved`, `conversation_resolved_forced` event types — see
   `event.type`, `event.actorType`, `event.occurredAt`, `event.conversationId`).
@@ -717,35 +776,41 @@ git commit -m "Add volume & status analytics metrics"
 
 ```typescript
 // append to backend/tests/agent.analytics.test.ts
-import { getSpeedMetrics } from '../src/agent/services/analyticsService.ts'
-import { appendEvent } from '../src/shared/events/appendEvent.ts'
-import { db } from '../src/shared/db/client.ts'
-import { withWorkspace } from '../src/shared/db/withWorkspace.ts'
+import { getSpeedMetrics } from '../src/agent/services/analyticsService.ts';
+import { appendEvent } from '../src/shared/events/appendEvent.ts';
+import { db } from '../src/shared/db/client.ts';
+import { withWorkspace } from '../src/shared/db/withWorkspace.ts';
 
 describe('getSpeedMetrics', () => {
   it('computes first-response time from conversation_opened to the first agent message_sent event', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId, status: 'open' })
-    const opened = new Date('2026-08-05T10:00:00Z')
-    const firstReply = new Date('2026-08-05T10:02:00Z') // 120s later
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId, status: 'open' });
+    const opened = new Date('2026-08-05T10:00:00Z');
+    const firstReply = new Date('2026-08-05T10:02:00Z'); // 120s later
 
     await withWorkspace(workspaceId, async (tx) => {
-      await appendEvent(tx, { workspaceId, type: 'conversation_opened', conversationId, actorType: 'system', occurredAt: opened })
+      await appendEvent(tx, {
+        workspaceId,
+        type: 'conversation_opened',
+        conversationId,
+        actorType: 'system',
+        occurredAt: opened,
+      });
       await appendEvent(tx, {
         workspaceId,
         type: 'message_sent',
         conversationId,
         actorType: 'agent',
         occurredAt: firstReply,
-      })
-    })
+      });
+    });
 
-    const result = await getSpeedMetrics({ agentId: 'unused', workspaceId }, RANGE)
+    const result = await getSpeedMetrics({ agentId: 'unused', workspaceId }, RANGE);
 
-    expect(result.firstResponse.avgSeconds).toBe(120)
-  })
-})
+    expect(result.firstResponse.avgSeconds).toBe(120);
+  });
+});
 ```
 
 - [ ] **Step 2: Run to verify it fails**
@@ -757,56 +822,71 @@ Expected: FAIL — `getSpeedMetrics is not a function`
 
 ```typescript
 // append to backend/src/agent/services/analyticsService.ts
-import { event } from '../../shared/db/schema/index.ts'
-import { asc, inArray } from 'drizzle-orm'
+import { event } from '../../shared/db/schema/index.ts';
+import { asc, inArray } from 'drizzle-orm';
 
-async function firstResponseSecondsByConversation(tx: Parameters<typeof withWorkspace<unknown>>[1] extends (tx: infer T) => unknown ? T : never, from: Date, to: Date) {
+async function firstResponseSecondsByConversation(
+  tx: Parameters<typeof withWorkspace<unknown>>[1] extends (tx: infer T) => unknown ? T : never,
+  from: Date,
+  to: Date,
+) {
   const opens = await tx
     .select({ conversationId: event.conversationId, occurredAt: event.occurredAt })
     .from(event)
-    .where(and(eq(event.type, 'conversation_opened'), gte(event.occurredAt, from), lte(event.occurredAt, to)))
+    .where(
+      and(
+        eq(event.type, 'conversation_opened'),
+        gte(event.occurredAt, from),
+        lte(event.occurredAt, to),
+      ),
+    );
 
   const replies = await tx
     .select({ conversationId: event.conversationId, occurredAt: event.occurredAt })
     .from(event)
     .where(and(eq(event.type, 'message_sent'), eq(event.actorType, 'agent')))
-    .orderBy(asc(event.occurredAt))
+    .orderBy(asc(event.occurredAt));
 
-  const firstReplyByConversation = new Map<string, Date>()
+  const firstReplyByConversation = new Map<string, Date>();
   for (const reply of replies) {
-    if (!reply.conversationId) continue
-    if (!firstReplyByConversation.has(reply.conversationId)) firstReplyByConversation.set(reply.conversationId, reply.occurredAt)
+    if (!reply.conversationId) continue;
+    if (!firstReplyByConversation.has(reply.conversationId))
+      firstReplyByConversation.set(reply.conversationId, reply.occurredAt);
   }
 
-  const seconds: Array<{ bucket: string; seconds: number }> = []
+  const seconds: Array<{ bucket: string; seconds: number }> = [];
   for (const open of opens) {
-    if (!open.conversationId) continue
-    const reply = firstReplyByConversation.get(open.conversationId)
-    if (!reply || reply < open.occurredAt) continue
-    const diffSeconds = (reply.getTime() - open.occurredAt.getTime()) / 1000
-    seconds.push({ bucket: open.occurredAt.toISOString().slice(0, 10), seconds: diffSeconds })
+    if (!open.conversationId) continue;
+    const reply = firstReplyByConversation.get(open.conversationId);
+    if (!reply || reply < open.occurredAt) continue;
+    const diffSeconds = (reply.getTime() - open.occurredAt.getTime()) / 1000;
+    seconds.push({ bucket: open.occurredAt.toISOString().slice(0, 10), seconds: diffSeconds });
   }
-  return seconds
+  return seconds;
 }
 
-function summarize(values: number[]): { avgSeconds: number | null; p50Seconds: number | null; p90Seconds: number | null } {
-  if (values.length === 0) return { avgSeconds: null, p50Seconds: null, p90Seconds: null }
-  const sorted = [...values].sort((a, b) => a - b)
-  const avg = sorted.reduce((sum, v) => sum + v, 0) / sorted.length
-  const pick = (p: number) => sorted[Math.min(sorted.length - 1, Math.floor(p * sorted.length))]!
-  return { avgSeconds: avg, p50Seconds: pick(0.5), p90Seconds: pick(0.9) }
+function summarize(values: number[]): {
+  avgSeconds: number | null;
+  p50Seconds: number | null;
+  p90Seconds: number | null;
+} {
+  if (values.length === 0) return { avgSeconds: null, p50Seconds: null, p90Seconds: null };
+  const sorted = [...values].sort((a, b) => a - b);
+  const avg = sorted.reduce((sum, v) => sum + v, 0) / sorted.length;
+  const pick = (p: number) => sorted[Math.min(sorted.length - 1, Math.floor(p * sorted.length))]!;
+  return { avgSeconds: avg, p50Seconds: pick(0.5), p90Seconds: pick(0.9) };
 }
 
 function bucketSeries(points: Array<{ bucket: string; seconds: number }>) {
-  const byBucket = new Map<string, number[]>()
+  const byBucket = new Map<string, number[]>();
   for (const p of points) {
-    const arr = byBucket.get(p.bucket) ?? []
-    arr.push(p.seconds)
-    byBucket.set(p.bucket, arr)
+    const arr = byBucket.get(p.bucket) ?? [];
+    arr.push(p.seconds);
+    byBucket.set(p.bucket, arr);
   }
   return [...byBucket.entries()]
     .map(([bucket, secs]) => ({ bucket, seconds: secs.reduce((s, v) => s + v, 0) / secs.length }))
-    .sort((a, b) => a.bucket.localeCompare(b.bucket))
+    .sort((a, b) => a.bucket.localeCompare(b.bucket));
 }
 
 export async function getSpeedMetrics(
@@ -814,63 +894,89 @@ export async function getSpeedMetrics(
   range: AnalyticsRange,
 ): Promise<AnalyticsResponse['speed']> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
-    const from = new Date(range.from)
-    const to = new Date(range.to)
+    const from = new Date(range.from);
+    const to = new Date(range.to);
 
-    const firstResponsePoints = await firstResponseSecondsByConversation(tx, from, to)
+    const firstResponsePoints = await firstResponseSecondsByConversation(tx, from, to);
 
     const resolutions = await tx
-      .select({ conversationId: event.conversationId, type: event.type, occurredAt: event.occurredAt })
+      .select({
+        conversationId: event.conversationId,
+        type: event.type,
+        occurredAt: event.occurredAt,
+      })
       .from(event)
-      .where(inArray(event.type, ['conversation_opened', 'conversation_resolved', 'conversation_resolved_forced']))
-      .orderBy(asc(event.occurredAt))
+      .where(
+        inArray(event.type, [
+          'conversation_opened',
+          'conversation_resolved',
+          'conversation_resolved_forced',
+        ]),
+      )
+      .orderBy(asc(event.occurredAt));
 
-    const openedAt = new Map<string, Date>()
-    const resolutionPoints: Array<{ bucket: string; seconds: number }> = []
+    const openedAt = new Map<string, Date>();
+    const resolutionPoints: Array<{ bucket: string; seconds: number }> = [];
     for (const row of resolutions) {
-      if (!row.conversationId) continue
+      if (!row.conversationId) continue;
       if (row.type === 'conversation_opened') {
-        openedAt.set(row.conversationId, row.occurredAt)
+        openedAt.set(row.conversationId, row.occurredAt);
       } else {
-        const opened = openedAt.get(row.conversationId)
+        const opened = openedAt.get(row.conversationId);
         if (opened && row.occurredAt >= from && row.occurredAt <= to) {
           resolutionPoints.push({
             bucket: opened.toISOString().slice(0, 10),
             seconds: (row.occurredAt.getTime() - opened.getTime()) / 1000,
-          })
+          });
         }
       }
     }
 
     const claims = await tx
-      .select({ conversationId: event.conversationId, type: event.type, occurredAt: event.occurredAt })
+      .select({
+        conversationId: event.conversationId,
+        type: event.type,
+        occurredAt: event.occurredAt,
+      })
       .from(event)
-      .where(inArray(event.type, ['conversation_opened', 'conversation_assigned_bot', 'conversation_assigned']))
-      .orderBy(asc(event.occurredAt))
+      .where(
+        inArray(event.type, [
+          'conversation_opened',
+          'conversation_assigned_bot',
+          'conversation_assigned',
+        ]),
+      )
+      .orderBy(asc(event.occurredAt));
 
-    const queuedAt = new Map<string, Date>()
-    const claimPoints: Array<{ bucket: string; seconds: number }> = []
+    const queuedAt = new Map<string, Date>();
+    const claimPoints: Array<{ bucket: string; seconds: number }> = [];
     for (const row of claims) {
-      if (!row.conversationId) continue
+      if (!row.conversationId) continue;
       if (row.type === 'conversation_opened' || row.type === 'conversation_assigned_bot') {
-        if (!queuedAt.has(row.conversationId)) queuedAt.set(row.conversationId, row.occurredAt)
+        if (!queuedAt.has(row.conversationId)) queuedAt.set(row.conversationId, row.occurredAt);
       } else {
-        const queued = queuedAt.get(row.conversationId)
+        const queued = queuedAt.get(row.conversationId);
         if (queued && row.occurredAt >= from && row.occurredAt <= to) {
           claimPoints.push({
             bucket: queued.toISOString().slice(0, 10),
             seconds: (row.occurredAt.getTime() - queued.getTime()) / 1000,
-          })
+          });
         }
       }
     }
 
     return {
-      firstResponse: { ...summarize(firstResponsePoints.map((p) => p.seconds)), series: bucketSeries(firstResponsePoints) },
-      resolution: { ...summarize(resolutionPoints.map((p) => p.seconds)), series: bucketSeries(resolutionPoints) },
+      firstResponse: {
+        ...summarize(firstResponsePoints.map((p) => p.seconds)),
+        series: bucketSeries(firstResponsePoints),
+      },
+      resolution: {
+        ...summarize(resolutionPoints.map((p) => p.seconds)),
+        series: bucketSeries(resolutionPoints),
+      },
       timeToClaim: { series: bucketSeries(claimPoints) },
-    }
-  })
+    };
+  });
 }
 ```
 
@@ -895,10 +1001,12 @@ git commit -m "Add speed analytics metrics (first response, resolution, time-to-
 ## Task 6: Analytics service — bot performance metrics
 
 **Files:**
+
 - Modify: `backend/src/agent/services/analyticsService.ts`
 - Modify: `backend/tests/agent.analytics.test.ts`
 
 **Interfaces:**
+
 - Consumes: `event` (`bot_handoff`, `bot_search`, `bot_article_offered`), `conversation.resolutionSource`.
 - Produces: `getBotMetrics(ctx, range): Promise<AnalyticsResponse['bot']>`.
 
@@ -906,24 +1014,29 @@ git commit -m "Add speed analytics metrics (first response, resolution, time-to-
 
 ```typescript
 // append to backend/tests/agent.analytics.test.ts
-import { getBotMetrics } from '../src/agent/services/analyticsService.ts'
+import { getBotMetrics } from '../src/agent/services/analyticsService.ts';
 
 describe('getBotMetrics', () => {
   it('computes containment rate as bot-resolved over total resolved', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    await seedConversation({ workspaceId, playerId, status: 'resolved', resolutionSource: 'bot' })
-    await seedConversation({ workspaceId, playerId, status: 'resolved', resolutionSource: 'agent' })
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    await seedConversation({ workspaceId, playerId, status: 'resolved', resolutionSource: 'bot' });
+    await seedConversation({
+      workspaceId,
+      playerId,
+      status: 'resolved',
+      resolutionSource: 'agent',
+    });
 
-    const result = await getBotMetrics({ agentId: 'unused', workspaceId }, RANGE)
+    const result = await getBotMetrics({ agentId: 'unused', workspaceId }, RANGE);
 
-    expect(result.containmentRate).toBe(0.5)
-  })
+    expect(result.containmentRate).toBe(0.5);
+  });
 
   it('groups handoffs by reason from the event payload', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
-    const conversationId = await seedConversation({ workspaceId, playerId, status: 'escalated' })
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
+    const conversationId = await seedConversation({ workspaceId, playerId, status: 'escalated' });
     await withWorkspace(workspaceId, async (tx) => {
       await appendEvent(tx, {
         workspaceId,
@@ -932,14 +1045,14 @@ describe('getBotMetrics', () => {
         actorType: 'bot',
         payload: { reason: 'article_rejected' },
         occurredAt: new Date('2026-08-05T10:00:00Z'),
-      })
-    })
+      });
+    });
 
-    const result = await getBotMetrics({ agentId: 'unused', workspaceId }, RANGE)
+    const result = await getBotMetrics({ agentId: 'unused', workspaceId }, RANGE);
 
-    expect(result.handoff.byReason).toEqual([{ reason: 'article_rejected', count: 1 }])
-  })
-})
+    expect(result.handoff.byReason).toEqual([{ reason: 'article_rejected', count: 1 }]);
+  });
+});
 ```
 
 - [ ] **Step 2: Run to verify it fails**
@@ -956,52 +1069,67 @@ export async function getBotMetrics(
   range: AnalyticsRange,
 ): Promise<AnalyticsResponse['bot']> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
-    const from = new Date(range.from)
-    const to = new Date(range.to)
+    const from = new Date(range.from);
+    const to = new Date(range.to);
 
     const [{ botResolved }] = await tx
-      .select({ botResolved: sql<number>`count(*) filter (where ${conversation.resolutionSource} = 'bot')::int` })
+      .select({
+        botResolved: sql<number>`count(*) filter (where ${conversation.resolutionSource} = 'bot')::int`,
+      })
       .from(conversation)
-      .where(eq(conversation.status, 'resolved'))
+      .where(eq(conversation.status, 'resolved'));
     const [{ totalResolved }] = await tx
       .select({ totalResolved: sql<number>`count(*)::int` })
       .from(conversation)
-      .where(eq(conversation.status, 'resolved'))
+      .where(eq(conversation.status, 'resolved'));
 
     const [{ handoffCount }] = await tx
       .select({ handoffCount: sql<number>`count(*)::int` })
       .from(event)
-      .where(and(eq(event.type, 'bot_handoff'), gte(event.occurredAt, from), lte(event.occurredAt, to)))
+      .where(
+        and(eq(event.type, 'bot_handoff'), gte(event.occurredAt, from), lte(event.occurredAt, to)),
+      );
 
     const handoffRows = await tx
       .select({ payload: event.payload })
       .from(event)
-      .where(and(eq(event.type, 'bot_handoff'), gte(event.occurredAt, from), lte(event.occurredAt, to)))
+      .where(
+        and(eq(event.type, 'bot_handoff'), gte(event.occurredAt, from), lte(event.occurredAt, to)),
+      );
 
-    const reasonCounts = new Map<string, number>()
+    const reasonCounts = new Map<string, number>();
     for (const row of handoffRows) {
-      const reason = typeof row.payload.reason === 'string' ? row.payload.reason : 'unknown'
-      reasonCounts.set(reason, (reasonCounts.get(reason) ?? 0) + 1)
+      const reason = typeof row.payload.reason === 'string' ? row.payload.reason : 'unknown';
+      reasonCounts.set(reason, (reasonCounts.get(reason) ?? 0) + 1);
     }
 
     const [{ searchCount }] = await tx
       .select({ searchCount: sql<number>`count(*)::int` })
       .from(event)
-      .where(and(eq(event.type, 'bot_search'), gte(event.occurredAt, from), lte(event.occurredAt, to)))
+      .where(
+        and(eq(event.type, 'bot_search'), gte(event.occurredAt, from), lte(event.occurredAt, to)),
+      );
     const [{ offeredCount }] = await tx
       .select({ offeredCount: sql<number>`count(*)::int` })
       .from(event)
-      .where(and(eq(event.type, 'bot_article_offered'), gte(event.occurredAt, from), lte(event.occurredAt, to)))
+      .where(
+        and(
+          eq(event.type, 'bot_article_offered'),
+          gte(event.occurredAt, from),
+          lte(event.occurredAt, to),
+        ),
+      );
 
     return {
       containmentRate: totalResolved > 0 ? botResolved / totalResolved : null,
       handoff: {
-        rate: totalResolved + handoffCount > 0 ? handoffCount / (totalResolved + handoffCount) : null,
+        rate:
+          totalResolved + handoffCount > 0 ? handoffCount / (totalResolved + handoffCount) : null,
         byReason: [...reasonCounts.entries()].map(([reason, count]) => ({ reason, count })),
       },
       articleHitRate: searchCount > 0 ? offeredCount / searchCount : null,
-    }
-  })
+    };
+  });
 }
 ```
 
@@ -1022,10 +1150,12 @@ git commit -m "Add bot performance analytics metrics"
 ## Task 7: Analytics service — team/workload aggregate metrics
 
 **Files:**
+
 - Modify: `backend/src/agent/services/analyticsService.ts`
 - Modify: `backend/tests/agent.analytics.test.ts`
 
 **Interfaces:**
+
 - Consumes: `conversation.assignedAgentId`, `workspaceMember` (for active-agent count),
   `event` (`conversation_opened`, `conversation_assigned`).
 - Produces: `getTeamMetrics(ctx, range): Promise<AnalyticsResponse['team']>`.
@@ -1034,26 +1164,26 @@ git commit -m "Add bot performance analytics metrics"
 
 ```typescript
 // append to backend/tests/agent.analytics.test.ts
-import { getTeamMetrics } from '../src/agent/services/analyticsService.ts'
-import { seedWorkspaceMember } from './helpers/db.ts'
+import { getTeamMetrics } from '../src/agent/services/analyticsService.ts';
+import { seedWorkspaceMember } from './helpers/db.ts';
 
 describe('getTeamMetrics', () => {
   it('divides assigned open conversations by active agent count', async () => {
-    const workspaceId = await seedWorkspace()
-    const playerId = await seedPlayer(workspaceId)
+    const workspaceId = await seedWorkspace();
+    const playerId = await seedPlayer(workspaceId);
     const { rows } = await ownerPool.query<{ id: string }>(
       `insert into agent (email, display_name) values ('agent1@example.test', 'Agent One') returning id`,
-    )
-    const agentId = rows[0]!.id
-    await seedWorkspaceMember({ workspaceId, agentId })
-    await seedConversation({ workspaceId, playerId, status: 'open', assignedAgentId: agentId })
-    await seedConversation({ workspaceId, playerId, status: 'open', assignedAgentId: agentId })
+    );
+    const agentId = rows[0]!.id;
+    await seedWorkspaceMember({ workspaceId, agentId });
+    await seedConversation({ workspaceId, playerId, status: 'open', assignedAgentId: agentId });
+    await seedConversation({ workspaceId, playerId, status: 'open', assignedAgentId: agentId });
 
-    const result = await getTeamMetrics({ agentId: 'unused', workspaceId }, RANGE)
+    const result = await getTeamMetrics({ agentId: 'unused', workspaceId }, RANGE);
 
-    expect(result.avgOpenPerActiveAgent).toBe(2)
-  })
-})
+    expect(result.avgOpenPerActiveAgent).toBe(2);
+  });
+});
 ```
 
 - [ ] **Step 2: Run to verify it fails**
@@ -1065,50 +1195,67 @@ Expected: FAIL — `getTeamMetrics is not a function`
 
 ```typescript
 // append to backend/src/agent/services/analyticsService.ts
-import { workspaceMember } from '../../shared/db/schema/index.ts'
-import { isNull, isNotNull } from 'drizzle-orm'
+import { workspaceMember } from '../../shared/db/schema/index.ts';
+import { isNull, isNotNull } from 'drizzle-orm';
 
 export async function getTeamMetrics(
   ctx: Pick<AgentContext, 'workspaceId'>,
   range: AnalyticsRange,
 ): Promise<AnalyticsResponse['team']> {
   return withWorkspace(ctx.workspaceId, async (tx) => {
-    const from = new Date(range.from)
-    const to = new Date(range.to)
+    const from = new Date(range.from);
+    const to = new Date(range.to);
 
     const [{ assignedOpen }] = await tx
       .select({ assignedOpen: sql<number>`count(*)::int` })
       .from(conversation)
-      .where(and(isNotNull(conversation.assignedAgentId), notInArray(conversation.status, ['resolved', 'closed'])))
+      .where(
+        and(
+          isNotNull(conversation.assignedAgentId),
+          notInArray(conversation.status, ['resolved', 'closed']),
+        ),
+      );
 
     const [{ activeAgents }] = await tx
       .select({ activeAgents: sql<number>`count(*)::int` })
       .from(workspaceMember)
-      .where(isNull(workspaceMember.deactivatedAt))
+      .where(isNull(workspaceMember.deactivatedAt));
 
     const opens = await tx
       .select({ conversationId: event.conversationId, occurredAt: event.occurredAt })
       .from(event)
-      .where(and(eq(event.type, 'conversation_opened'), gte(event.occurredAt, from), lte(event.occurredAt, to)))
+      .where(
+        and(
+          eq(event.type, 'conversation_opened'),
+          gte(event.occurredAt, from),
+          lte(event.occurredAt, to),
+        ),
+      );
     const assigns = await tx
       .select({ conversationId: event.conversationId, occurredAt: event.occurredAt })
       .from(event)
-      .where(and(eq(event.type, 'conversation_assigned'), gte(event.occurredAt, from), lte(event.occurredAt, to)))
-      .orderBy(asc(event.occurredAt))
+      .where(
+        and(
+          eq(event.type, 'conversation_assigned'),
+          gte(event.occurredAt, from),
+          lte(event.occurredAt, to),
+        ),
+      )
+      .orderBy(asc(event.occurredAt));
 
-    const assignedByConversation = new Map<string, Date>()
+    const assignedByConversation = new Map<string, Date>();
     for (const row of assigns) {
       if (row.conversationId && !assignedByConversation.has(row.conversationId)) {
-        assignedByConversation.set(row.conversationId, row.occurredAt)
+        assignedByConversation.set(row.conversationId, row.occurredAt);
       }
     }
 
-    const depthByBucket = new Map<string, number>()
+    const depthByBucket = new Map<string, number>();
     for (const open of opens) {
-      if (!open.conversationId) continue
-      const bucket = open.occurredAt.toISOString().slice(0, 10)
-      const assignedAt = assignedByConversation.get(open.conversationId)
-      if (!assignedAt) depthByBucket.set(bucket, (depthByBucket.get(bucket) ?? 0) + 1)
+      if (!open.conversationId) continue;
+      const bucket = open.occurredAt.toISOString().slice(0, 10);
+      const assignedAt = assignedByConversation.get(open.conversationId);
+      if (!assignedAt) depthByBucket.set(bucket, (depthByBucket.get(bucket) ?? 0) + 1);
     }
 
     return {
@@ -1118,8 +1265,8 @@ export async function getTeamMetrics(
           .map(([bucket, depth]) => ({ bucket, depth }))
           .sort((a, b) => a.bucket.localeCompare(b.bucket)),
       },
-    }
-  })
+    };
+  });
 }
 ```
 
@@ -1140,12 +1287,14 @@ git commit -m "Add team/workload aggregate analytics metrics"
 ## Task 8: Analytics route, OpenAPI registration, mount
 
 **Files:**
+
 - Modify: `backend/src/agent/controllers/analyticsController.ts`
 - Modify: `backend/src/agent/routers/analyticsRouter.ts`
 - Modify: `backend/src/docs/openapi.ts`
 - Modify: `backend/tests/agent.analytics.test.ts`
 
 **Interfaces:**
+
 - Consumes: `getVolumeMetrics`, `getSpeedMetrics`, `getBotMetrics`, `getTeamMetrics` (Tasks 4–7).
 - Produces: `GET /agent/analytics` — the endpoint Task 9's frontend `analyticsApi.ts` calls.
 
@@ -1153,63 +1302,63 @@ git commit -m "Add team/workload aggregate analytics metrics"
 
 ```typescript
 // append to backend/tests/agent.analytics.test.ts
-import { createServer } from 'node:http'
-import express from 'express'
-import { requireAgentSession } from '../src/shared/middleware/requireAgentSession.ts'
-import { errorMiddleware } from '../src/errors.ts'
-import { signAgentSession } from '../src/shared/auth/agentSession.ts'
-import { analyticsRouter } from '../src/agent/routers/analyticsRouter.ts'
-import { req as request } from './helpers/http.ts'
+import { createServer } from 'node:http';
+import express from 'express';
+import { requireAgentSession } from '../src/shared/middleware/requireAgentSession.ts';
+import { errorMiddleware } from '../src/errors.ts';
+import { signAgentSession } from '../src/shared/auth/agentSession.ts';
+import { analyticsRouter } from '../src/agent/routers/analyticsRouter.ts';
+import { req as request } from './helpers/http.ts';
 
-const app = express()
-app.use(express.json())
-app.use(requireAgentSession, analyticsRouter)
-app.use(errorMiddleware)
+const app = express();
+app.use(express.json());
+app.use(requireAgentSession, analyticsRouter);
+app.use(errorMiddleware);
 
 describe('GET /agent/analytics', () => {
   it('returns every metric group for the given range', async () => {
-    const workspaceId = await seedWorkspace()
+    const workspaceId = await seedWorkspace();
     const { rows } = await ownerPool.query<{ id: string }>(
       `insert into agent (email, display_name) values ('agent1@example.test', 'Agent One') returning id`,
-    )
-    const agentId = rows[0]!.id
-    await ownerPool.query(`insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`, [
-      workspaceId,
-      agentId,
-    ])
-    const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId })
+    );
+    const agentId = rows[0]!.id;
+    await ownerPool.query(
+      `insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`,
+      [workspaceId, agentId],
+    );
+    const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId });
 
     const res = await request(app)
       .get('/analytics')
       .query({ from: '2026-08-01', to: '2026-08-31', granularity: 'day' })
       .set('Authorization', `Bearer ${token}`)
-      .expect(200)
+      .expect(200);
 
-    expect(res.body).toHaveProperty('volume')
-    expect(res.body).toHaveProperty('speed')
-    expect(res.body).toHaveProperty('bot')
-    expect(res.body).toHaveProperty('team')
-  })
+    expect(res.body).toHaveProperty('volume');
+    expect(res.body).toHaveProperty('speed');
+    expect(res.body).toHaveProperty('bot');
+    expect(res.body).toHaveProperty('team');
+  });
 
   it('422s on an invalid granularity', async () => {
-    const workspaceId = await seedWorkspace()
+    const workspaceId = await seedWorkspace();
     const { rows } = await ownerPool.query<{ id: string }>(
       `insert into agent (email, display_name) values ('agent1@example.test', 'Agent One') returning id`,
-    )
-    const agentId = rows[0]!.id
-    await ownerPool.query(`insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`, [
-      workspaceId,
-      agentId,
-    ])
-    const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId })
+    );
+    const agentId = rows[0]!.id;
+    await ownerPool.query(
+      `insert into workspace_member (workspace_id, agent_id, role) values ($1, $2, 'agent')`,
+      [workspaceId, agentId],
+    );
+    const token = await signAgentSession({ agent_id: agentId, workspace_id: workspaceId });
 
     await request(app)
       .get('/analytics')
       .query({ from: '2026-08-01', to: '2026-08-31', granularity: 'month' })
       .set('Authorization', `Bearer ${token}`)
-      .expect(422)
-  })
-})
+      .expect(422);
+  });
+});
 ```
 
 - [ ] **Step 2: Run to verify it fails**
@@ -1221,38 +1370,48 @@ Expected: FAIL — `GET /analytics` 404s (route not registered)
 
 ```typescript
 // append to backend/src/agent/controllers/analyticsController.ts
-import { getBotMetrics, getSpeedMetrics, getTeamMetrics, getVolumeMetrics } from '../services/analyticsService.ts'
+import {
+  getBotMetrics,
+  getSpeedMetrics,
+  getTeamMetrics,
+  getVolumeMetrics,
+} from '../services/analyticsService.ts';
 
 const AnalyticsQuery = z.object({
   from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   granularity: z.enum(['day', 'week']).default('day'),
-})
+});
 
 export const getAnalyticsHandler: RequestHandler = async (req, res) => {
-  const ctx = req.agent!
-  const query = AnalyticsQuery.safeParse(req.query)
+  const ctx = req.agent!;
+  const query = AnalyticsQuery.safeParse(req.query);
   if (!query.success) {
-    sendError(res, 422, 'invalid_request', 'from/to must be YYYY-MM-DD and granularity must be day or week.')
-    return
+    sendError(
+      res,
+      422,
+      'invalid_request',
+      'from/to must be YYYY-MM-DD and granularity must be day or week.',
+    );
+    return;
   }
-  const range = query.data
+  const range = query.data;
   const [volume, speed, bot, team] = await Promise.all([
     getVolumeMetrics(ctx, range),
     getSpeedMetrics(ctx, range),
     getBotMetrics(ctx, range),
     getTeamMetrics(ctx, range),
-  ])
-  res.status(200).json({ range, volume, speed, bot, team })
-}
+  ]);
+  res.status(200).json({ range, volume, speed, bot, team });
+};
 ```
 
 - [ ] **Step 4: Register the route**
 
 ```typescript
 // backend/src/agent/routers/analyticsRouter.ts — add
-import { getAnalyticsHandler } from '../controllers/analyticsController.ts'
-analyticsRouter.get('/analytics', getAnalyticsHandler)
+import { getAnalyticsHandler } from '../controllers/analyticsController.ts';
+analyticsRouter.get('/analytics', getAnalyticsHandler);
 ```
 
 - [ ] **Step 5: Register OpenAPI schemas**
@@ -1263,7 +1422,7 @@ const AnalyticsRangeSchema = z.object({
   from: z.string().openapi({ example: '2026-08-01' }),
   to: z.string().openapi({ example: '2026-08-31' }),
   granularity: z.enum(['day', 'week']),
-})
+});
 
 const AnalyticsResponseSchema = z.object({
   range: AnalyticsRangeSchema,
@@ -1286,38 +1445,55 @@ const AnalyticsResponseSchema = z.object({
       p90Seconds: z.number().nullable(),
       series: z.array(z.object({ bucket: z.string(), seconds: z.number().nullable() })),
     }),
-    timeToClaim: z.object({ series: z.array(z.object({ bucket: z.string(), seconds: z.number().nullable() })) }),
+    timeToClaim: z.object({
+      series: z.array(z.object({ bucket: z.string(), seconds: z.number().nullable() })),
+    }),
   }),
   bot: z.object({
     containmentRate: z.number().nullable(),
-    handoff: z.object({ rate: z.number().nullable(), byReason: z.array(z.object({ reason: z.string(), count: z.number() })) }),
+    handoff: z.object({
+      rate: z.number().nullable(),
+      byReason: z.array(z.object({ reason: z.string(), count: z.number() })),
+    }),
     articleHitRate: z.number().nullable(),
   }),
   team: z.object({
     avgOpenPerActiveAgent: z.number().nullable(),
-    unassignedQueueDepth: z.object({ series: z.array(z.object({ bucket: z.string(), depth: z.number() })) }),
+    unassignedQueueDepth: z.object({
+      series: z.array(z.object({ bucket: z.string(), depth: z.number() })),
+    }),
   }),
-})
+});
 
 const DashboardLayoutSchema = z.object({
-  items: z.array(z.object({ i: z.string(), x: z.number(), y: z.number(), w: z.number(), h: z.number() })),
+  items: z.array(
+    z.object({ i: z.string(), x: z.number(), y: z.number(), w: z.number(), h: z.number() }),
+  ),
   visibleTileIds: z.array(z.string()),
-})
+});
 
 registry.registerPath({
   method: 'get',
   path: '/agent/analytics',
   summary: 'Workspace analytics dashboard data',
-  description: 'One aggregate response covering volume/status, speed, bot performance and team metric groups for a date range.',
+  description:
+    'One aggregate response covering volume/status, speed, bot performance and team metric groups for a date range.',
   security: [{ bearerAgentSession: [] }],
   request: {
-    query: z.object({ from: z.string(), to: z.string(), granularity: z.enum(['day', 'week']).optional() }),
+    query: z.object({
+      from: z.string(),
+      to: z.string(),
+      granularity: z.enum(['day', 'week']).optional(),
+    }),
   },
   responses: {
-    200: { description: 'Analytics data', content: { 'application/json': { schema: AnalyticsResponseSchema } } },
+    200: {
+      description: 'Analytics data',
+      content: { 'application/json': { schema: AnalyticsResponseSchema } },
+    },
     422: { description: 'Invalid range or granularity' },
   },
-})
+});
 
 registry.registerPath({
   method: 'get',
@@ -1325,9 +1501,12 @@ registry.registerPath({
   summary: "Get the caller's saved dashboard tile layout",
   security: [{ bearerAgentSession: [] }],
   responses: {
-    200: { description: 'Saved or default layout', content: { 'application/json': { schema: z.object({ layout: DashboardLayoutSchema }) } } },
+    200: {
+      description: 'Saved or default layout',
+      content: { 'application/json': { schema: z.object({ layout: DashboardLayoutSchema }) } },
+    },
   },
-})
+});
 
 registry.registerPath({
   method: 'put',
@@ -1335,13 +1514,15 @@ registry.registerPath({
   summary: "Save the caller's dashboard tile layout",
   security: [{ bearerAgentSession: [] }],
   request: {
-    body: { content: { 'application/json': { schema: z.object({ layout: DashboardLayoutSchema }) } } },
+    body: {
+      content: { 'application/json': { schema: z.object({ layout: DashboardLayoutSchema }) } },
+    },
   },
   responses: {
     200: { description: 'Saved' },
     422: { description: 'Invalid layout shape' },
   },
-})
+});
 ```
 
 Check the existing security scheme name for the agent-session bearer token before pasting the snippet
@@ -1371,6 +1552,7 @@ git commit -m "Add GET /agent/analytics endpoint with OpenAPI registration"
 ## Task 9: Frontend API client + data hooks
 
 **Files:**
+
 - Create: `frontend/src/surfaces/agent-console/api/analyticsApi.ts`
 - Create: `frontend/src/surfaces/agent-console/pages/Analytics/useAnalyticsData.ts`
 - Create: `frontend/src/surfaces/agent-console/pages/Analytics/useTileLayout.ts`
@@ -1378,6 +1560,7 @@ git commit -m "Add GET /agent/analytics endpoint with OpenAPI registration"
 - Test: `frontend/src/surfaces/agent-console/pages/Analytics/useTileLayout.test.ts`
 
 **Interfaces:**
+
 - Consumes: `AnalyticsResponse`, `DashboardLayout`, `AnalyticsGranularity` from `@support/types`;
   `apiCall` from `../../../lib/httpClient.ts`; `loadAgentSession` from `../../lib/agentSession.ts`.
 - Produces: `fetchAnalytics(token, range)`, `fetchLayout(token)`, `saveLayout(token, layout)`;
@@ -1393,22 +1576,28 @@ Run: `pnpm --filter @support/web add react-grid-layout && pnpm --filter @support
 
 ```typescript
 // frontend/src/surfaces/agent-console/api/analyticsApi.ts
-import type { AnalyticsGranularity, AnalyticsResponse, DashboardLayout } from '@support/types'
-import { apiCall } from '../../../lib/httpClient.ts'
+import type { AnalyticsGranularity, AnalyticsResponse, DashboardLayout } from '@support/types';
+import { apiCall } from '../../../lib/httpClient.ts';
 
-export type AnalyticsRangeParams = { from: string; to: string; granularity: AnalyticsGranularity }
+export type AnalyticsRangeParams = { from: string; to: string; granularity: AnalyticsGranularity };
 
-export function fetchAnalytics(token: string, range: AnalyticsRangeParams): Promise<AnalyticsResponse> {
-  const params = new URLSearchParams(range)
-  return apiCall(`/agent/analytics?${params.toString()}`, token)
+export function fetchAnalytics(
+  token: string,
+  range: AnalyticsRangeParams,
+): Promise<AnalyticsResponse> {
+  const params = new URLSearchParams(range);
+  return apiCall(`/agent/analytics?${params.toString()}`, token);
 }
 
 export function fetchLayout(token: string): Promise<{ layout: DashboardLayout }> {
-  return apiCall('/agent/analytics/layout', token)
+  return apiCall('/agent/analytics/layout', token);
 }
 
 export function saveLayout(token: string, layout: DashboardLayout): Promise<{ ok: true }> {
-  return apiCall('/agent/analytics/layout', token, { method: 'PUT', body: JSON.stringify({ layout }) })
+  return apiCall('/agent/analytics/layout', token, {
+    method: 'PUT',
+    body: JSON.stringify({ layout }),
+  });
 }
 ```
 
@@ -1467,18 +1656,22 @@ Expected: FAIL — `Cannot find module './useTileLayout.ts'`
 
 ```typescript
 // frontend/src/surfaces/agent-console/pages/Analytics/useAnalyticsData.ts
-import { useQuery } from '@tanstack/react-query'
-import type { AnalyticsGranularity } from '@support/types'
-import { fetchAnalytics } from '../../api/analyticsApi.ts'
-import { loadAgentSession } from '../../lib/agentSession.ts'
+import { useQuery } from '@tanstack/react-query';
+import type { AnalyticsGranularity } from '@support/types';
+import { fetchAnalytics } from '../../api/analyticsApi.ts';
+import { loadAgentSession } from '../../lib/agentSession.ts';
 
-export function useAnalyticsData(range: { from: string; to: string; granularity: AnalyticsGranularity }) {
-  const session = loadAgentSession()
+export function useAnalyticsData(range: {
+  from: string;
+  to: string;
+  granularity: AnalyticsGranularity;
+}) {
+  const session = loadAgentSession();
   return useQuery({
     queryKey: ['analytics', range.from, range.to, range.granularity],
     queryFn: () => fetchAnalytics(session!.token, range),
     enabled: session !== null,
-  })
+  });
 }
 ```
 
@@ -1486,48 +1679,51 @@ export function useAnalyticsData(range: { from: string; to: string; granularity:
 
 ```typescript
 // frontend/src/surfaces/agent-console/pages/Analytics/useTileLayout.ts
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import type { DashboardLayout } from '@support/types'
-import { fetchLayout, saveLayout } from '../../api/analyticsApi.ts'
-import { loadAgentSession } from '../../lib/agentSession.ts'
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import type { DashboardLayout } from '@support/types';
+import { fetchLayout, saveLayout } from '../../api/analyticsApi.ts';
+import { loadAgentSession } from '../../lib/agentSession.ts';
 
-const SAVE_DEBOUNCE_MS = 500
+const SAVE_DEBOUNCE_MS = 500;
 
 export function useTileLayout() {
-  const session = loadAgentSession()
+  const session = loadAgentSession();
   const query = useQuery({
     queryKey: ['analytics', 'layout'],
     queryFn: () => fetchLayout(session!.token),
     enabled: session !== null,
-  })
+  });
 
-  const [layout, setLayout] = useState<DashboardLayout | null>(null)
-  const [isSaving, setIsSaving] = useState(false)
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [layout, setLayout] = useState<DashboardLayout | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (query.data && layout === null) setLayout(query.data.layout)
-  }, [query.data, layout])
+    if (query.data && layout === null) setLayout(query.data.layout);
+  }, [query.data, layout]);
 
   const updateLayout = useCallback(
     (next: DashboardLayout) => {
-      setLayout(next)
-      if (timerRef.current) clearTimeout(timerRef.current)
+      setLayout(next);
+      if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(() => {
-        if (!session) return
-        setIsSaving(true)
-        saveLayout(session.token, next).finally(() => setIsSaving(false))
-      }, SAVE_DEBOUNCE_MS)
+        if (!session) return;
+        setIsSaving(true);
+        saveLayout(session.token, next).finally(() => setIsSaving(false));
+      }, SAVE_DEBOUNCE_MS);
     },
     [session],
-  )
+  );
 
-  useEffect(() => () => {
-    if (timerRef.current) clearTimeout(timerRef.current)
-  }, [])
+  useEffect(
+    () => () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    },
+    [],
+  );
 
-  return { layout, updateLayout, isSaving, isLoading: query.isLoading, isError: query.isError }
+  return { layout, updateLayout, isSaving, isLoading: query.isLoading, isError: query.isError };
 }
 ```
 
@@ -1550,11 +1746,13 @@ git commit -m "Add analytics API client and data/layout hooks"
 ## Task 10: TileFrame + skeleton
 
 **Files:**
+
 - Create: `frontend/src/surfaces/agent-console/pages/Analytics/tiles/TileFrame.tsx`
 - Create: `frontend/src/surfaces/agent-console/pages/Analytics/tiles/TileSkeleton.tsx`
 - Test: `frontend/src/surfaces/agent-console/pages/Analytics/tiles/TileFrame.test.tsx`
 
 **Interfaces:**
+
 - Produces: `<TileFrame title, dragHandleClassName?, onRemove?, children>` — every tile component
   (Tasks 11–14) wraps its content in this. `<TileSkeleton kind: 'number' | 'chart' />` — rendered by
   `AnalyticsGrid` (Task 15) in place of a tile while `isLoading` is true, sized to that slot's `w`/`h`.
@@ -1670,10 +1868,12 @@ git commit -m "Add TileFrame chrome and loading skeleton"
 ## Task 11: NumberTile
 
 **Files:**
+
 - Create: `frontend/src/surfaces/agent-console/pages/Analytics/tiles/NumberTile.tsx`
 - Test: `frontend/src/surfaces/agent-console/pages/Analytics/tiles/NumberTile.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `TileFrame` (Task 10).
 - Produces: `<NumberTile title, value: number | null, format?: 'count' | 'percent' | 'duration', previousValue?: number | null>` —
   used by Task 16's `tileCatalog.ts` for `open-total`, `bot-containment`, `article-hit-rate`,
@@ -1786,6 +1986,7 @@ git commit -m "Add NumberTile"
 ## Task 12: LineChartTile, DonutChartTile, BarChartTile
 
 **Files:**
+
 - Create: `frontend/src/surfaces/agent-console/pages/Analytics/tiles/LineChartTile.tsx`
 - Create: `frontend/src/surfaces/agent-console/pages/Analytics/tiles/DonutChartTile.tsx`
 - Create: `frontend/src/surfaces/agent-console/pages/Analytics/tiles/BarChartTile.tsx`
@@ -1795,6 +1996,7 @@ git commit -m "Add NumberTile"
 - Test: `frontend/src/surfaces/agent-console/pages/Analytics/tiles/BarChartTile.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `TileFrame` (Task 10), Recharts (`ResponsiveContainer`, `LineChart`, `Line`, `PieChart`,
   `Pie`, `Cell`, `BarChart`, `Bar`, `XAxis`, `YAxis`, `Tooltip`).
 - Produces: `<LineChartTile title, series: Array<{bucket: string} & Record<string, number>>, dataKeys: string[]>`,
@@ -1891,10 +2093,10 @@ Expected: FAIL — modules not found
 // Categorical palette for chart series/slices, distinct from the semantic
 // accent tokens used elsewhere in the UI — per the dataviz skill's guidance
 // that chart colors need their own scale, not raw reuse of brand accent.
-export const CHART_PALETTE = ['#6366f1', '#14b8a6', '#f59e0b', '#ef4444', '#8b5cf6', '#0ea5e9']
+export const CHART_PALETTE = ['#6366f1', '#14b8a6', '#f59e0b', '#ef4444', '#8b5cf6', '#0ea5e9'];
 
 export function paletteColor(index: number): string {
-  return CHART_PALETTE[index % CHART_PALETTE.length]!
+  return CHART_PALETTE[index % CHART_PALETTE.length]!;
 }
 ```
 
@@ -2032,10 +2234,12 @@ git commit -m "Add line, donut and bar chart tiles"
 ## Task 13: Time range bar
 
 **Files:**
+
 - Create: `frontend/src/surfaces/agent-console/pages/Analytics/AnalyticsTimeRangeBar.tsx`
 - Test: `frontend/src/surfaces/agent-console/pages/Analytics/AnalyticsTimeRangeBar.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `react-day-picker` (`DayPicker`, already a dependency), `Popover`/`PopoverTrigger`/`PopoverContent`
   from `../../components/ui/popover.tsx` if present (check `frontend/src/surfaces/agent-console/components/ui/`
   for an existing popover component before writing a new one — reuse it if found), `date-fns` `format`/`subDays`.
@@ -2169,10 +2373,12 @@ git commit -m "Add analytics time range bar"
 ## Task 14: Tile catalog (data → tile mapping)
 
 **Files:**
+
 - Create: `frontend/src/surfaces/agent-console/pages/Analytics/tileCatalog.ts`
 - Test: `frontend/src/surfaces/agent-console/pages/Analytics/tileCatalog.test.ts`
 
 **Interfaces:**
+
 - Consumes: `AnalyticsResponse` type, all four tile components (Tasks 11–12).
 - Produces: `TILE_IDS: string[]` (must exactly match `DEFAULT_LAYOUT.visibleTileIds` from the backend's
   `dashboardLayoutService.ts`, Task 3 — keep both lists in sync by hand),
@@ -2335,10 +2541,12 @@ git commit -m "Add tile catalog mapping tile ids to components"
 ## Task 15: AnalyticsGrid (react-grid-layout wrapper)
 
 **Files:**
+
 - Create: `frontend/src/surfaces/agent-console/pages/Analytics/AnalyticsGrid.tsx`
 - Test: `frontend/src/surfaces/agent-console/pages/Analytics/AnalyticsGrid.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `react-grid-layout` (`Responsive`, `WidthProvider`), `TILE_IDS`/`renderTile` (Task 14),
   `TileSkeleton` (Task 10), `DashboardLayoutItem` type.
 - Produces: `<AnalyticsGrid layout: DashboardLayout, data: AnalyticsResponse | undefined, isLoading: boolean, onLayoutChange: (items: DashboardLayoutItem[]) => void>` —
@@ -2468,12 +2676,14 @@ git commit -m "Add AnalyticsGrid drag/resize wrapper"
 ## Task 16: Analytics page + nav + route
 
 **Files:**
+
 - Create: `frontend/src/surfaces/agent-console/pages/Analytics/Analytics.tsx`
 - Create: `frontend/src/surfaces/agent-console/pages/Analytics/Analytics.test.tsx`
 - Modify: `frontend/src/surfaces/agent-console/components/AgentConsoleShell.tsx`
 - Modify: `frontend/src/routes/AppRoutes.tsx`
 
 **Interfaces:**
+
 - Consumes: `useAnalyticsData`, `useTileLayout` (Task 9), `AnalyticsTimeRangeBar` (Task 13),
   `AnalyticsGrid` (Task 15), `EmptyState` from `../../components/ui/empty-state.tsx`.
 - Produces: the `/analytics` route, reachable from the nav — end of this feature's user-facing surface.
@@ -2620,13 +2830,13 @@ Adjust `EmptyState` and `Button`'s prop names/variants to match what Step 3 foun
 
 ```typescript
 // frontend/src/surfaces/agent-console/components/AgentConsoleShell.tsx
-import { Inbox as InboxIcon, BookOpen, ClipboardList, LogOut, BarChart3 } from 'lucide-react'
+import { Inbox as InboxIcon, BookOpen, ClipboardList, LogOut, BarChart3 } from 'lucide-react';
 // ...
 const NAV_ITEMS = [
   { to: '/inbox', label: 'Inbox', icon: InboxIcon },
   { to: '/analytics', label: 'Analytics', icon: BarChart3 },
   { to: '/articles', label: 'Knowledge Base', icon: BookOpen },
-]
+];
 ```
 
 ```typescript

@@ -4,8 +4,7 @@ export const MAX_IMPORT_FILES = 200;
 const MAX_TITLE_LENGTH = 200;
 
 export type ParsedMarkdownEntry =
-  | { error: null; title: string; body: string; keywords: string[] }
-  | { error: string };
+  { error: null; title: string; body: string; keywords: string[] } | { error: string };
 
 function titleFromContent(body: string, filename: string): string {
   const h1 = body.match(/^#\s+(.+)$/m);

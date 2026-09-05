@@ -88,7 +88,9 @@ function ConversationQueue({
           {conversations.length === 0 && (
             <div className="px-3 py-3 text-sm text-muted">{emptyLabel}</div>
           )}
-          {isFetchingNextPage && <div className="px-3 pb-3 text-sm text-muted">Loading more...</div>}
+          {isFetchingNextPage && (
+            <div className="px-3 pb-3 text-sm text-muted">Loading more...</div>
+          )}
         </ScrollArea>
         {/* Same condition as the fixed height above — rendering this on a
           queue that isn't scrollable at all would lie. */}

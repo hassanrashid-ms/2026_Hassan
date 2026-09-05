@@ -22,11 +22,13 @@
 ### Task 1: `bot_config_version` schema, migration, RLS
 
 **Files:**
+
 - Modify: `backend/src/shared/db/schema/bot.ts`
 - Modify: `backend/src/shared/db/sql/002_rls.sql`
 - Create (generated): `backend/drizzle/00NN_<auto-name>.sql` via `pnpm db:generate`
 
 **Interfaces:**
+
 - Produces: Drizzle table `botConfigVersion` exported from `backend/src/shared/db/schema/bot.ts`, columns `id` (bigserial), `workspaceId` (uuid), `version` (integer), `prompt` (text), `rules`/`toolsConfig`/`limitsConfig` (jsonb), `actorId` (uuid), `changedFields` (text array), `createdAt` (timestamptz). Re-exported from `backend/src/shared/db/schema/index.ts` (barrel file — confirm it re-exports everything from `./bot.ts` already; if so no edit needed there).
 
 - [ ] **Step 1: Add the table definition**
@@ -87,9 +89,7 @@ export const botConfigVersion = pgTable(
       .references(() => agent.id, { onDelete: 'restrict' }),
     /** Subset of 'prompt' | 'rules' | 'tools_config' | 'limits_config'. */
     changedFields: text('changed_fields').array().notNull(),
-    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
   },
   (t) => [
     unique('bot_config_version_workspace_version_unique').on(t.workspaceId, t.version),
@@ -143,11 +143,13 @@ git commit -m "feat: add bot_config_version table for full-snapshot bot config h
 ### Task 2: Domain layer — write and read versions
 
 **Files:**
+
 - Create: `backend/src/domain/bot/botConfigVersion.ts`
 - Modify: `backend/src/domain/bot/botConfig.ts`
 - Test: `backend/tests/agent.botConfig.test.ts` (extend, integration-level — this codebase tests domain writes through the HTTP layer, see Task 4)
 
 **Interfaces:**
+
 - Consumes: `Tx` from `../../shared/db/withWorkspace.ts`; `botConfigVersion` table from Task 1; `RuleEntry`/`ToolToggle`/`LimitToggle` types already imported in `botConfig.ts`.
 - Produces:
   - `appendBotConfigVersion(tx, input: { workspaceId: string; actorId: string; prompt: string; rules: RuleEntry[]; toolsConfig: ToolToggle[]; limitsConfig: LimitToggle[] }): Promise<void>` — inserts the next version row, or does nothing if nothing changed vs. the prior version (mirrors `appendChangeLog`'s no-op drop).
@@ -351,27 +353,27 @@ import { appendBotConfigVersion } from './botConfigVersion.ts';
 In `saveBotConfig`, immediately after the existing `appendChangeLog(...)` call (before `return resolved(...)`), add:
 
 ```typescript
-  await appendBotConfigVersion(tx, {
-    workspaceId: input.workspaceId,
-    actorId: input.actorId,
-    prompt: afterPrompt,
-    rules: afterRules,
-    toolsConfig: afterTools,
-    limitsConfig: afterLimits,
-  });
+await appendBotConfigVersion(tx, {
+  workspaceId: input.workspaceId,
+  actorId: input.actorId,
+  prompt: afterPrompt,
+  rules: afterRules,
+  toolsConfig: afterTools,
+  limitsConfig: afterLimits,
+});
 ```
 
 In `seedBotConfig`, immediately after its `appendChangeLog(...)` call (before `return resolved(...)`), add:
 
 ```typescript
-  await appendBotConfigVersion(tx, {
-    workspaceId,
-    actorId,
-    prompt,
-    rules,
-    toolsConfig,
-    limitsConfig,
-  });
+await appendBotConfigVersion(tx, {
+  workspaceId,
+  actorId,
+  prompt,
+  rules,
+  toolsConfig,
+  limitsConfig,
+});
 ```
 
 This makes `seedBotConfig` write version 1 (no prior row exists, so `appendBotConfigVersion` treats every field as changed) — matching the "version 1" framing already documented on `seedBotConfig`'s docblock. Update that docblock's last sentence to also mention the version row:
@@ -491,9 +493,11 @@ git commit -m "feat: write a full bot_config snapshot version on every save"
 ### Task 3: `@support/types` — version wire shapes
 
 **Files:**
+
 - Modify: `packages/types/src/bot.ts`
 
 **Interfaces:**
+
 - Produces: `BotConfigVersionActorView`, `BotConfigVersionSummaryView`, `BotConfigVersionSnapshotView`, `BotConfigVersionsListResponse`, `BotConfigVersionsQuery` (Zod), `RollbackBotConfigVersionBody` (Zod) — consumed by Task 4 (backend service/controller) and Task 6 (frontend api client).
 
 - [ ] **Step 1: Add the types**
@@ -571,12 +575,14 @@ git commit -m "feat: add BotConfigVersion wire types, drop unused change_log his
 ### Task 4: Backend service, controller, router — version endpoints
 
 **Files:**
+
 - Modify: `backend/src/agent/services/botConfigService.ts`
 - Modify: `backend/src/agent/controllers/botConfigController.ts`
 - Modify: `backend/src/agent/routers/botConfigRouter.ts`
 - Modify: `backend/tests/agent.botConfig.test.ts`
 
 **Interfaces:**
+
 - Consumes: `listBotConfigVersions`, `getBotConfigVersionByNumber` from Task 2; `BotConfigVersionsListResponse`, `BotConfigVersionSnapshotView`, `BotConfigVersionsQuery`, `RollbackBotConfigVersionBody` from Task 3.
 - Produces: `listBotConfigVersionsForAgent(ctx, input: { limit: number; cursor?: number }): Promise<BotConfigVersionsListResponse>`, `getBotConfigVersionForAgent(ctx, version: number): Promise<BotConfigVersionSnapshotView>`, `rollbackBotConfigVersionForAgent(ctx, version: number): Promise<BotConfigView>`, error class `BotConfigVersionNotFound`. Routes: `GET /bot-config/versions`, `GET /bot-config/versions/:version`, `POST /bot-config/rollback` (body now `{ version }`). `GET /bot-config/history` is removed.
 
@@ -585,10 +591,7 @@ git commit -m "feat: add BotConfigVersion wire types, drop unused change_log his
 In `backend/src/agent/services/botConfigService.ts`, remove `listBotConfigHistory` and `rollbackBotConfigForAgent`, and their now-unused imports (`ChangeLogCursor`, `getChangeLogEntryById`, `readChangeLog`, `ChangeLogHistoryResponse`). Remove `ChangeLogEntryNotFound`/`ChangeLogFieldMismatch` too — nothing else uses them (confirmed in Task 3 Step 2). Add:
 
 ```typescript
-import type {
-  BotConfigVersionSnapshotView,
-  BotConfigVersionsListResponse,
-} from '@support/types';
+import type { BotConfigVersionSnapshotView, BotConfigVersionsListResponse } from '@support/types';
 import {
   getBotConfigVersionByNumber,
   listBotConfigVersions,
@@ -612,7 +615,8 @@ export async function listBotConfigVersionsForAgent(
           display_name: row.actor.displayName,
           email: row.actor.email,
         },
-        changed_fields: row.changedFields as BotConfigVersionsListResponse['versions'][number]['changed_fields'],
+        changed_fields:
+          row.changedFields as BotConfigVersionsListResponse['versions'][number]['changed_fields'],
         created_at: row.createdAt.toISOString(),
       })),
       next_cursor: page.nextCursor,
@@ -687,10 +691,7 @@ export async function rollbackBotConfigVersionForAgent(
 In `backend/src/agent/controllers/botConfigController.ts`, remove `getBotConfigHistoryHandler` and `rollbackBotConfigHandler`, the `HISTORY_FIELDS` set, and the now-unused `ChangeLogHistoryQuery`/`RollbackBotConfigBody`/`decodeChangeLogCursor`/`ChangeLogEntryNotFound`/`ChangeLogFieldMismatch` imports. Add:
 
 ```typescript
-import {
-  BotConfigVersionsQuery,
-  RollbackBotConfigVersionBody,
-} from '@support/types';
+import { BotConfigVersionsQuery, RollbackBotConfigVersionBody } from '@support/types';
 import {
   BotConfigVersionNotFound,
   getBotConfigVersionForAgent,
@@ -701,7 +702,12 @@ import {
 export const getBotConfigVersionsHandler: RequestHandler = async (req, res) => {
   const query = BotConfigVersionsQuery.safeParse(req.query);
   if (!query.success) {
-    sendError(res, 422, 'invalid_request', 'limit must be 1-200, cursor must be a positive integer.');
+    sendError(
+      res,
+      422,
+      'invalid_request',
+      'limit must be 1-200, cursor must be a positive integer.',
+    );
     return;
   }
   res.status(200).json(
@@ -975,9 +981,11 @@ git commit -m "feat: replace field-scoped bot config history/rollback with versi
 ### Task 5: Frontend API client — version endpoints
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/agent-console/api/agentApi.ts`
 
 **Interfaces:**
+
 - Consumes: `BotConfigVersionsListResponse`, `BotConfigVersionSnapshotView`, `RollbackBotConfigVersionBodyValue` from `@support/types` (Task 3).
 - Produces: `fetchBotConfigVersions(token, opts?: { limit?: number; cursor?: number }): Promise<BotConfigVersionsListResponse>`, `fetchBotConfigVersion(token, version: number): Promise<BotConfigVersionSnapshotView>`, `rollbackBotConfigVersion(token, version: number): Promise<BotConfigView>`.
 
@@ -1036,10 +1044,12 @@ git commit -m "feat: add versioned bot config API client functions"
 ### Task 6: Type-aware diff utility
 
 **Files:**
+
 - Create: `frontend/src/surfaces/agent-console/pages/BotConfig/lib/diffBotConfigVersion.ts`
 - Test: `frontend/src/surfaces/agent-console/pages/BotConfig/lib/diffBotConfigVersion.test.ts`
 
 **Interfaces:**
+
 - Consumes: `BotConfigVersionSnapshotView` (`prompt`, `rules: RuleEntryView[]`, `tools_config: ToolToggleValue[]`, `limits_config: LimitToggleValue[]`) from `@support/types`.
 - Produces:
   - `diffPromptText(before: string, after: string): PromptDiffToken[]` where `PromptDiffToken = { text: string; type: 'same' | 'added' | 'removed' }`.
@@ -1161,7 +1171,11 @@ Create `frontend/src/surfaces/agent-console/pages/BotConfig/lib/diffBotConfigVer
 import type { LimitToggleValue, RuleEntryView, ToolToggleValue } from '@support/types';
 
 export type PromptDiffToken = { text: string; type: 'same' | 'added' | 'removed' };
-export type StructuredDiffEntry = { key: string; kind: 'added' | 'removed' | 'changed'; description: string };
+export type StructuredDiffEntry = {
+  key: string;
+  kind: 'added' | 'removed' | 'changed';
+  description: string;
+};
 
 /**
  * Word-level LCS diff. No external dependency: bot prompts are a few hundred
@@ -1223,7 +1237,8 @@ export function diffRules(before: RuleEntryView[], after: RuleEntryView[]): Stru
     }
   }
   for (const key of beforeByKey.keys()) {
-    if (!afterByKey.has(key)) entries.push({ key, kind: 'removed', description: `Rule "${key}" removed` });
+    if (!afterByKey.has(key))
+      entries.push({ key, kind: 'removed', description: `Rule "${key}" removed` });
   }
   return entries;
 }
@@ -1285,10 +1300,12 @@ git commit -m "feat: add type-aware diff utility for bot config versions"
 ### Task 7: `VersionHistoryTab` component
 
 **Files:**
+
 - Create: `frontend/src/surfaces/agent-console/pages/BotConfig/components/VersionHistoryTab.tsx`
 - Test: `frontend/src/surfaces/agent-console/pages/BotConfig/components/VersionHistoryTab.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `fetchBotConfigVersions`, `fetchBotConfigVersion`, `rollbackBotConfigVersion` (Task 5); `diffPromptText`, `diffRules`, `diffToolsConfig`, `diffLimitsConfig` (Task 6); `ConfirmDialog`, `Button`, `ScrollArea` (existing shared components, same imports `HistoryPanel.tsx` used).
 - Produces: `VersionHistoryTab({ token }: { token: string })` — a default export is not used elsewhere in this folder (`PromptTab`/`RulesTab`/`ToolsTab` are named exports), so keep this a named export too.
 
@@ -1633,6 +1650,7 @@ git commit -m "feat: add VersionHistoryTab with type-aware diff and restore"
 ### Task 8: Wire the History tab into `BotConfig.tsx`, remove `HistoryPanel`
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/agent-console/pages/BotConfig/BotConfig.tsx`
 - Modify: `frontend/src/surfaces/agent-console/pages/BotConfig/components/PromptTab.tsx`
 - Modify: `frontend/src/surfaces/agent-console/pages/BotConfig/components/RulesTab.tsx`
@@ -1641,6 +1659,7 @@ git commit -m "feat: add VersionHistoryTab with type-aware diff and restore"
 - Delete: `frontend/src/surfaces/agent-console/pages/BotConfig/components/HistoryPanel.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `VersionHistoryTab` from Task 7.
 
 - [ ] **Step 1: Add the History tab in `BotConfig.tsx`**

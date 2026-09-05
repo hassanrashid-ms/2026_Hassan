@@ -210,7 +210,6 @@ describe('GET /bot-config', () => {
       .expect(422);
     expect(badSave.body.error.message).toMatch(/max_bot_messages/);
   });
-
 });
 
 describe('POST /bot-config', () => {
@@ -808,7 +807,11 @@ describe('rollback against a snapshot older than the current catalog', () => {
     expect(res.body.prompt).toBe('Stale prompt');
 
     const restoredRuleKeys = res.body.rules.map((r: { key: string }) => r.key).sort();
-    expect(restoredRuleKeys).toEqual(buildBaselineRules().map((r) => r.key).sort());
+    expect(restoredRuleKeys).toEqual(
+      buildBaselineRules()
+        .map((r) => r.key)
+        .sort(),
+    );
     const noRegreet = res.body.rules.find((r: { key: string }) => r.key === 'no_regreet');
     expect(noRegreet).toBeDefined();
     expect(noRegreet.enabled).toBe(
@@ -816,7 +819,11 @@ describe('rollback against a snapshot older than the current catalog', () => {
     );
 
     const restoredToolNames = res.body.tools_config.map((t: { tool: string }) => t.tool).sort();
-    expect(restoredToolNames).toEqual(buildBaselineToolsConfig().map((t) => t.tool).sort());
+    expect(restoredToolNames).toEqual(
+      buildBaselineToolsConfig()
+        .map((t) => t.tool)
+        .sort(),
+    );
 
     const restoredLimit = res.body.limits_config.find(
       (l: { key: string }) => l.key === 'max_unhelped_replies',

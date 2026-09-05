@@ -26,12 +26,14 @@
 ### Task 1: Generalize upload validation to accept zip imports
 
 **Files:**
+
 - Modify: `backend/src/shared/storage/presign.ts`
 - Modify: `backend/src/agent/services/uploadsService.ts`
 - Modify: `backend/src/agent/controllers/uploadsController.ts`
 - Test: `backend/tests/uploadsService.test.ts` (create if it doesn't already cover this; check first — if a test file already exists for `uploadsService.ts`, add to it instead)
 
 **Interfaces:**
+
 - Produces (used by Task 5 and Task 7): `ALLOWED_IMPORT_MIME_TYPES: readonly string[]`, `MAX_IMPORT_ZIP_BYTES: number`, `isAllowedUploadMimeType(contentType: string): boolean`, `maxBytesForUpload(contentType: string): number`, `getObjectBuffer(key: string): Promise<Buffer>` — all exported from `backend/src/shared/storage/presign.ts`.
 
 Currently `POST /uploads` only accepts image/video MIME types (`ALLOWED_CHAT_ATTACHMENT_MIME_TYPES`) via `uploadsService.requestUpload`. This task widens that check to also accept zip uploads, with their own size cap, without changing behavior for existing image/video uploads.
@@ -255,10 +257,12 @@ git commit -m "Allow zip uploads through the presigned-upload flow for bulk arti
 ### Task 2: Pure markdown-entry parser for bulk import
 
 **Files:**
+
 - Create: `backend/src/agent/services/articleMarkdownImport.ts`
 - Test: `backend/tests/articleMarkdownImport.test.ts`
 
 **Interfaces:**
+
 - Produces (used by Task 4): `parseMarkdownEntry(content: string, filename: string): ParsedMarkdownEntry`, `MAX_IMPORT_FILES: number`, and the type `ParsedMarkdownEntry = { error: null; title: string; body: string; keywords: string[] } | { error: string }`.
 
 This mirrors the existing frontend `parseMarkdownImport` (`frontend/src/surfaces/agent-console/pages/KnowledgeBase/articleForm.ts`) but as a server-side pure function — frontend and backend don't share code outside `packages/types`, so this is a deliberate, small, parallel implementation, not a bug.
@@ -366,13 +370,15 @@ export const MAX_IMPORT_FILES = 200;
 const MAX_TITLE_LENGTH = 200;
 
 export type ParsedMarkdownEntry =
-  | { error: null; title: string; body: string; keywords: string[] }
-  | { error: string };
+  { error: null; title: string; body: string; keywords: string[] } | { error: string };
 
 function titleFromContent(body: string, filename: string): string {
   const h1 = body.match(/^#\s+(.+)$/m);
   if (h1) return h1[1]!.trim();
-  return filename.split('/').pop()!.replace(/\.[^/.]+$/, '');
+  return filename
+    .split('/')
+    .pop()!
+    .replace(/\.[^/.]+$/, '');
 }
 
 /**
@@ -439,9 +445,11 @@ git commit -m "Add server-side markdown-entry parser for bulk article import"
 ### Task 3: Add wire-contract types for bulk import
 
 **Files:**
+
 - Modify: `packages/types/src/articles.ts`
 
 **Interfaces:**
+
 - Produces (used by Task 4, Task 5, Task 7): `BulkImportArticlesBody` (Zod schema), `BulkImportArticleResult`, `BulkImportArticlesResponse` (TS types).
 
 - [ ] **Step 1: Add the schema and types**
@@ -483,11 +491,13 @@ git commit -m "Add BulkImportArticlesBody/Response wire types"
 ### Task 4: `bulkImportArticles` service function
 
 **Files:**
+
 - Modify: `backend/src/agent/services/articlesService.ts`
 - Modify: `backend/src/errors.ts`
 - Test: `backend/tests/agent.articles.bulkImport.test.ts`
 
 **Interfaces:**
+
 - Consumes: `createArticle(ctx: AgentContext, input: CreateArticleInput): Promise<CreateArticleResult>` (existing, unchanged), `parseMarkdownEntry`, `MAX_IMPORT_FILES` (Task 2), `getObjectBuffer`, `headObject`, `deleteObject` (Task 1/existing), `BulkImportArticleResult`, `BulkImportArticlesResponse` (Task 3).
 - Produces (used by Task 5): `bulkImportArticles(ctx: AgentContext, key: string): Promise<BulkImportArticlesResult>` where `BulkImportArticlesResult = { ok: true; results: BulkImportArticleResult[]; summary: { total: number; created: number; failed: number } } | { ok: false; reason: 'not_found' | 'invalid_zip' | 'no_markdown_files' | 'too_many_files' }`.
 
@@ -611,9 +621,10 @@ describe('bulkImportArticles', () => {
     const result = await bulkImportArticles({ agentId, workspaceId, isAdmin: false }, key);
 
     expect(result).toEqual({ ok: false, reason: 'too_many_files' });
-    const { rows } = await ownerPool.query(`select count(*)::int from article where workspace_id = $1`, [
-      workspaceId,
-    ]);
+    const { rows } = await ownerPool.query(
+      `select count(*)::int from article where workspace_id = $1`,
+      [workspaceId],
+    );
     expect(rows[0].count).toBe(0);
   });
 
@@ -782,12 +793,14 @@ git commit -m "Add bulkImportArticles service: unzip, parse, create drafts best-
 ### Task 5: Route, controller, and OpenAPI registration
 
 **Files:**
+
 - Modify: `backend/src/agent/controllers/articlesController.ts`
 - Modify: `backend/src/agent/routers/articlesRouter.ts`
 - Modify: `backend/src/docs/openapi.ts`
 - Modify: `backend/tests/agent.articles.bulkImport.test.ts` (add HTTP-level tests)
 
 **Interfaces:**
+
 - Consumes: `bulkImportArticles` (Task 4), `BulkImportArticlesBody` (Task 3), `requireTeamLeadOrAdmin` (existing, `backend/src/shared/middleware/requireTeamLeadOrAdmin.ts`).
 
 - [ ] **Step 1: Write the failing HTTP-level tests**
@@ -978,9 +991,11 @@ git commit -m "Add POST /agent/articles/bulk-import route, controller, and OpenA
 ### Task 6: Frontend API client for bulk import
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/agent-console/api/agentApi.ts`
 
 **Interfaces:**
+
 - Produces (used by Task 7): `bulkImportArticles(token: string, input: { key: string }): Promise<BulkImportArticlesResponse>`; `putFileToUploadUrl(uploadUrl: string, file: File, onProgress?: (percent: number) => void, contentTypeOverride?: string): Promise<void>` (extended signature, backward compatible).
 
 The existing `putFileToUploadUrl` always signs the PUT's `Content-Type` header from `file.type` — but a `.zip` file's browser-reported MIME type is inconsistent (`application/zip`, `application/x-zip-compressed`, or empty depending on OS/browser), and it must exactly match the `content_type` used to presign the URL or S3 rejects the PUT. This task adds an optional override so the bulk-import caller can force `'application/zip'` deterministically, while every existing caller (image uploads) is unaffected since they don't pass the new parameter.
@@ -1067,10 +1082,12 @@ git commit -m "Add bulkImportArticles API client and content-type override for z
 ### Task 7: BulkImportDialog component
 
 **Files:**
+
 - Create: `frontend/src/surfaces/agent-console/pages/KnowledgeBase/components/BulkImportDialog.tsx`
 - Test: `frontend/src/surfaces/agent-console/pages/KnowledgeBase/components/BulkImportDialog.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `requestUpload`, `putFileToUploadUrl`, `bulkImportArticles` (Task 6), `Dialog`/`DialogContent`/`DialogHeader`/`DialogTitle`/`DialogFooter` from `../../../components/ui/dialog.tsx`, `Button` from `../../../components/ui/button.tsx`.
 - Produces (used by Task 8): `<BulkImportDialog open={boolean} onOpenChange={(open: boolean) => void} token={string} onImported={(response: BulkImportArticlesResponse) => void} />`.
 
@@ -1323,9 +1340,11 @@ git commit -m "Add BulkImportDialog for zip-based article import"
 ### Task 8: Wire the "Bulk Import" button into the KnowledgeBase list
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/agent-console/pages/KnowledgeBase/components/ArticleTable.tsx`
 
 **Interfaces:**
+
 - Consumes: `BulkImportDialog` (Task 7), `canBuildForms` from `../../../lib/agentSession.ts` (existing — already used in `ArticleEditorSheet.tsx` to gate publish/archive; reused here for the same Team-Lead/Admin boundary), `useQueryClient` from `@tanstack/react-query`.
 
 - [ ] **Step 1: Modify `ArticleTable.tsx`**
@@ -1403,6 +1422,7 @@ pnpm dev
 ```
 
 Navigate to the agent console KnowledgeBase page as a Team Lead or Admin account. Confirm:
+
 - "Bulk Import" button is visible next to "+ New" for a Team Lead/Admin session, and hidden for a plain agent session.
 - Selecting a `.zip` with a few `.md` files shows the uploading → importing → results sequence, and the new drafts appear in the list after closing the dialog.
 - Selecting a zip over 20MB shows the client-side size error without any network call (check the Network tab).

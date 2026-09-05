@@ -60,7 +60,7 @@ Two Docker services: Postgres and Redis. Redis is a queue and pub/sub bus, not a
 ## Architecture
 
 ```
-Unity SDK ─┐
+External SDK ─┐
 Web SDK ───┼──▶ Core API (Express, Socket.io, RLS workspace scoping)
 Console ───┘         │
                      ├── PostgreSQL (relational + append-only events)
@@ -68,7 +68,7 @@ Console ───┘         │
                      └── Object storage (presigned uploads)
 ```
 
-- **Support UI is a web app** — the Unity SDK is a thin shell that opens it with a signed token. Chat, bot, forms, articles all live here.
+- **Support UI is a web app** — the SDK is a thin shell that opens it with a signed token. Chat, bot, forms, articles all live here.
 - **Token in URL fragment** (`#t=`) — never in the query string. Never reaches the server in a request line.
 - **Workspace = one game.** RLS enforces tenant isolation at the database layer. Every scoped table has a policy; every request sets `app.workspace_id` for its transaction. Only `workspace` and `agent` tables are unscoped.
 - **The SDK never holds a secret.** The game's own backend calls `POST /auth/player-token`.

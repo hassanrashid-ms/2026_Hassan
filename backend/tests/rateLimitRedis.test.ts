@@ -1,5 +1,8 @@
 import { afterAll, describe, expect, it } from 'vitest';
-import { closeRateLimitRedis, rateLimitRedisClient } from '../src/shared/rateLimit/rateLimitRedis.ts';
+import {
+  closeRateLimitRedis,
+  rateLimitRedisClient,
+} from '../src/shared/rateLimit/rateLimitRedis.ts';
 
 afterAll(async () => {
   await closeRateLimitRedis();

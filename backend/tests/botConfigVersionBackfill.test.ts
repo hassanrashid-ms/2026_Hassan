@@ -1,6 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { closeOwnerPool, ownerPool, seedBotConfig, seedWorkspace, truncateAll } from './helpers/db.ts';
+import {
+  closeOwnerPool,
+  ownerPool,
+  seedBotConfig,
+  seedWorkspace,
+  truncateAll,
+} from './helpers/db.ts';
 
 afterAll(async () => {
   await closeOwnerPool();
@@ -26,7 +32,9 @@ describe('bot_config_version backfill (0023)', () => {
       workspaceId,
       isProvisioned: true,
       prompt: 'Pre-migration prompt',
-      rules: [{ key: 'custom_rule', text: 'Be nice', enabled: true, locked: false, source: 'custom' }],
+      rules: [
+        { key: 'custom_rule', text: 'Be nice', enabled: true, locked: false, source: 'custom' },
+      ],
       toolsConfig: [{ tool: 'search_articles', enabled: true }],
       limitsConfig: [{ key: 'max_bot_messages', value: 5 }],
     });

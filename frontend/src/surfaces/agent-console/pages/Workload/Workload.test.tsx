@@ -222,8 +222,14 @@ describe('Workload roster metrics', () => {
     const carolRow = screen.getByText('Carol').closest('tr')!;
     const aliceRow = screen.getByText('Alice').closest('tr')!;
     expect(within(bobRow).getByTestId('capacity-cell')).toHaveAttribute('data-at-capacity', 'true');
-    expect(within(carolRow).getByTestId('capacity-cell')).toHaveAttribute('data-at-capacity', 'true');
-    expect(within(aliceRow).getByTestId('capacity-cell')).toHaveAttribute('data-at-capacity', 'false');
+    expect(within(carolRow).getByTestId('capacity-cell')).toHaveAttribute(
+      'data-at-capacity',
+      'true',
+    );
+    expect(within(aliceRow).getByTestId('capacity-cell')).toHaveAttribute(
+      'data-at-capacity',
+      'false',
+    );
   });
 
   it('shows escalated and overdue counts', async () => {

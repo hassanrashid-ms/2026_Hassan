@@ -50,7 +50,12 @@ duplicates it (surfaces don't cross-import each other's local constants):
 
 ```ts
 const ALLOWED_CHAT_ATTACHMENT_MIME_TYPES = [
-  'image/png', 'image/jpeg', 'image/webp', 'image/gif', 'video/mp4', 'video/webm',
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/gif',
+  'video/mp4',
+  'video/webm',
 ];
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const MAX_VIDEO_BYTES = 50 * 1024 * 1024;

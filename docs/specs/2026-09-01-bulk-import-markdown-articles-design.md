@@ -53,37 +53,37 @@ per file is the friction this removes.
    bounded).
 5. Server:
    a. `headObject(key)` to verify the pending object exists and belongs
-      to this agent/workspace (same ownership check pattern as
-      attachment finalization) and re-checks actual byte size ≤ 20MB.
+   to this agent/workspace (same ownership check pattern as
+   attachment finalization) and re-checks actual byte size ≤ 20MB.
    b. Fetches the object from storage into memory and unzips it.
    c. Filters entries to `.md`/`.markdown`, skipping directories and
-      anything else. If this list is empty → reject (`no_markdown_files`).
-      If it has more than 200 entries → reject (`too_many_files`), no
-      processing happens.
+   anything else. If this list is empty → reject (`no_markdown_files`).
+   If it has more than 200 entries → reject (`too_many_files`), no
+   processing happens.
    d. Deletes the pending object — it is not needed after this point.
    e. For each `.md` entry, independently (a failure in one does not
-      stop the others):
-      - Read the entry's text content.
-      - Parse frontmatter with the `front-matter` package (same library
-        the single-file import uses on the client; added as a backend
-        dependency too — pure JS, no Node polyfills needed).
-      - Resolve title: `frontmatter.title` → first `# H1` line in the
-        body → the entry's basename with extension stripped (nested
-        zip paths are flattened to their basename for this purpose).
-        Truncate to 200 chars if longer (schema max) rather than
-        failing the file.
-      - Resolve keywords: `frontmatter.tags`, normalized the same way
-        the single-file import does (array or comma-separated string),
-        `[]` if absent.
-      - Reject the file (do not create) if its body content is empty
-        after stripping frontmatter.
-      - Call the existing `createArticle()` service function directly
-        (in-process, not over HTTP) with `{ title, body, keywords,
-        intent_id: null }`, in the calling agent's workspace context.
-      - Record the outcome: `{ filename, title, status: 'created', article_id }`
-        or `{ filename, status: 'error', reason }`.
-   f. Return the full list of per-file outcomes plus a summary
-      (`{ total, created, failed }`).
+   stop the others):
+   - Read the entry's text content.
+   - Parse frontmatter with the `front-matter` package (same library
+     the single-file import uses on the client; added as a backend
+     dependency too — pure JS, no Node polyfills needed).
+   - Resolve title: `frontmatter.title` → first `# H1` line in the
+     body → the entry's basename with extension stripped (nested
+     zip paths are flattened to their basename for this purpose).
+     Truncate to 200 chars if longer (schema max) rather than
+     failing the file.
+   - Resolve keywords: `frontmatter.tags`, normalized the same way
+     the single-file import does (array or comma-separated string),
+     `[]` if absent.
+   - Reject the file (do not create) if its body content is empty
+     after stripping frontmatter.
+   - Call the existing `createArticle()` service function directly
+     (in-process, not over HTTP) with `{ title, body, keywords,
+intent_id: null }`, in the calling agent's workspace context.
+   - Record the outcome: `{ filename, title, status: 'created', article_id }`
+     or `{ filename, status: 'error', reason }`.
+     f. Return the full list of per-file outcomes plus a summary
+     (`{ total, created, failed }`).
 6. Dialog renders the results: a scrollable table — filename, resolved
    title, status icon, error reason if failed — plus the summary count
    ("18 of 20 imported") and a link/button back to the article list
@@ -116,31 +116,31 @@ type BulkImportArticlesResponse = {
 
 Rejection responses (whole-batch, before any per-file processing):
 
-| Code | Reason               | Condition                          |
-| ---- | -------------------- | ----------------------------------- |
-| 400  | `invalid_zip`         | Object isn't a valid zip archive    |
-| 400  | `zip_too_large`       | Object size > 20MB                  |
-| 400  | `no_markdown_files`   | Zero `.md`/`.markdown` entries      |
+| Code | Reason                | Condition                               |
+| ---- | --------------------- | --------------------------------------- |
+| 400  | `invalid_zip`         | Object isn't a valid zip archive        |
+| 400  | `zip_too_large`       | Object size > 20MB                      |
+| 400  | `no_markdown_files`   | Zero `.md`/`.markdown` entries          |
 | 400  | `too_many_files`      | More than 200 `.md`/`.markdown` entries |
-| 403  | (existing role check) | Caller is not Team Lead/Admin       |
-| 404  | (existing pattern)    | `key` not found / not owned by caller |
+| 403  | (existing role check) | Caller is not Team Lead/Admin           |
+| 404  | (existing pattern)    | `key` not found / not owned by caller   |
 
 Registered in `backend/src/docs/openapi.ts` alongside the other
 articles routes.
 
 ## Error handling
 
-| Case                                      | Behavior                                                        |
-| ------------------------------------------ | ---------------------------------------------------------------- |
-| Zip > 20MB (caught client-side)            | Toast before upload starts, no request made                     |
-| Zip > 20MB (caught server-side, defense in depth) | 400 `zip_too_large`, nothing created                      |
-| > 200 `.md` entries                        | 400 `too_many_files`, nothing created, admin splits the batch    |
-| Corrupt / non-zip upload                   | 400 `invalid_zip`, nothing created                               |
-| Zip has no `.md`/`.markdown` entries       | 400 `no_markdown_files`, nothing created                         |
-| Individual file is empty (post-frontmatter)| That file recorded as `error`, rest of batch proceeds            |
-| Individual file's `createArticle()` fails  | That file recorded as `error` with the service's reason, rest of batch proceeds |
-| Individual file's resolved title > 200 chars | Truncated to 200 chars, file still created (not an error)      |
-| Non-`.md` entry in zip (image, folder, `.DS_Store`) | Silently skipped, not counted, not reported            |
+| Case                                                | Behavior                                                                        |
+| --------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Zip > 20MB (caught client-side)                     | Toast before upload starts, no request made                                     |
+| Zip > 20MB (caught server-side, defense in depth)   | 400 `zip_too_large`, nothing created                                            |
+| > 200 `.md` entries                                 | 400 `too_many_files`, nothing created, admin splits the batch                   |
+| Corrupt / non-zip upload                            | 400 `invalid_zip`, nothing created                                              |
+| Zip has no `.md`/`.markdown` entries                | 400 `no_markdown_files`, nothing created                                        |
+| Individual file is empty (post-frontmatter)         | That file recorded as `error`, rest of batch proceeds                           |
+| Individual file's `createArticle()` fails           | That file recorded as `error` with the service's reason, rest of batch proceeds |
+| Individual file's resolved title > 200 chars        | Truncated to 200 chars, file still created (not an error)                       |
+| Non-`.md` entry in zip (image, folder, `.DS_Store`) | Silently skipped, not counted, not reported                                     |
 
 ## Dependencies
 

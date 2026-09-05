@@ -87,8 +87,7 @@ export async function askResolved(
 const FORCE_RESOLVE_BLOCKED_STATUSES = new Set(['resolved', 'closed']);
 
 export type ForceResolveOutcome =
-  | { ok: true }
-  | { ok: false; reason: 'not_found' | 'wrong_status' };
+  { ok: true } | { ok: false; reason: 'not_found' | 'wrong_status' };
 
 /**
  * Admin-only bypass of the ask/confirm cycle: skips straight to resolved with

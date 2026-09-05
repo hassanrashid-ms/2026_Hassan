@@ -131,7 +131,11 @@ export function ArticleTable({
     setBusyAction(action);
     try {
       const call =
-        action === 'publish' ? publishArticle : action === 'archive' ? archiveArticle : unarchiveArticle;
+        action === 'publish'
+          ? publishArticle
+          : action === 'archive'
+            ? archiveArticle
+            : unarchiveArticle;
       await Promise.allSettled(ids.map((id) => call(token, id)));
       setSelectedIds(new Set());
       void queryClient.invalidateQueries({ queryKey: ['admin-articles'] });

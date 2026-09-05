@@ -20,10 +20,12 @@
 ### Task 1: `AttachmentField` — clickable container, validation, preview, progress, error revert
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/webview/components/chat/FormCard.tsx`
 - Test: `frontend/src/surfaces/webview/components/chat/FormCard.test.tsx`
 
 **Interfaces:**
+
 - Produces: `AttachmentField` component (private to `FormCard.tsx`, not exported) with props:
   ```ts
   {
@@ -67,197 +69,197 @@ function makeFile(name: string, type: string, size: number): File {
 Add these tests at the end of the `describe('FormCard', ...)` block, before the final closing `});`:
 
 ```tsx
-  it('shows a clickable container with an attachment icon before any file is picked', () => {
-    const form: PlayerFormView = {
-      submission_id: 's1',
-      form_id: 'f1',
-      form_name: 'Proof of purchase',
-      version: 1,
-      fields: [
-        { key: 'proof', label: 'Upload a photo', type: 'attachment', isRequired: false, position: 0 },
-      ],
-      answers: [],
-    };
-    render(
-      <FormCard
-        form={form}
-        onAnswer={vi.fn()}
-        onSubmit={vi.fn()}
-        onSkip={vi.fn()}
-        busy={false}
-        onSendAttachment={vi.fn()}
-      />,
-    );
-    expect(
-      screen.getByRole('button', { name: /tap to attach a photo or video/i }),
-    ).toBeInTheDocument();
-  });
+it('shows a clickable container with an attachment icon before any file is picked', () => {
+  const form: PlayerFormView = {
+    submission_id: 's1',
+    form_id: 'f1',
+    form_name: 'Proof of purchase',
+    version: 1,
+    fields: [
+      { key: 'proof', label: 'Upload a photo', type: 'attachment', isRequired: false, position: 0 },
+    ],
+    answers: [],
+  };
+  render(
+    <FormCard
+      form={form}
+      onAnswer={vi.fn()}
+      onSubmit={vi.fn()}
+      onSkip={vi.fn()}
+      busy={false}
+      onSendAttachment={vi.fn()}
+    />,
+  );
+  expect(
+    screen.getByRole('button', { name: /tap to attach a photo or video/i }),
+  ).toBeInTheDocument();
+});
 
-  it('rejects an oversized image client-side without calling onSendAttachment', () => {
-    const onSendAttachment = vi.fn();
-    const form: PlayerFormView = {
-      submission_id: 's1',
-      form_id: 'f1',
-      form_name: 'Proof of purchase',
-      version: 1,
-      fields: [
-        { key: 'proof', label: 'Upload a photo', type: 'attachment', isRequired: false, position: 0 },
-      ],
-      answers: [],
-    };
-    render(
-      <FormCard
-        form={form}
-        onAnswer={vi.fn()}
-        onSubmit={vi.fn()}
-        onSkip={vi.fn()}
-        busy={false}
-        onSendAttachment={onSendAttachment}
-      />,
-    );
-    const big = makeFile('huge.png', 'image/png', 11 * 1024 * 1024);
-    fireEvent.change(screen.getByLabelText('Attach image or video'), { target: { files: [big] } });
+it('rejects an oversized image client-side without calling onSendAttachment', () => {
+  const onSendAttachment = vi.fn();
+  const form: PlayerFormView = {
+    submission_id: 's1',
+    form_id: 'f1',
+    form_name: 'Proof of purchase',
+    version: 1,
+    fields: [
+      { key: 'proof', label: 'Upload a photo', type: 'attachment', isRequired: false, position: 0 },
+    ],
+    answers: [],
+  };
+  render(
+    <FormCard
+      form={form}
+      onAnswer={vi.fn()}
+      onSubmit={vi.fn()}
+      onSkip={vi.fn()}
+      busy={false}
+      onSendAttachment={onSendAttachment}
+    />,
+  );
+  const big = makeFile('huge.png', 'image/png', 11 * 1024 * 1024);
+  fireEvent.change(screen.getByLabelText('Attach image or video'), { target: { files: [big] } });
 
-    expect(onSendAttachment).not.toHaveBeenCalled();
-    expect(screen.getByText(/10 MB or smaller/)).toBeInTheDocument();
-  });
+  expect(onSendAttachment).not.toHaveBeenCalled();
+  expect(screen.getByText(/10 MB or smaller/)).toBeInTheDocument();
+});
 
-  it('rejects an oversized video client-side without calling onSendAttachment', () => {
-    const onSendAttachment = vi.fn();
-    const form: PlayerFormView = {
-      submission_id: 's1',
-      form_id: 'f1',
-      form_name: 'Proof of purchase',
-      version: 1,
-      fields: [
-        { key: 'proof', label: 'Upload a video', type: 'attachment', isRequired: false, position: 0 },
-      ],
-      answers: [],
-    };
-    render(
-      <FormCard
-        form={form}
-        onAnswer={vi.fn()}
-        onSubmit={vi.fn()}
-        onSkip={vi.fn()}
-        busy={false}
-        onSendAttachment={onSendAttachment}
-      />,
-    );
-    const big = makeFile('huge.mp4', 'video/mp4', 51 * 1024 * 1024);
-    fireEvent.change(screen.getByLabelText('Attach image or video'), { target: { files: [big] } });
+it('rejects an oversized video client-side without calling onSendAttachment', () => {
+  const onSendAttachment = vi.fn();
+  const form: PlayerFormView = {
+    submission_id: 's1',
+    form_id: 'f1',
+    form_name: 'Proof of purchase',
+    version: 1,
+    fields: [
+      { key: 'proof', label: 'Upload a video', type: 'attachment', isRequired: false, position: 0 },
+    ],
+    answers: [],
+  };
+  render(
+    <FormCard
+      form={form}
+      onAnswer={vi.fn()}
+      onSubmit={vi.fn()}
+      onSkip={vi.fn()}
+      busy={false}
+      onSendAttachment={onSendAttachment}
+    />,
+  );
+  const big = makeFile('huge.mp4', 'video/mp4', 51 * 1024 * 1024);
+  fireEvent.change(screen.getByLabelText('Attach image or video'), { target: { files: [big] } });
 
-    expect(onSendAttachment).not.toHaveBeenCalled();
-    expect(screen.getByText(/50 MB or smaller/)).toBeInTheDocument();
-  });
+  expect(onSendAttachment).not.toHaveBeenCalled();
+  expect(screen.getByText(/50 MB or smaller/)).toBeInTheDocument();
+});
 
-  it('rejects an unsupported file type client-side without calling onSendAttachment', () => {
-    const onSendAttachment = vi.fn();
-    const form: PlayerFormView = {
-      submission_id: 's1',
-      form_id: 'f1',
-      form_name: 'Proof of purchase',
-      version: 1,
-      fields: [
-        { key: 'proof', label: 'Upload a photo', type: 'attachment', isRequired: false, position: 0 },
-      ],
-      answers: [],
-    };
-    render(
-      <FormCard
-        form={form}
-        onAnswer={vi.fn()}
-        onSubmit={vi.fn()}
-        onSkip={vi.fn()}
-        busy={false}
-        onSendAttachment={onSendAttachment}
-      />,
-    );
-    const bad = makeFile('doc.pdf', 'application/pdf', 100);
-    fireEvent.change(screen.getByLabelText('Attach image or video'), { target: { files: [bad] } });
+it('rejects an unsupported file type client-side without calling onSendAttachment', () => {
+  const onSendAttachment = vi.fn();
+  const form: PlayerFormView = {
+    submission_id: 's1',
+    form_id: 'f1',
+    form_name: 'Proof of purchase',
+    version: 1,
+    fields: [
+      { key: 'proof', label: 'Upload a photo', type: 'attachment', isRequired: false, position: 0 },
+    ],
+    answers: [],
+  };
+  render(
+    <FormCard
+      form={form}
+      onAnswer={vi.fn()}
+      onSubmit={vi.fn()}
+      onSkip={vi.fn()}
+      busy={false}
+      onSendAttachment={onSendAttachment}
+    />,
+  );
+  const bad = makeFile('doc.pdf', 'application/pdf', 100);
+  fireEvent.change(screen.getByLabelText('Attach image or video'), { target: { files: [bad] } });
 
-    expect(onSendAttachment).not.toHaveBeenCalled();
-    expect(
-      screen.getByText(/Only PNG, JPEG, WebP, GIF images or MP4\/WebM videos are supported\./),
-    ).toBeInTheDocument();
-  });
+  expect(onSendAttachment).not.toHaveBeenCalled();
+  expect(
+    screen.getByText(/Only PNG, JPEG, WebP, GIF images or MP4\/WebM videos are supported\./),
+  ).toBeInTheDocument();
+});
 
-  it('shows the picked file as a preview with a progress overlay while uploading', async () => {
-    let resolveUpload!: () => void;
-    const onSendAttachment = vi.fn(
-      (_fieldKey: string, _file: File, onProgress: (percent: number) => void) =>
-        new Promise<void>((resolve) => {
-          onProgress(42);
-          resolveUpload = resolve;
-        }),
-    );
-    const form: PlayerFormView = {
-      submission_id: 's1',
-      form_id: 'f1',
-      form_name: 'Proof of purchase',
-      version: 1,
-      fields: [
-        { key: 'proof', label: 'Upload a photo', type: 'attachment', isRequired: false, position: 0 },
-      ],
-      answers: [],
-    };
-    render(
-      <FormCard
-        form={form}
-        onAnswer={vi.fn()}
-        onSubmit={vi.fn()}
-        onSkip={vi.fn()}
-        busy={false}
-        onSendAttachment={onSendAttachment}
-      />,
-    );
-    const file = makeFile('shot.png', 'image/png', 3);
-    fireEvent.change(screen.getByLabelText('Attach image or video'), { target: { files: [file] } });
+it('shows the picked file as a preview with a progress overlay while uploading', async () => {
+  let resolveUpload!: () => void;
+  const onSendAttachment = vi.fn(
+    (_fieldKey: string, _file: File, onProgress: (percent: number) => void) =>
+      new Promise<void>((resolve) => {
+        onProgress(42);
+        resolveUpload = resolve;
+      }),
+  );
+  const form: PlayerFormView = {
+    submission_id: 's1',
+    form_id: 'f1',
+    form_name: 'Proof of purchase',
+    version: 1,
+    fields: [
+      { key: 'proof', label: 'Upload a photo', type: 'attachment', isRequired: false, position: 0 },
+    ],
+    answers: [],
+  };
+  render(
+    <FormCard
+      form={form}
+      onAnswer={vi.fn()}
+      onSubmit={vi.fn()}
+      onSkip={vi.fn()}
+      busy={false}
+      onSendAttachment={onSendAttachment}
+    />,
+  );
+  const file = makeFile('shot.png', 'image/png', 3);
+  fireEvent.change(screen.getByLabelText('Attach image or video'), { target: { files: [file] } });
 
-    await screen.findByAltText('shot.png');
-    expect(screen.getByTestId('upload-progress-overlay')).toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: /tap to attach a photo or video/i }),
-    ).not.toBeInTheDocument();
+  await screen.findByAltText('shot.png');
+  expect(screen.getByTestId('upload-progress-overlay')).toBeInTheDocument();
+  expect(
+    screen.queryByRole('button', { name: /tap to attach a photo or video/i }),
+  ).not.toBeInTheDocument();
 
-    resolveUpload();
-    await waitFor(() =>
-      expect(onSendAttachment).toHaveBeenCalledWith('proof', file, expect.any(Function)),
-    );
-  });
+  resolveUpload();
+  await waitFor(() =>
+    expect(onSendAttachment).toHaveBeenCalledWith('proof', file, expect.any(Function)),
+  );
+});
 
-  it('reverts to the idle container and shows an error when the upload fails', async () => {
-    const onSubmit = vi.fn();
-    const onSendAttachment = vi.fn().mockRejectedValue(new Error('network error'));
-    const form: PlayerFormView = {
-      submission_id: 's1',
-      form_id: 'f1',
-      form_name: 'Proof of purchase',
-      version: 1,
-      fields: [
-        { key: 'proof', label: 'Upload a photo', type: 'attachment', isRequired: false, position: 0 },
-      ],
-      answers: [],
-    };
-    render(
-      <FormCard
-        form={form}
-        onAnswer={vi.fn()}
-        onSubmit={onSubmit}
-        onSkip={vi.fn()}
-        busy={false}
-        onSendAttachment={onSendAttachment}
-      />,
-    );
-    const file = makeFile('shot.png', 'image/png', 3);
-    fireEvent.change(screen.getByLabelText('Attach image or video'), { target: { files: [file] } });
+it('reverts to the idle container and shows an error when the upload fails', async () => {
+  const onSubmit = vi.fn();
+  const onSendAttachment = vi.fn().mockRejectedValue(new Error('network error'));
+  const form: PlayerFormView = {
+    submission_id: 's1',
+    form_id: 'f1',
+    form_name: 'Proof of purchase',
+    version: 1,
+    fields: [
+      { key: 'proof', label: 'Upload a photo', type: 'attachment', isRequired: false, position: 0 },
+    ],
+    answers: [],
+  };
+  render(
+    <FormCard
+      form={form}
+      onAnswer={vi.fn()}
+      onSubmit={onSubmit}
+      onSkip={vi.fn()}
+      busy={false}
+      onSendAttachment={onSendAttachment}
+    />,
+  );
+  const file = makeFile('shot.png', 'image/png', 3);
+  fireEvent.change(screen.getByLabelText('Attach image or video'), { target: { files: [file] } });
 
-    await screen.findByText(/Upload failed/);
-    expect(
-      screen.getByRole('button', { name: /tap to attach a photo or video/i }),
-    ).toBeInTheDocument();
-    expect(onSubmit).not.toHaveBeenCalled();
-  });
+  await screen.findByText(/Upload failed/);
+  expect(
+    screen.getByRole('button', { name: /tap to attach a photo or video/i }),
+  ).toBeInTheDocument();
+  expect(onSubmit).not.toHaveBeenCalled();
+});
 ```
 
 - [ ] **Step 3: Run the test file to verify the new/updated tests fail**
@@ -271,25 +273,32 @@ Expected: The two updated assertions fail (called with 2 args, not 3), and every
 In `frontend/src/surfaces/webview/components/chat/FormCard.tsx`:
 
 Change the import line (currently line 1):
+
 ```ts
 import { useMemo, useState } from 'react';
 ```
+
 to:
+
 ```ts
 import { useMemo, useRef, useState } from 'react';
 ```
 
 Add two new imports after the existing `import { cn } from '@/surfaces/webview/lib/cn';` line:
+
 ```ts
 import { Paperclip } from 'lucide-react';
 import { AttachmentThumbnail } from '@/features/chat/components/AttachmentThumbnail';
 ```
 
 Update the `FormCardProps` type's `onSendAttachment` field (currently):
+
 ```ts
   onSendAttachment?: (fieldKey: string, file: File) => Promise<void>;
 ```
+
 to:
+
 ```ts
   onSendAttachment?: (
     fieldKey: string,
@@ -299,46 +308,52 @@ to:
 ```
 
 Replace the whole `handleAttachmentPicked` function (currently lines 103-119, from the comment through the closing `};`) with:
+
 ```ts
-  // The attachment field's own advance path: no draft/changed value to
-  // compare, since a picked file that uploaded successfully is always a
-  // "yes, send this" — there is no re-shown-unchanged case to skip posting
-  // for. This mirrors advance()'s isLast/onSubmit/setIndex tail without its
-  // changed-value branch. The upload itself, its preview, and its progress
-  // are owned by AttachmentField below; this only runs once that upload has
-  // actually succeeded.
-  const handleAttachmentUploaded = (fieldKey: string) => {
-    setCommitted((current) => ({ ...current, [fieldKey]: true }));
-    if (isLast) onSubmit();
-    else setIndex((current) => current + 1);
-  };
+// The attachment field's own advance path: no draft/changed value to
+// compare, since a picked file that uploaded successfully is always a
+// "yes, send this" — there is no re-shown-unchanged case to skip posting
+// for. This mirrors advance()'s isLast/onSubmit/setIndex tail without its
+// changed-value branch. The upload itself, its preview, and its progress
+// are owned by AttachmentField below; this only runs once that upload has
+// actually succeeded.
+const handleAttachmentUploaded = (fieldKey: string) => {
+  setCommitted((current) => ({ ...current, [fieldKey]: true }));
+  if (isLast) onSubmit();
+  else setIndex((current) => current + 1);
+};
 ```
 
 Replace the `<FieldInput ... />` element (currently lines 162-168):
+
 ```tsx
-      <FieldInput
-        field={field}
-        value={value}
-        onChange={set}
-        disabled={disabled}
-        onAttachmentPicked={(file) => void handleAttachmentPicked(field.key, file)}
-      />
+<FieldInput
+  field={field}
+  value={value}
+  onChange={set}
+  disabled={disabled}
+  onAttachmentPicked={(file) => void handleAttachmentPicked(field.key, file)}
+/>
 ```
+
 with:
+
 ```tsx
-      {field.type === 'attachment' ? (
-        onSendAttachment && (
-          <AttachmentField
-            fieldKey={field.key}
-            disabled={disabled}
-            onSendAttachment={onSendAttachment}
-            onUploading={setSending}
-            onUploaded={() => handleAttachmentUploaded(field.key)}
-          />
-        )
-      ) : (
-        <FieldInput field={field} value={value} onChange={set} disabled={disabled} />
-      )}
+{
+  field.type === 'attachment' ? (
+    onSendAttachment && (
+      <AttachmentField
+        fieldKey={field.key}
+        disabled={disabled}
+        onSendAttachment={onSendAttachment}
+        onUploading={setSending}
+        onUploaded={() => handleAttachmentUploaded(field.key)}
+      />
+    )
+  ) : (
+    <FieldInput field={field} value={value} onChange={set} disabled={disabled} />
+  );
+}
 ```
 
 Remove the `onAttachmentPicked` prop from `FieldInput`'s props type and function signature (currently in the `function FieldInput({ field, value, onChange, disabled, onAttachmentPicked }: {...})` block) — delete the `onAttachmentPicked: (file: File) => void;` line from the type, and delete `onAttachmentPicked` from the destructured parameters.
@@ -515,10 +530,12 @@ git commit -m "Redesign form attachment field: clickable container, preview, upl
 ### Task 2: Thread real upload progress through `SupportChat.tsx`
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/webview/pages/SupportChat.tsx:374-398`
 - Test: `frontend/src/surfaces/webview/pages/SupportChat.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `AttachmentField`'s `onSendAttachment` shape from Task 1 —
   `(fieldKey: string, file: File, onProgress: (percent: number) => void) => Promise<void>`.
 - Consumes: `putFileToUploadUrl(uploadUrl: string, file: File, onProgress?: (percent: number) => void): Promise<void>` from `frontend/src/features/chat/api/playerChatApi.ts:82-107` (already supports the callback — this task is the first caller on the player side to pass one).
@@ -528,11 +545,13 @@ git commit -m "Redesign form attachment field: clickable container, preview, upl
 In `frontend/src/surfaces/webview/pages/SupportChat.test.tsx`:
 
 Add `PlayerFormView` to the existing type-only import from `@support/types` (currently `import type { PlayerMessagesResponse } from '@support/types';`):
+
 ```ts
 import type { PlayerFormView, PlayerMessagesResponse } from '@support/types';
 ```
 
 Add `requestUpload`, `putFileToUploadUrl`, and `sendPlayerMessage` to the existing import from `@/features/chat/api/playerChatApi` (currently importing `fetchPlayerMessages, markPlayerMessagesRead, postFormAnswer, skipForm, submitForm`):
+
 ```ts
 import {
   fetchPlayerMessages,
@@ -557,13 +576,17 @@ describe('SupportChat form attachment upload', () => {
       form_name: 'Proof of purchase',
       version: 1,
       fields: [
-        { key: 'proof', label: 'Upload a photo', type: 'attachment', isRequired: false, position: 0 },
+        {
+          key: 'proof',
+          label: 'Upload a photo',
+          type: 'attachment',
+          isRequired: false,
+          position: 0,
+        },
       ],
       answers: [],
     };
-    vi.mocked(fetchPlayerMessages).mockResolvedValue(
-      messages({ confirm_phase: 'form', form }),
-    );
+    vi.mocked(fetchPlayerMessages).mockResolvedValue(messages({ confirm_phase: 'form', form }));
     vi.mocked(requestUpload).mockResolvedValue({
       key: 'pending/ws/player/uuid.png',
       upload_url: 'https://upload.example/put',
@@ -589,7 +612,12 @@ describe('SupportChat form attachment upload', () => {
       't',
       '',
       's',
-      { key: 'pending/ws/player/uuid.png', filename: 'shot.png', mimeType: 'image/png', byteSize: 3 },
+      {
+        key: 'pending/ws/player/uuid.png',
+        filename: 'shot.png',
+        mimeType: 'image/png',
+        byteSize: 3,
+      },
       'proof',
     );
   });
@@ -698,6 +726,7 @@ Expected: no errors. A lint-only formatting diff (if `pnpm lint --fix` or a pre-
 - [ ] **Step 3: Manually verify in the browser**
 
 Run: `pnpm dev`, open the webview support chat with a workspace/form configured with an `attachment` field (or seed one via `pnpm db:seed` if none exists), and walk through:
+
 - The idle state shows a dashed container with a centered paperclip icon and helper text, not a raw file input.
 - Picking a small image shows the image preview immediately, dimmed under a dark scrim with a progress ring while it uploads.
 - Once upload completes, the form auto-advances to the next question (or submits, if it was the last).

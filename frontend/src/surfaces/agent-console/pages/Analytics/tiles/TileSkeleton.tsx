@@ -1,4 +1,4 @@
-type TileSkeletonProps = { kind: 'number' | 'chart' }
+type TileSkeletonProps = { kind: 'number' | 'chart' };
 
 export function TileSkeleton({ kind }: TileSkeletonProps) {
   return (
@@ -10,5 +10,5 @@ export function TileSkeleton({ kind }: TileSkeletonProps) {
         <div className="min-h-0 flex-1 animate-pulse rounded bg-accent-soft" />
       )}
     </div>
-  )
+  );
 }

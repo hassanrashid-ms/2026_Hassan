@@ -172,7 +172,10 @@ export function SubintentRow({
             </span>
 
             <span title={disabledTitle}>
-              <Select disabled={!admin || isOther} onValueChange={(intentId) => move.mutate(intentId)}>
+              <Select
+                disabled={!admin || isOther}
+                onValueChange={(intentId) => move.mutate(intentId)}
+              >
                 <SelectTrigger className="h-7 w-28 text-xs">
                   <SelectValue placeholder="Move to…" />
                 </SelectTrigger>
@@ -237,7 +240,11 @@ export function SubintentRow({
           </div>
         )}
       </div>
-      {(archive.isError || move.isError || merge.isError || rename.isError || unarchive.isError) && (
+      {(archive.isError ||
+        move.isError ||
+        merge.isError ||
+        rename.isError ||
+        unarchive.isError) && (
         <p className="pl-0 text-xs text-red-600">
           {archive.error?.message ??
             move.error?.message ??

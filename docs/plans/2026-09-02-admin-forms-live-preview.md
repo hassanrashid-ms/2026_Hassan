@@ -21,12 +21,14 @@
 ### Task 1: Extract `FormCard` into `features/forms/`
 
 **Files:**
+
 - Create: `frontend/src/features/forms/lib/cn.ts`
 - Move: `frontend/src/surfaces/webview/components/chat/FormCard.tsx` → `frontend/src/features/forms/components/FormCard.tsx`
 - Move: `frontend/src/surfaces/webview/components/chat/FormCard.test.tsx` → `frontend/src/features/forms/components/FormCard.test.tsx`
 - Modify: `frontend/src/surfaces/webview/pages/SupportChat.tsx:10`
 
 **Interfaces:**
+
 - Consumes: nothing new.
 - Produces: `FormCard` importable from `@/features/forms/components/FormCard`, with an unchanged prop signature (`FormCardProps` in the moved file). `cn` importable from `@/features/forms/lib/cn`. Tasks 3 and 4 import `FormCard` from this new path.
 
@@ -57,6 +59,7 @@ export function cn(...inputs: ClassValue[]): string {
 - [ ] **Step 3: Update imports at the top of the moved `FormCard.tsx`**
 
 Find:
+
 ```ts
 import { SupportButton } from '@/surfaces/webview/components/SupportButton';
 import { post } from '@/services/bridgeService';
@@ -64,6 +67,7 @@ import { cn } from '@/surfaces/webview/lib/cn';
 ```
 
 Replace with:
+
 ```ts
 import { post } from '@/services/bridgeService';
 import { cn } from '@/features/forms/lib/cn';
@@ -74,33 +78,35 @@ import { cn } from '@/features/forms/lib/cn';
 - [ ] **Step 4: Replace the `SupportButton` usage with an inline button**
 
 Find (inside the `FormCard` component's return block):
+
 ```tsx
-      <SupportButton
-        variant="primary"
-        className="w-full"
-        // A required field must have a value before Next may advance.
-        disabled={disabled || currentRequiredUnanswered}
-        onClick={() => void advance()}
-      >
-        {isLast ? 'Submit' : 'Next'}
-      </SupportButton>
+<SupportButton
+  variant="primary"
+  className="w-full"
+  // A required field must have a value before Next may advance.
+  disabled={disabled || currentRequiredUnanswered}
+  onClick={() => void advance()}
+>
+  {isLast ? 'Submit' : 'Next'}
+</SupportButton>
 ```
 
 Replace with:
+
 ```tsx
-      <button
-        type="button"
-        className={cn(
-          'inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-card px-5 py-3',
-          'text-base font-semibold transition-colors outline-none disabled:opacity-50',
-          'bg-accent text-accent-fg active:bg-accent-deep',
-        )}
-        // A required field must have a value before Next may advance.
-        disabled={disabled || currentRequiredUnanswered}
-        onClick={() => void advance()}
-      >
-        {isLast ? 'Submit' : 'Next'}
-      </button>
+<button
+  type="button"
+  className={cn(
+    'inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-card px-5 py-3',
+    'text-base font-semibold transition-colors outline-none disabled:opacity-50',
+    'bg-accent text-accent-fg active:bg-accent-deep',
+  )}
+  // A required field must have a value before Next may advance.
+  disabled={disabled || currentRequiredUnanswered}
+  onClick={() => void advance()}
+>
+  {isLast ? 'Submit' : 'Next'}
+</button>
 ```
 
 This reproduces `SupportButton`'s `primary` variant classes exactly (compare `frontend/src/surfaces/webview/components/SupportButton.tsx`), so rendered output is unchanged.
@@ -113,11 +119,13 @@ Expected: PASS — all existing `FormCard` tests pass unchanged (they only asser
 - [ ] **Step 6: Update the webview caller's import path**
 
 In `frontend/src/surfaces/webview/pages/SupportChat.tsx`, find:
+
 ```ts
 import { FormCard } from '@/surfaces/webview/components/chat/FormCard';
 ```
 
 Replace with:
+
 ```ts
 import { FormCard } from '@/features/forms/components/FormCard';
 ```
@@ -140,10 +148,12 @@ git commit -m "Extract FormCard into features/forms for cross-surface reuse"
 ### Task 2: `MobilePreviewFrame` — scoped webview theming
 
 **Files:**
+
 - Create: `frontend/src/surfaces/agent-console/pages/Forms/components/MobilePreviewFrame.tsx`
 - Test: `frontend/src/surfaces/agent-console/pages/Forms/components/MobilePreviewFrame.test.tsx`
 
 **Interfaces:**
+
 - Consumes: nothing new.
 - Produces: `MobilePreviewFrame({ children }: { children: ReactNode })` — a React component, default export not used (named export). Renders a `data-testid="mobile-preview-frame"` root element. Task 3 wraps its rendered `FormCard` in this.
 
@@ -244,10 +254,12 @@ git commit -m "Add MobilePreviewFrame for pixel-faithful admin form previews"
 ### Task 3: `FormLivePreview` — mocked, self-resetting preview session
 
 **Files:**
+
 - Create: `frontend/src/surfaces/agent-console/pages/Forms/components/FormLivePreview.tsx`
 - Test: `frontend/src/surfaces/agent-console/pages/Forms/components/FormLivePreview.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `MobilePreviewFrame` from Task 2 (`./MobilePreviewFrame.tsx`); `FormCard` from Task 1 (`@/features/forms/components/FormCard`); `FormField`, `PlayerFormView` types from `@support/types`.
 - Produces: `FormLivePreview({ formName, fields }: { formName: string; fields: FormField[] })`. Task 4 renders this with `FormEditorSheet`'s live `name`/`fields` state.
 
@@ -330,13 +342,7 @@ import { MobilePreviewFrame } from './MobilePreviewFrame.tsx';
  * real player's reconnect resumes mid-form instead of resetting. That same
  * behavior would otherwise leave a stale preview after every edit here.
  */
-export function FormLivePreview({
-  formName,
-  fields,
-}: {
-  formName: string;
-  fields: FormField[];
-}) {
+export function FormLivePreview({ formName, fields }: { formName: string; fields: FormField[] }) {
   if (fields.length === 0) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-[var(--color-muted)]">
@@ -420,20 +426,24 @@ git commit -m "Add FormLivePreview: local, mocked FormCard session for the admin
 ### Task 4: Wire the preview into `FormEditorSheet`
 
 **Files:**
+
 - Modify: `frontend/src/surfaces/agent-console/pages/Forms/components/FormEditorSheet.tsx`
 
 **Interfaces:**
+
 - Consumes: `FormLivePreview` from Task 3 (`./FormLivePreview.tsx`), fed `FormEditorForm`'s existing `name` and `fields` state (`frontend/src/surfaces/agent-console/pages/Forms/components/FormEditorSheet.tsx:134-135`).
 - Produces: nothing new for other tasks — this is the final integration point.
 
 - [ ] **Step 1: Add the import**
 
 Find (top of file, near the other relative imports):
+
 ```ts
 import { ShownForPicker } from './ShownForPicker.tsx';
 ```
 
 Replace with:
+
 ```ts
 import { FormLivePreview } from './FormLivePreview.tsx';
 import { ShownForPicker } from './ShownForPicker.tsx';
@@ -442,6 +452,7 @@ import { ShownForPicker } from './ShownForPicker.tsx';
 - [ ] **Step 2: Split the editor body into a side-by-side layout**
 
 Find the opening of `FormEditorForm`'s returned JSX:
+
 ```tsx
   return (
     <>
@@ -450,6 +461,7 @@ Find the opening of `FormEditorForm`'s returned JSX:
 ```
 
 Replace with:
+
 ```tsx
   return (
     <>
@@ -461,6 +473,7 @@ Replace with:
 - [ ] **Step 3: Close the new layout wrapper and add the preview column**
 
 Find the end of that same block, right before the footer:
+
 ```tsx
         <ShownForPicker
           intents={intents}
@@ -475,6 +488,7 @@ Find the end of that same block, right before the footer:
 ```
 
 Replace with:
+
 ```tsx
         <ShownForPicker
           intents={intents}
